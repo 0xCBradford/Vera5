@@ -7,6 +7,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:watch": "vite build --watch",
+    "verify:dist": "node scripts/verify-dist-manifest.mjs",
+    "verify:security": "node scripts/verify-extension-security.mjs",
+    "postbuild": "npm run verify:dist && npm run verify:security",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
@@ -14,12 +18,23 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:smoke": "vitest run src/background/messageHandler.smoke.test.ts",
     "check": "npm run lint && npm run test"
+  },
+  "dependencies": {
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.28.0",
+    "@types/chrome": "^0.0.323",
+    "@types/react": "^19.1.6",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^4.5.2",
     "eslint": "^9.28.0",
     "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.33.0",
