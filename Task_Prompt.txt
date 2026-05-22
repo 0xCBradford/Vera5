@@ -1,0 +1,115 @@
+Protocol authority: repository root TODO.md and docs/TODO_TASKS_Prompts.md
+
+Governance cross-reference: TODO.md (NON-NEGOTIABLES, BYOK/BYOA (Bring Your Own Keys / Bring Your Own API), DEV/ROADMAP HYGIENE). Write allowlist, forbidden actions, TASK TEXT MISMATCH, idempotency, mandatory execution/verification reports, and VERIFY-AND-CLOSE (one checkbox only) are defined in docs/TODO_TASKS_Prompts.md.
+
+DEV/ROADMAP HYGIENE (LOCKED): Internal week/day/task, AGENT/USER markers, Cursor/Claude/AI-build notes, execution/verification-report labels, and prompt-protocol language belong only in TODO.md, Task_Prompt.txt, docs/TODO_TASKS_Prompts.md, and Reqd_User_Config.txt (manual setup). Never leak them into public-facing files (see TODO.md DEV/ROADMAP HYGIENE).
+
+Execution date (optional session context):
+Current Date: 2026-05-22
+- ISO-8601 date only (YYYY-MM-DD). Operator may set; omit if not needed for this run.
+- Reduces timeline confusion, stale execution context, and documentation drift during long-running cycles.
+- Not for injection into source, comments, public docs, configs, UI, or other public artifacts unless a task explicitly requires it.
+
+Execute exactly ONE task using the protocol.
+
+Current TODO Objective: WEEK 0 - FOUNDATION AND REPO SETUP Day: 4 Task: 4
+Task scope: - [ ] Add pre-commit or documented local check (lint + test) (AGENT)
+
+Description: Establish repository structure, legal/docs skeleton, hygiene, and execution protocol before feature code. Lock MVP IOC list, first connectors (AbuseIPDB + OTX recommended), and folder contracts (`extension/`, `docs/`, `examples/`, `scripts/`). Enforce **no secrets in git** via `.gitignore` and documented env templates. Deliverable: clean tree, `docs/TODO_TASKS_Prompts.md`, `Task_Prompt.txt`, and reproducible dev commands.
+
+Steps:
+
+1) EXECUTE
+Implement only that task.
+Follow the write allowlist and forbidden actions defined in docs/TODO_TASKS_Prompts.md.
+
+Before editing (mandatory):
+- If Current TODO Objective or Task scope does not match the exact `- [ ]` line in TODO.md, output TASK TEXT MISMATCH and stop (docs/TODO_TASKS_Prompts.md).
+- Inspect every intended file path against the write allowlist and task-explicit root public files rule (docs/TODO_TASKS_Prompts.md). Reject or BLOCK any edit that would place internal roadmap, week/day/task, AGENT/USER, Cursor, Claude, AI-build, or prompt-protocol language into public-facing files (source, comments, filenames, folders, README, SECURITY, CONTRIBUTING, CHANGELOG, public docs, UI, manifest, package metadata, examples, release notes, captions).
+- Public docs required by the task must use product-native language only.
+
+Rules:
+- Execute exactly one task
+- Read and understand the week Description and Out of scope in TODO.md before editing
+- Do not batch tasks
+- Do not add developer notes
+- Do not add week/day/task references in code, comments, file names, or public docs (docs/acceptance/ internal checklists excepted per TODO.md DEV/ROADMAP HYGIENE)
+- Prefer extending existing modules rather than creating new files unless required
+- Do not change public connector shapes, manifest permissions, or storage key names unless the task explicitly requires it
+- Never commit API keys, secrets, .env files, or local config containing credentials
+- Enrich only detected IOC values — never upload full page content to Vera5-operated infrastructure (there is none in MVP)
+- Preserve local-first, no-telemetry, source-attribution, and BYOK/BYOA (Bring Your Own Keys / Bring Your Own API) requirements from TODO.md
+- During execution, do not add comments, headers, file names, docs (except allowlisted), UI text, config keys, package metadata, or release notes containing roadmap or AI-build references
+
+Idempotency rule:
+If the task's required behavior already exists in the repository, do not duplicate it. Run validation and produce the execution report.
+
+Before editing any file, state what modules or tests may be affected.
+
+Run the minimum relevant validation/tests and record the exact command and result.
+
+2) EXECUTION REPORT
+Output the Mandatory Execution Report defined in docs/TODO_TASKS_Prompts.md.
+
+If the task cannot be completed due to missing dependencies, disallowed file edits, or ambiguous requirements:
+- report BLOCKERS
+- set READY FOR VERIFY = No
+Do not start another task.
+
+3) VERIFY
+
+If READY FOR VERIFY = Yes:
+
+Run the Mandatory Verification Checklist defined in docs/TODO_TASKS_Prompts.md.
+
+Explicitly confirm in the verification report:
+"No internal roadmap, week/day/task, agent, Cursor, Claude, or prompt-protocol language was added to public-facing files."
+When the task touches keys, connectors, storage, or backend paths, confirm BYOK/BYOA invariants per docs/TODO_TASKS_Prompts.md.
+
+Provide:
+- exact file paths inspected
+- commands executed
+- command outputs
+
+Output the Mandatory Verification Report.
+
+If verification PASS:
+- mark the task complete in TODO.md (only change that checkbox)
+
+If verification FAIL:
+- output FAIL
+- output FOLLOW-UP WORK describing the exact missing work
+- do not modify TODO.md
+
+MANUAL CONFIG REQUIREMENT:
+
+If this task requires ANY manual action by the user (e.g., threat-intel API keys, Chrome unpacked load, connector dashboard setup, Firefox signing, local backend .env, or verification outside the codebase):
+
+- Explicitly list each required manual step
+- Explain WHY each step is needed
+- Specify WHERE it must be done (e.g., vendor API portal, Chrome extensions page, local machine, optional localhost backend)
+- Place this under a clearly labeled section: "Manual Steps Required"
+
+If NO manual action is required:
+- Explicitly state the following in ALL CAPS:
+
+NO MANUAL CONFIGURATION OR SETUP REQUIRED — PROCEED
+
+---
+
+USER MANUAL BACKLOG — Reqd_User_Config.txt (repository root)
+
+Manual setup persistence is required per docs/TODO_TASKS_Prompts.md (Manual configuration) and this section.
+
+After this run, if the user has any manual configuration or setup left to do, you MUST persist it for them:
+
+- Append a new block to Reqd_User_Config.txt at the repository root (create the file if it does not exist).
+- Trigger when Manual Steps Required is non-empty, or when BLOCKERS / FOLLOW-UP WORK describe actions only the user can take (API portals, env, browser-only checks, store accounts, etc.).
+- Do not append when the run concludes with NO MANUAL CONFIGURATION OR SETUP REQUIRED — PROCEED and there is no user-only follow-up.
+
+Each appended block must include:
+
+1. Source line — Copy Current TODO Objective (and task scope line if present) from the top of this prompt, plus one short sentence summarizing what the task was about. Week/Day/Task-style references are allowed only in Reqd_User_Config.txt for this backlog, not elsewhere in the repo for this run.
+2. Manual work — The same bullets as Manual Steps Required (what, why, where). If the user action came only from BLOCKERS or FOLLOW-UP WORK, list those items the same way.
+
+Before appending, read Reqd_User_Config.txt if it exists; do not duplicate a manual step that is already recorded as still open with the same substance (you may add one cross-reference line instead).

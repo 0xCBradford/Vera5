@@ -1,0 +1,29 @@
+# Vera5 sample IOCs (placeholder)
+# Use for detector and hover-card manual tests. Public/documentation values only—not live incident data.
+
+# IPv4
+8.8.8.8
+192.0.2.1
+
+# Domain
+example.com
+malware.testcategory.com
+
+# URL
+https://example.com/login
+http://192.0.2.1/resource?id=1
+
+# MD5
+d41d8cd98f00b204e9800998ecf8427e
+098f6bcd4621d373cade4e832627b4f6
+
+# SHA1
+aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8
+
+# SHA256
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117
+
+# CVE
+CVE-2021-44228
+CVE-2017-0144
