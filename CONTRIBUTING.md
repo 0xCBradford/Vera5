@@ -6,7 +6,7 @@ Thank you for helping improve Vera5. This project is an open-source browser exte
 
 - Read [README.md](README.md) for project scope and local-first operation.
 - Read [SECURITY.md](SECURITY.md) for the threat model, IOC handling, and privacy expectations.
-- Product and architecture notes live in [ideas.md](ideas.md).
+- Product and architecture notes live in [Product-Vision.md](Product-Vision.md).
 
 ## How to contribute
 

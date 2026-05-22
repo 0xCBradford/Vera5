@@ -811,7 +811,7 @@ Copy | Open VT | Open OTX | Open AbuseIPDB | Export Markdown
 
 ```text
 ┌────────────────────────────────────┐
-│ Vera5                          │
+│ Vera5                              │
 │ 185.220.101.4                      │
 │ IPv4 | Score: Suspicious           │
 ├────────────────────────────────────┤

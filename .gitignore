@@ -6,3 +6,14 @@ dist/
 keys/
 *.log
 logs/
+
+# Internal Governance / Build Orchestration
+TODO.md
+Task_Prompt.txt
+ideas.md
+docs/_DevNotes/
+docs/TODO_TASKS_Prompts.md
+docs/acceptance/
+Reqd_User_Config.txt
+
+# Local Backend Environment
