@@ -1,3 +1,4 @@
+import { setupAutoScanStorageListener, syncAutoScanWithStorage } from "./autoScan";
 import { CONTENT_MESSAGE } from "./constants";
 import { setupHoverCardTrigger } from "./hoverCardTrigger";
 import { setupHighlightStorageListener, setupScanPageListener } from "./scanPage";
@@ -10,4 +11,6 @@ void chrome.runtime
 
 setupScanPageListener();
 setupHighlightStorageListener();
+setupAutoScanStorageListener();
+void syncAutoScanWithStorage();
 setupHoverCardTrigger();

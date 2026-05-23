@@ -45,6 +45,20 @@ function checkNoDynamicExecution(label, filePath, source) {
   }
 }
 
+function checkNoApiKeyLogging(filePath, source) {
+  if (filePath.endsWith(".test.ts") || filePath.endsWith(".test.tsx")) {
+    return;
+  }
+
+  const logCalls = source.matchAll(/console\.(log|debug|info|warn|error)\([^;]*/g);
+  for (const match of logCalls) {
+    const call = match[0];
+    if (/apiKeys?|getApiKey|setApiKey|STORAGE_KEY_API_KEYS/i.test(call)) {
+      fail(`${filePath} logs API key material via ${call.slice(0, 96)}`);
+    }
+  }
+}
+
 function checkManifestCsp(manifestPath) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
   const csp =
@@ -71,7 +85,9 @@ if (fs.existsSync(path.join(distDir, "manifest.json"))) {
 }
 
 for (const filePath of walkFiles(srcDir, [".ts", ".tsx", ".js"])) {
-  checkNoDynamicExecution("source", filePath, fs.readFileSync(filePath, "utf8"));
+  const source = fs.readFileSync(filePath, "utf8");
+  checkNoDynamicExecution("source", filePath, source);
+  checkNoApiKeyLogging(filePath, source);
 }
 
 for (const filePath of walkFiles(distDir, [".js"])) {
@@ -101,5 +117,5 @@ for (const filePath of walkFiles(distDir, [".html"])) {
 }
 
 console.log(
-  "verify-extension-security: OK (no eval/new Function, no remote scripts, CSP not weakened)"
+  "verify-extension-security: OK (no eval/new Function, no remote scripts, no API key logging, CSP not weakened)"
 );

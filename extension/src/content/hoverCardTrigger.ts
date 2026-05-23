@@ -1,6 +1,11 @@
 import type { IocType } from "../lib/iocRegex";
 import { IOC_TYPE } from "../lib/iocRegex";
-import { IOC_HIGHLIGHT_CLASS } from "./highlighter";
+import { attemptAutoEnrichmentFetch } from "./enrichmentAutoFetch";
+import {
+  getEnrichmentSourceEnabledForContent,
+  listDisabledEnrichmentSourceIds,
+} from "./enrichmentSourceStorage";
+import { IOC_ENRICH_ICON_CLASS, IOC_HIGHLIGHT_CLASS } from "./highlighter";
 import {
   hideHoverCard,
   HOVER_CARD_HOST_ID,
@@ -49,16 +54,38 @@ export function buildHoverCardPayloadFromHighlight(
   };
 }
 
+export type HoverCardOpenOptions = {
+  enrichmentTrigger?: "manual" | "auto";
+};
+
+function isManualEnrichTarget(target: Element): boolean {
+  return target.closest(`.${IOC_ENRICH_ICON_CLASS}`) !== null;
+}
+
 export function openHoverCardForHighlight(
   highlight: HTMLElement,
+  options: HoverCardOpenOptions = {},
   doc: Document = document
 ): boolean {
-  const payload = buildHoverCardPayloadFromHighlight(highlight);
-  if (!payload) {
+  const basePayload = buildHoverCardPayloadFromHighlight(highlight);
+  if (!basePayload) {
     return false;
   }
 
-  showHoverCardNearAnchor(highlight, payload, doc);
+  void getEnrichmentSourceEnabledForContent().then((sources) => {
+    const disabledSources = listDisabledEnrichmentSourceIds(sources);
+    const payload: HoverCardOverlayPayload =
+      disabledSources.length > 0
+        ? { ...basePayload, disabledSources }
+        : basePayload;
+
+    showHoverCardNearAnchor(highlight, payload, doc);
+
+    if (options.enrichmentTrigger !== "manual") {
+      void attemptAutoEnrichmentFetch(payload);
+    }
+  });
+
   return true;
 }
 
@@ -76,7 +103,9 @@ function handleDocumentClick(event: MouseEvent, doc: Document): void {
   if (highlight) {
     event.preventDefault();
     event.stopPropagation();
-    openHoverCardForHighlight(highlight, doc);
+    openHoverCardForHighlight(highlight, {
+      enrichmentTrigger: isManualEnrichTarget(target) ? "manual" : "auto",
+    }, doc);
     return;
   }
 
@@ -105,7 +134,17 @@ function handleDocumentKeyDown(event: KeyboardEvent, doc: Document): void {
   }
 
   event.preventDefault();
-  openHoverCardForHighlight(highlight, doc);
+  openHoverCardForHighlight(
+    highlight,
+    {
+      enrichmentTrigger: isManualEnrichTarget(
+        event.target instanceof Element ? event.target : highlight
+      )
+        ? "manual"
+        : "auto",
+    },
+    doc
+  );
 }
 
 export function setupHoverCardTrigger(doc: Document = document): () => void {

@@ -1,0 +1,258 @@
+/**
+ * @vitest-environment happy-dom
+ */
+import { act } from "react";
+import { flushSync } from "react-dom";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
+import { STORAGE_KEY_API_KEYS } from "../lib/storage";
+import { Options } from "./Options";
+
+function renderOptions(): { container: HTMLDivElement; root: Root } {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  flushSync(() => {
+    root.render(<Options />);
+  });
+  return { container, root };
+}
+
+describe("Options API key inputs", () => {
+  let store: Record<string, unknown>;
+  let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+  beforeEach(() => {
+    store = {};
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    vi.unstubAllGlobals();
+  });
+
+  it("renders per-source enable toggles", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector('input[aria-label="Enable AbuseIPDB"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('input[aria-label="Enable OTX"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('input[aria-label="Enable URLScan.io"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('input[aria-label="Enable GreyNoise"]')
+    ).not.toBeNull();
+  });
+
+  it("renders the manual-only enrichment toggle", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const manualOnlyToggle = mounted.container.querySelector(
+      'input[aria-label="Manual-only enrichment"]'
+    );
+    expect(manualOnlyToggle).not.toBeNull();
+    expect((manualOnlyToggle as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("renders the auto-scan toggle", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const autoScanToggle = mounted.container.querySelector(
+      'input[aria-label="Automatically scan when the page changes"]'
+    );
+    expect(autoScanToggle).not.toBeNull();
+    expect(autoScanToggle?.getAttribute("type")).toBe("checkbox");
+  });
+
+  it("renders masked inputs for AbuseIPDB and OTX", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const abuseInput = mounted.container.querySelector(
+      'input[aria-label="AbuseIPDB API key"]'
+    );
+    const otxInput = mounted.container.querySelector(
+      'input[aria-label="OTX API key"]'
+    );
+
+    expect(abuseInput).not.toBeNull();
+    expect(otxInput).not.toBeNull();
+    expect(abuseInput?.getAttribute("type")).toBe("password");
+    expect(otxInput?.getAttribute("type")).toBe("password");
+    expect(abuseInput?.getAttribute("autocomplete")).toBe("off");
+    expect(otxInput?.getAttribute("autocomplete")).toBe("off");
+  });
+
+  it("loads stored keys as masked previews only", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: "abuse-secret",
+      otx: "otx-secret",
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const abuseInput = mounted.container.querySelector(
+      'input[aria-label="AbuseIPDB API key"]'
+    ) as HTMLInputElement;
+    const otxInput = mounted.container.querySelector(
+      'input[aria-label="OTX API key"]'
+    ) as HTMLInputElement;
+
+    expect(abuseInput.value).toBe("••••••••cret");
+    expect(abuseInput.value).not.toContain("abuse");
+    expect(otxInput.value).toBe("••••••••cret");
+    expect(otxInput.value).not.toBe("otx-secret");
+    expect(mounted.container.textContent).toContain(
+      "Only the last four characters are shown"
+    );
+  });
+
+  it("renders a clear cache control", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector('button[aria-label="Clear enrichment cache"]')
+    ).not.toBeNull();
+    expect(mounted.container.textContent).toContain("Enrichment cache");
+  });
+
+  it("clears enrichment cache when the button is clicked", async () => {
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "185.220.101.4|abuseipdb": {
+        fetchedAt: Date.now(),
+        payload: { summary: "cached" },
+      },
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const clearButton = mounted.container.querySelector(
+      'button[aria-label="Clear enrichment cache"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      clearButton.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_ENRICHMENT_CACHE]).toBeUndefined();
+    expect(mounted.container.textContent).toContain("Enrichment cache cleared.");
+  });
+
+  it("renders settings export and import controls", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector('button[aria-label="Export settings JSON"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('button[aria-label="Import settings JSON"]')
+    ).not.toBeNull();
+    const includeKeysToggle = mounted.container.querySelector(
+      'input[aria-label="Include API keys in export"]'
+    ) as HTMLInputElement;
+    expect(includeKeysToggle).not.toBeNull();
+    expect(includeKeysToggle.checked).toBe(false);
+  });
+
+  it("exports settings without API keys by default", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: "stored-secret",
+    };
+
+    const createObjectURL = vi.fn(() => "blob:test");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL,
+    });
+
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const exportButton = mounted.container.querySelector(
+      'button[aria-label="Export settings JSON"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      exportButton.click();
+      await Promise.resolve();
+    });
+
+    expect(createObjectURL).toHaveBeenCalled();
+    const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+    const exportedJson = await blob.text();
+    expect(exportedJson).not.toContain("stored-secret");
+    expect(exportedJson).not.toContain('"apiKeys"');
+    expect(mounted.container.textContent).toContain("Settings exported.");
+
+    clickSpy.mockRestore();
+  });
+});

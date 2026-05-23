@@ -1,13 +1,18 @@
+# Build Output
 node_modules/
 dist/
 .env
 .env.*
+
+# API Keys
 *.key
-keys/
+keys/ 
+
+# Logs & Diagnostics
 *.log
 logs/
 
-# Internal Governance / Build Orchestration
+# Internal Governance, Documentation, and Build Orchestration
 TODO.md
 Task_Prompt.txt
 ideas.md
@@ -16,4 +21,49 @@ docs/TODO_TASKS_Prompts.md
 docs/acceptance/
 extension/Assets/
 
-# Local Backend Environment
+# Local Backend Environment (Future)
+backend/
+backend/app/
+backend/app/main.py
+backend/app/config.py
+backend/app/models/
+backend/app/models/enrichment.py
+backend/app/connectors/
+backend/app/connectors/virustotal.py
+backend/app/connectors/otx.py
+backend/app/connectors/abuseipdb.py
+backend/app/connectors/urlscan.py
+backend/app/connectors/greynoise.py
+
+# Local LLM Environment (Future)
+llm/
+llm/models/
+llm/models/llama.cpp/
+llm/models/llama.cpp/llama-3.1-8b-instruct.Q4_K_M.gguf
+llm/models/llama.cpp/llama-3.1-8b-instruct.Q4_K_M.gguf.index
+llm/models/llama.cpp/llama-3.1-8b-instruct.Q4_K_M.gguf.index.d2v
+llm/models/llama.cpp/llama-3.1-8b-instruct.Q4_K_M.gguf.index.d2v.d2v
+llm/models/llama.cpp/llama-3.1-8b-instruct.Q4_K_M.gguf.index.d2v.d2v.d2v
+llm/models/llama.cpp/llama-3.1-8b-instruct.Q4_K_M.gguf.index.d2v.d2v.d2v.d2v
+llm/models/llama.cpp/llama-3.1-8b-instruct.Q4_K_M.gguf.index.d2v.d2v.d2v.d2v.d2v
+
+# Local Frontend Environment (Current)
+frontend/
+frontend/dist/
+frontend/node_modules/
+frontend/package-lock.json
+frontend/package.json
+frontend/vite.config.ts
+frontend/tsconfig.json
+frontend/manifest.json
+frontend/src/
+frontend/src/background/
+frontend/src/content/
+frontend/src/popup/
+frontend/src/options/
+frontend/src/components/
+frontend/src/lib/
+frontend/src/styles/
+frontend/public/
+frontend/public/icons/
+frontend/public/screenshots/
