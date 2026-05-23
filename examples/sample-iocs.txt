@@ -1,5 +1,5 @@
-# Vera5 sample IOCs (placeholder)
-# Use for detector and hover-card manual tests. Public/documentation values only—not live incident data.
+# Vera5 sample IOCs
+# Public/documentation values for detector unit tests and manual validation—not live incident data.
 
 # IPv4
 8.8.8.8

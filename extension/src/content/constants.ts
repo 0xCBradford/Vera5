@@ -1,0 +1,4 @@
+export const CONTENT_MESSAGE = {
+  CONTENT_REGISTER: "CONTENT_REGISTER",
+  SCAN_PAGE: "SCAN_PAGE",
+} as const;

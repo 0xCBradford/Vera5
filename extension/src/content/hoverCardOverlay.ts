@@ -1,0 +1,269 @@
+import type { IocType } from "../lib/iocRegex";
+import { copyTextToClipboard } from "../lib/copyText";
+import {
+  buildDisabledSourcePlaceholders,
+  resolveEnrichmentDisplay,
+  type EnrichmentSourceId,
+  type HoverCardEnrichmentState,
+} from "../lib/hoverCardEnrichment";
+import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
+import { getPivotLinks } from "../lib/pivots";
+import {
+  buildEnrichmentSummaryClassName,
+  ensureVera5UiStyles,
+} from "../lib/vera5UiStyles";
+import {
+  applyHoverCardFixedPosition,
+  computeHoverCardPosition,
+  readViewportSize,
+  type AxisPoint,
+  type HoverCardViewport,
+} from "./hoverCardPosition";
+
+export const HOVER_CARD_HOST_ID = "vera5-hover-card-host";
+export const HOVER_CARD_PANEL_CLASS = "vera5-hover-card-panel";
+export const HOVER_CARD_COPY_BUTTON_CLASS = "vera5-hover-card-copy";
+export const HOVER_CARD_PIVOT_NAV_CLASS = "vera5-hover-card-pivots";
+export const HOVER_CARD_PIVOT_LINK_CLASS = "vera5-hover-card-pivot-link";
+export const HOVER_CARD_ENRICHMENT_CLASS = "vera5-hover-card-enrichment";
+export const HOVER_CARD_SOURCES_CLASS = "vera5-hover-card-sources";
+export const HOVER_CARD_SOURCE_ITEM_CLASS = "vera5-hover-card-source-item";
+
+const TYPE_LABELS: Record<IocType, string> = {
+  ipv4: "IPv4 address",
+  domain: "Domain",
+  url: "URL",
+  md5: "MD5 hash",
+  sha1: "SHA1 hash",
+  sha256: "SHA256 hash",
+  cve: "CVE ID",
+};
+
+export type HoverCardOverlayPayload = {
+  value: string;
+  type: IocType;
+  summary?: string;
+  enrichmentState?: HoverCardEnrichmentState;
+  errorMessage?: string;
+  disabledSources?: readonly EnrichmentSourceId[];
+};
+
+function formatTypeLabel(type: IocType): string {
+  return TYPE_LABELS[type];
+}
+
+function createPivotLinksNav(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): HTMLElement | null {
+  const pivotLinks = getPivotLinks(payload.type, payload.value);
+  if (pivotLinks.length === 0) {
+    return null;
+  }
+
+  const nav = doc.createElement("nav");
+  nav.className = HOVER_CARD_PIVOT_NAV_CLASS;
+  nav.setAttribute("aria-label", "Open indicator in external sources");
+
+  for (const link of pivotLinks) {
+    const anchor = doc.createElement("a");
+    anchor.className = HOVER_CARD_PIVOT_LINK_CLASS;
+    anchor.href = link.href;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    anchor.textContent = link.label;
+    nav.appendChild(anchor);
+  }
+
+  return nav;
+}
+
+function createDisabledSourcesSection(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): HTMLElement | null {
+  const placeholders = buildDisabledSourcePlaceholders(
+    payload.disabledSources ?? []
+  );
+  if (placeholders.length === 0) {
+    return null;
+  }
+
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_SOURCES_CLASS;
+  section.setAttribute("aria-label", "Enrichment sources");
+
+  const heading = doc.createElement("p");
+  heading.className = "vera5-hover-card-sources-heading";
+  heading.textContent = "Sources";
+  section.appendChild(heading);
+
+  const list = doc.createElement("ul");
+  list.className = "vera5-hover-card-sources-list";
+
+  for (const entry of placeholders) {
+    const item = doc.createElement("li");
+    item.className = HOVER_CARD_SOURCE_ITEM_CLASS;
+    item.textContent = `${entry.label} — ${entry.message}`;
+    list.appendChild(item);
+  }
+
+  section.appendChild(list);
+  return section;
+}
+
+function createCopyButton(
+  value: string,
+  doc: Document
+): HTMLButtonElement {
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = HOVER_CARD_COPY_BUTTON_CLASS;
+  button.textContent = "Copy";
+  button.setAttribute("aria-label", `Copy indicator ${value}`);
+
+  button.addEventListener("click", () => {
+    void copyTextToClipboard(value).then((success) => {
+      if (!success) {
+        return;
+      }
+      button.textContent = "Copied";
+      button.classList.add("vera5-hover-card-copy--copied");
+      const docView = doc.defaultView ?? window;
+      scheduleCopyFeedbackReset(() => {
+        button.textContent = "Copy";
+        button.classList.remove("vera5-hover-card-copy--copied");
+      }, docView);
+    });
+  });
+
+  return button;
+}
+
+export function ensureHoverCardHost(doc: Document = document): HTMLElement {
+  const existing = doc.getElementById(HOVER_CARD_HOST_ID);
+  if (existing) {
+    return existing;
+  }
+
+  const host = doc.createElement("div");
+  host.id = HOVER_CARD_HOST_ID;
+  host.style.position = "fixed";
+  host.style.top = "0";
+  host.style.left = "0";
+  host.style.width = "0";
+  host.style.height = "0";
+  host.style.zIndex = "2147483646";
+  host.style.pointerEvents = "none";
+  doc.body.appendChild(host);
+  return host;
+}
+
+export function buildHoverCardPanel(
+  payload: HoverCardOverlayPayload,
+  doc: Document = document
+): HTMLElement {
+  ensureVera5UiStyles(doc);
+
+  const pivotLinks = getPivotLinks(payload.type, payload.value);
+  const enrichment = resolveEnrichmentDisplay({
+    enrichmentState: payload.enrichmentState,
+    summary: payload.summary,
+    errorMessage: payload.errorMessage,
+  });
+  const disabledSourcesSection = createDisabledSourcesSection(payload, doc);
+  const pivotNav = createPivotLinksNav(payload, doc);
+  const showFooter =
+    pivotLinks.length > 0 || disabledSourcesSection !== null;
+
+  const panel = doc.createElement("aside");
+  panel.className = HOVER_CARD_PANEL_CLASS;
+  panel.setAttribute("role", "region");
+  panel.setAttribute("aria-label", `Indicator details for ${payload.value}`);
+
+  const headerRow = doc.createElement("div");
+  headerRow.className = "vera5-hover-card-header";
+
+  const typeRow = doc.createElement("span");
+  typeRow.className = "vera5-hover-card-type";
+  typeRow.textContent = formatTypeLabel(payload.type);
+  headerRow.appendChild(typeRow);
+  headerRow.appendChild(createCopyButton(payload.value, doc));
+  panel.appendChild(headerRow);
+
+  const valueRow = doc.createElement("p");
+  valueRow.className = "vera5-hover-card-value";
+  valueRow.textContent = payload.value;
+  panel.appendChild(valueRow);
+
+  const summaryRow = doc.createElement("p");
+  summaryRow.className = buildEnrichmentSummaryClassName(
+    enrichment.variant,
+    HOVER_CARD_ENRICHMENT_CLASS
+  );
+  if (showFooter) {
+    summaryRow.style.marginBottom = "8px";
+  }
+  summaryRow.textContent = enrichment.text;
+  if (enrichment.variant === "error") {
+    summaryRow.setAttribute("role", "alert");
+  } else {
+    summaryRow.setAttribute("role", "status");
+  }
+  if (enrichment.variant === "loading") {
+    summaryRow.setAttribute("aria-live", "polite");
+    summaryRow.setAttribute("aria-busy", "true");
+  }
+  panel.appendChild(summaryRow);
+
+  if (disabledSourcesSection) {
+    panel.appendChild(disabledSourcesSection);
+  }
+  if (pivotNav) {
+    panel.appendChild(pivotNav);
+  }
+
+  return panel;
+}
+
+export function positionHoverCardPanel(
+  panel: HTMLElement,
+  anchor: Element,
+  viewport: HoverCardViewport = readViewportSize()
+): AxisPoint {
+  const anchorRect = anchor.getBoundingClientRect();
+  panel.style.visibility = "hidden";
+  panel.style.display = "block";
+
+  const measured = panel.getBoundingClientRect();
+  const cardSize = {
+    width: Math.max(measured.width, panel.offsetWidth, 220),
+    height: Math.max(measured.height, panel.offsetHeight, 80),
+  };
+
+  const position = computeHoverCardPosition(anchorRect, cardSize, viewport);
+  applyHoverCardFixedPosition(panel, position);
+  panel.style.visibility = "visible";
+  return position;
+}
+
+export function showHoverCardNearAnchor(
+  anchor: Element,
+  payload: HoverCardOverlayPayload,
+  doc: Document = document
+): HTMLElement {
+  hideHoverCard(doc);
+  const host = ensureHoverCardHost(doc);
+  const panel = buildHoverCardPanel(payload, doc);
+  host.appendChild(panel);
+  positionHoverCardPanel(panel, anchor, readViewportSize(doc.defaultView ?? window));
+  return panel;
+}
+
+export function hideHoverCard(doc: Document = document): void {
+  const host = doc.getElementById(HOVER_CARD_HOST_ID);
+  if (!host) {
+    return;
+  }
+  host.replaceChildren();
+}

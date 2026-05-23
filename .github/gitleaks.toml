@@ -1,0 +1,11 @@
+title = "Vera5 secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Internal specs with empty env placeholder blocks only (not committed going forward)"
+paths = [
+  '''(?:^|/)Vera5\.md$''',
+  '''(?:^|/)ideas\.md$''',
+]

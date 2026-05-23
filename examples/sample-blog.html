@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Why routine patch cadence still matters</title>
+    <style>
+      body {
+        font-family: Georgia, serif;
+        line-height: 1.6;
+        margin: 2rem auto;
+        max-width: 42rem;
+        padding: 0 1rem;
+        color: #222;
+      }
+      .byline {
+        color: #666;
+        font-family: system-ui, sans-serif;
+        font-size: 0.85rem;
+      }
+      a {
+        color: #0b57d0;
+      }
+    </style>
+  </head>
+  <body>
+    <article>
+      <header>
+        <h1>Why routine patch cadence still matters</h1>
+        <p class="byline">Published 12 March 2026 · 6 min read</p>
+      </header>
+
+      <p>
+        Last month I rotated DNS for a home lab and pointed resolvers at
+        8.8.8.8 while testing split horizon. That is a common choice, but it is
+        not where the interesting story was. A vendor bulletin tied
+        CVE-2021-44228 to a widely deployed logging stack, and the same week I
+        saw a grey noise report referencing 192.0.2.1 in a canned sandbox run.
+      </p>
+
+      <p>
+        The useful link in the thread was not the resolver—it was a file share
+        advertising
+        <a href="http://192.0.2.1/resource?id=1"
+          >http://192.0.2.1/resource?id=1</a
+        >
+        as a download mirror. I do not click those in production browsers, but
+        I keep the string in notes when reproducing detections. A colleague
+        pasted hash
+        <code>2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117</code>
+        from an old malware zoo entry.
+      </p>
+
+      <h2>What not to mistake for threats</h2>
+      <p>
+        Blog platforms love version numbers. This site runs template engine
+        1.2.3.4-beta and ships assets like hero-banner.png and stylesheet.min.css
+        on every page load. None of those strings are threat intelligence—they
+        are layout and semver noise. If your tools flag them, tune context before
+        opening tickets.
+      </p>
+
+      <p>
+        Comment sections also create clutter. A reader wrote:
+        <q>My scanner listed example.com twice because the permalink and the
+        anchor text matched.</q> That is a deduplication problem, not a new
+        domain discovery. Another message included only a mailto link to
+        security@example.com without any standalone hostname in the body.
+      </p>
+
+      <h2>Closing thought</h2>
+      <p>
+        Good detection separates document literals from navigation attributes.
+        Open this page locally, run a scan, and compare counts against the
+        alert-style sample page. Both pages use the same public sample values from
+        <code>examples/sample-iocs.txt</code> so results stay reproducible.
+      </p>
+
+      <footer class="byline">
+        <p>
+          Author: Jordan Lee · Tags: patching, detection, hygiene · No trackers
+          on this static file.
+        </p>
+      </footer>
+    </article>
+  </body>
+</html>

@@ -31,5 +31,14 @@
       "48": "icons/icon48.png"
     }
   },
-  "options_page": "options.html"
+  "options_page": "options.html",
+  "commands": {
+    "scan-page": {
+      "description": "Scan the current page for indicators",
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      }
+    }
+  }
 }

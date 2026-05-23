@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   contentRegisterMessage,
+  isScanPageMessage,
   isVera5Message,
   MESSAGE,
   pingMessage,
+  scanPageMessage,
 } from "./messages";
 
 describe("Vera5 message envelopes", () => {
@@ -17,9 +19,19 @@ describe("Vera5 message envelopes", () => {
     });
   });
 
-  it("accepts known envelopes", () => {
+  it("builds SCAN_PAGE", () => {
+    expect(scanPageMessage()).toEqual({ type: MESSAGE.SCAN_PAGE });
+  });
+
+  it("accepts known service worker envelopes", () => {
     expect(isVera5Message(pingMessage())).toBe(true);
     expect(isVera5Message(contentRegisterMessage())).toBe(true);
+    expect(isVera5Message(scanPageMessage())).toBe(false);
+  });
+
+  it("accepts SCAN_PAGE tab envelope", () => {
+    expect(isScanPageMessage(scanPageMessage())).toBe(true);
+    expect(isScanPageMessage({ type: "NOT_REAL" })).toBe(false);
   });
 
   it("rejects invalid envelopes", () => {

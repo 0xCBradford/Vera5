@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sample security alert</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        margin: 2rem auto;
+        max-width: 52rem;
+        padding: 0 1rem;
+      }
+      .meta {
+        color: #444;
+        font-size: 0.9rem;
+      }
+      code {
+        font-size: 0.95em;
+      }
+    </style>
+  </head>
+  <body>
+    <article>
+      <h1>Security alert: suspicious authentication activity</h1>
+      <p class="meta">
+        Documentation-only sample page for manual Vera5 detection checks. Indicator
+        values are public test data (RFC 5737, sample hashes, MITRE CVE IDs)—not
+        live incident intelligence.
+      </p>
+
+      <h2>Summary</h2>
+      <p>
+        Multiple failed logins were observed from
+        <strong>192.0.2.1</strong> targeting
+        <a href="https://example.com/login">https://example.com/login</a>. A
+        related host <strong>malware.testcategory.com</strong> appeared in passive
+        DNS for the same window. File hash
+        <code>d41d8cd98f00b204e9800998ecf8427e</code> matched a dormant ruleset.
+        Operators also flagged <strong>CVE-2021-44228</strong> as the probable
+        initial access vector on adjacent assets.
+      </p>
+
+      <h2>Expanded indicator set</h2>
+      <ul>
+        <li>IPv4: 8.8.8.8 (resolver seen in chain)</li>
+        <li>
+          URL (defanged copy from ticket):
+          hxxps://example.com/login?ref=analyst
+        </li>
+        <li>SHA1: aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</li>
+        <li>
+          SHA256:
+          e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        </li>
+        <li>Legacy MD5: 098f6bcd4621d373cade4e832627b4f6</li>
+        <li>Related CVE: CVE-2017-0144</li>
+      </ul>
+
+      <h2>Release engineering notes</h2>
+      <p>
+        The monitoring agent was upgraded from version 1.2.3.4 to 2.0.0. Analysts
+        exported <code>chart.png</code> and <code>report.csv</code> from the
+        dashboard before closing the ticket. Contact
+        <a href="mailto:analyst@example.com">analyst@example.com</a> for
+        questions.
+      </p>
+
+      <h2>Embedded page resources</h2>
+      <p>Values below are inside non-visible elements and should not be scanned.</p>
+      <script>
+        const telemetryEndpoint = "http://192.0.2.1/resource?id=1";
+      </script>
+      <textarea readonly>
+        Private-space literal 10.0.0.1 sometimes appears in form defaults.
+      </textarea>
+    </article>
+  </body>
+</html>

@@ -1,0 +1,263 @@
+import type { HoverCardEnrichmentState } from "./hoverCardEnrichment";
+
+export const VERA5_UI_STYLE_ID = "vera5-ui-styles";
+
+export const HOVER_CARD_ENRICHMENT_MODIFIER_CLASS: Record<
+  HoverCardEnrichmentState,
+  string
+> = {
+  empty: "vera5-hover-card-enrichment--empty",
+  loading: "vera5-hover-card-enrichment--loading",
+  error: "vera5-hover-card-enrichment--error",
+  ready: "vera5-hover-card-enrichment--ready",
+};
+
+export function buildEnrichmentSummaryClassName(
+  variant: HoverCardEnrichmentState,
+  baseClass = "vera5-hover-card-enrichment"
+): string {
+  return `${baseClass} ${HOVER_CARD_ENRICHMENT_MODIFIER_CLASS[variant]}`;
+}
+
+export function buildVera5UiStylesCss(): string {
+  return `
+.vera5-hover-card-panel {
+  --vera5-surface: #f8fafc;
+  --vera5-text: #1a1a1a;
+  --vera5-border: #c5d4e8;
+  --vera5-accent: #1a5fb4;
+  --vera5-accent-text: #1a3f6b;
+  --vera5-muted: #4a5568;
+  --vera5-muted-label: #6b7280;
+  --vera5-error: #9b2c2c;
+  --vera5-ready: #1a3f6b;
+  --vera5-button-bg: #ffffff;
+  --vera5-copy-success-bg: #e8f4ea;
+  --vera5-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  box-sizing: border-box;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-surface);
+  color: var(--vera5-text);
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: var(--vera5-shadow);
+  pointer-events: auto;
+  animation: vera5-panel-reveal 0.16s ease-out;
+}
+@keyframes vera5-panel-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.vera5-hover-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.vera5-hover-card-type {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vera5-accent);
+}
+.vera5-hover-card-value {
+  margin: 0 0 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.vera5-hover-card-enrichment {
+  margin: 0;
+  font-size: 12px;
+}
+.vera5-hover-card-enrichment--empty,
+.vera5-hover-card-enrichment--loading {
+  color: var(--vera5-muted);
+}
+.vera5-hover-card-enrichment--loading {
+  font-style: italic;
+  animation: vera5-loading-pulse 1.4s ease-in-out infinite;
+}
+@keyframes vera5-loading-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.vera5-hover-card-enrichment--error {
+  color: var(--vera5-error);
+}
+.vera5-hover-card-enrichment--ready {
+  color: var(--vera5-ready);
+}
+.vera5-hover-card-copy {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-button-bg);
+  color: var(--vera5-accent-text);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.vera5-hover-card-copy--copied {
+  background-color: var(--vera5-copy-success-bg);
+}
+.vera5-hover-card-pivots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vera5-hover-card-pivot-link {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-button-bg);
+  color: var(--vera5-accent-text);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.vera5-hover-card-sources {
+  margin-bottom: 8px;
+}
+.vera5-hover-card-sources-heading {
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-sources-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.vera5-hover-card-source-item {
+  margin: 0;
+  font-size: 11px;
+  color: var(--vera5-muted-label);
+  line-height: 1.4;
+}
+.vera5-ioc-highlight {
+  --vera5-highlight-accent: #1a5fb4;
+  --vera5-highlight-underline: color-mix(in srgb, #1a5fb4 75%, transparent);
+  --vera5-highlight-bg: color-mix(in srgb, #1a5fb4 12%, transparent);
+  --vera5-highlight-badge-text: #1a3f6b;
+  --vera5-highlight-badge-bg: color-mix(in srgb, #1a5fb4 18%, white);
+  --vera5-enrich-icon: #1a5fb4;
+  display: inline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  font: inherit;
+  line-height: inherit;
+  letter-spacing: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  text-decoration-color: var(--vera5-highlight-underline);
+  background-color: var(--vera5-highlight-bg);
+  border-radius: 2px;
+  padding: 0 1px;
+  margin: 0;
+  vertical-align: baseline;
+  white-space: inherit;
+  cursor: pointer;
+}
+.vera5-ioc-badge {
+  display: inline;
+  font-size: 0.65em;
+  font-weight: 600;
+  line-height: 1;
+  margin-left: 2px;
+  padding: 0 3px;
+  vertical-align: super;
+  border-radius: 3px;
+  color: var(--vera5-highlight-badge-text);
+  background-color: var(--vera5-highlight-badge-bg);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.vera5-ioc-enrich-icon {
+  display: inline;
+  font-size: 0.6em;
+  line-height: 1;
+  margin-left: 2px;
+  vertical-align: super;
+  color: var(--vera5-enrich-icon);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .vera5-hover-card-panel,
+  .vera5-hover-card-copy,
+  .vera5-hover-card-pivot-link,
+  .vera5-hover-card-enrichment--loading,
+  .vera5-ioc-highlight {
+    animation: none !important;
+    transition: none !important;
+  }
+  .vera5-hover-card-enrichment--loading {
+    font-style: normal;
+  }
+}
+@media (prefers-color-scheme: dark) {
+  .vera5-hover-card-panel {
+    --vera5-surface: #1e293b;
+    --vera5-text: #e2e8f0;
+    --vera5-border: #475569;
+    --vera5-accent: #60a5fa;
+    --vera5-accent-text: #dbeafe;
+    --vera5-muted: #94a3b8;
+    --vera5-muted-label: #94a3b8;
+    --vera5-error: #fca5a5;
+    --vera5-ready: #93c5fd;
+    --vera5-button-bg: #334155;
+    --vera5-copy-success-bg: #14532d;
+    --vera5-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+  }
+  .vera5-ioc-highlight {
+    --vera5-highlight-accent: #60a5fa;
+    --vera5-highlight-underline: color-mix(in srgb, #60a5fa 80%, transparent);
+    --vera5-highlight-bg: color-mix(in srgb, #60a5fa 20%, transparent);
+    --vera5-highlight-badge-text: #dbeafe;
+    --vera5-highlight-badge-bg: color-mix(in srgb, #60a5fa 24%, #1e293b);
+    --vera5-enrich-icon: #93c5fd;
+  }
+}
+`.trim();
+}
+
+export function ensureVera5UiStyles(doc: Document = document): void {
+  if (doc.getElementById(VERA5_UI_STYLE_ID)) {
+    return;
+  }
+
+  const style = doc.createElement("style");
+  style.id = VERA5_UI_STYLE_ID;
+  style.textContent = buildVera5UiStylesCss();
+  doc.head?.appendChild(style);
+}

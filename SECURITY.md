@@ -1,6 +1,6 @@
 # Security Policy
 
-Vera5 is a local-first browser extension for IOC enrichment. This document describes the security and privacy model for the project. Details will expand as the extension ships additional capability.
+Vera5 is a local-first browser extension for IOC enrichment. This document describes the security and privacy model for the repository as it exists today (foundation and scaffold). Update it when manifest permissions, connectors, and UI behavior ship.
 
 ## Scope
 
@@ -10,12 +10,12 @@ Vera5 runs in the analyst’s browser. It may read page content to detect indica
 
 | Risk | Mitigation (design intent) |
 |------|----------------------------|
-| Extension access to page DOM | Scan only what is needed for IOC detection; skip script/style where possible; optional manual-only mode |
-| API key exposure | Keys stored locally in extension storage (or optional self-hosted backend env); never committed to the repository |
-| IOC disclosure to third parties | Only indicator values you enrich are sent to vendors you enable—not full page HTML to Vera5 infrastructure |
-| Sensitive internal IOCs leaving the org | Analyst controls sources, toggles, and manual mode; review vendor policies before querying |
-| Malicious or confusing page content | Conservative matching, allowlist/denylist options, honest error states |
-| Analyst misinterpretation | Source attribution, raw inspect, no hidden scoring certainty |
+| Extension access to page DOM | Design intent: scan only for IOC detection; skip script/style where possible; optional manual-only mode when implemented |
+| API key exposure | Design intent: keys in extension storage or optional self-hosted env; never committed to the repository |
+| IOC disclosure to third parties | Design intent: only indicator values sent to vendors you enable—not full page HTML to Vera5 infrastructure |
+| Sensitive internal IOCs leaving the org | Design intent: analyst controls sources, toggles, and manual mode |
+| Malicious or confusing page content | Design intent: conservative matching, allowlist/denylist options, honest error states |
+| Analyst misinterpretation | Design intent: source attribution and visible uncertainty |
 
 ## IOC leakage and third-party APIs
 
@@ -57,4 +57,4 @@ We aim to acknowledge reports in a reasonable timeframe and coordinate fixes bef
 
 ## Document status
 
-This file is a living security skeleton. As installation, permissions, connectors, and backend options ship, this policy will be updated to match **implemented** behavior only.
+Matches foundation-phase behavior and documented design intent. Revise when install steps, manifest permissions, and connectors are implemented so the policy reflects shipped behavior only.
