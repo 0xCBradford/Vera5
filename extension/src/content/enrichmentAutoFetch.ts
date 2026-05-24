@@ -7,10 +7,16 @@ export type AutoEnrichmentFetcher = (
 
 let autoEnrichmentFetcher: AutoEnrichmentFetcher | null = null;
 
-export function setAutoEnrichmentFetcherForTests(
+export function setAutoEnrichmentFetcher(
   fetcher: AutoEnrichmentFetcher | null
 ): void {
   autoEnrichmentFetcher = fetcher;
+}
+
+export function setAutoEnrichmentFetcherForTests(
+  fetcher: AutoEnrichmentFetcher | null
+): void {
+  setAutoEnrichmentFetcher(fetcher);
 }
 
 export async function shouldAutoFetchEnrichmentForContent(): Promise<boolean> {

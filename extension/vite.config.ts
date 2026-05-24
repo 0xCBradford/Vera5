@@ -14,12 +14,10 @@ export default defineConfig({
         popup: "popup.html",
         options: "options.html",
         background: "src/background/serviceWorker.ts",
-        content: "src/content/contentScript.ts",
       },
       output: {
         entryFileNames: (chunkInfo) => {
           if (chunkInfo.name === "background") return "background.js";
-          if (chunkInfo.name === "content") return "content.js";
           return "assets/[name]-[hash].js";
         },
         chunkFileNames: "assets/[name]-[hash].js",

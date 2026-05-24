@@ -3,7 +3,13 @@ import type { IocType } from "../lib/iocRegex";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildDisabledSourcePlaceholders,
+  formatEnrichmentSourceAttribution,
+  HOVER_CARD_OPEN_SETTINGS_LABEL,
   resolveEnrichmentDisplay,
+  shouldShowEnrichmentSourceAttribution,
+  shouldShowMissingKeyAction,
+  shouldShowRateLimitRetryHint,
+  type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
   type HoverCardEnrichmentState,
 } from "../lib/hoverCardEnrichment";
@@ -32,8 +38,12 @@ export type HoverCardProps = {
   value: string;
   type: IocType;
   summary?: string;
+  tags?: readonly string[];
+  sourceAttribution?: EnrichmentSourceAttribution;
   enrichmentState?: HoverCardEnrichmentState;
   errorMessage?: string;
+  errorCode?: string;
+  retryHint?: string;
   disabledSources?: readonly EnrichmentSourceId[];
 };
 
@@ -45,8 +55,12 @@ export function HoverCard({
   value,
   type,
   summary,
+  tags = [],
+  sourceAttribution,
   enrichmentState,
   errorMessage,
+  errorCode,
+  retryHint,
   disabledSources = [],
 }: HoverCardProps) {
   const typeLabel = formatHoverCardTypeLabel(type);
@@ -60,7 +74,30 @@ export function HoverCard({
   const disabledSourcePlaceholders = buildDisabledSourcePlaceholders(
     disabledSources
   );
+  const enrichmentTags = tags
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0);
+  const showTags =
+    enrichment.variant === "ready" && enrichmentTags.length > 0;
+  const showAttribution = shouldShowEnrichmentSourceAttribution(
+    enrichment.variant,
+    sourceAttribution
+  );
+  const showMissingKeyAction = shouldShowMissingKeyAction(
+    enrichment.variant,
+    errorCode
+  );
+  const showRateLimitRetryHint = shouldShowRateLimitRetryHint(
+    enrichment.variant,
+    retryHint
+  );
   const showFooter = pivotLinks.length > 0 || disabledSourcePlaceholders.length > 0;
+  const showBelowSummary =
+    showFooter ||
+    showTags ||
+    showAttribution ||
+    showMissingKeyAction ||
+    showRateLimitRetryHint;
 
   useEffect(() => {
     ensureVera5UiStyles(document);
@@ -105,10 +142,50 @@ export function HoverCard({
         role={enrichment.variant === "error" ? "alert" : "status"}
         aria-live={enrichment.variant === "loading" ? "polite" : undefined}
         aria-busy={enrichment.variant === "loading" ? true : undefined}
-        style={{ marginBottom: showFooter ? 8 : 0 }}
+        style={{ marginBottom: showBelowSummary ? 8 : 0 }}
       >
         {enrichment.text}
       </p>
+      {showMissingKeyAction ? (
+        <button
+          type="button"
+          className="vera5-hover-card-action"
+          aria-label="Open Vera5 Settings to add an API key"
+          onClick={() => {
+            void chrome.runtime.openOptionsPage();
+          }}
+          style={{ marginBottom: showBelowSummary ? 8 : 0 }}
+        >
+          {HOVER_CARD_OPEN_SETTINGS_LABEL}
+        </button>
+      ) : null}
+      {showRateLimitRetryHint ? (
+        <p
+          className="vera5-hover-card-retry-hint"
+          role="note"
+          style={{ marginBottom: showBelowSummary ? 8 : 0 }}
+        >
+          {retryHint}
+        </p>
+      ) : null}
+      {showTags ? (
+        <div
+          className="vera5-hover-card-tags"
+          role="list"
+          aria-label="Threat intelligence tags"
+          style={{ marginBottom: showFooter ? 8 : 0 }}
+        >
+          {enrichmentTags.map((tag) => (
+            <span
+              key={tag}
+              className="vera5-hover-card-tag"
+              role="listitem"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+      ) : null}
       {disabledSourcePlaceholders.length > 0 ? (
         <section
           className="vera5-hover-card-sources"
@@ -144,6 +221,14 @@ export function HoverCard({
             </a>
           ))}
         </nav>
+      ) : null}
+      {showAttribution && sourceAttribution ? (
+        <p className="vera5-hover-card-attribution" role="note">
+          {formatEnrichmentSourceAttribution(
+            sourceAttribution,
+            enrichment.variant
+          )}
+        </p>
       ) : null}
     </aside>
   );

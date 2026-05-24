@@ -23,6 +23,9 @@ import {
 
 function stubManualOnlyStorage(manualOnly: boolean): void {
   vi.stubGlobal("chrome", {
+    runtime: {
+      sendMessage: vi.fn().mockResolvedValue({ ok: false, error: "test stub" }),
+    },
     storage: {
       local: {
         get: (keys: string | string[]) => {
@@ -112,6 +115,9 @@ describe("hover card manual enrich trigger", () => {
 
   it("shows disabled sources on the hover card when sources are off", async () => {
     vi.stubGlobal("chrome", {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ ok: false, error: "test stub" }),
+      },
       storage: {
         local: {
           get: (keys: string | string[]) => {

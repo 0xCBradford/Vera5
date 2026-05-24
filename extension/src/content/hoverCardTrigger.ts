@@ -1,6 +1,7 @@
 import type { IocType } from "../lib/iocRegex";
 import { IOC_TYPE } from "../lib/iocRegex";
 import { attemptAutoEnrichmentFetch } from "./enrichmentAutoFetch";
+import { runBackgroundEnrichment } from "./enrichmentBackgroundFetch";
 import {
   getEnrichmentSourceEnabledForContent,
   listDisabledEnrichmentSourceIds,
@@ -81,7 +82,9 @@ export function openHoverCardForHighlight(
 
     showHoverCardNearAnchor(highlight, payload, doc);
 
-    if (options.enrichmentTrigger !== "manual") {
+    if (options.enrichmentTrigger === "manual") {
+      void runBackgroundEnrichment(payload, doc);
+    } else {
       void attemptAutoEnrichmentFetch(payload);
     }
   });

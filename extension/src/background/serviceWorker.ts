@@ -1,8 +1,8 @@
 import { scanPageMessage } from "../lib/messages";
-import { routeIncomingMessage } from "./messageRouter";
+import { routeIncomingMessageAsync } from "./messageRouter";
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  sendResponse(routeIncomingMessage(message));
+  void routeIncomingMessageAsync(message).then(sendResponse);
   return true;
 });
 

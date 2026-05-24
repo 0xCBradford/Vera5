@@ -1,5 +1,6 @@
 import { setupAutoScanStorageListener, syncAutoScanWithStorage } from "./autoScan";
 import { CONTENT_MESSAGE } from "./constants";
+import { setupBackgroundEnrichmentRouting } from "./enrichmentBackgroundFetch";
 import { setupHoverCardTrigger } from "./hoverCardTrigger";
 import { setupHighlightStorageListener, setupScanPageListener } from "./scanPage";
 
@@ -13,4 +14,5 @@ setupScanPageListener();
 setupHighlightStorageListener();
 setupAutoScanStorageListener();
 void syncAutoScanWithStorage();
+setupBackgroundEnrichmentRouting();
 setupHoverCardTrigger();

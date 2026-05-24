@@ -106,6 +106,51 @@ export function buildVera5UiStylesCss(): string {
 .vera5-hover-card-enrichment--ready {
   color: var(--vera5-ready);
 }
+.vera5-hover-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.vera5-hover-card-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-button-bg);
+  color: var(--vera5-muted);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.vera5-hover-card-attribution {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--vera5-border);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-action {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-button-bg);
+  color: var(--vera5-accent-text);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.vera5-hover-card-retry-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vera5-muted-label);
+}
 .vera5-hover-card-copy {
   font-size: 11px;
   font-weight: 600;

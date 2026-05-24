@@ -84,10 +84,23 @@ if (fs.existsSync(path.join(distDir, "manifest.json"))) {
   checkManifestCsp(path.join(distDir, "manifest.json"));
 }
 
+function checkConnectorFetchUsesGetWithoutBody(filePath, source) {
+  if (!filePath.endsWith(`${path.sep}abuseipdbConnector.ts`)) {
+    return;
+  }
+  if (/fetch\s*\([^)]*\{[^}]*\bbody\s*:/s.test(source)) {
+    fail(`${filePath} sends a request body from the AbuseIPDB connector`);
+  }
+  if (!/\bmethod:\s*["']GET["']/.test(source)) {
+    fail(`${filePath} must use GET for AbuseIPDB vendor requests`);
+  }
+}
+
 for (const filePath of walkFiles(srcDir, [".ts", ".tsx", ".js"])) {
   const source = fs.readFileSync(filePath, "utf8");
   checkNoDynamicExecution("source", filePath, source);
   checkNoApiKeyLogging(filePath, source);
+  checkConnectorFetchUsesGetWithoutBody(filePath, source);
 }
 
 for (const filePath of walkFiles(distDir, [".js"])) {
@@ -117,5 +130,5 @@ for (const filePath of walkFiles(distDir, [".html"])) {
 }
 
 console.log(
-  "verify-extension-security: OK (no eval/new Function, no remote scripts, no API key logging, CSP not weakened)"
+  "verify-extension-security: OK (no eval/new Function, no remote scripts, no API key logging, enrichment GET without body, CSP not weakened)"
 );

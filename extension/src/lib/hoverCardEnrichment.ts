@@ -37,6 +37,50 @@ export type EnrichmentDisplay = {
   variant: HoverCardEnrichmentState;
 };
 
+export type EnrichmentSourceAttribution = {
+  sourceLabel: string;
+  fromCache?: boolean;
+};
+
+export function formatEnrichmentSourceAttribution(
+  attribution: EnrichmentSourceAttribution,
+  enrichmentState?: HoverCardEnrichmentState
+): string {
+  if (enrichmentState === "error") {
+    return `Source: ${attribution.sourceLabel}`;
+  }
+  if (attribution.fromCache) {
+    return `Source: ${attribution.sourceLabel} · cached`;
+  }
+  return `Source: ${attribution.sourceLabel} · live`;
+}
+
+export function shouldShowEnrichmentSourceAttribution(
+  enrichmentState: HoverCardEnrichmentState | undefined,
+  attribution: EnrichmentSourceAttribution | undefined
+): boolean {
+  if (!attribution?.sourceLabel.trim()) {
+    return false;
+  }
+  return enrichmentState === "ready" || enrichmentState === "error";
+}
+
+export const HOVER_CARD_OPEN_SETTINGS_LABEL = "Open settings";
+
+export function shouldShowMissingKeyAction(
+  enrichmentState?: HoverCardEnrichmentState,
+  errorCode?: string
+): boolean {
+  return enrichmentState === "error" && errorCode === "missing_key";
+}
+
+export function shouldShowRateLimitRetryHint(
+  enrichmentState?: HoverCardEnrichmentState,
+  retryHint?: string
+): boolean {
+  return enrichmentState === "error" && Boolean(retryHint?.trim());
+}
+
 export type DisabledSourcePlaceholder = {
   sourceId: EnrichmentSourceId;
   label: string;

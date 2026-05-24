@@ -263,6 +263,131 @@ describe("HoverCard enrichment states", () => {
     ).toContain(HOVER_CARD_ENRICHMENT_MODIFIER_CLASS.ready);
   });
 
+  it("shows source summary and tags when enrichment is ready", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+      tags: ["US", "Fixed Line ISP"],
+    });
+
+    expect(mounted.container.textContent).toContain("74 abuse confidence");
+    const tagsRow = mounted.container.querySelector(".vera5-hover-card-tags");
+    expect(tagsRow).not.toBeNull();
+    expect(tagsRow?.querySelectorAll(".vera5-hover-card-tag")).toHaveLength(2);
+    expect(mounted.container.textContent).toContain("US");
+    expect(mounted.container.textContent).toContain("Fixed Line ISP");
+  });
+
+  it("shows source attribution footer when enrichment is ready", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+      sourceAttribution: { sourceLabel: "AbuseIPDB" },
+    });
+
+    const footer = mounted.container.querySelector(
+      ".vera5-hover-card-attribution"
+    );
+    expect(footer?.textContent).toBe("Source: AbuseIPDB · live");
+    expect(footer?.getAttribute("role")).toBe("note");
+  });
+
+  it("shows cached attribution when enrichment came from cache", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+      sourceAttribution: { sourceLabel: "AbuseIPDB", fromCache: true },
+    });
+
+    expect(mounted.container.textContent).toContain("Source: AbuseIPDB · cached");
+  });
+
+  it("shows source attribution on enrichment errors", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "error",
+      errorMessage: "Request timed out.",
+      sourceAttribution: { sourceLabel: "AbuseIPDB" },
+    });
+
+    expect(mounted.container.textContent).toContain("Source: AbuseIPDB");
+    expect(mounted.container.textContent).not.toContain("· live");
+  });
+
+  it("hides attribution footer while loading", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "loading",
+      sourceAttribution: { sourceLabel: "AbuseIPDB" },
+    });
+
+    expect(
+      mounted.container.querySelector(".vera5-hover-card-attribution")
+    ).toBeNull();
+  });
+
+  it("shows missing-key message and open-settings action", () => {
+    const openOptionsPage = vi.fn();
+    vi.stubGlobal("chrome", {
+      runtime: {
+        openOptionsPage,
+      },
+    });
+
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "error",
+      errorCode: "missing_key",
+      errorMessage:
+        "Add your AbuseIPDB API key in Vera5 Settings to load enrichment.",
+      sourceAttribution: { sourceLabel: "AbuseIPDB" },
+    });
+
+    expect(mounted.container.textContent).toContain(
+      "Add your AbuseIPDB API key in Vera5 Settings to load enrichment."
+    );
+    const action = mounted.container.querySelector(".vera5-hover-card-action");
+    expect(action?.textContent).toBe("Open settings");
+    action?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(openOptionsPage).toHaveBeenCalledTimes(1);
+
+    vi.unstubAllGlobals();
+  });
+
+  it("shows rate-limit backoff message and retry hint", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "error",
+      errorCode: "rate_limited",
+      errorMessage:
+        "AbuseIPDB rate limit reached. Back off before retrying.",
+      retryHint: "Retry after 120 seconds.",
+      sourceAttribution: { sourceLabel: "AbuseIPDB" },
+    });
+
+    expect(mounted.container.textContent).toContain(
+      "AbuseIPDB rate limit reached. Back off before retrying."
+    );
+    const hint = mounted.container.querySelector(".vera5-hover-card-retry-hint");
+    expect(hint?.textContent).toBe("Retry after 120 seconds.");
+    expect(hint?.getAttribute("role")).toBe("note");
+  });
+
+  it("hides tags unless enrichment is ready", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "loading",
+      tags: ["US"],
+    });
+
+    expect(
+      mounted.container.querySelector(".vera5-hover-card-tags")
+    ).toBeNull();
+  });
+
   it("shows loading summary alongside disabled sources", () => {
     mounted = renderHoverCard({
       ...baseProps,

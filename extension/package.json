@@ -6,7 +6,7 @@
   "description": "Vera5 browser extension — IOC enrichment overlay",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && vite build -c vite.content.config.ts",
     "build:watch": "vite build --watch",
     "verify:dist": "node scripts/verify-dist-manifest.mjs",
     "verify:security": "node scripts/verify-extension-security.mjs",

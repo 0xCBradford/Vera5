@@ -2,7 +2,13 @@ import type { IocType } from "../lib/iocRegex";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildDisabledSourcePlaceholders,
+  formatEnrichmentSourceAttribution,
+  HOVER_CARD_OPEN_SETTINGS_LABEL,
   resolveEnrichmentDisplay,
+  shouldShowEnrichmentSourceAttribution,
+  shouldShowMissingKeyAction,
+  shouldShowRateLimitRetryHint,
+  type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
   type HoverCardEnrichmentState,
 } from "../lib/hoverCardEnrichment";
@@ -21,11 +27,22 @@ import {
 } from "./hoverCardPosition";
 
 export const HOVER_CARD_HOST_ID = "vera5-hover-card-host";
+
+let lastHoverCardAnchor: Element | null = null;
+
+export function getLastHoverCardAnchor(): Element | null {
+  return lastHoverCardAnchor;
+}
 export const HOVER_CARD_PANEL_CLASS = "vera5-hover-card-panel";
 export const HOVER_CARD_COPY_BUTTON_CLASS = "vera5-hover-card-copy";
 export const HOVER_CARD_PIVOT_NAV_CLASS = "vera5-hover-card-pivots";
 export const HOVER_CARD_PIVOT_LINK_CLASS = "vera5-hover-card-pivot-link";
 export const HOVER_CARD_ENRICHMENT_CLASS = "vera5-hover-card-enrichment";
+export const HOVER_CARD_TAGS_CLASS = "vera5-hover-card-tags";
+export const HOVER_CARD_TAG_CLASS = "vera5-hover-card-tag";
+export const HOVER_CARD_ATTRIBUTION_CLASS = "vera5-hover-card-attribution";
+export const HOVER_CARD_ACTION_CLASS = "vera5-hover-card-action";
+export const HOVER_CARD_RETRY_HINT_CLASS = "vera5-hover-card-retry-hint";
 export const HOVER_CARD_SOURCES_CLASS = "vera5-hover-card-sources";
 export const HOVER_CARD_SOURCE_ITEM_CLASS = "vera5-hover-card-source-item";
 
@@ -43,8 +60,12 @@ export type HoverCardOverlayPayload = {
   value: string;
   type: IocType;
   summary?: string;
+  tags?: readonly string[];
+  sourceAttribution?: EnrichmentSourceAttribution;
   enrichmentState?: HoverCardEnrichmentState;
   errorMessage?: string;
+  errorCode?: string;
+  retryHint?: string;
   disabledSources?: readonly EnrichmentSourceId[];
 };
 
@@ -112,6 +133,95 @@ function createDisabledSourcesSection(
   return section;
 }
 
+function createEnrichmentTagsSection(
+  tags: readonly string[],
+  doc: Document
+): HTMLElement | null {
+  const normalized = tags
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0);
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  const row = doc.createElement("div");
+  row.className = HOVER_CARD_TAGS_CLASS;
+  row.setAttribute("role", "list");
+  row.setAttribute("aria-label", "Threat intelligence tags");
+
+  for (const tag of normalized) {
+    const chip = doc.createElement("span");
+    chip.className = HOVER_CARD_TAG_CLASS;
+    chip.setAttribute("role", "listitem");
+    chip.textContent = tag;
+    row.appendChild(chip);
+  }
+
+  return row;
+}
+
+function createSourceAttributionFooter(
+  payload: HoverCardOverlayPayload,
+  enrichmentState: HoverCardEnrichmentState,
+  doc: Document
+): HTMLElement | null {
+  if (
+    !shouldShowEnrichmentSourceAttribution(
+      enrichmentState,
+      payload.sourceAttribution
+    ) ||
+    !payload.sourceAttribution
+  ) {
+    return null;
+  }
+
+  const footer = doc.createElement("p");
+  footer.className = HOVER_CARD_ATTRIBUTION_CLASS;
+  footer.setAttribute("role", "note");
+  footer.textContent = formatEnrichmentSourceAttribution(
+    payload.sourceAttribution,
+    enrichmentState
+  );
+  return footer;
+}
+
+function createMissingKeyAction(
+  payload: HoverCardOverlayPayload,
+  enrichmentState: HoverCardEnrichmentState,
+  doc: Document
+): HTMLElement | null {
+  if (!shouldShowMissingKeyAction(enrichmentState, payload.errorCode)) {
+    return null;
+  }
+
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = HOVER_CARD_ACTION_CLASS;
+  button.textContent = HOVER_CARD_OPEN_SETTINGS_LABEL;
+  button.setAttribute("aria-label", "Open Vera5 Settings to add an API key");
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void chrome.runtime.openOptionsPage();
+  });
+  return button;
+}
+
+function createRateLimitRetryHint(
+  payload: HoverCardOverlayPayload,
+  enrichmentState: HoverCardEnrichmentState,
+  doc: Document
+): HTMLElement | null {
+  if (!shouldShowRateLimitRetryHint(enrichmentState, payload.retryHint)) {
+    return null;
+  }
+
+  const hint = doc.createElement("p");
+  hint.className = HOVER_CARD_RETRY_HINT_CLASS;
+  hint.setAttribute("role", "note");
+  hint.textContent = payload.retryHint ?? "";
+  return hint;
+}
+
 function createCopyButton(
   value: string,
   doc: Document
@@ -173,8 +283,33 @@ export function buildHoverCardPanel(
   });
   const disabledSourcesSection = createDisabledSourcesSection(payload, doc);
   const pivotNav = createPivotLinksNav(payload, doc);
+  const enrichmentTagsSection =
+    enrichment.variant === "ready" && payload.tags
+      ? createEnrichmentTagsSection(payload.tags, doc)
+      : null;
+  const attributionFooter = createSourceAttributionFooter(
+    payload,
+    enrichment.variant,
+    doc
+  );
+  const missingKeyAction = createMissingKeyAction(
+    payload,
+    enrichment.variant,
+    doc
+  );
+  const rateLimitRetryHint = createRateLimitRetryHint(
+    payload,
+    enrichment.variant,
+    doc
+  );
   const showFooter =
     pivotLinks.length > 0 || disabledSourcesSection !== null;
+  const showBelowSummary =
+    showFooter ||
+    enrichmentTagsSection !== null ||
+    attributionFooter !== null ||
+    missingKeyAction !== null ||
+    rateLimitRetryHint !== null;
 
   const panel = doc.createElement("aside");
   panel.className = HOVER_CARD_PANEL_CLASS;
@@ -201,7 +336,7 @@ export function buildHoverCardPanel(
     enrichment.variant,
     HOVER_CARD_ENRICHMENT_CLASS
   );
-  if (showFooter) {
+  if (showBelowSummary) {
     summaryRow.style.marginBottom = "8px";
   }
   summaryRow.textContent = enrichment.text;
@@ -216,11 +351,28 @@ export function buildHoverCardPanel(
   }
   panel.appendChild(summaryRow);
 
+  if (missingKeyAction) {
+    missingKeyAction.style.marginBottom = showBelowSummary ? "8px" : "0";
+    panel.appendChild(missingKeyAction);
+  }
+
+  if (rateLimitRetryHint) {
+    rateLimitRetryHint.style.marginBottom = showBelowSummary ? "8px" : "0";
+    panel.appendChild(rateLimitRetryHint);
+  }
+
+  if (enrichmentTagsSection) {
+    panel.appendChild(enrichmentTagsSection);
+  }
+
   if (disabledSourcesSection) {
     panel.appendChild(disabledSourcesSection);
   }
   if (pivotNav) {
     panel.appendChild(pivotNav);
+  }
+  if (attributionFooter) {
+    panel.appendChild(attributionFooter);
   }
 
   return panel;
@@ -252,8 +404,9 @@ export function showHoverCardNearAnchor(
   payload: HoverCardOverlayPayload,
   doc: Document = document
 ): HTMLElement {
-  hideHoverCard(doc);
+  lastHoverCardAnchor = anchor;
   const host = ensureHoverCardHost(doc);
+  host.replaceChildren();
   const panel = buildHoverCardPanel(payload, doc);
   host.appendChild(panel);
   positionHoverCardPanel(panel, anchor, readViewportSize(doc.defaultView ?? window));
@@ -266,4 +419,5 @@ export function hideHoverCard(doc: Document = document): void {
     return;
   }
   host.replaceChildren();
+  lastHoverCardAnchor = null;
 }
