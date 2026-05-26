@@ -37,6 +37,7 @@ export type EnrichmentSourceResult = {
   retryHint?: string;
   fetchedAt?: string;
   fromCache?: boolean;
+  rawVendorJson?: string;
 };
 
 export type EnrichmentResult = {
@@ -229,6 +230,12 @@ export function isEnrichmentSourceResult(
   if (record.fromCache !== undefined && typeof record.fromCache !== "boolean") {
     return false;
   }
+  if (
+    record.rawVendorJson !== undefined &&
+    typeof record.rawVendorJson !== "string"
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -286,6 +293,10 @@ export function normalizeEnrichmentSourceResult(
   }
   if (record.fromCache === true) {
     normalized.fromCache = true;
+  }
+  const rawVendorJson = record.rawVendorJson?.trim();
+  if (rawVendorJson) {
+    normalized.rawVendorJson = rawVendorJson;
   }
   return normalized;
 }
@@ -347,6 +358,7 @@ export function createOkSourceResult(input: {
   tags?: readonly string[];
   fetchedAt?: string;
   fromCache?: boolean;
+  rawVendorJson?: string;
 }): EnrichmentSourceResult {
   const result: EnrichmentSourceResult = {
     sourceId: input.sourceId,
@@ -363,6 +375,10 @@ export function createOkSourceResult(input: {
   }
   if (input.fromCache === true) {
     result.fromCache = true;
+  }
+  const rawVendorJson = input.rawVendorJson?.trim();
+  if (rawVendorJson) {
+    result.rawVendorJson = rawVendorJson;
   }
   return result;
 }

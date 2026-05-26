@@ -85,14 +85,18 @@ if (fs.existsSync(path.join(distDir, "manifest.json"))) {
 }
 
 function checkConnectorFetchUsesGetWithoutBody(filePath, source) {
-  if (!filePath.endsWith(`${path.sep}abuseipdbConnector.ts`)) {
+  const connectorFiles = new Set([
+    "abuseipdbConnector.ts",
+    "otxConnector.ts",
+  ]);
+  if (!connectorFiles.has(path.basename(filePath))) {
     return;
   }
   if (/fetch\s*\([^)]*\{[^}]*\bbody\s*:/s.test(source)) {
-    fail(`${filePath} sends a request body from the AbuseIPDB connector`);
+    fail(`${filePath} sends a request body from an enrichment connector`);
   }
   if (!/\bmethod:\s*["']GET["']/.test(source)) {
-    fail(`${filePath} must use GET for AbuseIPDB vendor requests`);
+    fail(`${filePath} must use GET for vendor enrichment requests`);
   }
 }
 

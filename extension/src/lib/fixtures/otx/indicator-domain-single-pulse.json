@@ -1,0 +1,13 @@
+{
+  "indicator": "example.testcategory.com",
+  "type": "domain",
+  "pulse_info": {
+    "count": 1,
+    "pulses": [
+      {
+        "name": "Example domain pulse",
+        "tags": ["phishing"]
+      }
+    ]
+  }
+}

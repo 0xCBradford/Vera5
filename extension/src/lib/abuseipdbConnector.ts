@@ -17,6 +17,8 @@ import {
   assertEnrichmentFetchHasNoBody,
   sanitizeEnrichmentIoc,
 } from "./iocRequestBoundaries";
+import { formatRedactedVendorJson } from "./enrichmentRawResponse";
+import { mapAbuseIpdbFieldsToUnifiedPresentation } from "./enrichmentVendorNormalize";
 import { getApiKey } from "./storage";
 
 export const ABUSEIPDB_SOURCE_ID = "abuseipdb" as const;
@@ -143,30 +145,14 @@ export function parseAbuseIpdbCheckData(payload: unknown): AbuseIpdbCheckData | 
 }
 
 export function formatAbuseIpdbSummary(data: AbuseIpdbCheckData): string {
-  if (data.abuseConfidenceScore !== undefined) {
-    return `${Math.round(data.abuseConfidenceScore)} abuse confidence`;
-  }
-  if (data.totalReports !== undefined) {
-    return `${Math.round(data.totalReports)} reports`;
-  }
-  return "No AbuseIPDB reputation data";
+  return (
+    mapAbuseIpdbFieldsToUnifiedPresentation(data)?.summary ??
+    "No AbuseIPDB reputation data"
+  );
 }
 
 export function buildAbuseIpdbTags(data: AbuseIpdbCheckData): readonly string[] {
-  const tags: string[] = [];
-  if (data.countryCode) {
-    tags.push(data.countryCode.toUpperCase());
-  }
-  if (data.usageType) {
-    tags.push(data.usageType);
-  }
-  if (data.isp) {
-    tags.push(data.isp);
-  }
-  if (data.domain) {
-    tags.push(data.domain);
-  }
-  return tags;
+  return mapAbuseIpdbFieldsToUnifiedPresentation(data)?.tags ?? [];
 }
 
 export function normalizeAbuseIpdbCheckResponse(
@@ -176,10 +162,7 @@ export function normalizeAbuseIpdbCheckResponse(
   if (!data) {
     return null;
   }
-  return {
-    summary: formatAbuseIpdbSummary(data),
-    tags: buildAbuseIpdbTags(data),
-  };
+  return mapAbuseIpdbFieldsToUnifiedPresentation(data);
 }
 
 function mapAbuseIpdbHttpStatus(status: number): {
@@ -324,6 +307,7 @@ export async function enrichWithAbuseIpdb(
       summary: normalized.summary,
       tags: normalized.tags,
       fetchedAt,
+      rawVendorJson: formatRedactedVendorJson(payload),
     });
   } catch (error) {
     if (isAbortError(error)) {

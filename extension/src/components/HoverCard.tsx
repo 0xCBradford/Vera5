@@ -3,15 +3,20 @@ import type { IocType } from "../lib/iocRegex";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildDisabledSourcePlaceholders,
+  buildSourceStatusBadgeClassName,
   formatEnrichmentSourceAttribution,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
+  HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
   resolveEnrichmentDisplay,
   shouldShowEnrichmentSourceAttribution,
   shouldShowMissingKeyAction,
+  shouldShowMultiSourceResults,
   shouldShowRateLimitRetryHint,
+  shouldShowSingleSourceRawJson,
   type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
   type HoverCardEnrichmentState,
+  type HoverCardSourceEntry,
 } from "../lib/hoverCardEnrichment";
 import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
 import { getPivotLinks } from "../lib/pivots";
@@ -45,6 +50,7 @@ export type HoverCardProps = {
   errorCode?: string;
   retryHint?: string;
   disabledSources?: readonly EnrichmentSourceId[];
+  sourceResults?: readonly HoverCardSourceEntry[];
 };
 
 export function formatHoverCardTypeLabel(type: IocType): string {
@@ -62,6 +68,7 @@ export function HoverCard({
   errorCode,
   retryHint,
   disabledSources = [],
+  sourceResults = [],
 }: HoverCardProps) {
   const typeLabel = formatHoverCardTypeLabel(type);
   const [copied, setCopied] = useState(false);
@@ -79,22 +86,34 @@ export function HoverCard({
     .filter((tag) => tag.length > 0);
   const showTags =
     enrichment.variant === "ready" && enrichmentTags.length > 0;
+  const showMultiSourceResults = shouldShowMultiSourceResults(sourceResults);
+  const showSingleSourceRawJson = shouldShowSingleSourceRawJson(sourceResults);
+  const singleSourceRawJson = showSingleSourceRawJson
+    ? sourceResults[0]?.rawVendorJson
+    : undefined;
   const showAttribution = shouldShowEnrichmentSourceAttribution(
     enrichment.variant,
-    sourceAttribution
+    sourceAttribution,
+    sourceResults
   );
   const showMissingKeyAction = shouldShowMissingKeyAction(
     enrichment.variant,
-    errorCode
+    errorCode,
+    sourceResults
   );
   const showRateLimitRetryHint = shouldShowRateLimitRetryHint(
     enrichment.variant,
-    retryHint
+    retryHint,
+    sourceResults
   );
-  const showFooter = pivotLinks.length > 0 || disabledSourcePlaceholders.length > 0;
+  const showFooter =
+    pivotLinks.length > 0 ||
+    disabledSourcePlaceholders.length > 0 ||
+    showMultiSourceResults;
   const showBelowSummary =
     showFooter ||
     showTags ||
+    showSingleSourceRawJson ||
     showAttribution ||
     showMissingKeyAction ||
     showRateLimitRetryHint;
@@ -168,6 +187,15 @@ export function HoverCard({
           {retryHint}
         </p>
       ) : null}
+      {showSingleSourceRawJson && singleSourceRawJson ? (
+        <details
+          className="vera5-hover-card-raw-json"
+          style={{ marginBottom: showFooter ? 8 : 0 }}
+        >
+          <summary>{HOVER_CARD_RAW_JSON_SUMMARY_LABEL}</summary>
+          <pre className="vera5-hover-card-raw-json-body">{singleSourceRawJson}</pre>
+        </details>
+      ) : null}
       {showTags ? (
         <div
           className="vera5-hover-card-tags"
@@ -185,6 +213,38 @@ export function HoverCard({
             </span>
           ))}
         </div>
+      ) : null}
+      {showMultiSourceResults ? (
+        <section
+          className="vera5-hover-card-sources"
+          aria-label="Enrichment source results"
+          style={{ marginBottom: pivotLinks.length > 0 ? 8 : 0 }}
+        >
+          <p className="vera5-hover-card-sources-heading">Enrichment sources</p>
+          <ul className="vera5-hover-card-sources-list">
+            {sourceResults.map((entry) => (
+              <li key={entry.sourceId} className="vera5-hover-card-source-item">
+                <span className={buildSourceStatusBadgeClassName(entry.status)}>
+                  {entry.label} · {entry.badgeText}
+                </span>
+                <span className="vera5-hover-card-source-detail">{entry.detail}</span>
+                {entry.retryHint ? (
+                  <span className="vera5-hover-card-retry-hint" role="note">
+                    {entry.retryHint}
+                  </span>
+                ) : null}
+                {entry.rawVendorJson ? (
+                  <details className="vera5-hover-card-raw-json">
+                    <summary>{HOVER_CARD_RAW_JSON_SUMMARY_LABEL}</summary>
+                    <pre className="vera5-hover-card-raw-json-body">
+                      {entry.rawVendorJson}
+                    </pre>
+                  </details>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
       {disabledSourcePlaceholders.length > 0 ? (
         <section

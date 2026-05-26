@@ -2,15 +2,20 @@ import type { IocType } from "../lib/iocRegex";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildDisabledSourcePlaceholders,
+  buildSourceStatusBadgeClassName,
   formatEnrichmentSourceAttribution,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
+  HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
   resolveEnrichmentDisplay,
   shouldShowEnrichmentSourceAttribution,
   shouldShowMissingKeyAction,
+  shouldShowMultiSourceResults,
   shouldShowRateLimitRetryHint,
+  shouldShowSingleSourceRawJson,
   type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
   type HoverCardEnrichmentState,
+  type HoverCardSourceEntry,
 } from "../lib/hoverCardEnrichment";
 import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
 import { getPivotLinks } from "../lib/pivots";
@@ -45,6 +50,10 @@ export const HOVER_CARD_ACTION_CLASS = "vera5-hover-card-action";
 export const HOVER_CARD_RETRY_HINT_CLASS = "vera5-hover-card-retry-hint";
 export const HOVER_CARD_SOURCES_CLASS = "vera5-hover-card-sources";
 export const HOVER_CARD_SOURCE_ITEM_CLASS = "vera5-hover-card-source-item";
+export const HOVER_CARD_SOURCE_BADGE_CLASS = "vera5-hover-card-source-badge";
+export const HOVER_CARD_SOURCE_DETAIL_CLASS = "vera5-hover-card-source-detail";
+export const HOVER_CARD_RAW_JSON_CLASS = "vera5-hover-card-raw-json";
+export const HOVER_CARD_RAW_JSON_BODY_CLASS = "vera5-hover-card-raw-json-body";
 
 const TYPE_LABELS: Record<IocType, string> = {
   ipv4: "IPv4 address",
@@ -67,10 +76,31 @@ export type HoverCardOverlayPayload = {
   errorCode?: string;
   retryHint?: string;
   disabledSources?: readonly EnrichmentSourceId[];
+  sourceResults?: readonly HoverCardSourceEntry[];
 };
 
 function formatTypeLabel(type: IocType): string {
   return TYPE_LABELS[type];
+}
+
+export function createRawVendorJsonDetails(
+  rawVendorJson: string,
+  doc: Document,
+  summaryLabel: string = HOVER_CARD_RAW_JSON_SUMMARY_LABEL
+): HTMLDetailsElement {
+  const details = doc.createElement("details");
+  details.className = HOVER_CARD_RAW_JSON_CLASS;
+
+  const summary = doc.createElement("summary");
+  summary.textContent = summaryLabel;
+  details.appendChild(summary);
+
+  const pre = doc.createElement("pre");
+  pre.className = HOVER_CARD_RAW_JSON_BODY_CLASS;
+  pre.textContent = rawVendorJson;
+  details.appendChild(pre);
+
+  return details;
 }
 
 function createPivotLinksNav(
@@ -97,6 +127,60 @@ function createPivotLinksNav(
   }
 
   return nav;
+}
+
+function createSourceResultsSection(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): HTMLElement | null {
+  const entries = payload.sourceResults ?? [];
+  if (!shouldShowMultiSourceResults(entries)) {
+    return null;
+  }
+
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_SOURCES_CLASS;
+  section.setAttribute("aria-label", "Enrichment source results");
+
+  const heading = doc.createElement("p");
+  heading.className = "vera5-hover-card-sources-heading";
+  heading.textContent = "Enrichment sources";
+  section.appendChild(heading);
+
+  const list = doc.createElement("ul");
+  list.className = "vera5-hover-card-sources-list";
+
+  for (const entry of entries) {
+    const item = doc.createElement("li");
+    item.className = HOVER_CARD_SOURCE_ITEM_CLASS;
+
+    const badge = doc.createElement("span");
+    badge.className = buildSourceStatusBadgeClassName(entry.status);
+    badge.textContent = `${entry.label} · ${entry.badgeText}`;
+    item.appendChild(badge);
+
+    const detail = doc.createElement("span");
+    detail.className = HOVER_CARD_SOURCE_DETAIL_CLASS;
+    detail.textContent = entry.detail;
+    item.appendChild(detail);
+
+    if (entry.retryHint?.trim()) {
+      const retry = doc.createElement("span");
+      retry.className = HOVER_CARD_RETRY_HINT_CLASS;
+      retry.setAttribute("role", "note");
+      retry.textContent = entry.retryHint;
+      item.appendChild(retry);
+    }
+
+    if (entry.rawVendorJson?.trim()) {
+      item.appendChild(createRawVendorJsonDetails(entry.rawVendorJson, doc));
+    }
+
+    list.appendChild(item);
+  }
+
+  section.appendChild(list);
+  return section;
 }
 
 function createDisabledSourcesSection(
@@ -168,7 +252,8 @@ function createSourceAttributionFooter(
   if (
     !shouldShowEnrichmentSourceAttribution(
       enrichmentState,
-      payload.sourceAttribution
+      payload.sourceAttribution,
+      payload.sourceResults
     ) ||
     !payload.sourceAttribution
   ) {
@@ -190,7 +275,7 @@ function createMissingKeyAction(
   enrichmentState: HoverCardEnrichmentState,
   doc: Document
 ): HTMLElement | null {
-  if (!shouldShowMissingKeyAction(enrichmentState, payload.errorCode)) {
+  if (!shouldShowMissingKeyAction(enrichmentState, payload.errorCode, payload.sourceResults)) {
     return null;
   }
 
@@ -211,7 +296,7 @@ function createRateLimitRetryHint(
   enrichmentState: HoverCardEnrichmentState,
   doc: Document
 ): HTMLElement | null {
-  if (!shouldShowRateLimitRetryHint(enrichmentState, payload.retryHint)) {
+  if (!shouldShowRateLimitRetryHint(enrichmentState, payload.retryHint, payload.sourceResults)) {
     return null;
   }
 
@@ -281,6 +366,15 @@ export function buildHoverCardPanel(
     summary: payload.summary,
     errorMessage: payload.errorMessage,
   });
+  const sourceResultsSection = createSourceResultsSection(payload, doc);
+  const singleSourceRawJson =
+    shouldShowSingleSourceRawJson(payload.sourceResults) &&
+    payload.sourceResults?.[0]?.rawVendorJson?.trim()
+      ? createRawVendorJsonDetails(
+          payload.sourceResults[0].rawVendorJson,
+          doc
+        )
+      : null;
   const disabledSourcesSection = createDisabledSourcesSection(payload, doc);
   const pivotNav = createPivotLinksNav(payload, doc);
   const enrichmentTagsSection =
@@ -303,9 +397,12 @@ export function buildHoverCardPanel(
     doc
   );
   const showFooter =
-    pivotLinks.length > 0 || disabledSourcesSection !== null;
+    pivotLinks.length > 0 ||
+    disabledSourcesSection !== null ||
+    sourceResultsSection !== null;
   const showBelowSummary =
     showFooter ||
+    singleSourceRawJson !== null ||
     enrichmentTagsSection !== null ||
     attributionFooter !== null ||
     missingKeyAction !== null ||
@@ -365,6 +462,15 @@ export function buildHoverCardPanel(
     panel.appendChild(enrichmentTagsSection);
   }
 
+  if (singleSourceRawJson) {
+    singleSourceRawJson.style.marginBottom = showFooter ? "8px" : "0";
+    panel.appendChild(singleSourceRawJson);
+  }
+
+  if (sourceResultsSection) {
+    sourceResultsSection.style.marginBottom = showFooter ? "8px" : "0";
+    panel.appendChild(sourceResultsSection);
+  }
   if (disabledSourcesSection) {
     panel.appendChild(disabledSourcesSection);
   }

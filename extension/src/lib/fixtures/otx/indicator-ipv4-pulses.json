@@ -1,0 +1,19 @@
+{
+  "indicator": "198.51.100.42",
+  "type": "IPv4",
+  "pulse_info": {
+    "count": 3,
+    "pulses": [
+      {
+        "name": "Example pulse A",
+        "tags": ["malware", "scanner"]
+      },
+      {
+        "name": "Example pulse B",
+        "tags": ["c2", "phishing"]
+      }
+    ]
+  },
+  "validation": [],
+  "sections": []
+}

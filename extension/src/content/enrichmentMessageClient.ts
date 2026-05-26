@@ -1,8 +1,8 @@
+import type { EnrichmentSourceId } from "../lib/hoverCardEnrichment";
 import type { IocType } from "../lib/iocRegex";
 import { sanitizeEnrichmentIoc } from "../lib/iocRequestBoundaries";
 
 const ENRICH_IOC_MESSAGE_TYPE = "ENRICH_IOC";
-const DEFAULT_ENRICHMENT_SOURCE_ID = "abuseipdb";
 
 export type ContentEnrichmentSourceResult = {
   sourceId: string;
@@ -14,6 +14,7 @@ export type ContentEnrichmentSourceResult = {
   errorCode?: string;
   errorMessage?: string;
   retryHint?: string;
+  rawVendorJson?: string;
 };
 
 function normalizeContentTags(value: unknown): readonly string[] | undefined {
@@ -61,6 +62,9 @@ function isContentEnrichmentSourceResult(
   if (record.retryHint !== undefined && typeof record.retryHint !== "string") {
     return false;
   }
+  if (record.rawVendorJson !== undefined && typeof record.rawVendorJson !== "string") {
+    return false;
+  }
   return true;
 }
 
@@ -95,6 +99,10 @@ function parseContentEnrichmentSourceResult(
   if (record.retryHint) {
     parsed.retryHint = record.retryHint;
   }
+  const rawVendorJson = record.rawVendorJson?.trim();
+  if (rawVendorJson) {
+    parsed.rawVendorJson = rawVendorJson;
+  }
   return parsed;
 }
 
@@ -102,10 +110,34 @@ type MessageResponse =
   | { ok: true; payload?: unknown }
   | { ok: false; error: string };
 
-export async function requestEnrichmentFromServiceWorker(input: {
-  value: string;
-  iocType: IocType;
-}): Promise<ContentEnrichmentSourceResult | null> {
+function parseContentEnrichmentSourceResults(
+  value: unknown
+): ContentEnrichmentSourceResult[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const parsed: ContentEnrichmentSourceResult[] = [];
+  for (const entry of value) {
+    const source = parseContentEnrichmentSourceResult(entry);
+    if (source) {
+      parsed.push(source);
+    }
+  }
+  return parsed;
+}
+
+export type ContentEnrichmentFetchResult = {
+  sources: ContentEnrichmentSourceResult[];
+  primary: ContentEnrichmentSourceResult | null;
+};
+
+export async function requestEnrichmentFromServiceWorker(
+  input: {
+    value: string;
+    iocType: IocType;
+    sourceId?: EnrichmentSourceId;
+  }
+): Promise<ContentEnrichmentFetchResult | null> {
   const sanitized = sanitizeEnrichmentIoc({
     value: input.value,
     type: input.iocType,
@@ -114,17 +146,31 @@ export async function requestEnrichmentFromServiceWorker(input: {
     return null;
   }
 
-  const response = (await chrome.runtime.sendMessage({
+  const message: Record<string, unknown> = {
     type: ENRICH_IOC_MESSAGE_TYPE,
     value: sanitized.value,
     iocType: sanitized.type,
-    sourceId: DEFAULT_ENRICHMENT_SOURCE_ID,
-  })) as MessageResponse;
+  };
+  if (input.sourceId) {
+    message.sourceId = input.sourceId;
+  }
+
+  const response = (await chrome.runtime.sendMessage(message)) as MessageResponse;
 
   if (!response?.ok || typeof response.payload !== "object" || response.payload === null) {
     return null;
   }
 
   const payload = response.payload as Record<string, unknown>;
-  return parseContentEnrichmentSourceResult(payload.source);
+  const sources = parseContentEnrichmentSourceResults(payload.sources);
+  if (sources.length === 0) {
+    const single = parseContentEnrichmentSourceResult(payload.source);
+    if (!single) {
+      return null;
+    }
+    return { sources: [single], primary: single };
+  }
+  const primary =
+    parseContentEnrichmentSourceResult(payload.source) ?? sources[0] ?? null;
+  return { sources, primary };
 }

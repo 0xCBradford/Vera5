@@ -203,9 +203,65 @@ export function buildVera5UiStylesCss(): string {
 }
 .vera5-hover-card-source-item {
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: 11px;
   color: var(--vera5-muted-label);
   line-height: 1.4;
+}
+.vera5-hover-card-source-badge {
+  align-self: flex-start;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--vera5-border);
+  white-space: nowrap;
+}
+.vera5-hover-card-source-badge--ok {
+  color: #166534;
+  background-color: color-mix(in srgb, #22c55e 16%, white);
+  border-color: color-mix(in srgb, #22c55e 35%, var(--vera5-border));
+}
+.vera5-hover-card-source-badge--error {
+  color: #991b1b;
+  background-color: color-mix(in srgb, #ef4444 14%, white);
+  border-color: color-mix(in srgb, #ef4444 35%, var(--vera5-border));
+}
+.vera5-hover-card-source-badge--skipped {
+  color: var(--vera5-muted-label);
+  background-color: var(--vera5-button-bg);
+}
+.vera5-hover-card-source-detail {
+  display: block;
+  color: var(--vera5-text);
+}
+.vera5-hover-card-raw-json {
+  margin-top: 4px;
+}
+.vera5-hover-card-raw-json summary {
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--vera5-accent-text);
+  list-style-position: outside;
+}
+.vera5-hover-card-raw-json-body {
+  margin: 4px 0 0;
+  padding: 6px 8px;
+  max-height: 160px;
+  overflow: auto;
+  border-radius: 4px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-button-bg);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--vera5-text);
 }
 .vera5-ioc-highlight {
   --vera5-highlight-accent: #1a5fb4;
@@ -291,6 +347,16 @@ export function buildVera5UiStylesCss(): string {
     --vera5-highlight-badge-text: #dbeafe;
     --vera5-highlight-badge-bg: color-mix(in srgb, #60a5fa 24%, #1e293b);
     --vera5-enrich-icon: #93c5fd;
+  }
+  .vera5-hover-card-source-badge--ok {
+    color: #bbf7d0;
+    background-color: color-mix(in srgb, #22c55e 22%, #1e293b);
+    border-color: color-mix(in srgb, #22c55e 40%, #475569);
+  }
+  .vera5-hover-card-source-badge--error {
+    color: #fecaca;
+    background-color: color-mix(in srgb, #ef4444 20%, #1e293b);
+    border-color: color-mix(in srgb, #ef4444 40%, #475569);
   }
 }
 `.trim();

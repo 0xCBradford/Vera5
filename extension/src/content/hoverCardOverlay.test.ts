@@ -309,6 +309,47 @@ describe("hover card overlay", () => {
     vi.unstubAllGlobals();
   });
 
+  it("shows expandable raw vendor JSON for enrichment sources", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: "abuseipdb",
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "12 abuse confidence",
+          rawVendorJson:
+            '{\n  "data": {\n    "abuseConfidenceScore": 12\n  }\n}',
+        },
+      ],
+    });
+
+    const details = panel.querySelector(".vera5-hover-card-raw-json");
+    expect(details).not.toBeNull();
+    expect(details?.textContent).toContain("Raw response");
+    expect(details?.textContent).toContain("abuseConfidenceScore");
+  });
+
   it("shows rate-limit backoff message and retry hint", () => {
     const anchor = document.createElement("span");
     document.body.appendChild(anchor);

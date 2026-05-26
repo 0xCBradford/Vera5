@@ -213,8 +213,8 @@ describe("HoverCard enrichment states", () => {
       "ready",
       {
         enrichmentState: "ready",
-        summary: "3 related pulses on OTX.",
-        expectedText: "3 related pulses on OTX.",
+        summary: "3 threat pulses",
+        expectedText: "3 threat pulses",
         modifier: "ready",
         role: "status",
       },
@@ -277,6 +277,97 @@ describe("HoverCard enrichment states", () => {
     expect(tagsRow?.querySelectorAll(".vera5-hover-card-tag")).toHaveLength(2);
     expect(mounted.container.textContent).toContain("US");
     expect(mounted.container.textContent).toContain("Fixed Line ISP");
+  });
+
+  it("shows per-source badges for partial multi-source enrichment", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "42 abuse confidence",
+      tags: ["US"],
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "42 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "error",
+          badgeText: "Error",
+          detail: "OTX rate limit reached. Back off before retrying.",
+          retryHint: "Retry after 30 seconds.",
+        },
+      ],
+    });
+
+    expect(mounted.container.textContent).toContain("42 abuse confidence");
+    expect(mounted.container.textContent).toContain("AbuseIPDB · Live");
+    expect(mounted.container.textContent).toContain("OTX · Error");
+    expect(
+      mounted.container.querySelectorAll(".vera5-hover-card-source-badge")
+    ).toHaveLength(2);
+    expect(
+      mounted.container.querySelector(".vera5-hover-card-attribution")
+    ).toBeNull();
+  });
+
+  it("shows expandable redacted raw JSON for a single source", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: "abuseipdb",
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "12 abuse confidence",
+          rawVendorJson: '{\n  "data": {\n    "abuseConfidenceScore": 12\n  }\n}',
+        },
+      ],
+    });
+
+    const details = mounted.container.querySelector(
+      ".vera5-hover-card-raw-json"
+    );
+    expect(details).not.toBeNull();
+    expect(details?.textContent).toContain("Raw response");
+    expect(details?.textContent).toContain("abuseConfidenceScore");
+  });
+
+  it("shows per-source raw JSON when multiple sources return data", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "42 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: "abuseipdb",
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "42 abuse confidence",
+          rawVendorJson: '{"data":{"abuseConfidenceScore":42}}',
+        },
+        {
+          sourceId: "otx",
+          label: "OTX",
+          status: "ok",
+          badgeText: "Live",
+          detail: "2 threat pulses",
+          rawVendorJson: '{"pulse_info":{"count":2}}',
+        },
+      ],
+    });
+
+    expect(
+      mounted.container.querySelectorAll(".vera5-hover-card-raw-json")
+    ).toHaveLength(2);
   });
 
   it("shows source attribution footer when enrichment is ready", () => {
