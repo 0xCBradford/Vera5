@@ -106,6 +106,43 @@ export function buildVera5UiStylesCss(): string {
 .vera5-hover-card-enrichment--ready {
   color: var(--vera5-ready);
 }
+.vera5-hover-card-risk-score {
+  margin: 8px 0;
+}
+.vera5-hover-card-risk-score-label {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-risk-disagreement {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--vera5-error);
+}
+.vera5-hover-card-risk-contributions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.vera5-hover-card-risk-contribution {
+  margin: 0;
+}
+.vera5-hover-card-risk-contribution-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-button-bg);
+  color: var(--vera5-accent-text);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.3;
+}
 .vera5-hover-card-tags {
   display: flex;
   flex-wrap: wrap;
@@ -132,6 +169,20 @@ export function buildVera5UiStylesCss(): string {
   font-size: 11px;
   line-height: 1.4;
   color: var(--vera5-muted-label);
+}
+.vera5-hover-card-disclaimer {
+  margin: 8px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--vera5-border);
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-disclaimer p {
+  margin: 0 0 4px;
+}
+.vera5-hover-card-disclaimer p:last-child {
+  margin-bottom: 0;
 }
 .vera5-hover-card-action {
   display: inline-block;
@@ -224,6 +275,17 @@ export function buildVera5UiStylesCss(): string {
   color: #166534;
   background-color: color-mix(in srgb, #22c55e 16%, white);
   border-color: color-mix(in srgb, #22c55e 35%, var(--vera5-border));
+}
+.vera5-hover-card-source-badge--cached {
+  color: #1e40af;
+  background-color: color-mix(in srgb, #3b82f6 14%, white);
+  border-color: color-mix(in srgb, #3b82f6 35%, var(--vera5-border));
+}
+.vera5-hover-card-source-last-updated {
+  display: block;
+  font-size: 10px;
+  color: var(--vera5-muted-label);
+  line-height: 1.35;
 }
 .vera5-hover-card-source-badge--error {
   color: #991b1b;

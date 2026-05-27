@@ -1,7 +1,10 @@
 import type { IocType } from "../lib/iocRegex";
 import { IOC_TYPE } from "../lib/iocRegex";
 import { attemptAutoEnrichmentFetch } from "./enrichmentAutoFetch";
-import { runBackgroundEnrichment } from "./enrichmentBackgroundFetch";
+import {
+  cancelPendingHoverEnrichment,
+  runBackgroundEnrichment,
+} from "./enrichmentBackgroundFetch";
 import {
   getEnrichmentSourceEnabledForContent,
   listDisabledEnrichmentSourceIds,
@@ -83,7 +86,8 @@ export function openHoverCardForHighlight(
     showHoverCardNearAnchor(highlight, payload, doc);
 
     if (options.enrichmentTrigger === "manual") {
-      void runBackgroundEnrichment(payload, doc);
+      cancelPendingHoverEnrichment();
+      void runBackgroundEnrichment(payload, doc, { bypassCache: true });
     } else {
       void attemptAutoEnrichmentFetch(payload);
     }
@@ -116,11 +120,13 @@ function handleDocumentClick(event: MouseEvent, doc: Document): void {
     return;
   }
 
+  cancelPendingHoverEnrichment();
   hideHoverCard(doc);
 }
 
 function handleDocumentKeyDown(event: KeyboardEvent, doc: Document): void {
   if (event.key === "Escape") {
+    cancelPendingHoverEnrichment();
     hideHoverCard(doc);
     return;
   }
@@ -164,6 +170,7 @@ export function setupHoverCardTrigger(doc: Document = document): () => void {
   return () => {
     doc.removeEventListener("click", onClick, true);
     doc.removeEventListener("keydown", onKeyDown, true);
+    cancelPendingHoverEnrichment();
     hideHoverCard(doc);
   };
 }

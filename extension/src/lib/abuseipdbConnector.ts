@@ -11,6 +11,7 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
 import { IOC_TYPE } from "./iocRegex";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import {
@@ -270,6 +271,7 @@ export async function enrichWithAbuseIpdb(
     if (!response.ok) {
       const mapped = mapAbuseIpdbHttpStatus(response.status);
       if (response.status === 429) {
+        recordGlobalEnrichmentCooldownFromHeaders(response.headers);
         const rateLimit = buildRateLimitedEnrichmentError(
           ENRICHMENT_SOURCE_LABELS[ABUSEIPDB_SOURCE_ID],
           response.headers

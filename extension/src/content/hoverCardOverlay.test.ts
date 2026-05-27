@@ -3,8 +3,11 @@
  */
 import { describe, expect, it, afterEach, vi } from "vitest";
 import {
+  buildHoverCardSourceEntries,
   ENRICHMENT_SOURCE,
+  HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_LOADING_SUMMARY,
+  HOVER_CARD_RISK_SCORE_DISCLAIMER,
 } from "../lib/hoverCardEnrichment";
 import { IOC_TYPE } from "../lib/iocRegex";
 import * as copyText from "../lib/copyText";
@@ -19,6 +22,7 @@ import {
   HOVER_CARD_TAGS_CLASS,
   HOVER_CARD_TAG_CLASS,
   HOVER_CARD_ATTRIBUTION_CLASS,
+  HOVER_CARD_DISCLAIMER_CLASS,
   HOVER_CARD_ACTION_CLASS,
   HOVER_CARD_RETRY_HINT_CLASS,
   showHoverCardNearAnchor,
@@ -264,6 +268,46 @@ describe("hover card overlay", () => {
     expect(panel.textContent).toContain("Source: AbuseIPDB");
   });
 
+  it("shows enrichment and risk score disclaimers when enrichment is ready", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "12 abuse confidence",
+        },
+      ]),
+    });
+
+    const footer = panel.querySelector(`.${HOVER_CARD_DISCLAIMER_CLASS}`);
+    expect(footer?.getAttribute("aria-label")).toBe(
+      "Enrichment and risk score notice"
+    );
+    expect(panel.textContent).toContain(HOVER_CARD_ENRICHMENT_DISCLAIMER);
+    expect(panel.textContent).toContain(HOVER_CARD_RISK_SCORE_DISCLAIMER);
+  });
+
   it("shows missing-key message and open-settings action", () => {
     const openOptionsPage = vi.fn();
     vi.stubGlobal("chrome", {
@@ -307,6 +351,97 @@ describe("hover card overlay", () => {
     expect(openOptionsPage).toHaveBeenCalledTimes(1);
 
     vi.unstubAllGlobals();
+  });
+
+  it("shows cached badge and last updated for single-source enrichment", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const sourceResults = buildHoverCardSourceEntries([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "12 abuse confidence",
+        fromCache: true,
+        fetchedAt: "2026-05-22T10:00:00.000Z",
+      },
+    ]);
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults,
+      sourceAttribution: { sourceLabel: "AbuseIPDB", fromCache: true },
+    });
+
+    expect(panel.textContent).toContain("Last updated:");
+    expect(panel.textContent).toContain("Source: AbuseIPDB · cached");
+  });
+
+  it("shows Cached badge on multi-source rows served from cache", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const sourceResults = buildHoverCardSourceEntries([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "12 abuse confidence",
+        fromCache: true,
+        fetchedAt: "2026-05-22T10:00:00.000Z",
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+        fetchedAt: "2026-05-22T11:00:00.000Z",
+      },
+    ]);
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults,
+    });
+
+    expect(panel.textContent).toContain("AbuseIPDB · Cached");
+    expect(panel.textContent).toContain("OTX · Live");
+    expect(
+      panel.querySelector(".vera5-hover-card-source-badge--cached")
+    ).not.toBeNull();
   });
 
   it("shows expandable raw vendor JSON for enrichment sources", () => {

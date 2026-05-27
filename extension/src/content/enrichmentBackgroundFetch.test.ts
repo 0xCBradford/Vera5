@@ -1,9 +1,14 @@
 /**
  * @vitest-environment happy-dom
  */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IOC_TYPE } from "../lib/iocRegex";
-import { runBackgroundEnrichment } from "./enrichmentBackgroundFetch";
+import {
+  cancelPendingHoverEnrichment,
+  DEFAULT_HOVER_ENRICHMENT_DEBOUNCE_MS,
+  runBackgroundEnrichment,
+  scheduleDebouncedBackgroundEnrichment,
+} from "./enrichmentBackgroundFetch";
 import * as enrichmentMessageClient from "./enrichmentMessageClient";
 import {
   HOVER_CARD_PANEL_CLASS,
@@ -31,8 +36,106 @@ vi.mock("./enrichmentMessageClient", async (importOriginal) => {
 
 import * as enrichmentSourceStorage from "./enrichmentSourceStorage";
 
+describe("debounced hover enrichment fetch", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    cancelPendingHoverEnrichment();
+    document.body.replaceChildren();
+    vi.clearAllMocks();
+    vi.useRealTimers();
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockResolvedValue({
+      abuseipdb: true,
+      otx: false,
+      urlscan: false,
+      greynoise: false,
+    });
+  });
+
+  it("debounces rapid schedules into one service worker request", async () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    vi.mocked(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).mockResolvedValue({
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "18 abuse confidence",
+        },
+      ],
+      primary: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "18 abuse confidence",
+      },
+    });
+
+    scheduleDebouncedBackgroundEnrichment({
+      value: "1.1.1.1",
+      type: IOC_TYPE.IPV4,
+    });
+    scheduleDebouncedBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_HOVER_ENRICHMENT_DEBOUNCE_MS);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).toHaveBeenCalledTimes(1);
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).toHaveBeenCalledWith({
+      value: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+    });
+  });
+
+  it("cancels a pending debounced fetch before it runs", async () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    scheduleDebouncedBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    cancelPendingHoverEnrichment();
+
+    await vi.advanceTimersByTimeAsync(DEFAULT_HOVER_ENRICHMENT_DEBOUNCE_MS);
+    await Promise.resolve();
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).not.toHaveBeenCalled();
+  });
+});
+
 describe("background enrichment with mocked service worker fetch results", () => {
   afterEach(() => {
+    cancelPendingHoverEnrichment();
     document.body.replaceChildren();
     vi.clearAllMocks();
     vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockReset();
@@ -70,6 +173,53 @@ describe("background enrichment with mocked service worker fetch results", () =>
     const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
     expect(panel?.textContent).toContain(
       "No enrichment sources are enabled in extension settings."
+    );
+  });
+
+  it("passes bypassCache when manual refresh requests live enrichment", async () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    vi.mocked(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).mockResolvedValue({
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "live summary",
+        },
+      ],
+      primary: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "live summary",
+      },
+    });
+
+    await runBackgroundEnrichment(
+      {
+        value: "8.8.8.8",
+        type: IOC_TYPE.IPV4,
+      },
+      document,
+      { bypassCache: true }
+    );
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: "8.8.8.8",
+        iocType: IOC_TYPE.IPV4,
+        bypassCache: true,
+      })
     );
   });
 

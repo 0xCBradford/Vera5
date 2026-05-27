@@ -57,6 +57,21 @@ describe("Vera5 message envelopes", () => {
         iocType: "ipv4",
       })
     ).toBe(false);
+    expect(
+      isEnrichIocMessage(
+        enrichIocMessage({
+          value: "8.8.8.8",
+          iocType: "ipv4",
+          bypassCache: true,
+        })
+      )
+    ).toBe(true);
+    expect(
+      isEnrichIocMessage({
+        ...enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" }),
+        bypassCache: false,
+      })
+    ).toBe(false);
   });
 
   it("accepts SCAN_PAGE tab envelope", () => {

@@ -5,13 +5,17 @@ import {
   buildDisabledSourcePlaceholders,
   buildSourceStatusBadgeClassName,
   formatEnrichmentSourceAttribution,
+  getSingleSourceLastUpdatedLine,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
   resolveEnrichmentDisplay,
+  resolveHoverCardDisclaimerLines,
   shouldShowEnrichmentSourceAttribution,
+  shouldShowHoverCardDisclaimer,
   shouldShowMissingKeyAction,
   shouldShowMultiSourceResults,
   shouldShowRateLimitRetryHint,
+  shouldShowRiskScore,
   shouldShowSingleSourceRawJson,
   type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
@@ -24,6 +28,7 @@ import {
   buildEnrichmentSummaryClassName,
   ensureVera5UiStyles,
 } from "../lib/vera5UiStyles";
+import { RiskScore } from "./RiskScore";
 
 export {
   DEFAULT_HOVER_CARD_SUMMARY,
@@ -106,6 +111,17 @@ export function HoverCard({
     retryHint,
     sourceResults
   );
+  const singleSourceLastUpdatedLine =
+    getSingleSourceLastUpdatedLine(sourceResults);
+  const showRiskScore = shouldShowRiskScore(disabledSources, sourceResults);
+  const disclaimerLines = resolveHoverCardDisclaimerLines({
+    enrichmentState: enrichment.variant,
+    includeRiskScoreDisclaimer: showRiskScore,
+  });
+  const showDisclaimer = shouldShowHoverCardDisclaimer({
+    enrichmentState: enrichment.variant,
+    includeRiskScoreDisclaimer: showRiskScore,
+  });
   const showFooter =
     pivotLinks.length > 0 ||
     disabledSourcePlaceholders.length > 0 ||
@@ -116,7 +132,9 @@ export function HoverCard({
     showSingleSourceRawJson ||
     showAttribution ||
     showMissingKeyAction ||
-    showRateLimitRetryHint;
+    showRateLimitRetryHint ||
+    Boolean(singleSourceLastUpdatedLine) ||
+    showDisclaimer;
 
   useEffect(() => {
     ensureVera5UiStyles(document);
@@ -165,6 +183,10 @@ export function HoverCard({
       >
         {enrichment.text}
       </p>
+      <RiskScore
+        disabledSources={disabledSources}
+        sourceResults={sourceResults}
+      />
       {showMissingKeyAction ? (
         <button
           type="button"
@@ -196,6 +218,15 @@ export function HoverCard({
           <pre className="vera5-hover-card-raw-json-body">{singleSourceRawJson}</pre>
         </details>
       ) : null}
+      {singleSourceLastUpdatedLine ? (
+        <p
+          className="vera5-hover-card-source-last-updated"
+          role="note"
+          style={{ marginBottom: showFooter ? 8 : 0 }}
+        >
+          {singleSourceLastUpdatedLine}
+        </p>
+      ) : null}
       {showTags ? (
         <div
           className="vera5-hover-card-tags"
@@ -224,10 +255,23 @@ export function HoverCard({
           <ul className="vera5-hover-card-sources-list">
             {sourceResults.map((entry) => (
               <li key={entry.sourceId} className="vera5-hover-card-source-item">
-                <span className={buildSourceStatusBadgeClassName(entry.status)}>
+                <span
+                  className={buildSourceStatusBadgeClassName(
+                    entry.status,
+                    entry.fromCache
+                  )}
+                >
                   {entry.label} · {entry.badgeText}
                 </span>
                 <span className="vera5-hover-card-source-detail">{entry.detail}</span>
+                {entry.lastUpdatedLine ? (
+                  <span
+                    className="vera5-hover-card-source-last-updated"
+                    role="note"
+                  >
+                    {entry.lastUpdatedLine}
+                  </span>
+                ) : null}
                 {entry.retryHint ? (
                   <span className="vera5-hover-card-retry-hint" role="note">
                     {entry.retryHint}
@@ -289,6 +333,18 @@ export function HoverCard({
             enrichment.variant
           )}
         </p>
+      ) : null}
+      {showDisclaimer ? (
+        <footer
+          className="vera5-hover-card-disclaimer"
+          aria-label="Enrichment and risk score notice"
+        >
+          {disclaimerLines.map((line) => (
+            <p key={line} role="note">
+              {line}
+            </p>
+          ))}
+        </footer>
       ) : null}
     </aside>
   );

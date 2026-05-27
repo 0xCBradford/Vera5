@@ -6,16 +6,23 @@ import {
   ENRICHMENT_SOURCE,
   formatDisabledSourceMessage,
   formatEnrichmentSourceAttribution,
+  buildHoverCardLastUpdatedLine,
   formatSourceStatusBadge,
+  getSingleSourceLastUpdatedLine,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_ERROR_SUMMARY,
+  HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_LOADING_SUMMARY,
+  HOVER_CARD_RISK_SCORE_DISCLAIMER,
   resolveEnrichmentDisplay,
+  resolveHoverCardDisclaimerLines,
   resolveMultiSourceEnrichmentView,
   shouldShowEnrichmentSourceAttribution,
+  shouldShowHoverCardDisclaimer,
   shouldShowMissingKeyAction,
   shouldShowMultiSourceResults,
   shouldShowRateLimitRetryHint,
+  shouldShowRiskScore,
 } from "./hoverCardEnrichment";
 
 describe("hover card enrichment placeholders", () => {
@@ -64,6 +71,59 @@ describe("hover card enrichment placeholders", () => {
     expect(placeholders[0]?.message).toBe(
       formatDisabledSourceMessage("AbuseIPDB")
     );
+  });
+
+  it("resolves hover card disclaimer lines by enrichment state and risk visibility", () => {
+    expect(resolveHoverCardDisclaimerLines({ enrichmentState: "empty" })).toEqual(
+      []
+    );
+    expect(
+      resolveHoverCardDisclaimerLines({ enrichmentState: "ready" })
+    ).toEqual([HOVER_CARD_ENRICHMENT_DISCLAIMER]);
+    expect(
+      resolveHoverCardDisclaimerLines({
+        enrichmentState: "ready",
+        includeRiskScoreDisclaimer: true,
+      })
+    ).toEqual([
+      HOVER_CARD_ENRICHMENT_DISCLAIMER,
+      HOVER_CARD_RISK_SCORE_DISCLAIMER,
+    ]);
+    expect(
+      shouldShowHoverCardDisclaimer({
+        enrichmentState: "loading",
+      })
+    ).toBe(true);
+    expect(
+      resolveHoverCardDisclaimerLines({
+        enrichmentState: "empty",
+        includeRiskScoreDisclaimer: true,
+      })
+    ).toEqual([HOVER_CARD_RISK_SCORE_DISCLAIMER]);
+  });
+
+  it("hides risk score when all enrichment sources are disabled", () => {
+    const allDisabled = [
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.OTX,
+      ENRICHMENT_SOURCE.URLSCAN,
+      ENRICHMENT_SOURCE.GREYNOISE,
+    ];
+    const staleResults = [
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        label: "AbuseIPDB",
+        status: "ok" as const,
+        badgeText: "Live",
+        detail: "84 abuse confidence",
+      },
+    ];
+    expect(shouldShowRiskScore(allDisabled, staleResults)).toBe(false);
+    expect(shouldShowRiskScore(allDisabled, [])).toBe(false);
+    expect(
+      shouldShowRiskScore([ENRICHMENT_SOURCE.ABUSEIPDB], staleResults)
+    ).toBe(true);
+    expect(shouldShowRiskScore([], staleResults)).toBe(true);
   });
 
   it("formats source attribution for live, cached, and error states", () => {
@@ -136,6 +196,49 @@ describe("hover card enrichment placeholders", () => {
     ]);
     expect(entries[0]?.badgeText).toBe(formatSourceStatusBadge("error"));
     expect(entries[1]?.badgeText).toBe(formatSourceStatusBadge("ok"));
+  });
+
+  it("marks cached ok sources with Cached badge and last updated line", () => {
+    const fetchedAt = "2026-05-22T10:00:00.000Z";
+    const entries = buildHoverCardSourceEntries([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "12 abuse confidence",
+        fromCache: true,
+        fetchedAt,
+      },
+    ]);
+    expect(entries[0]?.badgeText).toBe("Cached");
+    expect(entries[0]?.fromCache).toBe(true);
+    expect(entries[0]?.lastUpdatedLine).toBe(
+      buildHoverCardLastUpdatedLine(fetchedAt)
+    );
+    expect(getSingleSourceLastUpdatedLine(entries)).toBe(
+      entries[0]?.lastUpdatedLine
+    );
+  });
+
+  it("omits single-source last updated line when multiple sources are shown", () => {
+    const entries = buildHoverCardSourceEntries([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "12 abuse confidence",
+        fetchedAt: "2026-05-22T10:00:00.000Z",
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+        fetchedAt: "2026-05-22T11:00:00.000Z",
+      },
+    ]);
+    expect(getSingleSourceLastUpdatedLine(entries)).toBeUndefined();
+    expect(entries.every((entry) => entry.lastUpdatedLine)).toBe(true);
   });
 
   it("includes redacted raw vendor JSON on successful source entries", () => {

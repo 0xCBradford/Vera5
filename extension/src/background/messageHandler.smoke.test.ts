@@ -1,7 +1,37 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { contentRegisterMessage, enrichIocMessage, pingMessage } from "../lib/messages";
 import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
+import {
+  DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
+  STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
+} from "../lib/storage";
 import { routeIncomingMessage, routeIncomingMessageAsync } from "./messageRouter";
+
+function stubChromeStorage(store: Record<string, unknown>): void {
+  vi.stubGlobal("chrome", {
+    storage: {
+      local: {
+        get: (keys: string | string[] | Record<string, unknown>) => {
+          if (typeof keys === "string") {
+            return Promise.resolve({ [keys]: store[keys] });
+          }
+          if (Array.isArray(keys)) {
+            const result: Record<string, unknown> = {};
+            for (const key of keys) {
+              result[key] = store[key];
+            }
+            return Promise.resolve(result);
+          }
+          return Promise.resolve({ ...store, ...keys });
+        },
+        set: (values: Record<string, unknown>) => {
+          Object.assign(store, values);
+          return Promise.resolve();
+        },
+      },
+    },
+  });
+}
 
 const enrichWithAbuseIpdb = vi.fn();
 
@@ -10,9 +40,13 @@ vi.mock("../lib/abuseipdbConnector", () => ({
   enrichWithAbuseIpdb: (...args: unknown[]) => enrichWithAbuseIpdb(...args),
 }));
 
-vi.mock("../lib/storage", () => ({
-  getEnrichmentSourceEnabled: vi.fn(async () => ({ abuseipdb: true })),
-}));
+vi.mock("../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/storage")>();
+  return {
+    ...actual,
+    getEnrichmentSourceEnabled: vi.fn(async () => ({ abuseipdb: true })),
+  };
+});
 
 describe("message handler smoke", () => {
   it("responds to PING", () => {
@@ -48,8 +82,20 @@ describe("message handler smoke", () => {
 });
 
 describe("message handler async enrich", () => {
+  const store: Record<string, unknown> = {};
+
   beforeEach(() => {
     enrichWithAbuseIpdb.mockReset();
+    for (const key of Object.keys(store)) {
+      delete store[key];
+    }
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
+      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it("routes ENRICH_IOC through the service worker handler", async () => {

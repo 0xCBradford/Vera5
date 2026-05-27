@@ -24,6 +24,7 @@ export type EnrichIocMessage = {
   value: string;
   iocType: IocType;
   sourceId?: EnrichmentSourceId;
+  bypassCache?: boolean;
 };
 
 export type Vera5Message =
@@ -51,6 +52,7 @@ export function enrichIocMessage(input: {
   value: string;
   iocType: IocType;
   sourceId?: EnrichmentSourceId;
+  bypassCache?: boolean;
 }): EnrichIocMessage {
   const message: EnrichIocMessage = {
     type: MESSAGE.ENRICH_IOC,
@@ -59,6 +61,9 @@ export function enrichIocMessage(input: {
   };
   if (input.sourceId) {
     message.sourceId = input.sourceId;
+  }
+  if (input.bypassCache === true) {
+    message.bypassCache = true;
   }
   return message;
 }
@@ -87,6 +92,12 @@ export function isEnrichIocMessage(raw: unknown): raw is EnrichIocMessage {
     return false;
   }
   if (record.sourceId !== undefined && typeof record.sourceId !== "string") {
+    return false;
+  }
+  if (
+    record.bypassCache !== undefined &&
+    record.bypassCache !== true
+  ) {
     return false;
   }
   return true;

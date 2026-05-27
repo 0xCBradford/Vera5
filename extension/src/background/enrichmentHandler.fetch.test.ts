@@ -3,8 +3,16 @@ import {
   ENRICHMENT_ERROR_CODE,
   ENRICHMENT_SOURCE_STATUS,
 } from "../lib/enrichment";
+import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
+import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
 import { enrichIocMessage } from "../lib/messages";
 import * as storage from "../lib/storage";
+import {
+  DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
+  STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
+  STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
+} from "../lib/storage";
+import { clearGlobalEnrichmentCooldown } from "../lib/enrichmentCooldown";
 import { handleEnrichIocMessage } from "./enrichmentHandler";
 
 vi.mock("../lib/storage", async (importOriginal) => {
@@ -36,6 +44,13 @@ function stubChromeStorage(store: Record<string, unknown>): void {
           Object.assign(store, values);
           return Promise.resolve();
         },
+        remove: (keys: string | string[]) => {
+          const keyList = Array.isArray(keys) ? keys : [keys];
+          for (const key of keyList) {
+            delete store[key];
+          }
+          return Promise.resolve();
+        },
       },
     },
   });
@@ -60,16 +75,299 @@ describe("enrichment handler with mocked fetch", () => {
     vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
       abuseipdb: true,
     });
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
+      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     stubChromeStorage(store);
     await storage.setApiKey("abuseipdb", "test-key");
   });
 
   afterEach(() => {
+    clearGlobalEnrichmentCooldown();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     for (const key of Object.keys(store)) {
       delete store[key];
     }
+  });
+
+  it("removes cached entries for the IOC when bypassCache is set", async () => {
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 3600;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: nowMs - 10_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "99 abuse confidence",
+        },
+      },
+      "8.8.8.8|otx": {
+        fetchedAt: nowMs - 10_000,
+        payload: {
+          sourceId: "otx",
+          sourceLabel: "OTX",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "2 threat pulses",
+        },
+      },
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(successPayload(), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
+
+    await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4", bypassCache: true })
+    );
+
+    const remaining = store[STORAGE_KEY_ENRICHMENT_CACHE] as Record<
+      string,
+      { payload: { summary?: string } }
+    >;
+    expect(Object.keys(remaining)).toEqual(["8.8.8.8|abuseipdb"]);
+    expect(remaining["8.8.8.8|abuseipdb"]?.payload.summary).toBe(
+      "42 abuse confidence"
+    );
+  });
+
+  it("fetches live data when bypassCache is set despite a valid cache entry", async () => {
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 3600;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: nowMs - 10_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "99 abuse confidence",
+          tags: ["US"],
+        },
+      },
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(successPayload(), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4", bypassCache: true })
+    );
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source.summary).toBe("42 abuse confidence");
+    expect(source.fromCache).toBeUndefined();
+  });
+
+  it("returns cached enrichment without calling fetch on a valid cache hit", async () => {
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 3600;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: nowMs - 10_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "99 abuse confidence",
+          tags: ["US"],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "abuseipdb",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "99 abuse confidence",
+      fromCache: true,
+    });
+  });
+
+  it("refetches only sources whose cache expired under per-source TTL", async () => {
+    const nowMs = Date.now();
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+    });
+    await storage.setApiKey("otx", "test-otx-key");
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 60;
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS] = { otx: 300 };
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: nowMs - 90_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "stale abuse",
+        },
+      },
+      "8.8.8.8|otx": {
+        fetchedAt: nowMs - 90_000,
+        payload: {
+          sourceId: "otx",
+          sourceLabel: "OTX",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached pulses",
+        },
+      },
+    };
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (!url.includes("abuseipdb.com")) {
+        throw new Error(`unexpected fetch: ${url}`);
+      }
+      return Response.json(successPayload(), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(response.ok).toBe(true);
+    const payload = (response as {
+      ok: true;
+      payload: { sources: Record<string, unknown>[] };
+    }).payload;
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "abuseipdb",
+          summary: "42 abuse confidence",
+        }),
+        expect.objectContaining({
+          sourceId: "otx",
+          summary: "cached pulses",
+          fromCache: true,
+        }),
+      ])
+    );
+    const abuse = payload.sources.find(
+      (source) => source.sourceId === "abuseipdb"
+    );
+    expect(abuse?.fromCache).toBeUndefined();
+  });
+
+  it("fetches live data when the cache entry is expired", async () => {
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 60;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: nowMs - 120_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "stale cache",
+        },
+      },
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(successPayload(), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source.summary).toBe("42 abuse confidence");
+    expect(source.fromCache).toBeUndefined();
+  });
+
+  it("uses cache for one source and fetches the other in parallel", async () => {
+    const nowMs = Date.now();
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+    });
+    await storage.setApiKey("otx", "test-otx-key");
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 3600;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: nowMs - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached abuse confidence",
+        },
+      },
+    };
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("otx.alienvault.com")) {
+        return Response.json(
+          { pulse_info: { count: 1, pulses: [{ tags: ["scanner"] }] } },
+          { status: 200 }
+        );
+      }
+      return Response.json(successPayload(), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("otx.alienvault.com");
+    expect(response.ok).toBe(true);
+    const payload = (response as { ok: true; payload: { sources: Record<string, unknown>[] } })
+      .payload;
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "abuseipdb",
+          summary: "cached abuse confidence",
+          fromCache: true,
+        }),
+        expect.objectContaining({
+          sourceId: "otx",
+          summary: "1 threat pulse",
+        }),
+      ])
+    );
   });
 
   it("returns skipped without fetch when no enrichment sources are enabled", async () => {
@@ -240,6 +538,63 @@ describe("enrichment handler with mocked fetch", () => {
       errorCode: ENRICHMENT_ERROR_CODE.UNAUTHORIZED,
       errorMessage: "AbuseIPDB rejected the API key.",
     });
+  });
+
+  it("blocks further enrichment while global cooldown is active", async () => {
+    clearGlobalEnrichmentCooldown();
+    const fetchMock = vi.fn(
+      async () =>
+        new Response("", {
+          status: 429,
+          headers: { "Retry-After": "120" },
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+    expect(first.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    const second = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "1.1.1.1", iocType: "ipv4" })
+    );
+    expect(second.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const source = (
+      second as { ok: true; payload: { source: Record<string, unknown> } }
+    ).payload.source;
+    expect(source.errorMessage).toBe(
+      "Threat intelligence rate limit reached. Back off before retrying."
+    );
+    expect(source.retryHint).toMatch(/^Retry after \d+ seconds\.$/);
+  });
+
+  it("allows manual refresh to bypass global cooldown", async () => {
+    clearGlobalEnrichmentCooldown();
+    const fetchMock = vi.fn(
+      async () =>
+        new Response("", {
+          status: 429,
+          headers: { "Retry-After": "120" },
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+
+    await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        bypassCache: true,
+      })
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("surfaces HTTP 429 from mocked fetch with retry hint", async () => {

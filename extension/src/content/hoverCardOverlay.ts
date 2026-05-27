@@ -4,13 +4,17 @@ import {
   buildDisabledSourcePlaceholders,
   buildSourceStatusBadgeClassName,
   formatEnrichmentSourceAttribution,
+  getSingleSourceLastUpdatedLine,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
   resolveEnrichmentDisplay,
+  resolveHoverCardDisclaimerLines,
   shouldShowEnrichmentSourceAttribution,
+  shouldShowHoverCardDisclaimer,
   shouldShowMissingKeyAction,
   shouldShowMultiSourceResults,
   shouldShowRateLimitRetryHint,
+  shouldShowRiskScore,
   shouldShowSingleSourceRawJson,
   type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
@@ -46,6 +50,7 @@ export const HOVER_CARD_ENRICHMENT_CLASS = "vera5-hover-card-enrichment";
 export const HOVER_CARD_TAGS_CLASS = "vera5-hover-card-tags";
 export const HOVER_CARD_TAG_CLASS = "vera5-hover-card-tag";
 export const HOVER_CARD_ATTRIBUTION_CLASS = "vera5-hover-card-attribution";
+export const HOVER_CARD_DISCLAIMER_CLASS = "vera5-hover-card-disclaimer";
 export const HOVER_CARD_ACTION_CLASS = "vera5-hover-card-action";
 export const HOVER_CARD_RETRY_HINT_CLASS = "vera5-hover-card-retry-hint";
 export const HOVER_CARD_SOURCES_CLASS = "vera5-hover-card-sources";
@@ -155,7 +160,10 @@ function createSourceResultsSection(
     item.className = HOVER_CARD_SOURCE_ITEM_CLASS;
 
     const badge = doc.createElement("span");
-    badge.className = buildSourceStatusBadgeClassName(entry.status);
+    badge.className = buildSourceStatusBadgeClassName(
+      entry.status,
+      entry.fromCache
+    );
     badge.textContent = `${entry.label} · ${entry.badgeText}`;
     item.appendChild(badge);
 
@@ -163,6 +171,14 @@ function createSourceResultsSection(
     detail.className = HOVER_CARD_SOURCE_DETAIL_CLASS;
     detail.textContent = entry.detail;
     item.appendChild(detail);
+
+    if (entry.lastUpdatedLine) {
+      const lastUpdated = doc.createElement("span");
+      lastUpdated.className = "vera5-hover-card-source-last-updated";
+      lastUpdated.setAttribute("role", "note");
+      lastUpdated.textContent = entry.lastUpdatedLine;
+      item.appendChild(lastUpdated);
+    }
 
     if (entry.retryHint?.trim()) {
       const retry = doc.createElement("span");
@@ -244,6 +260,41 @@ function createEnrichmentTagsSection(
   return row;
 }
 
+function createHoverCardDisclaimerFooter(
+  payload: HoverCardOverlayPayload,
+  enrichmentState: HoverCardEnrichmentState,
+  doc: Document
+): HTMLElement | null {
+  const includeRiskScoreDisclaimer = shouldShowRiskScore(
+    payload.disabledSources,
+    payload.sourceResults
+  );
+  if (
+    !shouldShowHoverCardDisclaimer({
+      enrichmentState,
+      includeRiskScoreDisclaimer,
+    })
+  ) {
+    return null;
+  }
+
+  const footer = doc.createElement("footer");
+  footer.className = HOVER_CARD_DISCLAIMER_CLASS;
+  footer.setAttribute("aria-label", "Enrichment and risk score notice");
+
+  for (const line of resolveHoverCardDisclaimerLines({
+    enrichmentState,
+    includeRiskScoreDisclaimer,
+  })) {
+    const paragraph = doc.createElement("p");
+    paragraph.setAttribute("role", "note");
+    paragraph.textContent = line;
+    footer.appendChild(paragraph);
+  }
+
+  return footer;
+}
+
 function createSourceAttributionFooter(
   payload: HoverCardOverlayPayload,
   enrichmentState: HoverCardEnrichmentState,
@@ -289,6 +340,22 @@ function createMissingKeyAction(
     void chrome.runtime.openOptionsPage();
   });
   return button;
+}
+
+function createSingleSourceLastUpdated(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): HTMLElement | null {
+  const line = getSingleSourceLastUpdatedLine(payload.sourceResults);
+  if (!line) {
+    return null;
+  }
+
+  const note = doc.createElement("p");
+  note.className = "vera5-hover-card-source-last-updated";
+  note.setAttribute("role", "note");
+  note.textContent = line;
+  return note;
 }
 
 function createRateLimitRetryHint(
@@ -386,6 +453,11 @@ export function buildHoverCardPanel(
     enrichment.variant,
     doc
   );
+  const disclaimerFooter = createHoverCardDisclaimerFooter(
+    payload,
+    enrichment.variant,
+    doc
+  );
   const missingKeyAction = createMissingKeyAction(
     payload,
     enrichment.variant,
@@ -396,6 +468,7 @@ export function buildHoverCardPanel(
     enrichment.variant,
     doc
   );
+  const singleSourceLastUpdated = createSingleSourceLastUpdated(payload, doc);
   const showFooter =
     pivotLinks.length > 0 ||
     disabledSourcesSection !== null ||
@@ -405,8 +478,10 @@ export function buildHoverCardPanel(
     singleSourceRawJson !== null ||
     enrichmentTagsSection !== null ||
     attributionFooter !== null ||
+    disclaimerFooter !== null ||
     missingKeyAction !== null ||
-    rateLimitRetryHint !== null;
+    rateLimitRetryHint !== null ||
+    singleSourceLastUpdated !== null;
 
   const panel = doc.createElement("aside");
   panel.className = HOVER_CARD_PANEL_CLASS;
@@ -462,6 +537,11 @@ export function buildHoverCardPanel(
     panel.appendChild(enrichmentTagsSection);
   }
 
+  if (singleSourceLastUpdated) {
+    singleSourceLastUpdated.style.marginBottom = showFooter ? "8px" : "0";
+    panel.appendChild(singleSourceLastUpdated);
+  }
+
   if (singleSourceRawJson) {
     singleSourceRawJson.style.marginBottom = showFooter ? "8px" : "0";
     panel.appendChild(singleSourceRawJson);
@@ -479,6 +559,9 @@ export function buildHoverCardPanel(
   }
   if (attributionFooter) {
     panel.appendChild(attributionFooter);
+  }
+  if (disclaimerFooter) {
+    panel.appendChild(disclaimerFooter);
   }
 
   return panel;

@@ -10,8 +10,10 @@ import * as copyText from "../lib/copyText";
 import type { HoverCardEnrichmentState } from "../lib/hoverCardEnrichment";
 import {
   ENRICHMENT_SOURCE,
+  HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_ERROR_SUMMARY,
   HOVER_CARD_LOADING_SUMMARY,
+  HOVER_CARD_RISK_SCORE_DISCLAIMER,
 } from "../lib/hoverCardEnrichment";
 import { IOC_TYPE } from "../lib/iocRegex";
 import { HOVER_CARD_ENRICHMENT_MODIFIER_CLASS } from "../lib/vera5UiStyles";
@@ -107,6 +109,33 @@ describe("HoverCard", () => {
     expect(mounted.container.textContent).toContain("OTX");
     expect(mounted.container.textContent).toContain("disabled");
     expect(mounted.container.textContent).toContain("extension settings");
+  });
+
+  it("does not show a risk score when all enrichment sources are disabled", () => {
+    mounted = renderHoverCard({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      disabledSources: [
+        ENRICHMENT_SOURCE.ABUSEIPDB,
+        ENRICHMENT_SOURCE.OTX,
+        ENRICHMENT_SOURCE.URLSCAN,
+        ENRICHMENT_SOURCE.GREYNOISE,
+      ],
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "84 abuse confidence",
+        },
+      ],
+    });
+
+    expect(
+      mounted.container.querySelector(".vera5-hover-card-risk-score")
+    ).toBeNull();
+    expect(mounted.container.textContent).not.toContain("Risk score:");
   });
 
   it("copies the IOC value when Copy is clicked", async () => {
@@ -313,6 +342,11 @@ describe("HoverCard enrichment states", () => {
     expect(
       mounted.container.querySelector(".vera5-hover-card-attribution")
     ).toBeNull();
+    expect(mounted.container.textContent).toContain("Risk score:");
+    const contributionChip = mounted.container.querySelector(
+      ".vera5-hover-card-risk-contribution-chip"
+    );
+    expect(contributionChip?.getAttribute("title")).toContain("AbuseIPDB:");
   });
 
   it("shows expandable redacted raw JSON for a single source", () => {
@@ -385,6 +419,29 @@ describe("HoverCard enrichment states", () => {
     expect(footer?.getAttribute("role")).toBe("note");
   });
 
+  it("shows cached badge and last updated for single-source enrichment", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: "abuseipdb",
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Cached",
+          detail: "74 abuse confidence",
+          fromCache: true,
+          lastUpdatedLine: "Last updated: May 22, 2026, 6:00 AM",
+        },
+      ],
+      sourceAttribution: { sourceLabel: "AbuseIPDB", fromCache: true },
+    });
+
+    expect(mounted.container.textContent).toContain("Last updated:");
+    expect(mounted.container.textContent).toContain("Source: AbuseIPDB · cached");
+  });
+
   it("shows cached attribution when enrichment came from cache", () => {
     mounted = renderHoverCard({
       ...baseProps,
@@ -418,6 +475,66 @@ describe("HoverCard enrichment states", () => {
     expect(
       mounted.container.querySelector(".vera5-hover-card-attribution")
     ).toBeNull();
+  });
+
+  it("shows enrichment and risk score disclaimers when enrichment is ready", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "74 abuse confidence",
+        },
+      ],
+    });
+
+    const footer = mounted.container.querySelector(
+      ".vera5-hover-card-disclaimer"
+    );
+    expect(footer?.getAttribute("aria-label")).toBe(
+      "Enrichment and risk score notice"
+    );
+    expect(mounted.container.textContent).toContain(
+      HOVER_CARD_ENRICHMENT_DISCLAIMER
+    );
+    expect(mounted.container.textContent).toContain(
+      HOVER_CARD_RISK_SCORE_DISCLAIMER
+    );
+  });
+
+  it("shows enrichment disclaimer only when risk score is hidden", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+      disabledSources: [
+        ENRICHMENT_SOURCE.ABUSEIPDB,
+        ENRICHMENT_SOURCE.OTX,
+        ENRICHMENT_SOURCE.URLSCAN,
+        ENRICHMENT_SOURCE.GREYNOISE,
+      ],
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "74 abuse confidence",
+        },
+      ],
+    });
+
+    expect(mounted.container.textContent).toContain(
+      HOVER_CARD_ENRICHMENT_DISCLAIMER
+    );
+    expect(mounted.container.textContent).not.toContain(
+      HOVER_CARD_RISK_SCORE_DISCLAIMER
+    );
   });
 
   it("shows missing-key message and open-settings action", () => {

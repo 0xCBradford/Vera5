@@ -16,6 +16,8 @@ export const STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED = "enrichmentSourceEnabled";
 export const STORAGE_KEY_IOC_TYPE_ENABLED = "iocTypeEnabled";
 export const STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS =
   "enrichmentCacheTtlSeconds";
+export const STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS =
+  "enrichmentSourceCacheTtlSeconds";
 
 export const STORAGE_KEYS = {
   EXTENSION_ENABLED: STORAGE_KEY_EXTENSION_ENABLED,
@@ -28,6 +30,8 @@ export const STORAGE_KEYS = {
   ENRICHMENT_SOURCE_ENABLED: STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   IOC_TYPE_ENABLED: STORAGE_KEY_IOC_TYPE_ENABLED,
   ENRICHMENT_CACHE_TTL_SECONDS: STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
+  ENRICHMENT_SOURCE_CACHE_TTL_SECONDS:
+    STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
 } as const;
 
 export type ApiKeySlot = EnrichmentSourceId;
@@ -40,6 +44,10 @@ export type EnrichmentSourceEnabledRecord = Partial<
 
 export type IocTypeEnabledRecord = Partial<Record<IocType, boolean>>;
 
+export type EnrichmentSourceCacheTtlRecord = Partial<
+  Record<EnrichmentSourceId, number>
+>;
+
 export type Vera5Settings = {
   extensionEnabled: boolean;
   highlightEnabled: boolean;
@@ -51,6 +59,7 @@ export type Vera5Settings = {
   enrichmentSourceEnabled: EnrichmentSourceEnabledRecord;
   iocTypeEnabled: IocTypeEnabledRecord;
   enrichmentCacheTtlSeconds: number;
+  enrichmentSourceCacheTtlSeconds: EnrichmentSourceCacheTtlRecord;
 };
 
 export type Vera5StorageRaw = {
@@ -64,6 +73,7 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]?: unknown;
   [STORAGE_KEY_IOC_TYPE_ENABLED]?: unknown;
   [STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS]?: unknown;
+  [STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS]?: unknown;
 };
 
 export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
@@ -77,6 +87,11 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_IOC_TYPE_ENABLED,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
+];
+
+export const VERA5_SETTINGS_READ_KEYS: readonly string[] = [
+  ...VERA5_SETTINGS_STORAGE_KEYS,
+  STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
 ];
 
 export const API_KEY_SLOTS: readonly ApiKeySlot[] = [
@@ -123,6 +138,22 @@ export function isEnrichmentSourceEnabledRecord(
   );
 }
 
+export function isEnrichmentSourceCacheTtlRecord(
+  value: unknown
+): value is EnrichmentSourceCacheTtlRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+
+  return Object.entries(value).every(
+    ([key, entry]) =>
+      API_KEY_SLOTS.includes(key as ApiKeySlot) &&
+      typeof entry === "number" &&
+      Number.isFinite(entry) &&
+      entry >= 0
+  );
+}
+
 export function isIocTypeEnabledRecord(
   value: unknown
 ): value is IocTypeEnabledRecord {
@@ -147,6 +178,10 @@ export function createDefaultEnrichmentSourceEnabledRecord(): EnrichmentSourceEn
   return record;
 }
 
+export function createDefaultEnrichmentSourceCacheTtlRecord(): EnrichmentSourceCacheTtlRecord {
+  return {};
+}
+
 export function createDefaultIocTypeEnabledRecord(): IocTypeEnabledRecord {
   const record: IocTypeEnabledRecord = {};
   for (const iocType of IOC_TYPE_SETTINGS_ORDER) {
@@ -167,7 +202,25 @@ export function createDefaultVera5Settings(): Vera5Settings {
     enrichmentSourceEnabled: createDefaultEnrichmentSourceEnabledRecord(),
     iocTypeEnabled: createDefaultIocTypeEnabledRecord(),
     enrichmentCacheTtlSeconds: DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
+    enrichmentSourceCacheTtlSeconds:
+      createDefaultEnrichmentSourceCacheTtlRecord(),
   };
+}
+
+export function normalizeEnrichmentSourceCacheTtlRecord(
+  value: unknown
+): EnrichmentSourceCacheTtlRecord {
+  if (!isEnrichmentSourceCacheTtlRecord(value)) {
+    return createDefaultEnrichmentSourceCacheTtlRecord();
+  }
+
+  const record: EnrichmentSourceCacheTtlRecord = {};
+  for (const [key, ttl] of Object.entries(value)) {
+    if (API_KEY_SLOTS.includes(key as ApiKeySlot)) {
+      record[key as ApiKeySlot] = Math.floor(ttl as number);
+    }
+  }
+  return record;
 }
 
 function readStoredBoolean(value: unknown, fallback: boolean): boolean {
@@ -184,7 +237,10 @@ function readStoredSchemaVersion(value: unknown, fallback: number): number {
   return Math.floor(value);
 }
 
-function readStoredCacheTtlSeconds(value: unknown, fallback: number): number {
+export function readStoredCacheTtlSeconds(
+  value: unknown,
+  fallback: number
+): number {
   if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
     return Math.floor(value);
   }
@@ -284,6 +340,9 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
       raw[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS],
       defaults.enrichmentCacheTtlSeconds
     ),
+    enrichmentSourceCacheTtlSeconds: normalizeEnrichmentSourceCacheTtlRecord(
+      raw[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS]
+    ),
   };
 }
 
@@ -314,6 +373,8 @@ export function vera5SettingsToStoragePayload(
     [STORAGE_KEY_IOC_TYPE_ENABLED]: settings.iocTypeEnabled,
     [STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS]:
       settings.enrichmentCacheTtlSeconds,
+    [STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS]:
+      settings.enrichmentSourceCacheTtlSeconds,
   };
 }
 
@@ -357,7 +418,7 @@ export function needsStorageMigration(raw: Vera5StorageRaw): boolean {
 
 export async function getVera5Settings(): Promise<Vera5Settings> {
   const raw = (await chrome.storage.local.get(
-    VERA5_SETTINGS_STORAGE_KEYS
+    VERA5_SETTINGS_READ_KEYS
   )) as Vera5StorageRaw;
   const migrated = migrateVera5StorageRaw(raw);
   const settings = normalizeVera5Settings(migrated);
@@ -474,6 +535,30 @@ export async function hasApiKey(slot: ApiKeySlot): Promise<boolean> {
 export async function getApiKey(slot: ApiKeySlot): Promise<string> {
   const settings = await getVera5Settings();
   return settings.apiKeys[slot] ?? "";
+}
+
+export async function setEnrichmentSourceCacheTtlSeconds(
+  sourceId: ApiKeySlot,
+  ttlSeconds: number | null
+): Promise<void> {
+  const settings = await getVera5Settings();
+  const enrichmentSourceCacheTtlSeconds: EnrichmentSourceCacheTtlRecord = {
+    ...settings.enrichmentSourceCacheTtlSeconds,
+  };
+
+  if (ttlSeconds === null) {
+    delete enrichmentSourceCacheTtlSeconds[sourceId];
+  } else {
+    enrichmentSourceCacheTtlSeconds[sourceId] = readStoredCacheTtlSeconds(
+      ttlSeconds,
+      settings.enrichmentCacheTtlSeconds
+    );
+  }
+
+  await chrome.storage.local.set({
+    [STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS]:
+      enrichmentSourceCacheTtlSeconds,
+  });
 }
 
 export async function setApiKey(slot: ApiKeySlot, value: string): Promise<void> {

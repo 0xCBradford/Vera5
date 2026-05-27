@@ -2,11 +2,24 @@ import {
   ABUSEIPDB_SOURCE_ID,
   enrichWithAbuseIpdb,
 } from "../lib/abuseipdbConnector";
+import {
+  cacheEnrichmentSourceResult,
+  invalidateEnrichmentCacheForIoc,
+  readCachedEnrichmentSourceResult,
+} from "../lib/cache";
 import { enrichWithOtx } from "../lib/otxConnector";
+import {
+  formatGlobalEnrichmentCooldownMessage,
+  formatGlobalEnrichmentCooldownRetryHint,
+  isGlobalEnrichmentCooldownActive,
+  recordGlobalEnrichmentCooldown,
+} from "../lib/enrichmentCooldown";
 import {
   createErrorSourceResult,
   createSkippedSourceResult,
   ENRICHMENT_ERROR_CODE,
+  isRateLimitedError,
+  parseRetryAfterSecondsFromHint,
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "../lib/enrichment";
@@ -25,6 +38,17 @@ import {
 import type { EnrichmentSourceEnabledRecord } from "../lib/storage";
 import { getEnrichmentSourceEnabled } from "../lib/storage";
 
+function createGlobalCooldownSourceResult(
+  sourceId: EnrichmentSourceId
+): EnrichmentSourceResult {
+  return createErrorSourceResult({
+    sourceId,
+    errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+    errorMessage: formatGlobalEnrichmentCooldownMessage(),
+    retryHint: formatGlobalEnrichmentCooldownRetryHint(),
+  });
+}
+
 function isSupportedEnrichmentSource(
   sourceId: string
 ): sourceId is EnrichmentSourceId {
@@ -36,19 +60,10 @@ function isSupportedEnrichmentSource(
   );
 }
 
-async function enrichLiveSource(
+async function fetchLiveSource(
   sourceId: EnrichmentSourceId,
-  ioc: EnrichmentIoc,
-  enabled: EnrichmentSourceEnabledRecord
+  ioc: EnrichmentIoc
 ): Promise<EnrichmentSourceResult> {
-  if (enabled[sourceId] !== true) {
-    return createSkippedSourceResult(
-      sourceId,
-      ENRICHMENT_ERROR_CODE.DISABLED,
-      "Source is disabled in extension settings."
-    );
-  }
-
   if (sourceId === ABUSEIPDB_SOURCE_ID) {
     return enrichWithAbuseIpdb(ioc);
   }
@@ -62,6 +77,41 @@ async function enrichLiveSource(
     errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
     errorMessage: "Live connector is not available for this source yet.",
   });
+}
+
+async function enrichLiveSource(
+  sourceId: EnrichmentSourceId,
+  ioc: EnrichmentIoc,
+  enabled: EnrichmentSourceEnabledRecord,
+  bypassCache: boolean
+): Promise<EnrichmentSourceResult> {
+  if (enabled[sourceId] !== true) {
+    return createSkippedSourceResult(
+      sourceId,
+      ENRICHMENT_ERROR_CODE.DISABLED,
+      "Source is disabled in extension settings."
+    );
+  }
+
+  if (!bypassCache) {
+    if (isGlobalEnrichmentCooldownActive()) {
+      return createGlobalCooldownSourceResult(sourceId);
+    }
+
+    const cached = await readCachedEnrichmentSourceResult(ioc.value, sourceId);
+    if (cached) {
+      return cached;
+    }
+  }
+
+  const result = await fetchLiveSource(sourceId, ioc);
+  if (isRateLimitedError(result.errorCode)) {
+    recordGlobalEnrichmentCooldown(
+      parseRetryAfterSecondsFromHint(result.retryHint)
+    );
+  }
+  await cacheEnrichmentSourceResult(ioc.value, sourceId, result);
+  return result;
 }
 
 function settleEnrichmentOutcome(
@@ -80,7 +130,8 @@ function settleEnrichmentOutcome(
 
 async function enrichEnabledSourcesParallel(
   ioc: EnrichmentIoc,
-  enabled: EnrichmentSourceEnabledRecord
+  enabled: EnrichmentSourceEnabledRecord,
+  bypassCache: boolean
 ): Promise<EnrichmentSourceResult[]> {
   const sourceIds = listEnabledLiveEnrichmentSourceIds(enabled, ioc.type);
   if (sourceIds.length === 0) {
@@ -94,7 +145,9 @@ async function enrichEnabledSourcesParallel(
   }
 
   const settled = await Promise.allSettled(
-    sourceIds.map((sourceId) => enrichLiveSource(sourceId, ioc, enabled))
+    sourceIds.map((sourceId) =>
+      enrichLiveSource(sourceId, ioc, enabled, bypassCache)
+    )
   );
 
   return settled.map((outcome, index) =>
@@ -105,7 +158,8 @@ async function enrichEnabledSourcesParallel(
 async function enrichRequestedSource(
   message: EnrichIocMessage,
   ioc: EnrichmentIoc,
-  enabled: EnrichmentSourceEnabledRecord
+  enabled: EnrichmentSourceEnabledRecord,
+  bypassCache: boolean
 ): Promise<EnrichmentSourceResult> {
   const sourceId = message.sourceId;
   if (!sourceId) {
@@ -124,7 +178,7 @@ async function enrichRequestedSource(
     });
   }
 
-  return enrichLiveSource(sourceId, ioc, enabled);
+  return enrichLiveSource(sourceId, ioc, enabled, bypassCache);
 }
 
 async function enrichFromMessage(
@@ -144,13 +198,50 @@ async function enrichFromMessage(
   }
 
   const enabled = await getEnrichmentSourceEnabled();
+  const bypassCache = message.bypassCache === true;
+
+  if (bypassCache) {
+    await invalidateEnrichmentCacheForIoc(sanitized.value);
+  }
+
+  if (!bypassCache && isGlobalEnrichmentCooldownActive()) {
+    if (message.sourceId && isSupportedEnrichmentSource(message.sourceId)) {
+      const source = createGlobalCooldownSourceResult(message.sourceId);
+      return { source, sources: [source] };
+    }
+
+    const sourceIds = listEnabledLiveEnrichmentSourceIds(enabled, sanitized.type);
+    if (sourceIds.length === 0) {
+      const skipped = createSkippedSourceResult(
+        ENRICHMENT_SOURCE.ABUSEIPDB,
+        ENRICHMENT_ERROR_CODE.DISABLED,
+        "No enrichment sources are enabled in extension settings."
+      );
+      return { source: skipped, sources: [skipped] };
+    }
+
+    const sources = sourceIds.map((sourceId) =>
+      createGlobalCooldownSourceResult(sourceId)
+    );
+    const source = pickPrimaryEnrichmentSource(sources) ?? sources[0]!;
+    return { source, sources };
+  }
 
   if (message.sourceId) {
-    const source = await enrichRequestedSource(message, sanitized, enabled);
+    const source = await enrichRequestedSource(
+      message,
+      sanitized,
+      enabled,
+      bypassCache
+    );
     return { source, sources: [source] };
   }
 
-  const sources = await enrichEnabledSourcesParallel(sanitized, enabled);
+  const sources = await enrichEnabledSourcesParallel(
+    sanitized,
+    enabled,
+    bypassCache
+  );
   const source = pickPrimaryEnrichmentSource(sources) ?? sources[0]!;
   return { source, sources };
 }

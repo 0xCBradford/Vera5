@@ -11,6 +11,7 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
 import { IOC_TYPE, type IocType } from "./iocRegex";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import {
@@ -309,6 +310,7 @@ export async function enrichWithOtx(
     if (!response.ok) {
       const mapped = mapOtxHttpStatus(response.status);
       if (response.status === 429) {
+        recordGlobalEnrichmentCooldownFromHeaders(response.headers);
         const rateLimit = buildRateLimitedEnrichmentError(
           ENRICHMENT_SOURCE_LABELS[OTX_SOURCE_ID],
           response.headers

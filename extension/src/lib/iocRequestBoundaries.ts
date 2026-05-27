@@ -16,6 +16,7 @@ export const ENRICH_IOC_MESSAGE_KEYS = [
   "value",
   "iocType",
   "sourceId",
+  "bypassCache",
 ] as const;
 
 const ENRICH_IOC_MESSAGE_KEY_SET = new Set<string>(ENRICH_IOC_MESSAGE_KEYS);

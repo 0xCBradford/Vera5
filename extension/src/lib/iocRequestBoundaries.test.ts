@@ -25,6 +25,7 @@ describe("enrichment IOC request boundaries", () => {
       "value",
       "iocType",
       "sourceId",
+      "bypassCache",
     ]);
   });
 

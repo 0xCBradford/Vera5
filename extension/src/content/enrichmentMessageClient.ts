@@ -11,6 +11,7 @@ export type ContentEnrichmentSourceResult = {
   summary?: string;
   tags?: readonly string[];
   fromCache?: boolean;
+  fetchedAt?: string;
   errorCode?: string;
   errorMessage?: string;
   retryHint?: string;
@@ -93,6 +94,9 @@ function parseContentEnrichmentSourceResult(
   if (record.fromCache === true) {
     parsed.fromCache = true;
   }
+  if (typeof record.fetchedAt === "string" && record.fetchedAt.trim()) {
+    parsed.fetchedAt = record.fetchedAt.trim();
+  }
   if (record.errorCode) {
     parsed.errorCode = record.errorCode;
   }
@@ -136,6 +140,7 @@ export async function requestEnrichmentFromServiceWorker(
     value: string;
     iocType: IocType;
     sourceId?: EnrichmentSourceId;
+    bypassCache?: boolean;
   }
 ): Promise<ContentEnrichmentFetchResult | null> {
   const sanitized = sanitizeEnrichmentIoc({
@@ -153,6 +158,9 @@ export async function requestEnrichmentFromServiceWorker(
   };
   if (input.sourceId) {
     message.sourceId = input.sourceId;
+  }
+  if (input.bypassCache === true) {
+    message.bypassCache = true;
   }
 
   const response = (await chrome.runtime.sendMessage(message)) as MessageResponse;

@@ -27,9 +27,13 @@ import {
   needsStorageMigration,
   normalizeVera5Settings,
   SETTINGS_SCHEMA_VERSION,
+  setEnrichmentSourceCacheTtlSeconds,
   setExtensionEnabled,
   setHighlightEnabled,
   vera5SettingsToStoragePayload,
+  isEnrichmentSourceCacheTtlRecord,
+  normalizeEnrichmentSourceCacheTtlRecord,
+  STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
   STORAGE_KEY_API_KEYS,
   STORAGE_KEY_AUTO_SCAN_ENABLED,
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
@@ -40,6 +44,7 @@ import {
   STORAGE_KEY_SCHEMA_VERSION,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
   STORAGE_KEYS,
+  VERA5_SETTINGS_READ_KEYS,
   VERA5_SETTINGS_STORAGE_KEYS,
 } from "./storage";
 
@@ -224,8 +229,16 @@ describe("Vera5 settings schema", () => {
     expect(new Set(keys).size).toBe(keys.length);
   });
 
-  it("lists every settings key for bulk reads", () => {
-    expect(VERA5_SETTINGS_STORAGE_KEYS).toEqual(Object.values(STORAGE_KEYS));
+  it("lists required settings keys and optional read keys separately", () => {
+    const optionalReadKeys = [STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS];
+    const requiredKeys = Object.values(STORAGE_KEYS).filter(
+      (key) => !optionalReadKeys.includes(key)
+    );
+    expect(VERA5_SETTINGS_STORAGE_KEYS).toEqual(requiredKeys);
+    expect(VERA5_SETTINGS_READ_KEYS).toEqual([
+      ...VERA5_SETTINGS_STORAGE_KEYS,
+      ...optionalReadKeys,
+    ]);
     expect(new Set(VERA5_SETTINGS_STORAGE_KEYS).size).toBe(
       VERA5_SETTINGS_STORAGE_KEYS.length
     );
@@ -277,6 +290,18 @@ describe("Vera5 settings schema", () => {
     expect(isIocTypeEnabledRecord({ ipv4: 1 })).toBe(false);
     expect(isIocTypeEnabledRecord({ email: true })).toBe(false);
   });
+
+  it("validates optional per-source cache TTL records", () => {
+    expect(isEnrichmentSourceCacheTtlRecord({ abuseipdb: 1800, otx: 600 })).toBe(
+      true
+    );
+    expect(isEnrichmentSourceCacheTtlRecord({})).toBe(true);
+    expect(isEnrichmentSourceCacheTtlRecord({ abuseipdb: -1 })).toBe(false);
+    expect(isEnrichmentSourceCacheTtlRecord({ unknown: 60 })).toBe(false);
+    expect(
+      normalizeEnrichmentSourceCacheTtlRecord({ otx: 120.9, abuseipdb: 30 })
+    ).toEqual({ otx: 120, abuseipdb: 30 });
+  });
 });
 
 describe("migrate-safe defaults", () => {
@@ -291,6 +316,7 @@ describe("migrate-safe defaults", () => {
     expect(defaults.enrichmentCacheTtlSeconds).toBe(
       DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS
     );
+    expect(defaults.enrichmentSourceCacheTtlSeconds).toEqual({});
     expect(defaults.apiKeys).toEqual({});
     expect(defaults.enrichmentSourceEnabled).toEqual({
       abuseipdb: false,
@@ -508,11 +534,29 @@ describe("settings round-trip", () => {
     });
   });
 
+  it("round-trips optional per-source cache TTL overrides", async () => {
+    await setEnrichmentSourceCacheTtlSeconds("abuseipdb", 900);
+    await setEnrichmentSourceCacheTtlSeconds("otx", 300);
+
+    const settings = await getVera5Settings();
+    expect(settings.enrichmentSourceCacheTtlSeconds).toEqual({
+      abuseipdb: 900,
+      otx: 300,
+    });
+
+    await setEnrichmentSourceCacheTtlSeconds("otx", null);
+    const cleared = await getVera5Settings();
+    expect(cleared.enrichmentSourceCacheTtlSeconds).toEqual({
+      abuseipdb: 900,
+    });
+  });
+
   it("round-trips a full settings payload written to storage", async () => {
     const target = {
       ...createDefaultVera5Settings(),
       includePrivateIpv4: true,
       enrichmentCacheTtlSeconds: 7200,
+      enrichmentSourceCacheTtlSeconds: { abuseipdb: 1800 },
       iocTypeEnabled: {
         ...createDefaultVera5Settings().iocTypeEnabled,
         md5: false,
@@ -525,6 +569,7 @@ describe("settings round-trip", () => {
 
     expect(loaded.includePrivateIpv4).toBe(true);
     expect(loaded.enrichmentCacheTtlSeconds).toBe(7200);
+    expect(loaded.enrichmentSourceCacheTtlSeconds).toEqual({ abuseipdb: 1800 });
     expect(loaded.iocTypeEnabled.md5).toBe(false);
     expect(loaded.iocTypeEnabled.cve).toBe(false);
     expect(loaded.iocTypeEnabled.ipv4).toBe(true);

@@ -24,6 +24,7 @@ import {
   formatRateLimitRetryHintText,
   isMissingKeyError,
   isRateLimitedError,
+  parseRetryAfterSecondsFromHint,
   type EnrichmentConnector,
   type EnrichmentResult,
 } from "./enrichment";
@@ -317,6 +318,11 @@ describe("rate limit error messaging", () => {
       errorMessage: "AbuseIPDB rate limit reached. Back off before retrying.",
       retryHint: "Retry after 120 seconds.",
     });
+  });
+
+  it("parses retry-after seconds from retry hint text", () => {
+    expect(parseRetryAfterSecondsFromHint("Retry after 45 seconds.")).toBe(45);
+    expect(parseRetryAfterSecondsFromHint("Try again later.")).toBeUndefined();
   });
 
   it("detects rate-limited error codes", () => {

@@ -554,3 +554,18 @@ export function isRateLimitedError(
 ): errorCode is typeof ENRICHMENT_ERROR_CODE.RATE_LIMITED {
   return errorCode === ENRICHMENT_ERROR_CODE.RATE_LIMITED;
 }
+
+export function parseRetryAfterSecondsFromHint(
+  retryHint?: string
+): number | undefined {
+  const trimmed = retryHint?.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const match = /Retry after (\d+) seconds\./i.exec(trimmed);
+  if (!match) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(match[1] ?? "", 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}

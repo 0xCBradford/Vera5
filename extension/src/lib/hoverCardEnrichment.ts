@@ -73,6 +73,34 @@ export const HOVER_CARD_OPEN_SETTINGS_LABEL = "Open settings";
 
 export const HOVER_CARD_RAW_JSON_SUMMARY_LABEL = "Raw response";
 
+export const HOVER_CARD_ENRICHMENT_DISCLAIMER =
+  "Enrichment uses your API keys and sends only the selected indicator value to vendors you enable—not the full page.";
+
+export const HOVER_CARD_RISK_SCORE_DISCLAIMER =
+  "The risk label is computed locally from available source signals. It is advisory only; review each source before acting.";
+
+export type HoverCardDisclaimerInput = {
+  enrichmentState?: HoverCardEnrichmentState;
+  includeRiskScoreDisclaimer?: boolean;
+};
+
+export function resolveHoverCardDisclaimerLines(
+  input: HoverCardDisclaimerInput = {}
+): readonly string[] {
+  const lines: string[] = [];
+  const state = input.enrichmentState ?? "empty";
+  const showEnrichmentDisclaimer =
+    state === "ready" || state === "loading" || state === "error";
+
+  if (showEnrichmentDisclaimer) {
+    lines.push(HOVER_CARD_ENRICHMENT_DISCLAIMER);
+  }
+  if (input.includeRiskScoreDisclaimer) {
+    lines.push(HOVER_CARD_RISK_SCORE_DISCLAIMER);
+  }
+  return lines;
+}
+
 export function shouldShowMissingKeyAction(
   enrichmentState?: HoverCardEnrichmentState,
   errorCode?: string,
@@ -127,17 +155,49 @@ export type HoverCardSourceEntry = {
   status: HoverCardSourceEntryStatus;
   badgeText: string;
   detail: string;
+  fromCache?: boolean;
+  lastUpdatedLine?: string;
   tags?: readonly string[];
   errorCode?: string;
   retryHint?: string;
   rawVendorJson?: string;
 };
 
+export function formatHoverCardLastUpdatedLabel(
+  fetchedAtIso: string
+): string | undefined {
+  const trimmed = fetchedAtIso.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+  const date = new Date(trimmed);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+export function buildHoverCardLastUpdatedLine(
+  fetchedAtIso?: string
+): string | undefined {
+  const label = fetchedAtIso
+    ? formatHoverCardLastUpdatedLabel(fetchedAtIso)
+    : undefined;
+  if (!label) {
+    return undefined;
+  }
+  return `Last updated: ${label}`;
+}
+
 export function formatSourceStatusBadge(
-  status: HoverCardSourceEntryStatus
+  status: HoverCardSourceEntryStatus,
+  fromCache?: boolean
 ): string {
   if (status === "ok") {
-    return "Live";
+    return fromCache === true ? "Cached" : "Live";
   }
   if (status === "error") {
     return "Error";
@@ -146,9 +206,22 @@ export function formatSourceStatusBadge(
 }
 
 export function buildSourceStatusBadgeClassName(
-  status: HoverCardSourceEntryStatus
+  status: HoverCardSourceEntryStatus,
+  fromCache?: boolean
 ): string {
+  if (status === "ok" && fromCache === true) {
+    return "vera5-hover-card-source-badge vera5-hover-card-source-badge--cached";
+  }
   return `vera5-hover-card-source-badge vera5-hover-card-source-badge--${status}`;
+}
+
+export function getSingleSourceLastUpdatedLine(
+  sourceResults: readonly HoverCardSourceEntry[] | undefined
+): string | undefined {
+  if (shouldShowMultiSourceResults(sourceResults)) {
+    return undefined;
+  }
+  return sourceResults?.[0]?.lastUpdatedLine;
 }
 
 export type HoverCardSourceResultInput = {
@@ -157,6 +230,8 @@ export type HoverCardSourceResultInput = {
   status: HoverCardSourceEntryStatus;
   summary?: string;
   tags?: readonly string[];
+  fromCache?: boolean;
+  fetchedAt?: string;
   errorCode?: string;
   errorMessage?: string;
   retryHint?: string;
@@ -185,13 +260,19 @@ export function buildHoverCardSourceEntry(
   if (!isKnownSourceId(result.sourceId)) {
     return null;
   }
+  const fromCache = result.status === "ok" && result.fromCache === true;
   const entry: HoverCardSourceEntry = {
     sourceId: result.sourceId,
     label: result.sourceLabel.trim() || ENRICHMENT_SOURCE_LABELS[result.sourceId],
     status: result.status,
-    badgeText: formatSourceStatusBadge(result.status),
+    fromCache,
+    badgeText: formatSourceStatusBadge(result.status, fromCache),
     detail: resolveSourceEntryDetail(result),
   };
+  const lastUpdatedLine = buildHoverCardLastUpdatedLine(result.fetchedAt);
+  if (lastUpdatedLine) {
+    entry.lastUpdatedLine = lastUpdatedLine;
+  }
   const tags = result.tags
     ?.map((tag) => tag.trim())
     .filter((tag) => tag.length > 0);
@@ -246,6 +327,30 @@ export function shouldShowMultiSourceResults(
   return (sourceResults?.length ?? 0) > 1;
 }
 
+export function areAllEnrichmentSourcesDisabled(
+  disabledSources: readonly EnrichmentSourceId[]
+): boolean {
+  return ENRICHMENT_SOURCE_ORDER.every((sourceId) =>
+    disabledSources.includes(sourceId)
+  );
+}
+
+export function shouldShowRiskScore(
+  disabledSources: readonly EnrichmentSourceId[] | undefined,
+  sourceResults: readonly HoverCardSourceEntry[] | undefined
+): boolean {
+  if (areAllEnrichmentSourcesDisabled(disabledSources ?? [])) {
+    return false;
+  }
+  return (sourceResults?.length ?? 0) > 0;
+}
+
+export function shouldShowHoverCardDisclaimer(
+  input: HoverCardDisclaimerInput = {}
+): boolean {
+  return resolveHoverCardDisclaimerLines(input).length > 0;
+}
+
 export type MultiSourceEnrichmentView = {
   enrichmentState: HoverCardEnrichmentState;
   summary?: string;
@@ -278,7 +383,10 @@ export function resolveMultiSourceEnrichmentView(
       tags: primary.tags,
       sourceAttribution:
         sourceResults.length === 1
-          ? { sourceLabel: primary.label }
+          ? {
+              sourceLabel: primary.label,
+              fromCache: primary.fromCache,
+            }
           : undefined,
       sourceResults,
     };
