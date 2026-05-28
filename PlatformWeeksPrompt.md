@@ -134,7 +134,7 @@ Output requirements in chat:
 
 ## Step 11 - Expand Week 8.5 (explain-this-IOC reasoning chain)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Add deterministic explainability to Week 8.5 without LLM summaries.
 
 ```text
@@ -168,7 +168,7 @@ Return in chat:
 
 ## Step 12 - Insert full Week 29 (page context awareness)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Local page-type detection drives analyst-native UI defaults.
 
 ```text
@@ -205,7 +205,7 @@ Return in chat:
 
 ## Step 13 - Insert full Week 30 (operator macros)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Programmable local analyst workflows without cloud automation.
 
 ```text
@@ -241,7 +241,7 @@ Return in chat:
 
 ## Step 14 - Insert full Week 31 (investigation replay)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Local workflow playback for training and DFIR documentation.
 
 ```text
@@ -274,7 +274,7 @@ Return in chat:
 
 ## Step 15 - Insert full Week 32 (multi-IOC correlation packs)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Local cross-session IOC correlation without global TI graph.
 
 ```text
@@ -307,7 +307,7 @@ Return in chat:
 
 ## Step 16 - Insert full Week 33 (human-centered noise reduction)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Privacy-safe local personalization from explicit suppress patterns.
 
 ```text
@@ -505,13 +505,13 @@ Return in chat:
 
 ## Progress Tracker (update as you execute)
 
-- [ ] Step 11 DONE — Expand Week 8.5 explain chain (**NEXT**)
-- [ ] Step 12 DONE — Full Week 29
-- [ ] Step 13 DONE — Full Week 30
-- [ ] Step 14 DONE — Full Week 31
-- [ ] Step 15 DONE — Full Week 32
-- [ ] Step 16 DONE — Full Week 33
-- [ ] Step 17 DONE — Full Week 34
+- [x] Step 11 DONE — Expand Week 8.5 explain chain
+- [x] Step 12 DONE — Full Week 29
+- [x] Step 13 DONE — Full Week 30
+- [x] Step 14 DONE — Full Week 31
+- [x] Step 15 DONE — Full Week 32
+- [x] Step 16 DONE — Full Week 33
+- [ ] Step 17 DONE — Full Week 34 (**NEXT**)
 - [ ] Step 18 DONE — Full Week 35
 - [ ] Step 19 DONE — Full Week 36
 - [ ] Step 20 DONE — Full Week 37
