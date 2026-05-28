@@ -340,7 +340,7 @@ Return in chat:
 
 ## Step 17 - Insert full Week 34 (portable threat profiles)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Community-style workflow profiles without keys or cloud.
 
 ```text
@@ -373,7 +373,7 @@ Return in chat:
 
 ## Step 18 - Insert full Week 35 (known-good intelligence)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Reduce fatigue via known-benign and known-internal labeling.
 
 ```text
@@ -406,7 +406,7 @@ Return in chat:
 
 ## Step 19 - Insert full Week 36 (analyst notebook layer)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Investigation fragments attached to IOC, session, and page.
 
 ```text
@@ -439,7 +439,7 @@ Return in chat:
 
 ## Step 20 - Insert full Week 37 (IOC relationship memory deep)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Operator memory augmentation across entities and sessions.
 
 ```text
@@ -472,7 +472,7 @@ Return in chat:
 
 ## Step 21 - Consistency pass (29–37 + 8.5 + WEEKS.md)
 
-**Status:** PENDING  
+**Status:** DONE  
 **Goal:** Roadmap coherence after platform weeks are inserted.
 
 ```text
@@ -511,11 +511,11 @@ Return in chat:
 - [x] Step 14 DONE — Full Week 31
 - [x] Step 15 DONE — Full Week 32
 - [x] Step 16 DONE — Full Week 33
-- [ ] Step 17 DONE — Full Week 34 (**NEXT**)
-- [ ] Step 18 DONE — Full Week 35
-- [ ] Step 19 DONE — Full Week 36
-- [ ] Step 20 DONE — Full Week 37
-- [ ] Step 21 DONE — Consistency pass / ALL COMPLETE
+- [x] Step 17 DONE — Full Week 34
+- [x] Step 18 DONE — Full Week 35
+- [x] Step 19 DONE — Full Week 36
+- [x] Step 20 DONE — Full Week 37
+- [x] Step 21 DONE — Consistency pass / ALL COMPLETE
 
 ---
 
