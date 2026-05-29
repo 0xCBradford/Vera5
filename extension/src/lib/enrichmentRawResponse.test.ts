@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatRawVendorJsonForDisplay,
   formatRedactedVendorJson,
   isSensitiveEnrichmentFieldName,
   redactEnrichmentVendorPayload,
@@ -46,5 +47,17 @@ describe("enrichment raw response redaction", () => {
     expect(formatted).toContain('"count": 2');
     expect(formatted).toContain(`"${REDACTED_VALUE_PLACEHOLDER}"`);
     expect(formatted).not.toContain("hidden");
+  });
+
+  it("redacts sensitive fields when formatting stored raw JSON strings", () => {
+    const formatted = formatRawVendorJsonForDisplay(
+      JSON.stringify({
+        data: { abuseConfidenceScore: 12 },
+        Key: "secret-abuse-key",
+      })
+    );
+    expect(formatted).toContain("abuseConfidenceScore");
+    expect(formatted).toContain(REDACTED_VALUE_PLACEHOLDER);
+    expect(formatted).not.toContain("secret-abuse-key");
   });
 });

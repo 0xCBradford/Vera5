@@ -2,21 +2,11 @@ import { useEffect, useState } from "react";
 import type { IocType } from "../lib/iocRegex";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
-  buildDisabledSourcePlaceholders,
   buildSourceStatusBadgeClassName,
   formatEnrichmentSourceAttribution,
-  getSingleSourceLastUpdatedLine,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
-  resolveEnrichmentDisplay,
-  resolveHoverCardDisclaimerLines,
-  shouldShowEnrichmentSourceAttribution,
-  shouldShowHoverCardDisclaimer,
-  shouldShowMissingKeyAction,
-  shouldShowMultiSourceResults,
-  shouldShowRateLimitRetryHint,
-  shouldShowRiskScore,
-  shouldShowSingleSourceRawJson,
+  resolveHoverCardDisplayView,
   type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
   type HoverCardEnrichmentState,
@@ -78,63 +68,19 @@ export function HoverCard({
   const typeLabel = formatHoverCardTypeLabel(type);
   const [copied, setCopied] = useState(false);
   const pivotLinks = getPivotLinks(type, value);
-  const enrichment = resolveEnrichmentDisplay({
+  const view = resolveHoverCardDisplayView({
     enrichmentState,
     summary,
-    errorMessage,
-  });
-  const disabledSourcePlaceholders = buildDisabledSourcePlaceholders(
-    disabledSources
-  );
-  const enrichmentTags = tags
-    .map((tag) => tag.trim())
-    .filter((tag) => tag.length > 0);
-  const showTags =
-    enrichment.variant === "ready" && enrichmentTags.length > 0;
-  const showMultiSourceResults = shouldShowMultiSourceResults(sourceResults);
-  const showSingleSourceRawJson = shouldShowSingleSourceRawJson(sourceResults);
-  const singleSourceRawJson = showSingleSourceRawJson
-    ? sourceResults[0]?.rawVendorJson
-    : undefined;
-  const showAttribution = shouldShowEnrichmentSourceAttribution(
-    enrichment.variant,
+    tags,
     sourceAttribution,
-    sourceResults
-  );
-  const showMissingKeyAction = shouldShowMissingKeyAction(
-    enrichment.variant,
+    errorMessage,
     errorCode,
-    sourceResults
-  );
-  const showRateLimitRetryHint = shouldShowRateLimitRetryHint(
-    enrichment.variant,
     retryHint,
-    sourceResults
-  );
-  const singleSourceLastUpdatedLine =
-    getSingleSourceLastUpdatedLine(sourceResults);
-  const showRiskScore = shouldShowRiskScore(disabledSources, sourceResults);
-  const disclaimerLines = resolveHoverCardDisclaimerLines({
-    enrichmentState: enrichment.variant,
-    includeRiskScoreDisclaimer: showRiskScore,
+    disabledSources,
+    sourceResults,
+    pivotLinkCount: pivotLinks.length,
   });
-  const showDisclaimer = shouldShowHoverCardDisclaimer({
-    enrichmentState: enrichment.variant,
-    includeRiskScoreDisclaimer: showRiskScore,
-  });
-  const showFooter =
-    pivotLinks.length > 0 ||
-    disabledSourcePlaceholders.length > 0 ||
-    showMultiSourceResults;
-  const showBelowSummary =
-    showFooter ||
-    showTags ||
-    showSingleSourceRawJson ||
-    showAttribution ||
-    showMissingKeyAction ||
-    showRateLimitRetryHint ||
-    Boolean(singleSourceLastUpdatedLine) ||
-    showDisclaimer;
+  const enrichment = view.enrichment;
 
   useEffect(() => {
     ensureVera5UiStyles(document);
@@ -179,7 +125,7 @@ export function HoverCard({
         role={enrichment.variant === "error" ? "alert" : "status"}
         aria-live={enrichment.variant === "loading" ? "polite" : undefined}
         aria-busy={enrichment.variant === "loading" ? true : undefined}
-        style={{ marginBottom: showBelowSummary ? 8 : 0 }}
+        style={{ marginBottom: view.showBelowSummary ? 8 : 0 }}
       >
         {enrichment.text}
       </p>
@@ -187,7 +133,7 @@ export function HoverCard({
         disabledSources={disabledSources}
         sourceResults={sourceResults}
       />
-      {showMissingKeyAction ? (
+      {view.showMissingKeyAction ? (
         <button
           type="button"
           className="vera5-hover-card-action"
@@ -195,46 +141,46 @@ export function HoverCard({
           onClick={() => {
             void chrome.runtime.openOptionsPage();
           }}
-          style={{ marginBottom: showBelowSummary ? 8 : 0 }}
+          style={{ marginBottom: view.showBelowSummary ? 8 : 0 }}
         >
           {HOVER_CARD_OPEN_SETTINGS_LABEL}
         </button>
       ) : null}
-      {showRateLimitRetryHint ? (
+      {view.showRateLimitRetryHint ? (
         <p
           className="vera5-hover-card-retry-hint"
           role="note"
-          style={{ marginBottom: showBelowSummary ? 8 : 0 }}
+          style={{ marginBottom: view.showBelowSummary ? 8 : 0 }}
         >
           {retryHint}
         </p>
       ) : null}
-      {showSingleSourceRawJson && singleSourceRawJson ? (
+      {view.showSingleSourceRawJson && view.singleSourceRawJson ? (
         <details
           className="vera5-hover-card-raw-json"
-          style={{ marginBottom: showFooter ? 8 : 0 }}
+          style={{ marginBottom: view.showFooter ? 8 : 0 }}
         >
           <summary>{HOVER_CARD_RAW_JSON_SUMMARY_LABEL}</summary>
-          <pre className="vera5-hover-card-raw-json-body">{singleSourceRawJson}</pre>
+          <pre className="vera5-hover-card-raw-json-body">{view.singleSourceRawJson}</pre>
         </details>
       ) : null}
-      {singleSourceLastUpdatedLine ? (
+      {view.singleSourceLastUpdatedLine ? (
         <p
           className="vera5-hover-card-source-last-updated"
           role="note"
-          style={{ marginBottom: showFooter ? 8 : 0 }}
+          style={{ marginBottom: view.showFooter ? 8 : 0 }}
         >
-          {singleSourceLastUpdatedLine}
+          {view.singleSourceLastUpdatedLine}
         </p>
       ) : null}
-      {showTags ? (
+      {view.showTags ? (
         <div
           className="vera5-hover-card-tags"
           role="list"
           aria-label="Threat intelligence tags"
-          style={{ marginBottom: showFooter ? 8 : 0 }}
+          style={{ marginBottom: view.showFooter ? 8 : 0 }}
         >
-          {enrichmentTags.map((tag) => (
+          {view.enrichmentTags.map((tag) => (
             <span
               key={tag}
               className="vera5-hover-card-tag"
@@ -245,7 +191,7 @@ export function HoverCard({
           ))}
         </div>
       ) : null}
-      {showMultiSourceResults ? (
+      {view.showMultiSourceResults ? (
         <section
           className="vera5-hover-card-sources"
           aria-label="Enrichment source results"
@@ -290,7 +236,7 @@ export function HoverCard({
           </ul>
         </section>
       ) : null}
-      {disabledSourcePlaceholders.length > 0 ? (
+      {view.disabledSourcePlaceholders.length > 0 ? (
         <section
           className="vera5-hover-card-sources"
           aria-label="Enrichment sources"
@@ -298,7 +244,7 @@ export function HoverCard({
         >
           <p className="vera5-hover-card-sources-heading">Sources</p>
           <ul className="vera5-hover-card-sources-list">
-            {disabledSourcePlaceholders.map((entry) => (
+            {view.disabledSourcePlaceholders.map((entry) => (
               <li key={entry.sourceId} className="vera5-hover-card-source-item">
                 <span style={{ fontWeight: 600 }}>{entry.label}</span>
                 {" — "}
@@ -326,7 +272,7 @@ export function HoverCard({
           ))}
         </nav>
       ) : null}
-      {showAttribution && sourceAttribution ? (
+      {view.showAttribution && sourceAttribution ? (
         <p className="vera5-hover-card-attribution" role="note">
           {formatEnrichmentSourceAttribution(
             sourceAttribution,
@@ -334,12 +280,12 @@ export function HoverCard({
           )}
         </p>
       ) : null}
-      {showDisclaimer ? (
+      {view.showDisclaimer ? (
         <footer
           className="vera5-hover-card-disclaimer"
           aria-label="Enrichment and risk score notice"
         >
-          {disclaimerLines.map((line) => (
+          {view.disclaimerLines.map((line) => (
             <p key={line} role="note">
               {line}
             </p>

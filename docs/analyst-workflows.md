@@ -101,6 +101,24 @@ Disable sources you do not need for a case to save quota and simplify the card.
 | AbuseIPDB works, OTX errors | Partial success | Read per-source badge and message; fix OTX key or quota. |
 | Highlights missing | Extension off, highlight off, or scan not run | Enable extension and highlighting; scan the page. |
 
+## Foundation capability traceability
+
+Internal acceptance checklists in [`docs/acceptance/`](acceptance/) record sign-off criteria for each foundation capability layer through cache and rate-limit operations. Use the checklist that matches the behavior you are validating in the browser or in tests—not a single monolithic doc.
+
+| Capability layer | What it covers | Acceptance checklist |
+|------------------|----------------|----------------------|
+| **Extension scaffold** | Manifest V3 load path, service worker, popup, options, build output | [`W1_7_1.md`](acceptance/W1_7_1.md) |
+| **IOC detection** | Regex engine, on-demand scan, fixture tuning, false-positive guards | [`W2_7_1.md`](acceptance/W2_7_1.md) |
+| **Highlights and hover shell** | On-page highlights, hover card, copy, static pivot links | [`W3_7_1.md`](acceptance/W3_7_1.md) |
+| **Settings and privacy** | Masked API keys, toggles, manual-only mode, cache clear, settings export/import | [`W4_7_1.md`](acceptance/W4_7_1.md) |
+| **First live enrichment** | AbuseIPDB IPv4 connector, worker routing, error paths | [`W5_7_1.md`](acceptance/W5_7_1.md) |
+| **Multi-source enrichment** | OTX + parallel fetch, per-source badges, expandable raw JSON | [`W6_7_1.md`](acceptance/W6_7_1.md) |
+| **Cache and rate limits** | TTL cache, Live/Cached labels, manual **›** refresh, 429 cooldown | [`W7_7_1.md`](acceptance/W7_7_1.md) |
+
+Production-path foundation closure (overlay parity with the enrichment behaviors above) is tracked in [`W8_25_1.md`](acceptance/W8_25_1.md). Composite scoring acceptance is in [`W8_7_1.md`](acceptance/W8_7_1.md).
+
+These artifacts are for maintainers and operator sign-off; they are not required reading for day-to-day triage.
+
 ## Related documentation
 
 - [api-integrations.md](api-integrations.md) — per-source limits, 429 headers, and monitoring links

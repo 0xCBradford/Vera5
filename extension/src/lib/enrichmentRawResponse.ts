@@ -56,3 +56,15 @@ export function formatRedactedVendorJson(value: unknown): string | undefined {
   }
   return text;
 }
+
+export function formatRawVendorJsonForDisplay(rawJson: string): string {
+  const trimmed = rawJson.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+  try {
+    return formatRedactedVendorJson(JSON.parse(trimmed) as unknown) ?? trimmed;
+  } catch {
+    return trimmed;
+  }
+}

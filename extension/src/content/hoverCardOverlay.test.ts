@@ -11,13 +11,24 @@ import {
 } from "../lib/hoverCardEnrichment";
 import { IOC_TYPE } from "../lib/iocRegex";
 import * as copyText from "../lib/copyText";
+import { REDACTED_VALUE_PLACEHOLDER } from "../lib/enrichmentRawResponse";
 import {
+  DEFAULT_HOVER_CARD_SUMMARY,
+  HOVER_CARD_ERROR_SUMMARY,
+  type HoverCardEnrichmentState,
+} from "../lib/hoverCardEnrichment";
+import { HOVER_CARD_ENRICHMENT_MODIFIER_CLASS } from "../lib/vera5UiStyles";
+import {
+  buildHoverCardPanel,
   hideHoverCard,
   HOVER_CARD_COPY_BUTTON_CLASS,
   HOVER_CARD_HOST_ID,
   HOVER_CARD_PANEL_CLASS,
   HOVER_CARD_ENRICHMENT_CLASS,
   HOVER_CARD_PIVOT_LINK_CLASS,
+  HOVER_CARD_PIVOT_NAV_CLASS,
+  HOVER_CARD_RAW_JSON_BODY_CLASS,
+  HOVER_CARD_RAW_JSON_CLASS,
   HOVER_CARD_SOURCES_CLASS,
   HOVER_CARD_TAGS_CLASS,
   HOVER_CARD_TAG_CLASS,
@@ -25,8 +36,185 @@ import {
   HOVER_CARD_DISCLAIMER_CLASS,
   HOVER_CARD_ACTION_CLASS,
   HOVER_CARD_RETRY_HINT_CLASS,
+  HOVER_CARD_SOURCE_DETAIL_CLASS,
+  HOVER_CARD_SOURCE_ITEM_CLASS,
   showHoverCardNearAnchor,
 } from "./hoverCardOverlay";
+
+function queryOverlayEnrichmentSummary(panel: ParentNode): HTMLElement | null {
+  return panel.querySelector(`.${HOVER_CARD_ENRICHMENT_CLASS}`);
+}
+
+describe("hover card overlay shell", () => {
+  it("renders static pivot links for IPv4 indicators", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    expect(panel.querySelector(`.${HOVER_CARD_PIVOT_NAV_CLASS}`)).not.toBeNull();
+    const vtLink = panel.querySelector(
+      `.${HOVER_CARD_PIVOT_LINK_CLASS}[href="https://www.virustotal.com/gui/ip-address/8.8.8.8"]`
+    );
+    const abuseLink = panel.querySelector(
+      `.${HOVER_CARD_PIVOT_LINK_CLASS}[href="https://www.abuseipdb.com/check/8.8.8.8"]`
+    );
+    expect(vtLink?.textContent).toBe("VirusTotal");
+    expect(abuseLink?.textContent).toBe("AbuseIPDB");
+    expect(vtLink?.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(vtLink?.getAttribute("target")).toBe("_blank");
+  });
+
+  it.each<
+    [
+      string,
+      {
+        enrichmentState?: HoverCardEnrichmentState;
+        summary?: string;
+        errorMessage?: string;
+        expectedText: string;
+        modifier: keyof typeof HOVER_CARD_ENRICHMENT_MODIFIER_CLASS;
+        role: "status" | "alert";
+        ariaBusy?: string;
+        ariaLive?: string;
+      },
+    ]
+  >([
+    [
+      "empty default",
+      {
+        expectedText: DEFAULT_HOVER_CARD_SUMMARY,
+        modifier: "empty",
+        role: "status",
+      },
+    ],
+    [
+      "empty explicit",
+      {
+        enrichmentState: "empty",
+        expectedText: DEFAULT_HOVER_CARD_SUMMARY,
+        modifier: "empty",
+        role: "status",
+      },
+    ],
+    [
+      "loading",
+      {
+        enrichmentState: "loading",
+        expectedText: HOVER_CARD_LOADING_SUMMARY,
+        modifier: "loading",
+        role: "status",
+        ariaBusy: "true",
+        ariaLive: "polite",
+      },
+    ],
+    [
+      "error default",
+      {
+        enrichmentState: "error",
+        expectedText: HOVER_CARD_ERROR_SUMMARY,
+        modifier: "error",
+        role: "alert",
+      },
+    ],
+    [
+      "error custom",
+      {
+        enrichmentState: "error",
+        errorMessage: "Request timed out.",
+        expectedText: "Request timed out.",
+        modifier: "error",
+        role: "alert",
+      },
+    ],
+    [
+      "ready",
+      {
+        enrichmentState: "ready",
+        summary: "3 threat pulses",
+        expectedText: "3 threat pulses",
+        modifier: "ready",
+        role: "status",
+      },
+    ],
+  ])("renders %s enrichment state", (_label, config) => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: config.enrichmentState,
+      summary: config.summary,
+      errorMessage: config.errorMessage,
+    });
+
+    const summary = queryOverlayEnrichmentSummary(panel);
+    expect(summary?.textContent).toContain(config.expectedText);
+    expect(summary?.className).toContain(
+      HOVER_CARD_ENRICHMENT_MODIFIER_CLASS[config.modifier]
+    );
+    expect(summary?.getAttribute("role")).toBe(config.role);
+
+    if (config.ariaBusy) {
+      expect(summary?.getAttribute("aria-busy")).toBe(config.ariaBusy);
+    } else {
+      expect(summary?.hasAttribute("aria-busy")).toBe(false);
+    }
+
+    if (config.ariaLive) {
+      expect(summary?.getAttribute("aria-live")).toBe(config.ariaLive);
+    } else {
+      expect(summary?.hasAttribute("aria-live")).toBe(false);
+    }
+  });
+
+  it("shows ready summary and keeps pivot links visible together", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "Known scanner activity.",
+    });
+
+    expect(panel.textContent).toContain("Known scanner activity.");
+    expect(panel.querySelector(`.${HOVER_CARD_PIVOT_NAV_CLASS}`)).not.toBeNull();
+    expect(queryOverlayEnrichmentSummary(panel)?.className).toContain(
+      HOVER_CARD_ENRICHMENT_MODIFIER_CLASS.ready
+    );
+  });
+
+  it("hides attribution footer while loading", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "loading",
+      sourceAttribution: { sourceLabel: "AbuseIPDB" },
+    });
+
+    expect(panel.querySelector(`.${HOVER_CARD_ATTRIBUTION_CLASS}`)).toBeNull();
+    expect(panel.textContent).toContain(HOVER_CARD_LOADING_SUMMARY);
+  });
+
+  it("copies the IOC value from the shell copy button", async () => {
+    const copy = vi
+      .spyOn(copyText, "copyTextToClipboard")
+      .mockResolvedValue(true);
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const button = panel.querySelector(`.${HOVER_CARD_COPY_BUTTON_CLASS}`);
+    expect(button?.textContent).toBe("Copy");
+    button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(button?.textContent).toBe("Copied");
+    });
+
+    expect(copy).toHaveBeenCalledWith("8.8.8.8");
+    expect(button?.className).toContain("vera5-hover-card-copy--copied");
+    copy.mockRestore();
+  });
+});
 
 describe("hover card overlay", () => {
   afterEach(() => {
@@ -444,6 +632,155 @@ describe("hover card overlay", () => {
     ).not.toBeNull();
   });
 
+  it("renders Live, Cached, Error, and Skipped badges on multi-source rows", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Cached",
+          detail: "12 abuse confidence",
+          fromCache: true,
+          lastUpdatedLine: "Last updated: May 22, 2026, 6:00 AM",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "ok",
+          badgeText: "Live",
+          detail: "2 threat pulses",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.URLSCAN,
+          label: "URLScan.io",
+          status: "error",
+          badgeText: "Error",
+          detail: "URLScan.io rate limit reached. Back off before retrying.",
+          retryHint: "Retry after 30 seconds.",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.GREYNOISE,
+          label: "GreyNoise",
+          status: "skipped",
+          badgeText: "Skipped",
+          detail: "Enrichment was not available for this source.",
+        },
+      ],
+    });
+
+    expect(panel.textContent).toContain("AbuseIPDB · Cached");
+    expect(panel.textContent).toContain("OTX · Live");
+    expect(panel.textContent).toContain("URLScan.io · Error");
+    expect(panel.textContent).toContain("GreyNoise · Skipped");
+    expect(
+      panel.querySelector(".vera5-hover-card-source-badge--cached")
+    ).not.toBeNull();
+    expect(
+      panel.querySelector(".vera5-hover-card-source-badge--ok")
+    ).not.toBeNull();
+    expect(
+      panel.querySelector(".vera5-hover-card-source-badge--error")
+    ).not.toBeNull();
+    expect(
+      panel.querySelector(".vera5-hover-card-source-badge--skipped")
+    ).not.toBeNull();
+    expect(
+      panel.querySelectorAll(".vera5-hover-card-source-badge")
+    ).toHaveLength(4);
+    expect(panel.querySelector(".vera5-hover-card-attribution")).toBeNull();
+    expect(panel.textContent).toContain("Retry after 30 seconds.");
+    expect(panel.textContent).toContain("Enrichment sources");
+    expect(panel.querySelector(`.${HOVER_CARD_ACTION_CLASS}`)).toBeNull();
+    expect(
+      panel.querySelector(`p.${HOVER_CARD_RETRY_HINT_CLASS}`)
+    ).toBeNull();
+    const perSourceRetry = panel.querySelector(
+      `.${HOVER_CARD_SOURCE_ITEM_CLASS} .${HOVER_CARD_RETRY_HINT_CLASS}`
+    );
+    expect(perSourceRetry?.textContent).toBe("Retry after 30 seconds.");
+    expect(
+      panel.querySelector(`.${HOVER_CARD_SOURCE_DETAIL_CLASS}`)
+    ).not.toBeNull();
+  });
+
+  it("shows per-source error detail without card-level open-settings when all sources fail", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const sourceResults = buildHoverCardSourceEntries([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "error",
+        errorCode: "missing_key",
+        errorMessage:
+          "Add your AbuseIPDB API key in Vera5 Settings to load enrichment.",
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "error",
+        errorCode: "missing_key",
+        errorMessage: "Add your OTX API key in Vera5 Settings to load enrichment.",
+      },
+    ]);
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "error",
+      errorCode: "missing_key",
+      errorMessage:
+        "Add your AbuseIPDB API key in Vera5 Settings to load enrichment.",
+      sourceResults,
+    });
+
+    expect(panel.textContent).toContain(
+      "Add your AbuseIPDB API key in Vera5 Settings to load enrichment."
+    );
+    expect(panel.textContent).toContain(
+      "Add your OTX API key in Vera5 Settings to load enrichment."
+    );
+    expect(panel.querySelector(`.${HOVER_CARD_ACTION_CLASS}`)).toBeNull();
+    expect(
+      panel.querySelectorAll(`.${HOVER_CARD_SOURCE_DETAIL_CLASS}`)
+    ).toHaveLength(2);
+  });
+
   it("shows expandable raw vendor JSON for enrichment sources", () => {
     const anchor = document.createElement("span");
     document.body.appendChild(anchor);
@@ -483,6 +820,98 @@ describe("hover card overlay", () => {
     expect(details).not.toBeNull();
     expect(details?.textContent).toContain("Raw response");
     expect(details?.textContent).toContain("abuseConfidenceScore");
+  });
+
+  it("redacts sensitive fields in expandable raw response panel", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: "abuseipdb",
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "12 abuse confidence",
+          rawVendorJson: JSON.stringify({
+            data: { abuseConfidenceScore: 12 },
+            Key: "secret-abuse-key",
+          }),
+        },
+      ],
+    });
+
+    const pre = panel.querySelector(`.${HOVER_CARD_RAW_JSON_BODY_CLASS}`);
+    expect(pre?.textContent).toContain("abuseConfidenceScore");
+    expect(pre?.textContent).toContain(REDACTED_VALUE_PLACEHOLDER);
+    expect(pre?.textContent).not.toContain("secret-abuse-key");
+  });
+
+  it("shows per-source expandable raw response panels for multi-source enrichment", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "42 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "42 abuse confidence",
+          rawVendorJson: '{"data":{"abuseConfidenceScore":42}}',
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "ok",
+          badgeText: "Live",
+          detail: "2 threat pulses",
+          rawVendorJson: '{"pulse_info":{"count":2}}',
+        },
+      ],
+    });
+
+    expect(
+      panel.querySelectorAll(`.${HOVER_CARD_RAW_JSON_CLASS}`)
+    ).toHaveLength(2);
+    expect(panel.textContent).toContain("abuseConfidenceScore");
+    expect(panel.textContent).toContain("pulse_info");
   });
 
   it("shows rate-limit backoff message and retry hint", () => {

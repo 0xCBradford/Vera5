@@ -16,6 +16,7 @@ import {
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
   resolveEnrichmentDisplay,
   resolveHoverCardDisclaimerLines,
+  resolveHoverCardDisplayView,
   resolveMultiSourceEnrichmentView,
   shouldShowEnrichmentSourceAttribution,
   shouldShowHoverCardDisclaimer,
@@ -322,5 +323,69 @@ describe("hover card enrichment placeholders", () => {
     expect(shouldShowRateLimitRetryHint("loading", "Retry after 30 seconds.")).toBe(
       false
     );
+  });
+});
+
+describe("hover card display view model", () => {
+  it("resolves shared enrich display flags for ready single-source enrichment", () => {
+    const view = resolveHoverCardDisplayView({
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      tags: ["US", "Fixed Line ISP"],
+      sourceAttribution: { sourceLabel: "AbuseIPDB" },
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "12 abuse confidence",
+        },
+      ],
+      pivotLinkCount: 2,
+    });
+
+    expect(view.enrichment.text).toBe("12 abuse confidence");
+    expect(view.showTags).toBe(true);
+    expect(view.enrichmentTags).toEqual(["US", "Fixed Line ISP"]);
+    expect(view.showAttribution).toBe(true);
+    expect(view.showMultiSourceResults).toBe(false);
+    expect(view.showFooter).toBe(true);
+    expect(view.showBelowSummary).toBe(true);
+    expect(view.showDisclaimer).toBe(true);
+  });
+
+  it("hides attribution and card-level actions when multi-source rows are shown", () => {
+    const view = resolveHoverCardDisplayView({
+      enrichmentState: "ready",
+      summary: "42 abuse confidence",
+      sourceAttribution: { sourceLabel: "AbuseIPDB" },
+      errorCode: "missing_key",
+      retryHint: "Retry after 30 seconds.",
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "42 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "error",
+          badgeText: "Error",
+          detail: "OTX rate limit reached.",
+          retryHint: "Retry after 30 seconds.",
+        },
+      ],
+      pivotLinkCount: 0,
+    });
+
+    expect(view.showMultiSourceResults).toBe(true);
+    expect(view.showAttribution).toBe(false);
+    expect(view.showMissingKeyAction).toBe(false);
+    expect(view.showRateLimitRetryHint).toBe(false);
+    expect(view.showFooter).toBe(true);
   });
 });

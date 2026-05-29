@@ -2,8 +2,10 @@
  * @vitest-environment happy-dom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { IOC_TYPE } from "../lib/iocRegex";
 import { CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED } from "./enrichmentSourceStorage";
 import { CONTENT_STORAGE_KEY_MANUAL_ONLY_MODE } from "./manualOnlyStorage";
+import * as enrichmentBackgroundFetch from "./enrichmentBackgroundFetch";
 import {
   setAutoEnrichmentFetcherForTests,
 } from "./enrichmentAutoFetch";
@@ -177,8 +179,11 @@ describe("hover card manual enrich trigger", () => {
     expect(document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)).not.toBeNull();
   });
 
-  it("does not auto-fetch enrichment when manual-only mode is on", () => {
+  it("does not auto-fetch enrichment when manual-only mode is on", async () => {
     const fetcher = vi.fn();
+    const runSpy = vi
+      .spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment")
+      .mockResolvedValue(undefined);
     setAutoEnrichmentFetcherForTests(fetcher);
 
     const highlight = mountHighlightedIpv4();
@@ -186,7 +191,89 @@ describe("hover card manual enrich trigger", () => {
       new MouseEvent("click", { bubbles: true, cancelable: true })
     );
 
+    await flushAsyncWork();
+
     expect(fetcher).not.toHaveBeenCalled();
+    expect(runSpy).not.toHaveBeenCalled();
+    runSpy.mockRestore();
+  });
+
+  it("requests live enrichment with bypassCache when the enrich icon is clicked", async () => {
+    const runSpy = vi
+      .spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment")
+      .mockResolvedValue(undefined);
+    const cancelSpy = vi
+      .spyOn(enrichmentBackgroundFetch, "cancelPendingHoverEnrichment")
+      .mockImplementation(() => {});
+
+    const highlight = mountHighlightedIpv4();
+    const icon = highlight.querySelector(`.${IOC_ENRICH_ICON_CLASS}`);
+    icon?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true })
+    );
+
+    await flushAsyncWork();
+
+    expect(cancelSpy).toHaveBeenCalled();
+    expect(runSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: "8.8.8.8",
+        type: IOC_TYPE.IPV4,
+      }),
+      document,
+      { bypassCache: true }
+    );
+
+    runSpy.mockRestore();
+    cancelSpy.mockRestore();
+  });
+
+  it("still requests bypassCache refresh from the enrich icon when manual-only mode is off", async () => {
+    stubManualOnlyStorage(false);
+    const runSpy = vi
+      .spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment")
+      .mockResolvedValue(undefined);
+
+    const highlight = mountHighlightedIpv4();
+    const icon = highlight.querySelector(`.${IOC_ENRICH_ICON_CLASS}`);
+    icon?.dispatchEvent(
+      new MouseEvent("click", { bubbles: true, cancelable: true })
+    );
+
+    await flushAsyncWork();
+
+    expect(runSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: "8.8.8.8",
+        type: IOC_TYPE.IPV4,
+      }),
+      document,
+      { bypassCache: true }
+    );
+    runSpy.mockRestore();
+  });
+
+  it("openHoverCardForHighlight passes bypassCache only for manual enrichment trigger", async () => {
+    const runSpy = vi
+      .spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment")
+      .mockResolvedValue(undefined);
+    const highlight = mountHighlightedIpv4();
+
+    openHoverCardForHighlight(highlight, { enrichmentTrigger: "auto" });
+    await flushAsyncWork();
+    expect(runSpy).not.toHaveBeenCalled();
+
+    openHoverCardForHighlight(highlight, { enrichmentTrigger: "manual" });
+    await flushAsyncWork();
+    expect(runSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        value: "8.8.8.8",
+        type: IOC_TYPE.IPV4,
+      }),
+      document,
+      { bypassCache: true }
+    );
+    runSpy.mockRestore();
   });
 
   it("closes the hover card on Escape or outside click", async () => {

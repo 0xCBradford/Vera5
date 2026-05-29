@@ -435,3 +435,119 @@ export function resolveEnrichmentDisplay(input: {
   };
 }
 
+export type HoverCardDisplayInput = {
+  enrichmentState?: HoverCardEnrichmentState;
+  summary?: string;
+  tags?: readonly string[];
+  sourceAttribution?: EnrichmentSourceAttribution;
+  errorMessage?: string;
+  errorCode?: string;
+  retryHint?: string;
+  disabledSources?: readonly EnrichmentSourceId[];
+  sourceResults?: readonly HoverCardSourceEntry[];
+  pivotLinkCount?: number;
+};
+
+export type HoverCardDisplayView = {
+  enrichment: EnrichmentDisplay;
+  enrichmentTags: readonly string[];
+  showTags: boolean;
+  showMultiSourceResults: boolean;
+  showSingleSourceRawJson: boolean;
+  singleSourceRawJson?: string;
+  showAttribution: boolean;
+  showMissingKeyAction: boolean;
+  showRateLimitRetryHint: boolean;
+  singleSourceLastUpdatedLine?: string;
+  showRiskScore: boolean;
+  disclaimerLines: readonly string[];
+  showDisclaimer: boolean;
+  showFooter: boolean;
+  showBelowSummary: boolean;
+  disabledSourcePlaceholders: DisabledSourcePlaceholder[];
+  hasPivotLinks: boolean;
+};
+
+export function resolveHoverCardDisplayView(
+  input: HoverCardDisplayInput
+): HoverCardDisplayView {
+  const sourceResults = input.sourceResults ?? [];
+  const disabledSources = input.disabledSources ?? [];
+  const enrichment = resolveEnrichmentDisplay({
+    enrichmentState: input.enrichmentState,
+    summary: input.summary,
+    errorMessage: input.errorMessage,
+  });
+  const disabledSourcePlaceholders =
+    buildDisabledSourcePlaceholders(disabledSources);
+  const enrichmentTags = (input.tags ?? [])
+    .map((tag) => tag.trim())
+    .filter((tag) => tag.length > 0);
+  const showTags = enrichment.variant === "ready" && enrichmentTags.length > 0;
+  const showMultiSourceResults = shouldShowMultiSourceResults(sourceResults);
+  const showSingleSourceRawJson = shouldShowSingleSourceRawJson(sourceResults);
+  const singleSourceRawJson = showSingleSourceRawJson
+    ? sourceResults[0]?.rawVendorJson
+    : undefined;
+  const showAttribution = shouldShowEnrichmentSourceAttribution(
+    enrichment.variant,
+    input.sourceAttribution,
+    sourceResults
+  );
+  const showMissingKeyAction = shouldShowMissingKeyAction(
+    enrichment.variant,
+    input.errorCode,
+    sourceResults
+  );
+  const showRateLimitRetryHint = shouldShowRateLimitRetryHint(
+    enrichment.variant,
+    input.retryHint,
+    sourceResults
+  );
+  const singleSourceLastUpdatedLine =
+    getSingleSourceLastUpdatedLine(sourceResults);
+  const showRiskScore = shouldShowRiskScore(disabledSources, sourceResults);
+  const disclaimerLines = resolveHoverCardDisclaimerLines({
+    enrichmentState: enrichment.variant,
+    includeRiskScoreDisclaimer: showRiskScore,
+  });
+  const showDisclaimer = shouldShowHoverCardDisclaimer({
+    enrichmentState: enrichment.variant,
+    includeRiskScoreDisclaimer: showRiskScore,
+  });
+  const hasPivotLinks = (input.pivotLinkCount ?? 0) > 0;
+  const showFooter =
+    hasPivotLinks ||
+    disabledSourcePlaceholders.length > 0 ||
+    showMultiSourceResults;
+  const showBelowSummary =
+    showFooter ||
+    showTags ||
+    Boolean(showSingleSourceRawJson && singleSourceRawJson) ||
+    showAttribution ||
+    showMissingKeyAction ||
+    showRateLimitRetryHint ||
+    Boolean(singleSourceLastUpdatedLine) ||
+    showDisclaimer;
+
+  return {
+    enrichment,
+    enrichmentTags,
+    showTags,
+    showMultiSourceResults,
+    showSingleSourceRawJson,
+    singleSourceRawJson,
+    showAttribution,
+    showMissingKeyAction,
+    showRateLimitRetryHint,
+    singleSourceLastUpdatedLine,
+    showRiskScore,
+    disclaimerLines,
+    showDisclaimer,
+    showFooter,
+    showBelowSummary,
+    disabledSourcePlaceholders,
+    hasPivotLinks,
+  };
+}
+

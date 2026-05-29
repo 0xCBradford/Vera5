@@ -10,7 +10,8 @@ Browser extension for on-demand indicator detection on pages you browse. After a
 | **Toolbar popup** | **Extension enabled**; **Highlight indicators** (default on); **Scan page** scans the active tab and shows a match count. |
 | **Keyboard shortcut** | `Ctrl+Shift+Y` (Windows/Linux) or `Cmd+Shift+Y` (macOS)—same scan as the popup; the count appears in the popup only when you use **Scan page** there. |
 | **On-page highlights** | After scan, detected indicators get an inline underline, type badge, and **›** enrich control when highlighting is enabled. |
-| **Hover card** | Click a highlight for a fixed-position card: type, value, enrichment summary, tag chips when returned, **Copy**, pivot links, and source attribution. With multiple live sources enabled, each source shows a badge (**Live**, **Cached**, **Error**, or **Skipped**), detail text, **Last updated** when available, and optional **Raw response** (redacted vendor JSON). Dismiss with Escape or an outside click. |
+| **Hover card** | Click a highlight for a fixed-position card: type, value, enrichment summary, tag chips when returned, **Copy**, pivot links, and source attribution. With multiple live sources enabled, each source shows a badge (**Live**, **Cached**, **Error**, or **Skipped**), detail text, **Last updated** when available, and optional **Raw response** (redacted vendor JSON). After successful enrichment, the footer may include enrichment and **risk score advisory** notes (local synthesis from vendor signals, not a vendor verdict). Dismiss with Escape or an outside click. |
+| **Composite risk score** | After enrichment, Vera5 computes a local band (**Unknown**, **Low**, **Suspicious**, **High**, **Critical**) from normalized AbuseIPDB and OTX signals and can flag source disagreement in scoring logic. The on-page hover card shows only an advisory footer when scoring applies—not the composite label, per-source contribution tooltips, or disagreement callout. |
 | **Live enrichment** | **AbuseIPDB** (IPv4) and **OTX** (IPv4, domain, URL, MD5, SHA1, SHA256, CVE) when enabled with a saved API key. Enabled sources are queried in parallel from the service worker; partial success keeps working sources visible while failures stay per source. Only the indicator value is sent to vendors. |
 | **Enrichment cache** | Successful responses are stored locally per indicator and per source (default time-to-live about one hour). Repeat enrichment reuses cache until expiry. **Clear cache** on the options page removes stored responses without changing keys or toggles. |
 | **Manual refresh** | **›** on a highlight forces a live fetch for that indicator, bypassing cache and removing cached entries for that indicator first. |
@@ -23,14 +24,14 @@ Browser extension for on-demand indicator detection on pages you browse. After a
 | **IOC detection** | Visible text nodes on demand; skips `script`, `style`, `textarea`, and metadata subtrees; does not scan attributes. Types: IPv4, domain, URL, MD5, SHA1, SHA256, CVE—with false-positive guards and overlap deduplication. Stops after 2,500 text nodes per scan. |
 | **Build** | `npm run build` emits `dist/`, then runs `verify:dist` and `verify:security`. `npm run check` runs lint and unit tests. |
 
-Not supported: live enrichment from URLScan.io or GreyNoise (toggles and pivot links only; no API key fields for those sources), composite reputation scoring, per-type IOC toggles in options, or an options control for cache time-to-live (a default applies in storage).
+Not supported: live enrichment from URLScan.io or GreyNoise (toggles and pivot links only; no API key fields for those sources), per-type IOC toggles in options, or an options control for cache time-to-live (a default applies in storage).
 
 ## Configuration flow
 
 1. Build and load the extension (see below).
 2. Open **Vera5 Settings**.
 3. Enter **AbuseIPDB** and/or **OTX** API keys.
-4. Enable sources under **Enrichment sources** (URLScan.io and GreyNoise toggles do not call live APIs today).
+4. Enable sources under **Enrichment sources** (URLScan.io and GreyNoise toggles store preferences and pivot links only—no live API calls).
 5. Choose **Manual-only enrichment** (default on) or allow automatic fetch when opening the card (debounced across quick clicks).
 6. Enable **Automatically scan when the page changes** if you want mutation rescans.
 7. Use **Clear cache** to drop stored vendor responses.
@@ -58,8 +59,8 @@ More detail: [docs/architecture.md](docs/architecture.md), [docs/api-integration
 |------|------|
 | `extension/src/background/` | Service worker, enrichment handler, cache, cooldown. |
 | `extension/src/content/` | Detection, highlights, hover overlay, debounced fetch, auto-scan. |
-| `extension/src/components/` | Hover card component (tests and dev shell). |
-| `extension/src/lib/` | IOC regex, connectors, storage, cache, export/import, pivots, UI styles. |
+| `extension/src/components/` | Enrichment card UI (tests and dev shell; not injected into page tabs). |
+| `extension/src/lib/` | IOC regex, connectors, storage, cache, scoring, export/import, pivots, UI styles. |
 | `extension/src/popup/` | Toolbar popup. |
 | `extension/src/options/` | Settings UI. |
 
@@ -91,7 +92,7 @@ python -m http.server 8080
 1. Open `http://localhost:8080/sample-alert.html` or `http://localhost:8080/sample-blog.html`.
 2. Enable the extension and highlighting, then **Scan page**.
 3. Save API keys and enable AbuseIPDB and/or OTX in settings.
-4. Click a highlighted IPv4 (use **›** first when manual-only is on). With both sources enabled, check per-source badges and optional **Raw response**.
+4. Click a highlighted IPv4 (use **›** first when manual-only is on). With both sources enabled, check per-source badges, optional **Raw response**, and footer disclaimers (enrichment plus risk score advisory when signals are present).
 5. Reopen the same indicator and confirm **Cached** / **· cached** and **Last updated**; use **›** to force a fresh fetch.
 6. Try a domain, URL, or hash with OTX enabled.
 7. Confirm **Copy** and pivot links.
