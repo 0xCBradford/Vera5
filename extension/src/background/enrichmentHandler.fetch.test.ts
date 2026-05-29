@@ -4,7 +4,6 @@ import {
   ENRICHMENT_SOURCE_STATUS,
 } from "../lib/enrichment";
 import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
-import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
 import { enrichIocMessage } from "../lib/messages";
 import * as storage from "../lib/storage";
 import {
@@ -695,5 +694,128 @@ describe("enrichment handler with mocked fetch", () => {
       errorCode: ENRICHMENT_ERROR_CODE.TIMEOUT,
       errorMessage: "AbuseIPDB request timed out.",
     });
+  });
+});
+
+describe("enrichment pipeline regression (service worker)", () => {
+  const store: Record<string, unknown> = {};
+
+  beforeEach(async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockReset();
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+    });
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
+      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    stubChromeStorage(store);
+    await storage.setApiKey("abuseipdb", "test-key");
+    await storage.setApiKey("otx", "test-otx-key");
+    clearGlobalEnrichmentCooldown();
+  });
+
+  afterEach(() => {
+    clearGlobalEnrichmentCooldown();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    for (const key of Object.keys(store)) {
+      delete store[key];
+    }
+  });
+
+  it("parallel multi-source → cache hit → manual refresh bypasses global cooldown", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("abuseipdb.com")) {
+        return Response.json(successPayload(), { status: 200 });
+      }
+      return Response.json(
+        { pulse_info: { count: 2, pulses: [{ tags: ["scanner"] }] } },
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const parallel = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+    expect(parallel.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const parallelPayload = (
+      parallel as { ok: true; payload: { sources: Record<string, unknown>[] } }
+    ).payload;
+    expect(parallelPayload.sources).toHaveLength(2);
+    expect(store[STORAGE_KEY_ENRICHMENT_CACHE]).toBeTruthy();
+
+    fetchMock.mockClear();
+    const cached = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+    expect(cached.ok).toBe(true);
+    expect(fetchMock.mock.calls.length).toBeLessThan(2);
+    const cachedSources = (
+      cached as { ok: true; payload: { sources: Record<string, unknown>[] } }
+    ).payload.sources;
+    expect(
+      cachedSources.some((source) => source.fromCache === true)
+    ).toBe(true);
+
+    fetchMock.mockClear();
+    const cachedRepeat = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+    expect(cachedRepeat.ok).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    const repeatSource = (
+      cachedRepeat as { ok: true; payload: { source: Record<string, unknown> } }
+    ).payload.source;
+    expect(repeatSource.fromCache).toBe(true);
+
+    clearGlobalEnrichmentCooldown();
+    const fetchMock429 = vi.fn(
+      async () =>
+        new Response("", {
+          status: 429,
+          headers: { "Retry-After": "120" },
+        })
+    );
+    vi.stubGlobal("fetch", fetchMock429);
+
+    await handleEnrichIocMessage(
+      enrichIocMessage({ value: "9.9.9.9", iocType: "ipv4" })
+    );
+    const fetchCountAfterRateLimit = fetchMock429.mock.calls.length;
+    expect(fetchCountAfterRateLimit).toBeGreaterThan(0);
+
+    const blocked = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "1.1.1.1", iocType: "ipv4" })
+    );
+    expect(blocked.ok).toBe(true);
+    expect(fetchMock429.mock.calls.length).toBe(fetchCountAfterRateLimit);
+    const blockedSource = (
+      blocked as { ok: true; payload: { source: Record<string, unknown> } }
+    ).payload.source;
+    expect(blockedSource.errorMessage).toBe(
+      "Threat intelligence rate limit reached. Back off before retrying."
+    );
+
+    fetchMock429.mockClear();
+    fetchMock429.mockImplementation(async (url: string) => {
+      if (url.includes("abuseipdb.com")) {
+        return Response.json(successPayload(), { status: 200 });
+      }
+      return Response.json(
+        { pulse_info: { count: 2, pulses: [{ tags: ["scanner"] }] } },
+        { status: 200 }
+      );
+    });
+
+    await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        bypassCache: true,
+      })
+    );
+    expect(fetchMock429.mock.calls.length).toBeGreaterThan(0);
   });
 });
