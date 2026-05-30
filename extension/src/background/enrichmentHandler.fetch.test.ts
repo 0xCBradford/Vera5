@@ -819,3 +819,194 @@ describe("enrichment pipeline regression (service worker)", () => {
     expect(fetchMock429.mock.calls.length).toBeGreaterThan(0);
   });
 });
+
+describe("IOC-only vendor request security regression", () => {
+  const store: Record<string, unknown> = {};
+
+  beforeEach(async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockReset();
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+    });
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
+      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    stubChromeStorage(store);
+    await storage.setApiKey("abuseipdb", "test-key");
+    clearGlobalEnrichmentCooldown();
+  });
+
+  afterEach(() => {
+    clearGlobalEnrichmentCooldown();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    for (const key of Object.keys(store)) {
+      delete store[key];
+    }
+  });
+
+  it("uses GET without a request body and sends only the sanitized IPv4 in the URL", async () => {
+    const fetchMock = vi.fn(async () =>
+      Response.json(successPayload(), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const requestUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(requestInit?.method).toBe("GET");
+    expect(requestInit?.body).toBeUndefined();
+    expect(requestUrl.searchParams.get("ipAddress")).toBe("8.8.8.8");
+    expect(String(requestUrl)).not.toMatch(/page|html|<script/i);
+  });
+
+  it("does not call vendor fetch when the enrich message contains page snippets", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage({
+      type: "ENRICH_IOC",
+      value: "8.8.8.8 malicious page excerpt",
+      iocType: "ipv4",
+    });
+
+    expect(response).toEqual({ ok: false, error: "invalid enrich request" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("disabled source and partial success regression", () => {
+  const store: Record<string, unknown> = {};
+
+  beforeEach(async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockReset();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
+      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    stubChromeStorage(store);
+    clearGlobalEnrichmentCooldown();
+  });
+
+  afterEach(() => {
+    clearGlobalEnrichmentCooldown();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    for (const key of Object.keys(store)) {
+      delete store[key];
+    }
+  });
+
+  it("skips a disabled requested source without calling vendor fetch", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: false,
+      otx: true,
+    });
+    await storage.setApiKey("otx", "test-otx-key");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (
+      response as { ok: true; payload: { source: Record<string, unknown> } }
+    ).payload.source;
+    expect(source).toMatchObject({
+      sourceId: "abuseipdb",
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.DISABLED,
+      errorMessage: "Source is disabled in extension settings.",
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("fetches only enabled live sources when the other source is disabled", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: false,
+    });
+    await storage.setApiKey("abuseipdb", "test-key");
+    const fetchMock = vi.fn(async () =>
+      Response.json(successPayload(), { status: 200 })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain("abuseipdb.com");
+    const sources = (
+      response as { ok: true; payload: { sources: Record<string, unknown>[] } }
+    ).payload.sources;
+    expect(sources).toHaveLength(1);
+    expect(sources[0]).toMatchObject({
+      sourceId: "abuseipdb",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+    });
+  });
+
+  it("returns partial success when one live source succeeds and another errors", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+    });
+    await storage.setApiKey("abuseipdb", "test-key");
+    await storage.setApiKey("otx", "test-otx-key");
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("abuseipdb.com")) {
+        return Response.json(successPayload(), { status: 200 });
+      }
+      return new Response("", {
+        status: 429,
+        headers: { "Retry-After": "60" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.ok).toBe(true);
+    const payload = (
+      response as {
+        ok: true;
+        payload: {
+          source: Record<string, unknown>;
+          sources: Record<string, unknown>[];
+        };
+      }
+    ).payload;
+    expect(payload.source).toMatchObject({
+      sourceId: "abuseipdb",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "42 abuse confidence",
+    });
+    expect(payload.sources).toHaveLength(2);
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "abuseipdb",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+        }),
+        expect.objectContaining({
+          sourceId: "otx",
+          status: ENRICHMENT_SOURCE_STATUS.ERROR,
+          errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+        }),
+      ])
+    );
+  });
+});

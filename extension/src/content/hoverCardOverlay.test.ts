@@ -724,6 +724,65 @@ describe("hover card overlay", () => {
     ).not.toBeNull();
   });
 
+  it("shows partial success UI when one source succeeds and another fails", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "42 abuse confidence",
+      tags: ["US"],
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "42 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "error",
+          badgeText: "Error",
+          detail: "OTX rate limit reached. Back off before retrying.",
+          retryHint: "Retry after 30 seconds.",
+        },
+      ],
+    });
+
+    expect(panel.textContent).toContain("42 abuse confidence");
+    expect(panel.textContent).toContain("US");
+    expect(panel.textContent).toContain("AbuseIPDB · Live");
+    expect(panel.textContent).toContain("OTX · Error");
+    expect(panel.textContent).toContain("OTX rate limit reached");
+    expect(panel.querySelector(".vera5-hover-card-attribution")).toBeNull();
+    expect(
+      panel.querySelectorAll(".vera5-hover-card-source-badge")
+    ).toHaveLength(2);
+    expect(
+      panel.querySelector(".vera5-hover-card-source-badge--ok")
+    ).not.toBeNull();
+    expect(
+      panel.querySelector(".vera5-hover-card-source-badge--error")
+    ).not.toBeNull();
+  });
+
   it("shows per-source error detail without card-level open-settings when all sources fail", () => {
     const anchor = document.createElement("span");
     document.body.appendChild(anchor);

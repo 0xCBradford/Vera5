@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { enrichIocMessage } from "./messages";
+import { IOC_TYPE } from "./iocRegex";
+import { enrichIocMessage, isEnrichIocMessage } from "./messages";
 import {
   assertEnrichmentFetchHasNoBody,
   ENRICH_IOC_MESSAGE_KEYS,
   extractExactIocValue,
   hasOnlyEnrichIocMessageKeys,
+  MAX_ENRICHMENT_IOC_VALUE_LENGTH,
   sanitizeEnrichmentIoc,
 } from "./iocRequestBoundaries";
 
@@ -62,5 +64,81 @@ describe("enrichment IOC request boundaries", () => {
         body: JSON.stringify({ page: "html" }),
       })
     ).toBe(false);
+  });
+});
+
+describe("IOC-only enrichment security regression", () => {
+  const exactIocFixtures: ReadonlyArray<{ type: (typeof IOC_TYPE)[keyof typeof IOC_TYPE]; value: string }> = [
+    { type: IOC_TYPE.IPV4, value: "8.8.8.8" },
+    { type: IOC_TYPE.DOMAIN, value: "example.com" },
+    { type: IOC_TYPE.URL, value: "https://example.com/login" },
+    {
+      type: IOC_TYPE.MD5,
+      value: "d41d8cd98f00b204e9800998ecf8427e",
+    },
+    {
+      type: IOC_TYPE.SHA1,
+      value: "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+    },
+    {
+      type: IOC_TYPE.SHA256,
+      value: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    },
+    { type: IOC_TYPE.CVE, value: "CVE-2021-44228" },
+  ];
+
+  it.each(exactIocFixtures)(
+    "accepts exact $type values for enrichment",
+    ({ type, value }) => {
+      expect(sanitizeEnrichmentIoc({ value, type })).toEqual({ value, type });
+      expect(isEnrichIocMessage(enrichIocMessage({ value, iocType: type }))).toBe(
+        true
+      );
+    }
+  );
+
+  it.each([
+    { label: "trailing page context", value: "8.8.8.8 seen on the alert page" },
+    { label: "HTML markers", value: "<html>8.8.8.8</html>" },
+    { label: "multiline text", value: "8.8.8.8\nextra line" },
+    {
+      label: "oversized payload",
+      value: `${"a".repeat(MAX_ENRICHMENT_IOC_VALUE_LENGTH)}.com`,
+    },
+  ])("rejects $label before enrichment", ({ value }) => {
+    expect(sanitizeEnrichmentIoc({ value, type: IOC_TYPE.IPV4 })).toBeNull();
+    expect(
+      isEnrichIocMessage({
+        type: "ENRICH_IOC",
+        value,
+        iocType: IOC_TYPE.IPV4,
+      })
+    ).toBe(false);
+  });
+
+  it("rejects enrich messages that carry extra page fields", () => {
+    expect(
+      isEnrichIocMessage({
+        type: "ENRICH_IOC",
+        value: "8.8.8.8",
+        iocType: IOC_TYPE.IPV4,
+        pageHtml: "<html>secret</html>",
+      })
+    ).toBe(false);
+  });
+
+  it("rejects vendor fetches that include a non-empty request body", () => {
+    expect(
+      assertEnrichmentFetchHasNoBody({
+        method: "POST",
+        body: JSON.stringify({ pageContent: "full alert body" }),
+      })
+    ).toBe(false);
+    expect(
+      assertEnrichmentFetchHasNoBody({
+        method: "GET",
+        body: "",
+      })
+    ).toBe(true);
   });
 });
