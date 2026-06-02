@@ -15,6 +15,8 @@ On `http://` and `https://` tabs, day-to-day triage runs through the **content-s
 
 The keyboard shortcut (`Ctrl+Shift+Y` / `Cmd+Shift+Y`) triggers the same page scan as **Scan page**; the match count appears in the popup only when you scan from there.
 
+Diagram overviews in those docs: [Local mode — what runs where](docs/local-mode.md) (browser runtime and local storage) and [Typical triage flow](docs/analyst-workflows.md) (scan, on-page overlay, and enrichment on a page tab).
+
 ## What works today
 
 | Capability | Behavior |

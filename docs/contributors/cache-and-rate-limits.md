@@ -2,6 +2,31 @@
 
 ## Enrichment cache
 
+**Per-indicator cache and refresh**
+
+```mermaid
+flowchart TD
+  Request[Enrichment request]
+  Lookup[Cache lookup]
+  Hit{Cache hit?}
+  Cached[Cache hit]
+  Miss[Cache miss]
+  Fetch[Live fetch]
+  Store[Cache store]
+  Display[Display result]
+  Manual[Manual refresh path]
+
+  Request --> Lookup
+  Lookup --> Hit
+  Hit -->|Within TTL| Cached
+  Hit -->|Expired or absent| Miss
+  Miss --> Fetch
+  Fetch --> Store
+  Store --> Display
+  Cached --> Display
+  Manual --> Fetch
+```
+
 **Module:** `extension/src/lib/cache.ts`
 
 - Keys combine **indicator value + source id**.
@@ -23,6 +48,8 @@ When a vendor returns **429 Too Many Requests**:
 - That source shows a rate-limit error on the card.
 - Vera5 may start a **global cooldown** blocking further **automatic** enrichment until the window passes.
 - Manual **›** refresh can retry despite cooldown (vendor may still 429).
+
+For automatic enrichment gating during cooldown (visual summary), see [Global enrichment cooldown](../api-integrations.md#global-enrichment-cooldown) in [docs/api-integrations.md](../api-integrations.md).
 
 User-oriented explanation: [docs/analyst-workflows.md](../analyst-workflows.md) and [docs/api-integrations.md](../api-integrations.md).
 

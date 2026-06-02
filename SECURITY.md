@@ -23,6 +23,32 @@ Vera5 runs in your browser on pages you open. It may read visible page text to d
 
 Understanding what stays on your machine versus what can leave the browser is central to using Vera5 safely in SOC, CTI, and DFIR workflows.
 
+**IOC and data boundary**
+
+```mermaid
+flowchart LR
+  subgraph Vera5Ext[Vera5 Extension]
+    Page[Page content]
+    Detect[Local detection]
+    IOC[Detected IOC]
+    Review[User review]
+    Action[User enrichment action]
+    Store[(Local storage)]
+  end
+  Vendors[Third-party vendor APIs]
+
+  Page --> Detect
+  Detect --> IOC
+  IOC --> Review
+  Review --> Action
+  Action -->|When you choose| Vendors
+  Store --- Review
+```
+
+Page text and detection stay in the browser. Only the **indicator value** may reach third-party vendor APIs you enable, and only when you review and trigger enrichment (or allow automatic fetch when manual-only is off). Settings and cache remain in local storage. Vera5 does not operate a required enrichment cloud or page-upload service.
+
+Runtime component layout: [docs/local-mode.md](docs/local-mode.md). Enrichment message path: [docs/contributors/enrichment-connectors.md](docs/contributors/enrichment-connectors.md).
+
 ### Stays local (does not go to Vera5)
 
 | Data | Handling |

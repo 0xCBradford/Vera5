@@ -59,6 +59,8 @@ Icons and HTML entrypoints do not add extra Chrome permission keys beyond those 
 | Detected IOC values | Processed locally for display | Sent as **indicator-only** requests to configured threat-intel APIs |
 | Full page HTML, browsing history, tickets | Not uploaded to Vera5-operated services | Not sent to Vera5 by design |
 
+For a visual summary of IOC and data boundaries, see the **IOC and data boundary** diagram in [SECURITY.md](../SECURITY.md#ioc-leakage).
+
 **Bring-your-own keys / bring-your-own API:** You create keys in vendor portals; Vera5 does not operate a required enrichment proxy or shared maintainer keys.
 
 **Telemetry:** No usage analytics or crash reporting to Vera5 by default.

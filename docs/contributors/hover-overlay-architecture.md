@@ -2,6 +2,24 @@
 
 Vera5 has two hover UIs that share enrichment and scoring logic but serve different runtimes.
 
+**Production overlay vs test UI**
+
+```mermaid
+flowchart TD
+  CS[Content script]
+  Enrich[Enrichment actions]
+  VM[Shared view model]
+  Overlay[Production overlay]
+  React[React test UI]
+
+  CS --> Enrich
+  Enrich --> VM
+  VM --> Overlay
+  VM --> React
+```
+
+Enrichment actions on the page feed the shared view model; production overlay and React test UI consume the same normalized data and scoring presentation rules.
+
 ## Production overlay (content script)
 
 **Module:** `extension/src/content/hoverCardOverlay.ts`

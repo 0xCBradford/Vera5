@@ -44,6 +44,19 @@ If no usable headers are present, the hover card shows a source-attributed backo
 
 After any live connector receives **HTTP 429**, Vera5 also starts a **global** cooldown that blocks further **automatic** enrichment until the window expires. This is separate from the per-source error row shown for the request that triggered the limit.
 
+**Automatic enrichment gating after HTTP 429**
+
+```mermaid
+stateDiagram-v2
+  [*] --> NormalState
+  NormalState --> CooldownActive: Vendor returns HTTP 429
+  CooldownActive --> AutomaticEnrichmentBlocked: Automatic enrichment
+  AutomaticEnrichmentBlocked --> CooldownActive
+  CooldownActive --> ManualRefreshAllowed: Manual refresh on highlight
+  ManualRefreshAllowed --> NormalState: Live fetch attempt
+  CooldownActive --> NormalState: Cooldown expires
+```
+
 | Behavior | Detail |
 |----------|--------|
 | **Trigger** | HTTP 429 from AbuseIPDB or OTX during a live fetch |

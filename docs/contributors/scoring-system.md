@@ -10,6 +10,30 @@ Composite risk labels are computed **locally** in `extension/src/lib/scoring.ts`
 
 Signal parsing maps normalized vendor summary strings to numeric strength (`unifiedSummaryToSignalStrength`, `signalStrengthToBand`).
 
+**Composite score decision**
+
+```mermaid
+flowchart TD
+  Signals[Source signals]
+  MinCheck{Minimum signal check}
+  Unknown[Unknown or insufficient data]
+  Composite[Composite score calculation]
+  Disagree{Disagreement evaluation}
+  Blended[Blended band with optional /100]
+  DisagreeNote[Sources disagree notice]
+  Present[Presentation layer]
+
+  Signals --> MinCheck
+  MinCheck -->|Insufficient parseable OK signals| Unknown
+  MinCheck -->|Enough signals| Composite
+  Composite --> Disagree
+  Disagree -->|Material divergence| DisagreeNote
+  Disagree -->|No material divergence| Blended
+  Unknown --> Present
+  Blended --> Present
+  DisagreeNote --> Present
+```
+
 ## Disagreement
 
 `computeCompositeRiskScore` sets `disagreement` when:

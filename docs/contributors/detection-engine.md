@@ -4,6 +4,21 @@ Vera5 detects indicators in **visible text nodes** on HTTP/HTTPS pages when the 
 
 ## Pipeline
 
+**Detection pipeline**
+
+```mermaid
+flowchart LR
+  Collect[Text collection]
+  Match[Matching]
+  Dedup[Deduplication]
+  Highlight[Highlight generation]
+  Output[Scan output]
+
+  Collect --> Match --> Dedup --> Highlight --> Output
+```
+
+For operator scan and triage context, see [docs/analyst-workflows.md](../analyst-workflows.md).
+
 1. **Text collection** — `extension/src/content/textWalker.ts` walks eligible DOM text nodes (skips `script`, `style`, `textarea`, and metadata subtrees by default).
 2. **Matching** — `extension/src/lib/iocRegex.ts` applies conservative regex per IOC type.
 3. **Dedup and overlap** — `extension/src/content/detector.ts` resolves overlapping spans (URL beats domain, longest hash wins, etc.).
