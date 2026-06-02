@@ -290,6 +290,25 @@ Only indicators selected for enrichment should ever be queried externally.
 
 # Architecture Direction
 
+**Extension-first architecture (today and optional future)**
+
+```mermaid
+flowchart TB
+  subgraph Shipped[Primary experience today]
+    Extension[Browser extension]
+    Extension --> Detection[IOC detection and highlighting]
+    Extension --> Enrichment[On-page enrichment and pivots]
+    Extension --> Control[Settings BYOK and local cache]
+  end
+  subgraph Future[Optional self-hosted path]
+    Backend[Local backend]
+    Backend --> Advanced[Normalization scoring optional AI]
+  end
+  Extension -.->|Additive not required| Backend
+```
+
+The extension ships as the default and only required deployment. An optional backend is additive—local-first extension operation remains valid without it. Current runtime detail: [docs/local-mode.md](docs/local-mode.md).
+
 ## Browser Extension First
 
 The primary Vera5 experience begins as a browser extension built for Chromium-based browsers.
@@ -407,6 +426,27 @@ The long-term vision is an analyst productivity layer that sits between:
 - operational context
 
 and reduces the friction analysts experience every day.
+
+**Analyst productivity layer**
+
+```mermaid
+flowchart TD
+  Vera5[Vera5 context layer]
+  Inv[Investigations]
+  Intel[Enrichment sources]
+  Cases[Case workflows]
+  Tools[Local tooling]
+  OpCtx[Operational context]
+
+  Inv --> Vera5
+  Intel --> Vera5
+  Cases --> Vera5
+  Tools --> Vera5
+  OpCtx --> Vera5
+  Vera5 --> Inv
+```
+
+Vera5 connects investigations, enrichment, and tooling without replacing SIEMs, EDRs, or analyst judgment—it reduces friction at the point of review.
 
 Vera5 aims to remain:
 - lightweight
