@@ -22,13 +22,13 @@ Local mode is the **default and only required** deployment for the MVP. You do n
 ┌─────────────────────────────────────────────────────────────┐
 │  Your browser (Chromium, Manifest V3)                       │
 │                                                             │
-│  ┌──────────────┐   ┌──────────────┐   ┌─────────────────┐ │
-│  │ Content      │   │ Background   │   │ Popup / Options │ │
-│  │ script       │◄─►│ service      │◄─►│ (settings UI)   │ │
-│  │ detection,   │   │ worker       │   │                 │ │
-│  │ highlights,  │   │ messages,    │   │ keys masked,    │ │
-│  │ hover card   │   │ enrichment   │   │ toggles, cache  │ │
-│  └──────────────┘   │ fetch        │   └─────────────────┘ │
+│  ┌──────────────┐   ┌──────────────┐   ┌─────────────────┐  │
+│  │ Content      │   │ Background   │   │ Popup / Options │  │
+│  │ script       │◄─►│ service      │◄─►│ (settings UI)   │  │
+│  │ detection,   │   │ worker       │   │                 │  │
+│  │ highlights,  │   │ messages,    │   │ keys masked,    │  │
+│  │ hover card   │   │ enrichment   │   │ toggles, cache  │  │
+│  └──────────────┘   │ fetch        │   └─────────────────┘  │
 │         │           └──────┬───────┘                        │
 │         │                  │                                │
 │         ▼                  ▼                                │

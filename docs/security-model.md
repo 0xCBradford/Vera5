@@ -6,7 +6,7 @@ Vera5 is **local-first**: enrichment uses API keys you configure; indicator valu
 
 ## Current release scope
 
-The shipped scaffold registers a service worker, content script entry, popup, and options page. IOC detection, hover enrichment, and live connector calls are planned on top of the permissions below. Rationale here matches both current behavior and intended use of each permission.
+The shipped extension registers a Manifest V3 service worker, content scripts on HTTP/HTTPS pages, a toolbar popup, and an options page. On pages you open, Vera5 can scan visible text for IOCs, show on-page highlights, open a production hover overlay, and—when you configure API keys—fetch enrichment from AbuseIPDB and OTX directly from the background worker. Settings, API keys, and enrichment cache stay in local browser storage. There is no Vera5-operated enrichment backend and no default telemetry. Permission rationale below matches this behavior.
 
 ## Manifest permissions
 
@@ -31,9 +31,9 @@ The shipped scaffold registers a service worker, content script entry, popup, an
 
 ### How host access is used
 
-- **Content scripts** (see manifest `content_scripts`) run at `document_idle` on matching pages to register with the background worker and, when implemented, scan visible text for IOCs.
+- **Content scripts** (see manifest `content_scripts`) run at `document_idle` on matching pages, scan visible text for IOCs when you trigger a scan (or when auto-scan is enabled), and render the on-page hover overlay.
 - **Page text** is processed in the browser for detection. Only **indicator values you choose to enrich** are sent in API requests to third parties you configure—not full page HTML to Vera5 infrastructure.
-- **Skip rules** (when detection ships): ignore `script` and `style` content; respect manual-only and allowlist/denylist options in settings.
+- **Skip rules:** ignore `script`, `style`, and `textarea` text by default; respect manual-only enrichment and per-source toggles in settings.
 
 ### Why broad host patterns
 
@@ -43,10 +43,10 @@ Analysts cannot predict every SOC, CTI, or DFIR site in advance. Narrow host lis
 
 | Surface | Purpose |
 |---------|---------|
-| `background` service worker (`background.js`, ES module) | Message routing between popup, options, and content scripts; future enrichment orchestration and cache coordination. No DOM access. |
-| `content_scripts` → `content.js` on `http://*/*`, `https://*/*` | In-page entry for registration and future IOC highlighting. Runs only on origins covered by host permissions. |
-| `action` popup (`popup.html`) | Quick enable/disable and status. |
-| `options_page` (`options.html`) | API keys, source toggles, and preferences. |
+| `background` service worker (`background.js`, ES module) | Message routing, enrichment fetch orchestration, cache, rate-limit cooldown, and connector calls. No DOM access. |
+| `content_scripts` → `content.js` on `http://*/*`, `https://*/*` | IOC detection, highlights, production hover overlay, and enrich wiring. Runs only on origins covered by host permissions. |
+| `action` popup (`popup.html`) | Extension on/off, highlight toggle, scan page, match count. |
+| `options_page` (`options.html`) | Masked API keys, source toggles, manual-only mode, cache clear, settings export/import. |
 
 Icons and HTML entrypoints do not add extra Chrome permission keys beyond those listed above.
 

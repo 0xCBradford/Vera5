@@ -8,10 +8,10 @@ On `http://` and `https://` tabs, day-to-day triage runs through the **content-s
 
 | Surface | Where it runs | Role |
 |---------|---------------|------|
-| **On-page overlay** | Content script on the active page | **Primary operator UI:** highlights, hover card (type, value, enrichment summary, per-source badges, copy, pivot links). Open it by clicking a highlight after scan. |
+| **On-page overlay** | Content script on the active page | **Primary operator UI:** highlights, hover card (type, value, enrichment summary, per-source badges, local composite risk score with reasoning chain, copy, pivot links). Open it by clicking a highlight after scan. |
 | **Toolbar popup** | Extension action popup | Extension on/off, **Highlight indicators**, **Scan page**, and match count after a popup scan. |
 | **Settings (options) page** | Dedicated options tab | Masked API keys, enrichment source toggles, manual-only mode, auto-scan, **Clear cache**, settings export/import. |
-| **React hover card** | Unit tests only | **Not injected into page tabs.** Holds the full **composite risk score** presentation (band label, per-source contribution chips, disagreement callout). The default `npm run dev` page is a stub and does not mount this UI. The production overlay shows enrichment and risk-score **footer disclaimers** when applicable—not that full score UI. |
+| **React hover card** | Unit tests only | **Not injected into page tabs.** Uses the same shared scoring logic as the on-page overlay. Unit tests also render per-source contribution chips that the production overlay does not show. |
 
 The keyboard shortcut (`Ctrl+Shift+Y` / `Cmd+Shift+Y`) triggers the same page scan as **Scan page**; the match count appears in the popup only when you scan from there.
 
@@ -22,8 +22,8 @@ The keyboard shortcut (`Ctrl+Shift+Y` / `Cmd+Shift+Y`) triggers the same page sc
 | **Install** | `npm run build` in `extension/`, then load `extension/dist/` in Chrome. |
 | **Toolbar popup** | **Extension enabled**; **Highlight indicators** (default on); **Scan page** scans the active tab and shows a match count. Keyboard shortcut `Ctrl+Shift+Y` / `Cmd+Shift+Y` runs the same scan (count updates in the popup when you scan from there). |
 | **On-page highlights** | After scan, detected indicators get an inline underline, type badge, and **›** enrich control when highlighting is enabled. |
-| **Hover card** | Click a highlight on the page for the **on-page overlay** (content script): type, value, enrichment summary, tag chips when returned, **Copy**, pivot links, and source attribution. With multiple live sources enabled, each source shows a badge (**Live**, **Cached**, **Error**, or **Skipped**), detail text, **Last updated** when available, and optional **Raw response** (redacted vendor JSON). After successful enrichment, the footer may include enrichment and advisory risk-score disclaimers when enough source signals exist—not a composite score block. Dismiss with Escape or an outside click. |
-| **Composite risk score** | Full presentation (band label **Unknown**–**Critical**, per-source contribution chips, disagreement callout) appears in **React unit tests** only. On live page tabs, the **on-page overlay** shows footer disclaimers when scoring signals apply—not the composite score UI. |
+| **Hover card** | Click a highlight on the page for the **on-page overlay** (content script): type, value, enrichment summary, tag chips when returned, **Copy**, pivot links, and source attribution. With multiple live sources enabled, each source shows a badge (**Live**, **Cached**, **Error**, or **Skipped**), detail text, **Last updated** when available, and optional **Raw response** (redacted vendor JSON). When enrichment returns per-source results, a **Risk score** section shows a locally computed advisory band (**Unknown**–**Critical**, with **/100** when a blended composite is available), a **How this score was computed** panel (ordered per-source lines from normalized summaries, or an explicit empty state when blending is not possible), and a **Sources disagree** note when source bands diverge materially. If every enrichment source is disabled, the section shows **Risk score unavailable** with settings guidance instead of a numeric label. The footer may include enrichment and risk-score disclaimers when a scored result is shown. Dismiss with Escape or an outside click. |
+| **Composite risk score** | Computed locally from normalized per-source summaries (not an LLM verdict). Requires at least two enabled sources with parseable OK signals for a blended **/100** label; otherwise the card may show **Unknown risk**, an insufficient-data notice, and an empty reasoning chain. Shown in the **on-page overlay** when source results exist; all sources disabled yields an explicit unavailable state. React unit tests exercise the same rules and additionally show per-source contribution chips. |
 | **Live enrichment** | **AbuseIPDB** (IPv4) and **OTX** (IPv4, domain, URL, MD5, SHA1, SHA256, CVE) when enabled with a saved API key. Enabled sources are queried in parallel from the service worker; partial success keeps working sources visible while failures stay per source. Only the indicator value is sent to vendors. |
 | **Enrichment cache** | Successful responses are stored locally per indicator and per source (default time-to-live about one hour). Repeat enrichment reuses cache until expiry. **Clear cache** on the options page removes stored responses without changing keys or toggles. |
 | **Manual refresh** | **›** on a highlight forces a live fetch for that indicator, bypassing cache and removing cached entries for that indicator first. Manual refresh also bypasses the global rate-limit cooldown gate (vendors may still return HTTP 429). |
@@ -61,6 +61,7 @@ More detail: [docs/architecture.md](docs/architecture.md), [docs/api-integration
 | `docs/analyst-workflows.md` | Cache, refresh, and quota-aware triage. |
 | `docs/security-model.md` | Permissions and host access. |
 | `docs/local-mode.md` | Extension-only deployment. |
+| `docs/contributors/` | Contributor architecture, connectors, cache, scoring, and testing. |
 | `examples/` | Sample HTML and IOC strings for manual checks. |
 | `.github/workflows/` | Lint, tests, and secret scan on pull requests. |
 | [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), [LICENSE](LICENSE) | Security, contribution, license. |
@@ -71,7 +72,7 @@ More detail: [docs/architecture.md](docs/architecture.md), [docs/api-integration
 |------|------|
 | `extension/src/background/` | Service worker, enrichment handler, cache, cooldown. |
 | `extension/src/content/` | Detection, highlights, **production on-page overlay**, debounced fetch, auto-scan. |
-| `extension/src/components/` | React hover card and risk score UI for unit tests—not injected into page tabs. |
+| `extension/src/components/` | React hover card and risk score UI for unit tests (shared scoring with the overlay; not injected into page tabs). |
 | `extension/src/lib/` | IOC regex, connectors, storage, cache, scoring, export/import, pivots, UI styles. |
 | `extension/src/popup/` | Toolbar popup (scan, enable, highlight toggle). |
 | `extension/src/options/` | Settings page (keys, toggles, cache, export/import). |
@@ -104,7 +105,7 @@ python -m http.server 8080
 1. Open `http://localhost:8080/sample-alert.html` or `http://localhost:8080/sample-blog.html`.
 2. Enable the extension and highlighting, then **Scan page**.
 3. Save API keys and enable AbuseIPDB and/or OTX in settings.
-4. Click a highlighted IPv4 (use **›** first when manual-only is on). With both sources enabled, check per-source badges, optional **Raw response**, and footer disclaimers (enrichment plus advisory risk-score notice when enough source signals exist).
+4. Click a highlighted IPv4 (use **›** first when manual-only is on). With both sources enabled, check the **Risk score** label, **How this score was computed** panel (or its empty-state note when only one source has parseable data), per-source badges, optional **Raw response**, and footer disclaimers when a score is shown.
 5. Reopen the same indicator and confirm **Cached** / **· cached** and **Last updated**; use **›** to force a fresh fetch.
 6. Try a domain, URL, or hash with OTX enabled.
 7. Confirm **Copy** and pivot links.
@@ -127,7 +128,7 @@ python -m http.server 8080
 - Settings export omits API keys unless you include them.
 - Manual-only enrichment is on by default.
 - No maintainer telemetry, crash reporting, or Vera5-operated network endpoints by default.
-- Scans and detection run locally. Enrichment sends only the selected indicator value. Raw JSON panels redact sensitive key fields before display.
+- Scans and detection run locally. Enrichment sends only the selected indicator value. Composite risk labels and reasoning chains are computed locally from vendor summaries—never from Vera5-operated AI. Raw JSON panels redact sensitive key fields before display.
 
 [SECURITY.md](SECURITY.md), [docs/local-mode.md](docs/local-mode.md).
 
@@ -152,7 +153,7 @@ From `extension/` after `npm install`:
 
 From the repository root: `.\scripts\check.ps1`, `.\scripts\dev.ps1` (Windows).
 
-[CONTRIBUTING.md](CONTRIBUTING.md).
+[CONTRIBUTING.md](CONTRIBUTING.md). Contributor architecture and module guides: [docs/contributors/README.md](docs/contributors/README.md).
 
 ## License
 

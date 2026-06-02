@@ -13,7 +13,7 @@ Everything below assumes the **production on-page overlay** (content script on t
 | **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. |
 | **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page**, and read the match count (popup scan only). |
 | **Settings (options) page** | Configure API keys, enable sources, set manual-only and auto-scan, clear the enrichment cache, export or import settings. |
-| **React hover card** | Maintainer and test use only (`npm run dev` and unit tests). It is **not** shown on live page tabs. Full composite risk score UI (band label, contribution chips, disagreement callout) lives there; the production overlay shows footer disclaimers only when scoring signals apply. |
+| **React hover card** | Unit tests and `npm run dev` only. It is **not** shown on live page tabs. It exercises the same local scoring rules as the overlay; unit tests may also show per-source contribution chips the overlay does not render. |
 
 The keyboard shortcut runs the same scan as **Scan page** but does not update the popup match count unless you scan from the popup.
 
@@ -95,6 +95,61 @@ With AbuseIPDB and OTX both enabled for IPv4:
 
 Disable sources you do not need for a case to save quota and simplify the card.
 
+## Composite risk score on the hover card
+
+When enrichment returns per-source results, the on-page overlay shows a **Risk score** section. Vera5 computes the label **on your machine** from normalized vendor summaries (AbuseIPDB abuse-confidence text, OTX pulse counts, report-count summaries, and similar parseable OK lines). It is **not** an LLM verdict and does not call Vera5-operated infrastructure.
+
+### What you see
+
+| UI element | Meaning |
+|--------------|---------|
+| **Risk score: …** | Advisory band (**Unknown**, **Low**, **Suspicious**, **High**, or **Critical**). When at least two enabled sources return parseable OK signals, the label may include **(N/100)**—a weighted blend of per-source numeric signals. |
+| **How this score was computed** | Heading for the explain-this-IOC panel. |
+| Ordered per-source lines | Each enabled source with a parseable OK summary gets one line (source name, band, numeric signal, and weight). Lines follow connector order (AbuseIPDB, OTX, URLScan.io, GreyNoise). |
+| Empty reasoning note | Shown instead of a numbered list when a blended composite cannot be built—for example, only one source returned parseable data. The notice explains that blended steps need at least two parseable sources. |
+| **Sources disagree: …** | Appears only when a blended score exists **and** sources materially diverge (see below). |
+| **Risk score unavailable** | All enrichment sources are disabled in settings. The card still shows guidance to enable at least one source; there is no numeric label. |
+| Insufficient-data notice (above reasoning) | At least one source responded, but fewer than two parseable OK signals exist for blending. The label may read **Unknown risk**; read per-source rows and vendor pivots before acting. |
+| Footer disclaimers | **Enrichment** reminds you that only the indicator value is sent to vendors you enable. **Risk score** reminds you the label is advisory and computed locally. The risk disclaimer appears when a scored result is shown, not when the score is unavailable. |
+
+If enrichment is still loading, failed for every source, or no source results are attached to the card, the **Risk score** section is omitted entirely.
+
+### Interpreting the band label
+
+| Label | How to read it |
+|-------|----------------|
+| **Low** / **Suspicious** / **High** / **Critical** (with **/100**) | Weighted blend of at least two parseable per-source signals. Treat as a **hint** for prioritization, not a block/allow decision. |
+| **Unknown risk** (no **/100**) | Not enough parseable evidence to blend—often one OK source, errors on others, or summaries Vera5 cannot map to a numeric signal. Use per-source badges, raw JSON, and pivot links. |
+| **Risk score unavailable** | Every configured enrichment source is toggled off. Enable at least one source in settings if you want a local score. |
+
+Numeric signals are derived only from recognized summary patterns (for example `84 abuse confidence`, `4 threat pulses`, `9 reports`). Unrecognized OK text still appears in enrichment rows but does not contribute a weighted line.
+
+## When sources disagree
+
+The **Sources disagree** callout means Vera5 detected **material** divergence among sources that contributed to the blended score. It does **not** mean the composite label is wrong; it means you should not treat the single headline band as unanimous vendor consensus.
+
+Disagreement is raised when **both** are true:
+
+1. At least two sources supplied parseable OK signals (so a blended **/100** label exists).
+2. Either the numeric signals differ by **35 points or more**, **or** their mapped bands sit **two or more steps apart** on the Low → Suspicious → High → Critical scale.
+
+| Situation | Typical overlay behavior |
+|-----------|---------------------------|
+| Two sources, similar severity (for example both High) | No disagreement callout; reasoning list still shows each source’s line. |
+| High abuse confidence vs low pulse count (wide numeric gap) | Disagreement callout; compare each line in **How this score was computed**. |
+| High vs Suspicious bands with moderate numeric gap | Disagreement callout when bands are two steps apart. |
+| Only one parseable source | No blended **/100** label; empty reasoning note instead of disagreement. |
+| All sources disabled | **Risk score unavailable**; no disagreement logic runs. |
+
+**How to respond when you see disagreement**
+
+1. Read every line under **How this score was computed**—each reflects that vendor’s normalized summary, not the blend alone.
+2. Open **Raw response** or pivot links for sources on opposite sides of the callout.
+3. Prefer case policy and corroboration over the headline band when sources conflict.
+4. Do not cite the composite label in notes as if all vendors agreed.
+
+When disagreement is absent, sources still may differ slightly; Vera5 only surfaces the callout when divergence crosses the thresholds above.
+
 ## Operational checklist
 
 | Goal | Suggested approach |
@@ -103,6 +158,8 @@ Disable sources you do not need for a case to save quota and simplify the card.
 | Fresh data for one IOC | **›** manual refresh or clear cache then enrich. |
 | Fresh data everywhere | **Clear cache** on the options page, then re-enrich indicators you care about. |
 | Hit a rate limit | Read the retry hint; wait for cooldown; check vendor usage dashboards listed in [api-integrations.md](api-integrations.md). |
+| Conflicting risk signals | Read **How this score was computed**; follow pivots for diverging sources; do not treat the headline band as consensus when **Sources disagree** is shown. |
+| Single live source only | Expect **Unknown risk** and an empty reasoning note until a second source returns parseable OK data. |
 | Sensitive / classified work | Manual-only on; enable only approved sources; do not export settings with keys unless policy allows. |
 
 ## Troubleshooting
@@ -114,25 +171,9 @@ Disable sources you do not need for a case to save quota and simplify the card.
 | Cached summary but you need live data | Valid cache entry | Use **›** manual refresh. |
 | All sources show rate-limit backoff | Global cooldown after 429 | Wait for the countdown hint; reduce hover churn. |
 | AbuseIPDB works, OTX errors | Partial success | Read per-source badge and message; fix OTX key or quota. |
+| **Unknown risk** with one Live source | Only one parseable OK signal | Enable a second source or accept advisory unknown until another source succeeds. |
+| **Sources disagree** on a high-profile IOC | Material band or numeric spread between sources | Compare reasoning lines and vendor pivots; do not rely on the headline band alone. |
 | Highlights missing | Extension off, highlight off, or scan not run | Enable extension and highlighting; scan the page. |
-
-## Foundation capability traceability
-
-Internal acceptance checklists in [`docs/acceptance/`](acceptance/) record sign-off criteria for each foundation capability layer through cache and rate-limit operations. Use the checklist that matches the behavior you are validating in the browser or in tests—not a single monolithic doc.
-
-| Capability layer | What it covers | Acceptance checklist |
-|------------------|----------------|----------------------|
-| **Extension scaffold** | Manifest V3 load path, service worker, popup, options, build output | [`W1_7_1.md`](acceptance/W1_7_1.md) |
-| **IOC detection** | Regex engine, on-demand scan, fixture tuning, false-positive guards | [`W2_7_1.md`](acceptance/W2_7_1.md) |
-| **Highlights and hover shell** | On-page highlights, hover card, copy, static pivot links | [`W3_7_1.md`](acceptance/W3_7_1.md) |
-| **Settings and privacy** | Masked API keys, toggles, manual-only mode, cache clear, settings export/import | [`W4_7_1.md`](acceptance/W4_7_1.md) |
-| **First live enrichment** | AbuseIPDB IPv4 connector, worker routing, error paths | [`W5_7_1.md`](acceptance/W5_7_1.md) |
-| **Multi-source enrichment** | OTX + parallel fetch, per-source badges, expandable raw JSON | [`W6_7_1.md`](acceptance/W6_7_1.md) |
-| **Cache and rate limits** | TTL cache, Live/Cached labels, manual **›** refresh, 429 cooldown | [`W7_7_1.md`](acceptance/W7_7_1.md) |
-
-Production-path foundation closure (overlay parity with the enrichment behaviors above) is tracked in [`W8_25_1.md`](acceptance/W8_25_1.md). Composite scoring acceptance is in [`W8_7_1.md`](acceptance/W8_7_1.md).
-
-These artifacts are for maintainers and operator sign-off; they are not required reading for day-to-day triage.
 
 ## Related documentation
 

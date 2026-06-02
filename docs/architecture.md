@@ -13,16 +13,15 @@ High-level structure for the browser extension codebase. Describes planned layou
 | `extension/src/components/` | React hover card and composite risk score UI for the dev shell and unit tests—not injected into live page tabs. |
 | `extension/src/lib/` | Shared non-UI modules: IOC regex, normalization, storage schema, cache, scoring, connector client interfaces. |
 
-**Scaffold note:** `extension/src/placeholder.ts` is temporary tooling placeholder until background/content entrypoints land.
+**Build output:** `extension/dist/` (gitignored) — production extension package from `npm run build` (`verify:dist` and `verify:security` run post-build).
 
-**Build output:** `extension/dist/` (gitignored) — Vite emit target; manifest wiring added when the extension build pipeline is finalized.
+For module-level implementation detail, see [contributors/README.md](contributors/README.md).
 
 ## Repository (root)
 
 | Path | Ownership |
 |------|-----------|
-| `docs/` | Public and internal documentation. |
-| `docs/acceptance/` | Internal sign-off checklists only. |
+| `docs/` | Public user and contributor documentation (tracked in git). |
 | `examples/` | Sample pages and IOC fixtures for manual testing. |
 | `scripts/` | Maintainer build/dev helper scripts. |
 
@@ -47,7 +46,7 @@ The initial Vera5 release detects and enriches **only** the indicator types belo
 - Scan visible page text for the types above; skip `script` and `style` content.
 - Apply false-positive controls (context, allowlist/denylist options, conservative matching) before surfacing a hover target.
 - Enrich **indicator values only**—never upload full page HTML to third parties or Vera5-operated infrastructure.
-- Per-type enable/disable in the options UI when the settings surface ships.
+- Per-type enable/disable flags exist in the storage schema; dedicated Options UI controls for IOC types and cache TTL are not wired in the current release (see [README.md](../README.md) limitations).
 
 **Fixtures:** Public sample values for manual and automated tests live in [`examples/sample-iocs.txt`](../examples/sample-iocs.txt). Static HTML pages [`examples/sample-alert.html`](../examples/sample-alert.html) and [`examples/sample-blog.html`](../examples/sample-blog.html) embed those values plus decoy strings for manual scan checks.
 
@@ -176,7 +175,7 @@ The Vera5 browser extension uses **[Semantic Versioning 2.0.0](https://semver.or
 
 **Pre-1.0 behavior:** While `MAJOR` is `0`, treat `MINOR` bumps as the primary milestone marker and document breaking changes in release notes even though SemVer allows API instability below `1.0.0`.
 
-**Current baseline:** `0.0.0` in `extension/package.json` indicates pre-release scaffold (tooling, CI, docs). Do not tag public store releases from `0.0.0`.
+**Current baseline:** `0.0.0` in `extension/package.json` is the pre-1.0 package version while capabilities advance toward the 0.2.x enrichment milestone. Do not tag a public store release until version and sign-off policy align with [Product-Vision.md](../Product-Vision.md).
 
 **Milestone mapping (extension package only)**
 

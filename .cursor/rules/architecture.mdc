@@ -1,0 +1,99 @@
+---
+description: Use for architecture diagrams, workflows, data flows, roadmaps, state machines, threat models, entity relationships, documentation diagrams, and repo visual explanations.
+alwaysApply: false
+---
+
+# Mermaid Diagram Standards
+
+When creating or editing repo documentation that includes architecture diagrams, workflows, data flows, roadmaps, state machines, process documentation, threat models, ERDs, or lifecycle diagrams:
+
+## Required Format
+
+- Use Mermaid syntax inside Markdown fenced code blocks.
+- Use complete, valid Mermaid blocks.
+- Ensure diagrams render correctly in GitHub.
+- Avoid Mermaid syntax that is unsupported or unreliable in GitHub.
+- Prefer simple, maintainable diagrams over overly complex visual maps.
+- Do not use screenshots for diagrams unless explicitly requested.
+- Do not use external diagram tools unless explicitly requested.
+
+## Diagram Type Selection
+
+- Architecture diagrams: flowchart TD
+- Left-to-right pipelines: flowchart LR
+- Request/response flows: sequenceDiagram
+- Lifecycle/status logic: stateDiagram-v2
+- Database/schema relationships: erDiagram
+- Roadmaps/timelines: gantt
+- Git workflows/branching: gitGraph
+- User journeys/processes: journey
+
+## Repo Documentation Placement
+
+- General architecture: docs/architecture/
+- Workflows: docs/workflows/
+- Roadmaps: docs/roadmap/
+- Threat models: docs/security/
+- Contributor-facing diagrams: CONTRIBUTING.md or docs/contributing/
+- Public project overview diagrams: README.md
+- Internal/private validation diagrams: keep out of public docs unless explicitly approved.
+
+## Naming Standards
+
+- system-architecture.md
+- data-flow.md
+- analyst-workflow.md
+- threat-model.md
+- state-lifecycle.md
+- roadmap-flow.md
+- database-erd.md
+
+## Mermaid Style Rules
+
+- Use readable node names.
+- Avoid giant diagrams with too many nodes.
+- Split large diagrams into multiple smaller diagrams.
+- Use consistent naming across diagrams and documentation.
+- Use labels that match existing repo terminology.
+- Prefer deterministic structure that is easy to review in Git diffs.
+- Prefer multiple focused diagrams over one large diagram exceeding approximately 25 nodes.
+- Use stable terminology that matches README.md, architecture docs, and codebase naming conventions.
+
+## Example Placeholders
+
+- Replace the markers below with actual Mermaid fences when generating documentation.
+- When generating actual documentation files, do not leave [FENCE:MERMAID] or [/FENCE] in the output. Replace them with real Markdown Mermaid fences.
+
+[FENCE:MERMAID]
+flowchart TD
+    User[User] --> UI[Frontend UI]
+    UI --> API[Backend API]
+    API --> Engine[Core Engine]
+[/FENCE]
+
+[FENCE:MERMAID]
+sequenceDiagram
+    actor Analyst
+    Analyst->>Frontend: Submit request
+[/FENCE]
+
+## GitHub Compatibility Requirements
+
+- Confirm the Mermaid block uses a supported diagram type.
+- Confirm the diagram is inside a Markdown fenced block using mermaid.
+- Confirm node IDs do not contain spaces.
+- Confirm labels are readable.
+- Confirm public documentation does not expose private validation evidence, secrets, internal-only paths, or sensitive operational details.
+- Do not include Mermaid examples inside Cursor rule files using real fenced code blocks unless explicitly needed.
+- Use placeholders in Cursor rule files to avoid Markdown rendering conflicts.
+- Prefer GitHub-supported Mermaid syntax over newly released Mermaid features.
+
+## VERA5-Specific Guidance
+
+Prefer Mermaid diagrams for IOC enrichment pipelines, connector architecture, analyst workflows, search execution flows, multi-tenant architecture, API request lifecycle, authentication flows, alerting pipelines, data retention lifecycle, and export/report generation flows.
+
+When documenting VERA5 architecture:
+
+- Show logical relationships rather than implementation details.
+- Do not expose secrets, API keys, internal evidence structures, private validation workflows, or hidden operational logic in public diagrams.
+- Public diagrams should be understandable by contributors without revealing sensitive implementation details.

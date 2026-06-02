@@ -1,19 +1,20 @@
 # Contributing to Vera5
 
-Thank you for helping improve Vera5. This project is an open-source browser extension for analyst-driven IOC enrichment. The extension scaffold and CI are in place; detection, UI, and connectors are not implemented yet.
+Thank you for helping improve Vera5. This project is an open-source Chromium extension for analyst-driven IOC enrichment: on-page detection, highlights, a production hover overlay, live AbuseIPDB and OTX connectors (bring-your-own API keys), local cache, and composite risk scoring computed in the browser.
 
 ## Before you start
 
-- Read [README.md](README.md) for project scope and local-first operation.
+- Read [README.md](README.md) for project scope, operator surfaces, and local-first operation.
 - Read [SECURITY.md](SECURITY.md) for the threat model, IOC handling, and privacy expectations.
-- Product and architecture notes live in [Product-Vision.md](Product-Vision.md).
+- Read [docs/contributors/README.md](docs/contributors/README.md) for architecture, modules, connectors, cache, scoring, and testing guidance.
+- Product vision: [Product-Vision.md](Product-Vision.md). High-level scope and IOC types: [docs/architecture.md](docs/architecture.md).
 
 ## How to contribute
 
 1. **Fork and branch** — Use a focused branch name that describes the change (for example `fix-ioc-detector-false-positive`).
 2. **Keep changes small** — Prefer incremental pull requests over large mixed updates.
 3. **Match existing style** — Follow patterns in the area you edit under `extension/` and `docs/`.
-4. **Document behavior** — Update user-facing docs when you change install steps, permissions, connectors, or configuration.
+4. **Document behavior** — Update user-facing docs under `docs/` (and `README.md` when install or capabilities change). Update [docs/contributors/](docs/contributors/) when you change architecture, connectors, cache, scoring, or test layout.
 
 ## Development setup
 
@@ -58,8 +59,8 @@ On Windows, ensure `pre-commit` is executable (Git Bash: `chmod +x .githooks/pre
 
 - **No secrets in git** — Never commit API keys, `.env` files, tokens, or credential exports. Use local storage or private env files only.
 - **IOC-only enrichment** — Do not add full-page upload, hidden telemetry, or maintainer-operated enrichment proxies unless an explicit, documented product decision says otherwise.
-- **Source attribution** — When enrichment UI exists, show which connector produced each field.
-- **Tests** — Add or update unit tests when you change detection, normalization, caching, or connector logic (as those modules land).
+- **Source attribution** — Enrichment UI must show which connector produced each field.
+- **Tests** — Add or update unit tests when you change detection, normalization, caching, scoring, or connector logic. Run `npm run check` in `extension/` before opening a PR.
 
 ## Pull requests
 
