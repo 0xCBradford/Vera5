@@ -38,7 +38,23 @@ The extension reads these response headers when present:
 | `X-RateLimit-Remaining` | Parsed; if zero with no `Retry-After`, hint may say quota exhausted |
 | `X-RateLimit-Reset` | Unix epoch; converted to “Limit resets at …” when no `Retry-After` |
 
-If no usable headers are present, the hover card shows a generic backoff message (“rate limit reached. Back off before retrying.”) and “Try again later.”
+If no usable headers are present, the hover card shows a source-attributed backoff message (for example, “AbuseIPDB rate limit reached. Back off before retrying.”) and “Try again later.”
+
+### Global enrichment cooldown
+
+After any live connector receives **HTTP 429**, Vera5 also starts a **global** cooldown that blocks further **automatic** enrichment until the window expires. This is separate from the per-source error row shown for the request that triggered the limit.
+
+| Behavior | Detail |
+|----------|--------|
+| **Trigger** | HTTP 429 from AbuseIPDB or OTX during a live fetch |
+| **Duration** | `Retry-After` seconds when the vendor sends it; otherwise **60 seconds** default |
+| **Maximum** | Cooldown capped at **3600 seconds** (one hour) |
+| **Multiple 429s** | Cooldown extends to the **longest** active retry window |
+| **While active** | Automatic enrichment returns a shared message (“Threat intelligence rate limit reached. Back off before retrying.”) with **Retry after N seconds.** instead of calling vendors |
+| **Manual refresh** | **›** on a highlight (`bypassCache`) **bypasses** the global cooldown gate and still issues live vendor requests (the vendor may still return 429) |
+| **Partial success** | In a parallel multi-source batch, sources that did not return 429 can still succeed on the same enrichment; the global cooldown applies to subsequent automatic requests |
+
+Debounced auto enrichment (~400 ms when manual-only is off) and manual-only mode (default on) reduce accidental quota use; see [analyst-workflows.md](analyst-workflows.md).
 
 URLScan.io uses a different `X-Rate-Limit-*` shape (scope, action, window). When URLScan is implemented, connectors should map those headers using the same user-facing backoff pattern.
 
@@ -61,7 +77,7 @@ Connectors send only the sanitized indicator value required by the vendor endpoi
 - **URLScan.io:** `GET https://urlscan.io/api/v1/quotas` with your API key when live integration ships.
 - **GreyNoise:** [Search usage monitoring](https://docs.greynoise.io/) for community tier when live integration ships.
 
-To validate Vera5 backoff messaging locally, enable a source, trigger enrichment until the vendor returns 429, and confirm the hover card shows the rate-limit message and retry hint for that source without affecting unrelated pivot links or disabled sources.
+To validate Vera5 backoff messaging locally, enable a source, trigger enrichment until the vendor returns 429, and confirm the hover card shows the rate-limit message and retry hint for that source without affecting unrelated pivot links or disabled sources. Confirm subsequent automatic enrichment shows the global cooldown message until the countdown expires; **›** manual refresh should still attempt a live fetch.
 
 ## Related documentation
 

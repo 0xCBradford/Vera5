@@ -4,6 +4,19 @@ Practical guidance for using Vera5 during alert triage, blog review, and case-no
 
 For install steps, see [README.md](../README.md). For quotas, HTTP 429 handling, and vendor limits, see [api-integrations.md](api-integrations.md).
 
+## Operator surfaces
+
+Everything below assumes the **production on-page overlay** (content script on the tab you are reviewing). That overlay is the primary operator surface for highlights, enrichment, cache labels, and manual refresh.
+
+| Surface | When you use it |
+|---------|-----------------|
+| **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. |
+| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page**, and read the match count (popup scan only). |
+| **Settings (options) page** | Configure API keys, enable sources, set manual-only and auto-scan, clear the enrichment cache, export or import settings. |
+| **React hover card** | Maintainer and test use only (`npm run dev` and unit tests). It is **not** shown on live page tabs. Full composite risk score UI (band label, contribution chips, disagreement callout) lives there; the production overlay shows footer disclaimers only when scoring signals apply. |
+
+The keyboard shortcut runs the same scan as **Scan page** but does not update the popup match count unless you scan from the popup.
+
 ## Before you start
 
 1. Load the extension and open **Vera5 Settings**.
@@ -14,6 +27,8 @@ For install steps, see [README.md](../README.md). For quotas, HTTP 429 handling,
 URLScan.io and GreyNoise toggles store preferences and provide pivot links; they do not perform live API enrichment in the current release.
 
 ## Typical triage flow
+
+All steps use the **on-page overlay** on the tab under review unless noted.
 
 1. **Scan the page** from the toolbar popup (**Scan page**) or the keyboard shortcut (`Ctrl+Shift+Y` / `Cmd+Shift+Y`).
 2. **Review highlights** on indicators Vera5 detected in visible page text.

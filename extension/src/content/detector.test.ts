@@ -128,6 +128,13 @@ describe("detectIocsInText", () => {
     expect(ipv4.map((m) => m.value)).toEqual(["8.8.8.8"]);
   });
 
+  it("excludes private-space IPv4 by default through detectIocsInText", () => {
+    const text = "8.8.8.8 192.168.0.1";
+    const matches = detectIocsInText(text);
+    const ipv4 = matches.filter((m) => m.type === IOC_TYPE.IPV4);
+    expect(ipv4.map((m) => m.value)).toEqual(["8.8.8.8"]);
+  });
+
   it("detects defanged URLs in full scan", () => {
     const text = "Indicator hxxps://example.com/evil";
     const matches = detectIocsInText(text);

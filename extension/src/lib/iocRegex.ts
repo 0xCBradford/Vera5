@@ -335,7 +335,7 @@ export function findIpv4InText(
   text: string,
   options: IocRegexOptions = {}
 ): IocMatch[] {
-  const includePrivate = options.includePrivateIpv4 ?? true;
+  const includePrivate = options.includePrivateIpv4 ?? false;
   return collectPatternMatches(
     text,
     IPV4_PATTERN,

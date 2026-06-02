@@ -11,11 +11,6 @@ import {
   teardownDebouncedMutationRescan,
 } from "./mutationRescan";
 
-async function flushAsyncWork(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-}
-
 describe("debounced mutation rescan stub", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -62,8 +57,9 @@ describe("debounced mutation rescan stub", () => {
     expect(onScan).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(1);
-    await flushAsyncWork();
-    expect(onScan).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(onScan).toHaveBeenCalledTimes(1);
+    });
     expect(onScan.mock.calls[0]?.[0]).toMatchObject({
       ok: true,
       payload: { count: expect.any(Number) },
@@ -93,8 +89,9 @@ describe("debounced mutation rescan stub", () => {
     expect(onScan).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(1);
-    await flushAsyncWork();
-    expect(onScan).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(onScan).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("routes mutation observer callbacks through debounced rescan", async () => {
@@ -125,8 +122,9 @@ describe("debounced mutation rescan stub", () => {
     expect(callbacks).toHaveLength(1);
     callbacks[0]?.([], {} as MutationObserver);
     vi.advanceTimersByTime(DEFAULT_MUTATION_RESCAN_DEBOUNCE_MS);
-    await flushAsyncWork();
-    expect(onScan).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(onScan).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("cancels pending rescans on teardown", () => {

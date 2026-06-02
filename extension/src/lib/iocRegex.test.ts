@@ -72,8 +72,16 @@ describe("iocRegex golden vectors", () => {
 describe("iocRegex private IPv4 option", () => {
   const text = "Public 8.8.8.8 private 10.0.0.1 and 192.168.1.55";
 
-  it("includes private-space IPv4 by default", () => {
+  it("excludes private-space IPv4 by default", () => {
     const values = valuesOfType(findIpv4InText(text), IOC_TYPE.IPV4);
+    expect(values).toEqual(["8.8.8.8"]);
+  });
+
+  it("includes private-space IPv4 when includePrivateIpv4 is true", () => {
+    const values = valuesOfType(
+      findIpv4InText(text, { includePrivateIpv4: true }),
+      IOC_TYPE.IPV4
+    );
     expect(values).toContain("8.8.8.8");
     expect(values).toContain("10.0.0.1");
     expect(values).toContain("192.168.1.55");

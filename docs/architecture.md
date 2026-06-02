@@ -7,10 +7,10 @@ High-level structure for the browser extension codebase. Describes planned layou
 | Path | Ownership |
 |------|-----------|
 | `extension/src/background/` | Manifest V3 service worker: message routing, enrichment fetch orchestration, cache coordination, connector calls. No DOM access. |
-| `extension/src/content/` | Content scripts: IOC detection, page highlighting, hover trigger wiring. Runs in page context. |
+| `extension/src/content/` | Content scripts: IOC detection, page highlighting, production on-page hover overlay, scan and enrich wiring. Runs in page context. |
 | `extension/src/popup/` | Browser action popup UI: enable/disable, quick status, shortcuts to options. |
 | `extension/src/options/` | Options page: API keys (masked), source toggles, IOC type toggles, manual-only mode, cache controls. |
-| `extension/src/components/` | Shared React UI: hover card, source badges, risk display, pivot actions. Used by popup, options, and content-injected UI. |
+| `extension/src/components/` | React hover card and composite risk score UI for the dev shell and unit tests—not injected into live page tabs. |
 | `extension/src/lib/` | Shared non-UI modules: IOC regex, normalization, storage schema, cache, scoring, connector client interfaces. |
 
 **Scaffold note:** `extension/src/placeholder.ts` is temporary tooling placeholder until background/content entrypoints land.
@@ -50,6 +50,23 @@ The initial Vera5 release detects and enriches **only** the indicator types belo
 - Per-type enable/disable in the options UI when the settings surface ships.
 
 **Fixtures:** Public sample values for manual and automated tests live in [`examples/sample-iocs.txt`](../examples/sample-iocs.txt). Static HTML pages [`examples/sample-alert.html`](../examples/sample-alert.html) and [`examples/sample-blog.html`](../examples/sample-blog.html) embed those values plus decoy strings for manual scan checks.
+
+## Page scan and mutation rescan
+
+Vera5 supports **explicit** scans and an **optional** mutation-driven rescan. There is no silent background rescan unless the analyst turns on auto-scan in Options.
+
+| Trigger | Module path | Behavior |
+|---------|-------------|----------|
+| Popup **Scan page** or `scan-page` keyboard shortcut | `serviceWorker.ts` → `scanPage.ts` | One-shot scan of visible text; highlights when highlighting is enabled. |
+| **Automatically scan when the page changes** (Options, off by default) | `autoScan.ts` → `mutationRescan.ts` | Debounced `MutationObserver` (400 ms default) calls the same scan path as an explicit **Scan page** action. |
+
+**`mutationRescan.ts` status:** Implemented and active only when auto-scan is enabled. The module is not a no-op stub: it registers a subtree observer, coalesces rapid DOM changes into one debounced scan, and tears down on disable or navigation teardown. When `enabled` is not `true`, setup returns immediately and no observer runs.
+
+**Operator intent and defaults:**
+
+- `autoScanEnabled` defaults to **false** in extension storage (`storage.ts` schema). Content scripts call `syncAutoScanWithStorage()` on load and react to storage changes via `setupAutoScanStorageListener()` in `autoScan.ts`.
+- With auto-scan off, DOM mutations do **not** trigger rescans. Analysts scan with **Scan page** in the popup or `Ctrl+Shift+Y` / `Cmd+Shift+Y`.
+- Enabling auto-scan in Options is the only path that activates mutation rescan; it is a deliberate opt-in, not an implicit page-load behavior.
 
 ## Known false positives and suppressions
 
@@ -98,7 +115,7 @@ Configurable walker flags can set `skipScript`, `skipStyle`, or `skipTextarea` t
 | Documentation and benign IPs (`8.8.8.8`, `192.0.2.1`) | Literals are syntactically valid IPv4 | Context scoring or allowlists (future) |
 | `example.com` and test domains in prose | Valid domain grammar | Same as above |
 | CVE IDs cited in non-security articles | Valid CVE syntax | Type toggle or section-aware scanning (future) |
-| Private-space IPs when `includePrivateIpv4` is true (default) | Intended for lab and SOC pages | Disable private IP class in options |
+| Private-space IPs when `includePrivateIpv4` is enabled in settings | Intended for lab and SOC pages | Off by default in settings schema; enable when private literals are required |
 | Same indicator repeated in separate text nodes | Each node scanned independently | Hover dedupe by value (UI layer, future) |
 | Very long pages | Performance caps apply in later phases | Scan limits and debounce (see performance guardrails in implementation) |
 

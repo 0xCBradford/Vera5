@@ -3,9 +3,14 @@ import {
   CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED,
   getHighlightEnabledForContent,
 } from "./highlightStorage";
+import { getIncludePrivateIpv4ForContent } from "./includePrivateIpv4Storage";
 import { CONTENT_MESSAGE } from "./constants";
 import { logIocDetectionCount } from "./devLog";
-import { scanTextNodesForIocs, type DetectedIocInTextNode } from "./detector";
+import {
+  scanTextNodesForIocs,
+  type DetectedIocInTextNode,
+  type IocDetectorScanOptions,
+} from "./detector";
 import { clearIocHighlights, highlightDetectedIocs } from "./highlighter";
 
 export function isScanPageMessage(
@@ -32,10 +37,16 @@ export function applyHighlightForScan(
   clearIocHighlights(root);
 }
 
+export async function resolveIocDetectorScanOptions(): Promise<IocDetectorScanOptions> {
+  const includePrivateIpv4 = await getIncludePrivateIpv4ForContent();
+  return { ioc: { includePrivateIpv4 } };
+}
+
 export async function handleScanPageRequest(
   root: Node = document.body
 ): Promise<MessageResponse> {
-  const matches = scanTextNodesForIocs(root);
+  const scanOptions = await resolveIocDetectorScanOptions();
+  const matches = scanTextNodesForIocs(root, scanOptions);
   const highlightEnabled = await getHighlightEnabledForContent();
   applyHighlightForScan(matches, root, highlightEnabled);
   logIocDetectionCount(matches.length);

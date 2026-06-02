@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { scanPageMessage } from "../lib/messages";
 import { CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED } from "./highlightStorage";
+import { CONTENT_STORAGE_KEY_INCLUDE_PRIVATE_IPV4 } from "./includePrivateIpv4Storage";
 import { CONTENT_MESSAGE } from "./constants";
 import { logIocDetectionCount } from "./devLog";
 import {
@@ -86,6 +87,19 @@ describe("handleScanPageRequest", () => {
     await handleScanPageRequest(root);
     expect(root.querySelectorAll(`.${IOC_HIGHLIGHT_CLASS}`)).toHaveLength(0);
   });
+
+  it("omits private-space IPv4 when includePrivateIpv4 is unset", async () => {
+    const root = mountPage("<p>Public 8.8.8.8 private 192.168.0.1</p>");
+    const response = await handleScanPageRequest(root);
+    expect(response).toEqual({ ok: true, payload: { count: 1 } });
+  });
+
+  it("includes private-space IPv4 when includePrivateIpv4 is enabled in storage", async () => {
+    store[CONTENT_STORAGE_KEY_INCLUDE_PRIVATE_IPV4] = true;
+    const root = mountPage("<p>Public 8.8.8.8 private 192.168.0.1</p>");
+    const response = await handleScanPageRequest(root);
+    expect(response).toEqual({ ok: true, payload: { count: 2 } });
+  });
 });
 
 describe("logIocDetectionCount", () => {
@@ -127,6 +141,77 @@ describe("setupScanPageListener", () => {
     const { setupScanPageListener } = await import("./scanPage");
     setupScanPageListener();
     expect(onMessage).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("handles SCAN_PAGE messages from the service worker shortcut path", async () => {
+    const store: Record<string, unknown> = {
+      [CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED]: true,
+    };
+    let messageListener:
+      | ((
+          message: unknown,
+          sender: unknown,
+          sendResponse: (response: unknown) => void
+        ) => boolean)
+      | undefined;
+
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+        },
+      },
+      runtime: {
+        onMessage: {
+          addListener: (
+            callback: NonNullable<typeof messageListener>
+          ) => {
+            messageListener = callback;
+          },
+        },
+      },
+    });
+
+    mountPage("<p>Contact 8.8.8.8 today.</p>");
+    const { setupScanPageListener } = await import("./scanPage");
+    setupScanPageListener();
+
+    expect(messageListener).toBeDefined();
+    const sendResponse = vi.fn();
+    const handled = messageListener!(
+      scanPageMessage(),
+      {},
+      sendResponse
+    );
+    expect(handled).toBe(true);
+
+    await vi.waitFor(() => {
+      expect(sendResponse).toHaveBeenCalledWith({
+        ok: true,
+        payload: { count: 1 },
+      });
+    });
+    expect(
+      document.querySelectorAll(`.${IOC_HIGHLIGHT_CLASS}`).length
+    ).toBeGreaterThan(0);
     vi.unstubAllGlobals();
   });
 });
