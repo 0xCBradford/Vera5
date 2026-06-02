@@ -30,6 +30,26 @@ URLScan.io and GreyNoise toggles store preferences and provide pivot links; they
 
 All steps use the **on-page overlay** on the tab under review unless noted.
 
+```mermaid
+flowchart TD
+  Scan[Scan the page]
+  Review[Review highlights]
+  Open[Open hover card]
+  Enrich{Enrich needed?}
+  Fetch[Request live enrichment]
+  Score[Read risk score and reasoning when shown]
+  Pivot[Copy indicator or use pivot links]
+  Dismiss[Dismiss card]
+  Scan --> Review
+  Review --> Open
+  Open --> Enrich
+  Enrich -->|Yes| Fetch
+  Enrich -->|No| Pivot
+  Fetch --> Score
+  Score --> Pivot
+  Pivot --> Dismiss
+```
+
 1. **Scan the page** from the toolbar popup (**Scan page**) or the keyboard shortcut (`Ctrl+Shift+Y` / `Cmd+Shift+Y`).
 2. **Review highlights** on indicators Vera5 detected in visible page text.
 3. **Open the hover card** by clicking a highlighted value (or focus it and press Enter).

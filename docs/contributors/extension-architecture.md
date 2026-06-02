@@ -27,12 +27,21 @@ Analyst-facing behavior on real pages uses the **content-script overlay**, not t
 
 ## Message flow (simplified)
 
-```text
-Popup / content  --chrome.runtime.sendMessage-->  serviceWorker
-                                                      |
-                                                      +--> enrichmentHandler
-                                                      +--> cache read/write
-Content overlay  <--enrichment results / settings---  (via messages + storage)
+```mermaid
+sequenceDiagram
+  participant Popup as Toolbar popup
+  participant Content as Content script
+  participant SW as Background worker
+  participant Store as chrome.storage.local
+  participant Vendor as Third-party APIs
+
+  Popup->>SW: Scan and settings messages
+  Content->>SW: Enrich and scan messages
+  SW->>Store: Read and write settings and cache
+  SW->>Vendor: HTTPS enrichment (indicator only)
+  Vendor-->>SW: Vendor response
+  SW-->>Content: Enrichment results via messages
+  Content->>Store: Settings sync when applicable
 ```
 
 Content scripts request enrichment through the background worker so API keys and fetch logic stay out of the page JavaScript context exposed to hostile pages.

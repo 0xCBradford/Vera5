@@ -18,25 +18,22 @@ Local mode is the **default and only required** deployment for the MVP. You do n
 
 ## What runs where
 
-```text
-┌─────────────────────────────────────────────────────────────┐
-│  Your browser (Chromium, Manifest V3)                       │
-│                                                             │
-│  ┌──────────────┐   ┌──────────────┐   ┌─────────────────┐  │
-│  │ Content      │   │ Background   │   │ Popup / Options │  │
-│  │ script       │◄─►│ service      │◄─►│ (settings UI)   │  │
-│  │ detection,   │   │ worker       │   │                 │  │
-│  │ highlights,  │   │ messages,    │   │ keys masked,    │  │
-│  │ hover card   │   │ enrichment   │   │ toggles, cache  │  │
-│  └──────────────┘   │ fetch        │   └─────────────────┘  │
-│         │           └──────┬───────┘                        │
-│         │                  │                                │
-│         ▼                  ▼                                │
-│  chrome.storage.local     HTTPS (your keys)                 │
-│  settings, keys, cache    ───────────────────────────────►  │
-└─────────────────────────────────────────────────────────────┘
-                                        Third-party APIs
-                              (AbuseIPDB, OTX, URLScan.io, GreyNoise, …)
+```mermaid
+flowchart TB
+  subgraph Browser["Chromium browser (Manifest V3)"]
+    CS[Content script]
+    BG[Background worker]
+    Popup[Toolbar popup]
+    Options[Options page]
+    Store[(chrome.storage.local)]
+    CS <-->|messages| BG
+    Popup <-->|messages| BG
+    Options <-->|messages| BG
+    CS --> Store
+    BG --> Store
+  end
+  Vendors[Third-party APIs]
+  BG -->|HTTPS indicator only| Vendors
 ```
 
 Nothing in this diagram sends page HTML or browsing history to Vera5-maintained servers.

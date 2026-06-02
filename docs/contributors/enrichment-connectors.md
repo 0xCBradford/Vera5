@@ -21,6 +21,30 @@ When multiple sources are enabled for an indicator:
 
 Selection and skip rules: `enrichmentSourceSelection.ts`.
 
+## Enrichment request flow
+
+```mermaid
+sequenceDiagram
+  actor Analyst
+  participant Content as Content script
+  participant BG as Background worker
+  participant AbuseIPDB as AbuseIPDB
+  participant OTX as OTX
+  participant UI as Hover overlay
+
+  Analyst->>Content: Open card or request enrich
+  Content->>BG: Enrichment message
+  par Parallel enabled sources
+    BG->>AbuseIPDB: Indicator lookup
+    BG->>OTX: Indicator lookup
+  end
+  AbuseIPDB-->>BG: Response
+  OTX-->>BG: Response
+  BG->>BG: Normalize and cache
+  BG-->>Content: Per-source results
+  Content-->>UI: Badges and enrichment summary
+```
+
 ## IOC-only requests
 
 `sanitizeEnrichmentIoc` and `iocRequestBoundaries.ts` enforce that outbound payloads contain indicator values required by the vendor API, not full page HTML. Security regression: `verify:security` and `iocRequestBoundaries.test.ts`.
