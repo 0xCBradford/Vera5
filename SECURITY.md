@@ -8,6 +8,12 @@ For permission rationale and manifest details, see [docs/security-model.md](docs
 
 Vera5 runs in your browser on pages you open. It may read visible page text to detect indicators of compromise (IOCs). Enrichment and pivots use **your** threat-intelligence API keys and **your** choice of sources (bring-your-own keys / bring-your-own API). Requests to vendors go directly from the extension over TLS—not through Vera5-operated infrastructure.
 
+**Privacy and enrichment invariants (unchanged in the MVP):**
+
+- **Bring-your-own keys / bring-your-own API (BYOK/BYOA)** — You create and control vendor API keys in local extension storage. Vera5 does not supply shared maintainer keys or require routing enrichment through Vera5-hosted infrastructure.
+- **IOC-only enrichment queries** — Live enrichment sends the **indicator value** (and API fields each vendor requires) to sources **you** enable—not full page HTML, browsing history, or bulk content to Vera5-operated services (there is no Vera5 enrichment cloud in the MVP).
+- **No telemetry by default** — Vera5 does not collect maintainer usage analytics, crash telemetry, or browsing history by default. See [Telemetry and analytics](#telemetry-and-analytics).
+
 ## Threat model
 
 | Risk | Mitigation |
@@ -16,7 +22,7 @@ Vera5 runs in your browser on pages you open. It may read visible page text to d
 | API key exposure | Keys stored in `chrome.storage.local` on your profile; masked in the options UI after save; excluded from settings export by default; never committed to the repository. |
 | IOC disclosure to third parties | Only indicator values you enrich (or open via pivot links) reach vendors you choose—not full page HTML to Vera5 infrastructure. Per-source toggles and manual-only mode limit automatic requests. |
 | Sensitive internal IOCs leaving the org | You control which sources are enabled, whether auto-fetch runs, and when to click enrich or pivot links. |
-| Malicious or confusing page content | Conservative regex matching, overlap deduplication, and per-type enable options reduce false positives. |
+| Malicious or confusing page content | Conservative regex matching, overlap deduplication, and documented false-positive suppressions reduce noise. |
 | Analyst misinterpretation | Source attribution on enrichment results; static pivots open vendor sites in a new tab under your browser session. |
 
 ## IOC leakage
@@ -70,9 +76,9 @@ Runtime component layout: [docs/local-mode.md](docs/local-mode.md). Enrichment m
 
 - **Manual-only enrichment** (default on): Threat-intelligence fetch runs only when you use the enrich control, not automatically when a hover card opens.
 - **Per-source enable flags**: Disabled sources are not queried and are omitted from automatic enrichment paths.
-- **Per-type toggles**: Indicator types you disable are not detected for highlighting and enrichment.
+- **Supported IOC types (current release)**: Options exposes per-type detection toggles (IPv4, domain, URL, MD5, SHA1, SHA256, CVE). Disabled types are omitted from page scans; defaults enable all MVP types.
+- **Private-space IPv4**: Omitted from detection by default (RFC1918, loopback, link-local). Options includes a checkbox to include them when needed for lab or internal pages.
 - **Auto-scan off by default**: Page rescans on DOM changes run only when you enable auto-scan; otherwise you scan explicitly from the popup or keyboard shortcut.
-- **Private IPv4**: Optional setting controls whether RFC1918-style addresses are treated as indicators.
 
 ### What Vera5 never sends to its own infrastructure
 
@@ -123,10 +129,10 @@ All Vera5-controlled persistence uses the browser’s **local extension storage*
 | Highlight enabled | Whether detected indicators are underlined after scan. | On. |
 | Auto-scan enabled | Whether DOM changes trigger rescans. | Off. |
 | Manual-only mode | When on, enrichment fetch requires explicit user action. | On. |
-| Include private IPv4 | Whether private-space IPv4 literals are detected. | Off. |
+| Include private IPv4 | Whether private-space IPv4 literals are detected. | Off (default). Options checkbox persists the flag; the scan path reads it on each scan. |
 | Enrichment source enabled | Per-vendor on/off (AbuseIPDB, OTX, URLScan.io, GreyNoise). | All off until you enable. |
-| IOC type enabled | Per-type detection toggles (IPv4, domain, URL, hashes, CVE). | Types on unless you disable. |
-| Enrichment cache TTL | Seconds cached responses remain valid (used when cache is populated). | 3600. |
+| IOC type enabled | Per-type detection toggles (IPv4, domain, URL, hashes, CVE). | Defaults all MVP types **on**. Options checkboxes persist flags; the scan path omits disabled types. |
+| Enrichment cache TTL | Seconds cached responses remain valid (used when cache is populated). | Default 3600. Options exposes a global seconds field and optional per-source overrides. |
 | Settings schema version | Migration marker for stored preferences. | Managed by the extension. |
 
 ### API keys

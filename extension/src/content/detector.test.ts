@@ -142,6 +142,20 @@ describe("detectIocsInText", () => {
       true
     );
   });
+
+  it("excludes disabled IOC types when enabledTypes is set", () => {
+    const text =
+      "8.8.8.8 https://example.com/login CVE-2021-44228 example.com";
+    const matches = detectIocsInText(text, {
+      enabledTypes: { ipv4: true, domain: false, url: false, cve: true },
+    });
+    expect(hasMatch(matches, IOC_TYPE.IPV4, "8.8.8.8")).toBe(true);
+    expect(hasMatch(matches, IOC_TYPE.CVE, "CVE-2021-44228")).toBe(true);
+    expect(
+      hasMatch(matches, IOC_TYPE.URL, "https://example.com/login")
+    ).toBe(false);
+    expect(hasMatch(matches, IOC_TYPE.DOMAIN, "example.com")).toBe(false);
+  });
 });
 
 function mountPage(html: string): HTMLDivElement {

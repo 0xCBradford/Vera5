@@ -17,8 +17,11 @@ export type IocMatch = {
   end: number;
 };
 
+export type IocTypeEnableMap = Partial<Record<IocType, boolean>>;
+
 export type IocRegexOptions = {
   includePrivateIpv4?: boolean;
+  enabledTypes?: IocTypeEnableMap;
 };
 
 const HASH_LENGTHS: ReadonlyArray<{ length: number; type: IocType }> = [

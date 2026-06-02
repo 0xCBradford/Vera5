@@ -2,6 +2,7 @@ import {
   CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED,
   getAutoScanEnabledForContent,
 } from "./autoScanStorage";
+import { runWithExtensionContext } from "../lib/extensionContext";
 import {
   setupDebouncedMutationRescan,
   teardownDebouncedMutationRescan,
@@ -30,15 +31,17 @@ export async function syncAutoScanWithStorage(): Promise<void> {
 
 export function setupAutoScanStorageListener(): void {
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "local") {
-      return;
-    }
+    runWithExtensionContext(() => {
+      if (areaName !== "local") {
+        return;
+      }
 
-    if (!(CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED in changes)) {
-      return;
-    }
+      if (!(CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED in changes)) {
+        return;
+      }
 
-    const newValue = changes[CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED]?.newValue;
-    applyAutoScanEnabled(Boolean(newValue));
+      const newValue = changes[CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED]?.newValue;
+      applyAutoScanEnabled(Boolean(newValue));
+    });
   });
 }

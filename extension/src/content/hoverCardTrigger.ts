@@ -1,5 +1,9 @@
 import type { IocType } from "../lib/iocRegex";
 import { IOC_TYPE } from "../lib/iocRegex";
+import {
+  isExtensionContextInvalidated,
+  rethrowUnlessStaleExtensionError,
+} from "../lib/extensionContext";
 import { attemptAutoEnrichmentFetch } from "./enrichmentAutoFetch";
 import {
   cancelPendingHoverEnrichment,
@@ -76,22 +80,33 @@ export function openHoverCardForHighlight(
     return false;
   }
 
-  void getEnrichmentSourceEnabledForContent().then((sources) => {
-    const disabledSources = listDisabledEnrichmentSourceIds(sources);
-    const payload: HoverCardOverlayPayload =
-      disabledSources.length > 0
-        ? { ...basePayload, disabledSources }
-        : basePayload;
+  if (isExtensionContextInvalidated()) {
+    showHoverCardNearAnchor(highlight, basePayload, doc);
+    return true;
+  }
 
-    showHoverCardNearAnchor(highlight, payload, doc);
+  void getEnrichmentSourceEnabledForContent()
+    .then((sources) => {
+      const disabledSources = listDisabledEnrichmentSourceIds(sources);
+      const payload: HoverCardOverlayPayload =
+        disabledSources.length > 0
+          ? { ...basePayload, disabledSources }
+          : basePayload;
 
-    if (options.enrichmentTrigger === "manual") {
-      cancelPendingHoverEnrichment();
-      void runBackgroundEnrichment(payload, doc, { bypassCache: true });
-    } else {
-      void attemptAutoEnrichmentFetch(payload);
-    }
-  });
+      showHoverCardNearAnchor(highlight, payload, doc);
+
+      if (options.enrichmentTrigger === "manual") {
+        cancelPendingHoverEnrichment();
+        void runBackgroundEnrichment(payload, doc, { bypassCache: true }).catch(
+          rethrowUnlessStaleExtensionError
+        );
+      } else {
+        void attemptAutoEnrichmentFetch(payload).catch(
+          rethrowUnlessStaleExtensionError
+        );
+      }
+    })
+    .catch(rethrowUnlessStaleExtensionError);
 
   return true;
 }

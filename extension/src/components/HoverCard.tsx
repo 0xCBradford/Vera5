@@ -1,9 +1,18 @@
 import { useEffect, useState } from "react";
 import type { IocType } from "../lib/iocRegex";
+import {
+  getSessionAnalystNote,
+  primeAnalystNoteForIoc,
+  setSessionAnalystNote,
+} from "../lib/analystNotesSession";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildSourceStatusBadgeClassName,
   formatEnrichmentSourceAttribution,
+  HOVER_CARD_ANALYST_NOTES_INPUT_ID,
+  HOVER_CARD_ANALYST_NOTES_LABEL,
+  HOVER_CARD_ANALYST_NOTES_PLACEHOLDER,
+  HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
   resolveEffectiveSourceAttribution,
@@ -49,6 +58,7 @@ export type HoverCardProps = {
   retryHint?: string;
   disabledSources?: readonly EnrichmentSourceId[];
   sourceResults?: readonly HoverCardSourceEntry[];
+  analystNotes?: string;
 };
 
 export function formatHoverCardTypeLabel(type: IocType): string {
@@ -67,9 +77,13 @@ export function HoverCard({
   retryHint,
   disabledSources = [],
   sourceResults = [],
+  analystNotes,
 }: HoverCardProps) {
   const typeLabel = formatHoverCardTypeLabel(type);
   const [copied, setCopied] = useState(false);
+  const [note, setNote] = useState(() =>
+    analystNotes ?? getSessionAnalystNote(value)
+  );
   const pivotLinks = getPivotLinks(type, value);
   const view = resolveHoverCardDisplayView({
     enrichmentState,
@@ -97,6 +111,13 @@ export function HoverCard({
     ensureVera5UiStyles(document);
   }, []);
 
+  useEffect(() => {
+    setNote(analystNotes ?? getSessionAnalystNote(value));
+    primeAnalystNoteForIoc(value, (storedNote) => {
+      setNote((current) => (current.length > 0 ? current : storedNote));
+    });
+  }, [analystNotes, value]);
+
   const handleCopy = () => {
     void copyTextToClipboard(value).then((success) => {
       if (!success) {
@@ -107,6 +128,11 @@ export function HoverCard({
         setCopied(false);
       });
     });
+  };
+
+  const handleNoteChange = (nextNote: string) => {
+    setNote(nextNote);
+    setSessionAnalystNote(value, nextNote);
   };
 
   return (
@@ -283,6 +309,29 @@ export function HoverCard({
           ))}
         </nav>
       ) : null}
+      <section
+        className="vera5-hover-card-analyst-notes"
+        aria-label={HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL}
+        style={{ marginBottom: view.showFooter ? 8 : 0 }}
+      >
+        <label
+          className="vera5-hover-card-analyst-notes-label"
+          htmlFor={HOVER_CARD_ANALYST_NOTES_INPUT_ID}
+        >
+          {HOVER_CARD_ANALYST_NOTES_LABEL}
+        </label>
+        <textarea
+          id={HOVER_CARD_ANALYST_NOTES_INPUT_ID}
+          className="vera5-hover-card-analyst-notes-input"
+          placeholder={HOVER_CARD_ANALYST_NOTES_PLACEHOLDER}
+          rows={3}
+          value={note}
+          aria-label={HOVER_CARD_ANALYST_NOTES_LABEL}
+          onChange={(event) => {
+            handleNoteChange(event.target.value);
+          }}
+        />
+      </section>
       {view.showAttribution && effectiveSourceAttribution ? (
         <p className="vera5-hover-card-attribution" role="note">
           {formatEnrichmentSourceAttribution(

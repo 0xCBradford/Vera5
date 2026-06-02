@@ -1,4 +1,5 @@
 import type { EnrichmentSourceId } from "../lib/hoverCardEnrichment";
+import { safeStorageLocalGet } from "../lib/extensionContext";
 
 export const CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED =
   "enrichmentSourceEnabled";
@@ -44,7 +45,7 @@ export function normalizeEnrichmentSourceEnabledMap(
 }
 
 export async function getEnrichmentSourceEnabledForContent(): Promise<EnrichmentSourceEnabledMap> {
-  const result = await chrome.storage.local.get(
+  const result = await safeStorageLocalGet(
     CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED
   );
   return normalizeEnrichmentSourceEnabledMap(

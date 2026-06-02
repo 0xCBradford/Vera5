@@ -501,6 +501,60 @@ export async function setEnrichmentSourceEnabled(
   });
 }
 
+export async function getIocTypeEnabled(): Promise<IocTypeEnabledRecord> {
+  const settings = await getVera5Settings();
+  return settings.iocTypeEnabled;
+}
+
+export async function setIocTypeEnabled(
+  iocType: IocType,
+  enabled: boolean
+): Promise<void> {
+  const settings = await getVera5Settings();
+  const iocTypeEnabled: IocTypeEnabledRecord = {
+    ...settings.iocTypeEnabled,
+    [iocType]: enabled,
+  };
+
+  await chrome.storage.local.set({
+    [STORAGE_KEY_IOC_TYPE_ENABLED]: iocTypeEnabled,
+  });
+}
+
+export async function getIncludePrivateIpv4(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.includePrivateIpv4;
+}
+
+export async function setIncludePrivateIpv4(enabled: boolean): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: enabled,
+  });
+}
+
+export async function getEnrichmentCacheTtlSecondsFromSettings(): Promise<number> {
+  const settings = await getVera5Settings();
+  return settings.enrichmentCacheTtlSeconds;
+}
+
+export async function setEnrichmentCacheTtlSeconds(
+  ttlSeconds: number
+): Promise<void> {
+  const settings = await getVera5Settings();
+  const normalized = readStoredCacheTtlSeconds(
+    ttlSeconds,
+    settings.enrichmentCacheTtlSeconds
+  );
+  await chrome.storage.local.set({
+    [STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS]: normalized,
+  });
+}
+
+export async function getEnrichmentSourceCacheTtlSeconds(): Promise<EnrichmentSourceCacheTtlRecord> {
+  const settings = await getVera5Settings();
+  return settings.enrichmentSourceCacheTtlSeconds;
+}
+
 export function listDisabledEnrichmentSources(
   sources: EnrichmentSourceEnabledRecord
 ): ApiKeySlot[] {

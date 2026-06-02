@@ -52,6 +52,14 @@ describe("ioc highlighter", () => {
     expect(highlight?.style.display).not.toBe("block");
     expect(highlight?.dataset.vera5Type).toBe(IOC_TYPE.IPV4);
     expect(highlight?.dataset.vera5Value).toBe("8.8.8.8");
+    expect(highlight?.dataset.vera5AnchorId).toMatch(/^vera5-hl-\d+$/);
+    expect(result.anchorLinks).toEqual([
+      {
+        anchorId: highlight?.dataset.vera5AnchorId,
+        type: IOC_TYPE.IPV4,
+        value: "8.8.8.8",
+      },
+    ]);
     expect(
       highlight?.querySelector(`.${IOC_HIGHLIGHT_BADGE_CLASS}`)?.textContent
     ).toBe("IP");

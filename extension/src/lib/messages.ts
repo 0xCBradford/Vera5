@@ -4,11 +4,17 @@ import {
   extractExactIocValue,
   hasOnlyEnrichIocMessageKeys,
 } from "./iocRequestBoundaries";
+import {
+  isTabScanSnapshotPayload,
+  type TabScanSnapshotPayload,
+} from "./tabScanSnapshot";
 
 export const MESSAGE = {
   PING: "PING",
   CONTENT_REGISTER: "CONTENT_REGISTER",
   SCAN_PAGE: "SCAN_PAGE",
+  TAB_SCAN_SNAPSHOT: "TAB_SCAN_SNAPSHOT",
+  GET_TAB_SCAN_SUMMARY: "GET_TAB_SCAN_SUMMARY",
   ENRICH_IOC: "ENRICH_IOC",
 } as const;
 
@@ -19,6 +25,14 @@ export type ContentRegisterMessage = {
   type: typeof MESSAGE.CONTENT_REGISTER;
 };
 export type ScanPageMessage = { type: typeof MESSAGE.SCAN_PAGE };
+export type TabScanSnapshotMessage = {
+  type: typeof MESSAGE.TAB_SCAN_SNAPSHOT;
+  snapshot: TabScanSnapshotPayload;
+};
+export type GetTabScanSummaryMessage = {
+  type: typeof MESSAGE.GET_TAB_SCAN_SUMMARY;
+  tabId?: number;
+};
 export type EnrichIocMessage = {
   type: typeof MESSAGE.ENRICH_IOC;
   value: string;
@@ -30,6 +44,8 @@ export type EnrichIocMessage = {
 export type Vera5Message =
   | PingMessage
   | ContentRegisterMessage
+  | TabScanSnapshotMessage
+  | GetTabScanSummaryMessage
   | EnrichIocMessage;
 
 export type MessageResponse =
@@ -46,6 +62,50 @@ export function contentRegisterMessage(): ContentRegisterMessage {
 
 export function scanPageMessage(): ScanPageMessage {
   return { type: MESSAGE.SCAN_PAGE };
+}
+
+export function tabScanSnapshotMessage(
+  snapshot: TabScanSnapshotPayload
+): TabScanSnapshotMessage {
+  return { type: MESSAGE.TAB_SCAN_SNAPSHOT, snapshot };
+}
+
+export function getTabScanSummaryMessage(
+  tabId?: number
+): GetTabScanSummaryMessage {
+  if (tabId === undefined) {
+    return { type: MESSAGE.GET_TAB_SCAN_SUMMARY };
+  }
+  return { type: MESSAGE.GET_TAB_SCAN_SUMMARY, tabId };
+}
+
+export function isTabScanSnapshotMessage(
+  raw: unknown
+): raw is TabScanSnapshotMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.TAB_SCAN_SNAPSHOT) {
+    return false;
+  }
+  return isTabScanSnapshotPayload(record.snapshot);
+}
+
+export function isGetTabScanSummaryMessage(
+  raw: unknown
+): raw is GetTabScanSummaryMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.GET_TAB_SCAN_SUMMARY) {
+    return false;
+  }
+  if (record.tabId === undefined) {
+    return true;
+  }
+  return typeof record.tabId === "number" && Number.isFinite(record.tabId);
 }
 
 export function enrichIocMessage(input: {
@@ -117,6 +177,12 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
     return false;
   }
   const type = (raw as { type: unknown }).type;
+  if (type === MESSAGE.TAB_SCAN_SNAPSHOT) {
+    return isTabScanSnapshotMessage(raw);
+  }
+  if (type === MESSAGE.GET_TAB_SCAN_SUMMARY) {
+    return isGetTabScanSummaryMessage(raw);
+  }
   return (
     type === MESSAGE.PING ||
     type === MESSAGE.CONTENT_REGISTER ||

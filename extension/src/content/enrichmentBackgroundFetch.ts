@@ -1,4 +1,5 @@
 import { ENRICHMENT_ERROR_CODE } from "../lib/enrichment";
+import { isExtensionContextInvalidated } from "../lib/extensionContext";
 import { listEnabledLiveEnrichmentSourceIds } from "../lib/enrichmentSourceSelection";
 import { resolveMultiSourceEnrichmentView } from "../lib/hoverCardEnrichment";
 import {
@@ -63,6 +64,10 @@ export async function runBackgroundEnrichment(
   doc: Document = document,
   options: BackgroundEnrichmentOptions = {}
 ): Promise<void> {
+  if (isExtensionContextInvalidated()) {
+    return;
+  }
+
   const anchor = getLastHoverCardAnchor();
   if (!anchor) {
     return;

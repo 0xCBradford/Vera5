@@ -3,6 +3,11 @@
  */
 import { describe, expect, it, afterEach, vi } from "vitest";
 import {
+  clearSessionAnalystNotes,
+  getSessionAnalystNote,
+  setSessionAnalystNote,
+} from "../lib/analystNotesSession";
+import {
   buildHoverCardSourceEntries,
   ENRICHMENT_SOURCE,
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
@@ -49,14 +54,27 @@ import {
   HOVER_CARD_RETRY_HINT_CLASS,
   HOVER_CARD_SOURCE_DETAIL_CLASS,
   HOVER_CARD_SOURCE_ITEM_CLASS,
+  HOVER_CARD_ANALYST_NOTES_CLASS,
+  HOVER_CARD_ANALYST_NOTES_INPUT_CLASS,
+  HOVER_CARD_EXPORT_BUTTON_CLASS,
+  HOVER_CARD_EXPORT_DROPDOWN_CLASS,
+  HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS,
+  HOVER_CARD_EXPORT_SECTION_CLASS,
+  buildExportRecordFromPayload,
   showHoverCardNearAnchor,
+  updateHoverCardAnalystNoteIfOpen,
 } from "./hoverCardOverlay";
+import * as enrichmentExport from "../lib/enrichmentExport";
 
 function queryOverlayEnrichmentSummary(panel: ParentNode): HTMLElement | null {
   return panel.querySelector(`.${HOVER_CARD_ENRICHMENT_CLASS}`);
 }
 
 describe("hover card overlay shell", () => {
+  afterEach(() => {
+    clearSessionAnalystNotes();
+  });
+
   it("renders static pivot links for IPv4 indicators", () => {
     const panel = buildHoverCardPanel({
       value: "8.8.8.8",
@@ -466,6 +484,7 @@ describe("hover card overlay", () => {
   afterEach(() => {
     hideHoverCard();
     document.body.replaceChildren();
+    clearSessionAnalystNotes();
   });
 
   it("mounts a positioned panel near the anchor", () => {
@@ -1258,7 +1277,7 @@ describe("hover card overlay", () => {
     ).toHaveLength(4);
     expect(panel.querySelector(".vera5-hover-card-attribution")).toBeNull();
     expect(panel.textContent).toContain("Retry after 30 seconds.");
-    expect(panel.textContent).toContain("Enrichment sources");
+    expect(panel.textContent).toContain("Sources");
     expect(panel.querySelector(`.${HOVER_CARD_ACTION_CLASS}`)).toBeNull();
     expect(
       panel.querySelector(`p.${HOVER_CARD_RETRY_HINT_CLASS}`)
@@ -1581,5 +1600,270 @@ describe("hover card overlay", () => {
     expect(
       document.getElementById(HOVER_CARD_HOST_ID)?.childElementCount
     ).toBe(0);
+  });
+
+  it("renders an analyst notes field on the overlay", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 50,
+        left: 50,
+        width: 40,
+        height: 16,
+        right: 90,
+        bottom: 66,
+        x: 50,
+        y: 50,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+    });
+
+    const notesSection = panel.querySelector(`.${HOVER_CARD_ANALYST_NOTES_CLASS}`);
+    const notesInput = panel.querySelector(
+      `.${HOVER_CARD_ANALYST_NOTES_INPUT_CLASS}`
+    ) as HTMLTextAreaElement | null;
+
+    expect(notesSection).not.toBeNull();
+    expect(notesInput).not.toBeNull();
+    expect(notesInput?.value).toBe("");
+  });
+
+  it("keeps per-IOC analyst notes when the overlay rebuilds", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 50,
+        left: 50,
+        width: 40,
+        height: 16,
+        right: 90,
+        bottom: 66,
+        x: 50,
+        y: 50,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const basePayload = {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "loading" as const,
+    };
+
+    showHoverCardNearAnchor(anchor, basePayload);
+    setSessionAnalystNote("8.8.8.8", "Review firewall logs.");
+
+    const rebuilt = showHoverCardNearAnchor(anchor, {
+      ...basePayload,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+    });
+
+    const notesInput = rebuilt.querySelector(
+      `.${HOVER_CARD_ANALYST_NOTES_INPUT_CLASS}`
+    ) as HTMLTextAreaElement | null;
+
+    expect(notesInput?.value).toBe("Review firewall logs.");
+    expect(getSessionAnalystNote("8.8.8.8")).toBe("Review firewall logs.");
+  });
+
+  it("renders centered intel summary and sources section headings", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      disabledSources: [ENRICHMENT_SOURCE.OTX],
+    });
+
+    const headings = [...panel.querySelectorAll(".vera5-hover-card-section-heading")].map(
+      (heading) => heading.textContent
+    );
+
+    expect(headings).toContain("Intel Summary");
+    expect(headings).toContain("Sources");
+    expect(headings).toContain("Analyst notes");
+  });
+
+  it("renders export and copy dropdown actions on the overlay", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const exportSection = panel.querySelector(`.${HOVER_CARD_EXPORT_SECTION_CLASS}`);
+    const dropdowns = panel.querySelectorAll(`.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`);
+    const triggers = panel.querySelectorAll(`.${HOVER_CARD_EXPORT_BUTTON_CLASS}`);
+
+    expect(exportSection).not.toBeNull();
+    expect(dropdowns).toHaveLength(2);
+    expect(triggers).toHaveLength(2);
+    expect(triggers[0]?.textContent).toBe("Export");
+    expect(triggers[1]?.textContent).toBe("Copy");
+  });
+
+  it("copies markdown from the copy dropdown menu", async () => {
+    const copyMarkdown = vi
+      .spyOn(enrichmentExport, "copyEnrichmentExportMarkdownToClipboard")
+      .mockResolvedValue(true);
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+    });
+
+    const copyDropdown = panel.querySelectorAll(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`
+    )[1];
+    const copyTrigger = copyDropdown?.querySelector(
+      `.${HOVER_CARD_EXPORT_BUTTON_CLASS}`
+    ) as HTMLButtonElement | null;
+    copyTrigger?.click();
+
+    const menuItem = copyDropdown?.querySelector(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`
+    ) as HTMLButtonElement | null;
+    menuItem?.click();
+
+    await vi.waitFor(() => {
+      expect(copyMarkdown).toHaveBeenCalledTimes(1);
+    });
+    expect(copyMarkdown.mock.calls[0]?.[0]).toMatchObject({
+      ioc: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+    });
+
+    copyMarkdown.mockRestore();
+  });
+
+  it("downloads markdown from the export dropdown menu", () => {
+    const download = vi
+      .spyOn(enrichmentExport, "downloadEnrichmentExportFile")
+      .mockImplementation(() => undefined);
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+    });
+
+    const exportDropdown = panel.querySelector(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`
+    );
+    const exportTrigger = exportDropdown?.querySelector(
+      `.${HOVER_CARD_EXPORT_BUTTON_CLASS}`
+    ) as HTMLButtonElement | null;
+    exportTrigger?.click();
+
+    const menuItems = exportDropdown?.querySelectorAll(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`
+    );
+    (menuItems[0] as HTMLButtonElement | undefined)?.click();
+
+    expect(download).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ioc: "8.8.8.8",
+        iocType: IOC_TYPE.IPV4,
+      }),
+      "markdown",
+      document
+    );
+
+    download.mockRestore();
+  });
+
+  it("includes analyst notes in export record built from overlay payload", () => {
+    setSessionAnalystNote("8.8.8.8", "Escalate to IR.");
+
+    const record = buildExportRecordFromPayload({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+    });
+
+    expect(record.analystNotes).toBe("Escalate to IR.");
+  });
+
+  it("preserves analyst notes focus when the note is updated in place", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 50,
+        left: 50,
+        width: 40,
+        height: 16,
+        right: 90,
+        bottom: 66,
+        x: 50,
+        y: 50,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const notesInput = panel.querySelector(
+      `.${HOVER_CARD_ANALYST_NOTES_INPUT_CLASS}`
+    ) as HTMLTextAreaElement | null;
+    expect(notesInput).not.toBeNull();
+
+    notesInput!.focus();
+    notesInput!.value = "te";
+    notesInput!.setSelectionRange(2, 2);
+
+    updateHoverCardAnalystNoteIfOpen("8.8.8.8", "test");
+
+    expect(notesInput!.value).toBe("test");
+    expect(document.activeElement).toBe(notesInput);
+    expect(notesInput!.selectionStart).toBe(2);
+  });
+
+  it("does not rebuild the overlay when session already matches persisted note", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 50,
+        left: 50,
+        width: 40,
+        height: 16,
+        right: 90,
+        bottom: 66,
+        x: 50,
+        y: 50,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const notesInput = panel.querySelector(
+      `.${HOVER_CARD_ANALYST_NOTES_INPUT_CLASS}`
+    ) as HTMLTextAreaElement | null;
+    notesInput!.focus();
+    setSessionAnalystNote("8.8.8.8", "a");
+
+    updateHoverCardAnalystNoteIfOpen("8.8.8.8", "a");
+
+    expect(document.activeElement).toBe(notesInput);
+    expect(notesInput!.value).toBe("a");
   });
 });

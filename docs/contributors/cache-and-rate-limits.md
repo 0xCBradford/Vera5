@@ -30,7 +30,7 @@ flowchart TD
 **Module:** `extension/src/lib/cache.ts`
 
 - Keys combine **indicator value + source id**.
-- Successful responses are stored in `chrome.storage.local` with a TTL (default about one hour).
+- Successful responses are stored in `chrome.storage.local` with a TTL (default about one hour; configurable on Options as a global seconds value with optional per-source overrides).
 - Repeat enrichment reuses cache until expiry; UI shows **Cached** vs **Live**.
 
 **Clear cache** on the Options page wipes stored responses without removing keys or toggles.

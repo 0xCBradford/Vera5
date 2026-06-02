@@ -2,9 +2,10 @@
  * @vitest-environment happy-dom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { scanPageMessage } from "../lib/messages";
+import { MESSAGE, scanPageMessage } from "../lib/messages";
 import { CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED } from "./highlightStorage";
 import { CONTENT_STORAGE_KEY_INCLUDE_PRIVATE_IPV4 } from "./includePrivateIpv4Storage";
+import { CONTENT_STORAGE_KEY_IOC_TYPE_ENABLED } from "./iocTypeEnabledStorage";
 import { CONTENT_MESSAGE } from "./constants";
 import { logIocDetectionCount } from "./devLog";
 import {
@@ -21,34 +22,51 @@ function mountPage(html: string): HTMLDivElement {
   return root;
 }
 
+function stubChromeForScanPageTests(
+  store: Record<string, unknown>,
+  sendMessage = vi.fn(async () => ({ ok: true }))
+): void {
+  vi.stubGlobal("chrome", {
+    storage: {
+      local: {
+        get: (keys: string | string[] | Record<string, unknown>) => {
+          const keyList = Array.isArray(keys)
+            ? keys
+            : typeof keys === "string"
+              ? [keys]
+              : Object.keys(keys);
+          const result: Record<string, unknown> = {};
+          for (const key of keyList) {
+            if (key in store) {
+              result[key] = store[key];
+            }
+          }
+          return Promise.resolve(result);
+        },
+        set: (items: Record<string, unknown>) => {
+          Object.assign(store, items);
+          return Promise.resolve();
+        },
+      },
+    },
+    runtime: {
+      id: "test-extension-id",
+      sendMessage,
+    },
+  });
+}
+
 describe("handleScanPageRequest", () => {
   let store: Record<string, unknown>;
+  let sendMessage: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     store = {};
-    vi.stubGlobal("chrome", {
-      storage: {
-        local: {
-          get: (keys: string | string[] | Record<string, unknown>) => {
-            const keyList = Array.isArray(keys)
-              ? keys
-              : typeof keys === "string"
-                ? [keys]
-                : Object.keys(keys);
-            const result: Record<string, unknown> = {};
-            for (const key of keyList) {
-              if (key in store) {
-                result[key] = store[key];
-              }
-            }
-            return Promise.resolve(result);
-          },
-          set: (items: Record<string, unknown>) => {
-            Object.assign(store, items);
-            return Promise.resolve();
-          },
-        },
-      },
+    sendMessage = vi.fn(async () => ({ ok: true }));
+    stubChromeForScanPageTests(store, sendMessage);
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { href: "https://example.com/alert" },
     });
   });
 
@@ -64,6 +82,37 @@ describe("handleScanPageRequest", () => {
     `);
     const response = await handleScanPageRequest(root);
     expect(response).toEqual({ ok: true, payload: { count: 2 } });
+  });
+
+  it("persists scan snapshot entries with highlight anchor linkage", async () => {
+    store[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED] = true;
+    const root = mountPage("<p>Contact 8.8.8.8 today.</p>");
+    await handleScanPageRequest(root);
+
+    expect(sendMessage).toHaveBeenCalledTimes(1);
+    const message = sendMessage.mock.calls[0]?.[0];
+    expect(message.type).toBe(MESSAGE.TAB_SCAN_SNAPSHOT);
+    expect(message.snapshot.pageUrl).toBe("https://example.com/alert");
+    expect(message.snapshot.entries).toEqual([
+      expect.objectContaining({
+        type: "ipv4",
+        value: "8.8.8.8",
+        anchorId: expect.stringMatching(/^vera5-hl-\d+$/),
+      }),
+    ]);
+    expect(
+      root.querySelector<HTMLElement>(`.${IOC_HIGHLIGHT_CLASS}`)?.dataset.vera5AnchorId
+    ).toBe(message.snapshot.entries[0]?.anchorId);
+  });
+
+  it("persists logical anchor ids when highlighting is disabled", async () => {
+    store[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED] = false;
+    const root = mountPage("<p>Contact 8.8.8.8 today.</p>");
+    await handleScanPageRequest(root);
+
+    const message = sendMessage.mock.calls[0]?.[0];
+    expect(message.snapshot.entries[0]?.anchorId).toMatch(/^vera5-loc-ipv4-/);
+    expect(root.querySelectorAll(`.${IOC_HIGHLIGHT_CLASS}`)).toHaveLength(0);
   });
 
   it("applies highlights when highlight storage is enabled", async () => {
@@ -97,6 +146,21 @@ describe("handleScanPageRequest", () => {
   it("includes private-space IPv4 when includePrivateIpv4 is enabled in storage", async () => {
     store[CONTENT_STORAGE_KEY_INCLUDE_PRIVATE_IPV4] = true;
     const root = mountPage("<p>Public 8.8.8.8 private 192.168.0.1</p>");
+    const response = await handleScanPageRequest(root);
+    expect(response).toEqual({ ok: true, payload: { count: 2 } });
+  });
+
+  it("omits disabled IOC types from scan counts", async () => {
+    store[CONTENT_STORAGE_KEY_IOC_TYPE_ENABLED] = {
+      ipv4: true,
+      domain: false,
+      url: false,
+      md5: false,
+      sha1: false,
+      sha256: false,
+      cve: true,
+    };
+    const root = mountPage("<p>8.8.8.8 CVE-2021-44228 https://example.com</p>");
     const response = await handleScanPageRequest(root);
     expect(response).toEqual({ ok: true, payload: { count: 2 } });
   });
@@ -136,7 +200,11 @@ describe("setupScanPageListener", () => {
           get: () => Promise.resolve({}),
         },
       },
-      runtime: { onMessage: { addListener: onMessage } },
+      runtime: {
+        id: "test-extension-id",
+        sendMessage: vi.fn(async () => ({ ok: true })),
+        onMessage: { addListener: onMessage },
+      },
     });
     const { setupScanPageListener } = await import("./scanPage");
     setupScanPageListener();
@@ -180,6 +248,8 @@ describe("setupScanPageListener", () => {
         },
       },
       runtime: {
+        id: "test-extension-id",
+        sendMessage: vi.fn(async () => ({ ok: true })),
         onMessage: {
           addListener: (
             callback: NonNullable<typeof messageListener>
@@ -188,6 +258,11 @@ describe("setupScanPageListener", () => {
           },
         },
       },
+    });
+
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { href: "https://example.com/alert" },
     });
 
     mountPage("<p>Contact 8.8.8.8 today.</p>");

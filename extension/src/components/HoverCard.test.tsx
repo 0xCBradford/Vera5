@@ -7,12 +7,17 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as copyText from "../lib/copyText";
+import {
+  clearSessionAnalystNotes,
+  getSessionAnalystNote,
+} from "../lib/analystNotesSession";
 import type { HoverCardEnrichmentState } from "../lib/hoverCardEnrichment";
 import {
   ENRICHMENT_SOURCE,
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_ERROR_SUMMARY,
   HOVER_CARD_LOADING_SUMMARY,
+  HOVER_CARD_ANALYST_NOTES_LABEL,
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
 } from "../lib/hoverCardEnrichment";
 import { IOC_TYPE } from "../lib/iocRegex";
@@ -47,6 +52,7 @@ describe("HoverCard", () => {
     mounted?.root.unmount();
     mounted?.container.remove();
     document.getElementById(VERA5_UI_STYLE_ID)?.remove();
+    clearSessionAnalystNotes();
     mounted = null;
   });
 
@@ -620,5 +626,34 @@ describe("HoverCard enrichment states", () => {
     expect(
       mounted.container.querySelector(".vera5-hover-card-sources")
     ).toBeNull();
+  });
+
+  it("renders an analyst notes field and stores input per IOC", () => {
+    mounted = renderHoverCard({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+    });
+
+    const notesInput = mounted.container.querySelector(
+      ".vera5-hover-card-analyst-notes-input"
+    ) as HTMLTextAreaElement | null;
+
+    expect(mounted.container.textContent).toContain(
+      HOVER_CARD_ANALYST_NOTES_LABEL
+    );
+    expect(notesInput).not.toBeNull();
+
+    act(() => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value"
+      )?.set;
+      nativeInputValueSetter?.call(notesInput, "Check proxy logs.");
+      notesInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    expect(getSessionAnalystNote("8.8.8.8")).toBe("Check proxy logs.");
   });
 });

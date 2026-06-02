@@ -24,9 +24,16 @@ const TYPE_BADGE_LABEL: Record<IocType, string> = {
   cve: "CVE",
 };
 
+export type HighlightAnchorLink = {
+  anchorId: string;
+  type: IocType;
+  value: string;
+};
+
 export type HighlightResult = {
   highlightedCount: number;
   skippedCount: number;
+  anchorLinks: HighlightAnchorLink[];
 };
 
 export type HighlightOptions = {
@@ -35,6 +42,13 @@ export type HighlightOptions = {
   doc?: Document;
   scan?: IocDetectorScanOptions;
 };
+
+let highlightAnchorSequence = 0;
+
+function nextHighlightAnchorId(): string {
+  highlightAnchorSequence += 1;
+  return `vera5-hl-${highlightAnchorSequence}`;
+}
 
 function highlightScope(root: Node): ParentNode {
   if (root instanceof Document) {
@@ -81,13 +95,15 @@ function unwrapHighlightSpan(span: HTMLSpanElement): void {
 function createHighlightSpan(
   doc: Document,
   text: string,
-  match: DetectedIocInTextNode
+  match: DetectedIocInTextNode,
+  anchorId: string
 ): HTMLSpanElement {
   const span = doc.createElement("span");
   span.className = IOC_HIGHLIGHT_CLASS;
   span.dataset.vera5Ioc = "true";
   span.dataset.vera5Type = match.type;
   span.dataset.vera5Value = match.value;
+  span.dataset.vera5AnchorId = anchorId;
 
   const badgeLabel = TYPE_BADGE_LABEL[match.type] ?? match.type.toUpperCase();
   span.setAttribute("role", "button");
@@ -164,7 +180,8 @@ function resolveMatchesForHighlight(
 function highlightTextNode(
   textNode: Text,
   matches: ReadonlyArray<DetectedIocInTextNode>,
-  doc: Document
+  doc: Document,
+  anchorLinks: HighlightAnchorLink[]
 ): number {
   const text = textNode.data;
   const sorted = [...matches].sort((a, b) => a.start - b.start);
@@ -181,9 +198,15 @@ function highlightTextNode(
       fragment.appendChild(doc.createTextNode(text.slice(cursor, match.start)));
     }
 
+    const anchorId = nextHighlightAnchorId();
     fragment.appendChild(
-      createHighlightSpan(doc, text.slice(match.start, match.end), match)
+      createHighlightSpan(doc, text.slice(match.start, match.end), match, anchorId)
     );
+    anchorLinks.push({
+      anchorId,
+      type: match.type,
+      value: match.value,
+    });
     cursor = match.end;
     applied += 1;
   }
@@ -222,6 +245,7 @@ export function highlightDetectedIocs(
   );
 
   const grouped = groupMatchesByTextNode(activeMatches, root);
+  const anchorLinks: HighlightAnchorLink[] = [];
   let highlightedCount = 0;
 
   for (const nodeMatches of grouped.values()) {
@@ -230,11 +254,21 @@ export function highlightDetectedIocs(
       continue;
     }
 
-    highlightedCount += highlightTextNode(textNode, nodeMatches, doc);
+    highlightedCount += highlightTextNode(textNode, nodeMatches, doc, anchorLinks);
   }
 
   return {
     highlightedCount,
     skippedCount: Math.max(0, activeMatches.length - highlightedCount),
+    anchorLinks,
   };
+}
+
+export function findHighlightByAnchorId(
+  anchorId: string,
+  root: ParentNode = document.body
+): HTMLElement | null {
+  return root.querySelector<HTMLElement>(
+    `.${IOC_HIGHLIGHT_CLASS}[data-vera5-anchor-id="${CSS.escape(anchorId)}"]`
+  );
 }

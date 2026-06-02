@@ -1,4 +1,5 @@
 import type { HoverCardOverlayPayload } from "./hoverCardOverlay";
+import { isExtensionContextInvalidated } from "../lib/extensionContext";
 import { getManualOnlyModeForContent } from "./manualOnlyStorage";
 
 export type AutoEnrichmentFetcher = (
@@ -27,6 +28,10 @@ export async function shouldAutoFetchEnrichmentForContent(): Promise<boolean> {
 export async function attemptAutoEnrichmentFetch(
   payload: HoverCardOverlayPayload
 ): Promise<boolean> {
+  if (isExtensionContextInvalidated()) {
+    return false;
+  }
+
   if (!(await shouldAutoFetchEnrichmentForContent())) {
     return false;
   }

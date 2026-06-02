@@ -9,10 +9,14 @@ import {
   getManualOnlyMode,
   getExtensionEnabled,
   getHighlightEnabled,
+  getIncludePrivateIpv4,
   getVera5Settings,
   listDisabledEnrichmentSources,
   setAutoScanEnabled,
   setEnrichmentSourceEnabled,
+  setEnrichmentCacheTtlSeconds,
+  setIncludePrivateIpv4,
+  setIocTypeEnabled,
   setManualOnlyMode,
   STORAGE_KEY_MANUAL_ONLY_MODE,
   hasApiKey,
@@ -159,6 +163,24 @@ describe("enrichment source enabled storage", () => {
     await expect(getEnrichmentSourceEnabled()).resolves.toMatchObject({
       abuseipdb: true,
     });
+  });
+
+  it("persists a single IOC type toggle", async () => {
+    await setIocTypeEnabled("ipv4", false);
+    const settings = await getVera5Settings();
+    expect(settings.iocTypeEnabled.ipv4).toBe(false);
+    expect(settings.iocTypeEnabled.domain).toBe(true);
+  });
+
+  it("persists includePrivateIpv4", async () => {
+    await setIncludePrivateIpv4(true);
+    await expect(getIncludePrivateIpv4()).resolves.toBe(true);
+  });
+
+  it("persists global enrichment cache TTL", async () => {
+    await setEnrichmentCacheTtlSeconds(7200);
+    const settings = await getVera5Settings();
+    expect(settings.enrichmentCacheTtlSeconds).toBe(7200);
   });
 
   it("lists disabled sources for connector gating", () => {

@@ -73,6 +73,12 @@ export const HOVER_CARD_OPEN_SETTINGS_LABEL = "Open settings";
 
 export const HOVER_CARD_RAW_JSON_SUMMARY_LABEL = "Raw response";
 
+export const HOVER_CARD_ANALYST_NOTES_LABEL = "Analyst notes";
+export const HOVER_CARD_ANALYST_NOTES_PLACEHOLDER =
+  "Add local notes for this indicator…";
+export const HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL = "Analyst notes";
+export const HOVER_CARD_ANALYST_NOTES_INPUT_ID = "vera5-analyst-notes-input";
+
 export const HOVER_CARD_ENRICHMENT_DISCLAIMER =
   "Enrichment uses your API keys and sends only the selected indicator value to vendors you enable—not the full page.";
 

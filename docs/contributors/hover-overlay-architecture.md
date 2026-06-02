@@ -26,7 +26,7 @@ Enrichment actions on the page feed the shared view model; production overlay an
 
 - Rendered in the page as DOM built by the content script (not React on live tabs).
 - Opened when the analyst clicks a highlight after scan.
-- Shows type, value, enrichment rows, Live/Cached/Error badges, raw JSON panel, copy, pivots, composite risk score, and reasoning chain when data allows.
+- Shows type, value, enrichment rows, Live/Cached/Error badges, raw JSON panel, copy, pivots, composite risk score, reasoning chain when data allows, and a local **Analyst notes** textarea keyed per indicator (`extension/src/lib/analystNotesSession.ts` with persistence in `extension/src/lib/analystNotesStorage.ts`).
 
 This is the **primary operator surface** documented in [README.md](../../README.md) and [docs/analyst-workflows.md](../analyst-workflows.md).
 
@@ -37,6 +37,7 @@ This is the **primary operator surface** documented in [README.md](../../README.
 - Used by Vitest and optional Vite dev shell (`npm run dev`).
 - **Not** injected into arbitrary web pages in production builds.
 - May render **per-source contribution chips** that the overlay omits; scoring rules still come from `extension/src/lib/scoring.ts`.
+- Mirrors the overlay **Analyst notes** textarea for tests and dev.
 
 ## Shared view-model
 

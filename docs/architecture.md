@@ -9,7 +9,7 @@ High-level structure for the browser extension codebase. Describes planned layou
 | `extension/src/background/` | Manifest V3 service worker: message routing, enrichment fetch orchestration, cache coordination, connector calls. No DOM access. |
 | `extension/src/content/` | Content scripts: IOC detection, page highlighting, production on-page hover overlay, scan and enrich wiring. Runs in page context. |
 | `extension/src/popup/` | Browser action popup UI: enable/disable, quick status, shortcuts to options. |
-| `extension/src/options/` | Options page: API keys (masked), source toggles, IOC type toggles, manual-only mode, cache controls. |
+| `extension/src/options/` | Options page: API keys (masked), enrichment source toggles, manual-only mode, auto-scan, per-type IOC and private IPv4 controls, cache TTL fields, cache clear, settings export/import. |
 | `extension/src/components/` | React hover card and composite risk score UI for the dev shell and unit tests—not injected into live page tabs. |
 | `extension/src/lib/` | Shared non-UI modules: IOC regex, normalization, storage schema, cache, scoring, connector client interfaces. |
 
@@ -43,10 +43,18 @@ The initial Vera5 release detects and enriches **only** the indicator types belo
 
 **Detection expectations**
 
-- Scan visible page text for the types above; skip `script` and `style` content.
-- Apply false-positive controls (context, allowlist/denylist options, conservative matching) before surfacing a hover target.
+- Scan visible page text for the types above; skip `script`, `style`, `textarea`, and metadata subtrees by default; do not scan attributes.
+- Apply false-positive controls (context suppressions, conservative matching, overlap deduplication) before surfacing a hover target.
 - Enrich **indicator values only**—never upload full page HTML to third parties or Vera5-operated infrastructure.
-- Per-type enable/disable flags exist in the storage schema; dedicated Options UI controls for IOC types and cache TTL are not wired in the current release (see [README.md](../README.md) limitations).
+
+**Per-type IOC controls (current release)**
+
+| Control | Storage schema | Options UI | Scan / detection path |
+|---------|----------------|------------|------------------------|
+| **Per-type enable** (`iocTypeEnabled`) | Yes — defaults all MVP types on | **Wired** — Scanning → Indicator types | **Applied** — disabled types are omitted from scan output |
+| **Include private IPv4** (`includePrivateIpv4`) | Yes — default off | **Wired** — Scanning section | **Applied** — private-space literals omitted unless enabled |
+
+Analyst-facing limits for cache TTL are listed in [README.md](../README.md). Limit exposure with per-type toggles, per-source toggles, manual-only enrichment, and choosing when to scan sensitive pages.
 
 **Fixtures:** Public sample values for manual and automated tests live in [`examples/sample-iocs.txt`](../examples/sample-iocs.txt). Static HTML pages [`examples/sample-alert.html`](../examples/sample-alert.html) and [`examples/sample-blog.html`](../examples/sample-blog.html) embed those values plus decoy strings for manual scan checks.
 
@@ -195,6 +203,9 @@ The Vera5 browser extension uses **[Semantic Versioning 2.0.0](https://semver.or
 
 ## Principles
 
-- Local-first enrichment; bring-your-own API keys.
-- No required Vera5-hosted backend for the initial release.
-- IOC values only to configured third-party sources—not full page uploads.
+These invariants apply to the initial release and are expanded in [SECURITY.md](../SECURITY.md):
+
+- **Bring-your-own keys / bring-your-own API (BYOK/BYOA)** — Analyst-supplied vendor credentials in local extension storage; no Vera5-operated enrichment proxy and no maintainer-shared keys.
+- **IOC-only enrichment queries** — Live connectors send the sanitized indicator value and required request metadata only—not full page HTML or browsing history to Vera5 infrastructure (there is no Vera5 enrichment cloud in the MVP).
+- **No telemetry by default** — No usage analytics, crash reporting to Vera5, or hidden phone-home endpoints; any future diagnostics must be opt-in and off by default.
+- **Local-first** — No required Vera5-hosted backend for enrichment or settings.

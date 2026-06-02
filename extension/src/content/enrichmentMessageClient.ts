@@ -1,5 +1,6 @@
 import type { EnrichmentSourceId } from "../lib/hoverCardEnrichment";
 import type { IocType } from "../lib/iocRegex";
+import { safeRuntimeSendMessage } from "../lib/extensionContext";
 import { sanitizeEnrichmentIoc } from "../lib/iocRequestBoundaries";
 
 const ENRICH_IOC_MESSAGE_TYPE = "ENRICH_IOC";
@@ -163,7 +164,7 @@ export async function requestEnrichmentFromServiceWorker(
     message.bypassCache = true;
   }
 
-  const response = (await chrome.runtime.sendMessage(message)) as MessageResponse;
+  const response = (await safeRuntimeSendMessage(message)) as MessageResponse | null;
 
   if (!response?.ok || typeof response.payload !== "object" || response.payload === null) {
     return null;

@@ -119,6 +119,37 @@ Disable sources you do not need for a case to save quota and simplify the card.
 
 When enrichment returns per-source results, the on-page overlay shows a **Risk score** section. Vera5 computes the label **on your machine** from normalized vendor summaries (AbuseIPDB abuse-confidence text, OTX pulse counts, report-count summaries, and similar parseable OK lines). It is **not** an LLM verdict and does not call Vera5-operated infrastructure.
 
+## Explain-this-IOC chain vs composite score
+
+The hover card shows **two related outputs**. They answer different questions; neither is an AI judgment.
+
+| Output | UI label | What it answers | How it is built |
+|--------|----------|-----------------|-----------------|
+| **Composite risk label** | **Risk score: …** (headline band, optional **(N/100)**) | “What advisory band should I consider for prioritization?” | Weighted blend of at least **two** parseable per-source numeric signals on your machine. |
+| **Explain-this-IOC chain** | **How this score was computed** (ordered list below the headline) | “Which sources contributed what evidence for this indicator?” | One deterministic line per enabled source with a parseable OK summary—source name, mapped band, numeric signal, and weight. Same rules in the production overlay and shared card logic. |
+
+**How to read them together**
+
+1. Read per-source enrichment rows (**Live** / **Cached**, summary text, optional **Raw response**) for vendor context.
+2. Read the **Risk score** headline for the blended advisory band when blending is possible.
+3. Open **How this score was computed** for the explain-this-IOC chain—each line is traceable to normalized vendor text, not a narrative summary.
+4. If **Sources disagree** appears, treat the headline band as non-consensus; use the chain and pivots before acting.
+
+When fewer than two sources return parseable OK signals, Vera5 may show **Unknown risk**, an insufficient-data notice, and an empty reasoning note instead of a blended **/100** label. That is expected—not a hidden AI fallback.
+
+### What Vera5 does not do (forbidden framing)
+
+Vera5 is **not** marketed or implemented as “AI says this IOC is bad.” Do not describe Vera5 scores that way in runbooks, tickets, or training.
+
+| Vera5 does **not** | Vera5 **does** |
+|--------------------|----------------|
+| Call an LLM or cloud model to score or explain an IOC | Parse vendor summaries locally with fixed rules |
+| Generate free-text “because AI thinks…” narratives | Show ordered per-source lines under **How this score was computed** |
+| Autoblock, autoremediate, or replace analyst judgment | Show advisory bands and source attribution for **your** decision |
+| Hide which vendor supplied which signal | Keep per-source badges, reasoning lines, and pivot links visible |
+
+Footer disclaimers on the card reinforce this: enrichment sends only the indicator value to vendors you enable; the risk label is **advisory** and computed locally—review each source before acting.
+
 ### What you see
 
 | UI element | Meaning |

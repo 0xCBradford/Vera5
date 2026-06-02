@@ -1,9 +1,21 @@
 import type { MessageResponse } from "../lib/messages";
+import { tabScanSnapshotMessage } from "../lib/messages";
+import {
+  rethrowUnlessStaleExtensionError,
+  runWithExtensionContext,
+  safeRuntimeSendMessage,
+} from "../lib/extensionContext";
+import {
+  buildTabScanSnapshotEntriesFromMatches,
+  buildTabScanSnapshotPayload,
+  type TabScanSnapshotEntry,
+} from "../lib/tabScanSnapshot";
 import {
   CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED,
   getHighlightEnabledForContent,
 } from "./highlightStorage";
 import { getIncludePrivateIpv4ForContent } from "./includePrivateIpv4Storage";
+import { getIocTypeEnabledForContent } from "./iocTypeEnabledStorage";
 import { CONTENT_MESSAGE } from "./constants";
 import { logIocDetectionCount } from "./devLog";
 import {
@@ -11,7 +23,11 @@ import {
   type DetectedIocInTextNode,
   type IocDetectorScanOptions,
 } from "./detector";
-import { clearIocHighlights, highlightDetectedIocs } from "./highlighter";
+import {
+  clearIocHighlights,
+  highlightDetectedIocs,
+  type HighlightAnchorLink,
+} from "./highlighter";
 
 export function isScanPageMessage(
   raw: unknown
@@ -28,18 +44,46 @@ export function applyHighlightForScan(
   matches: ReadonlyArray<DetectedIocInTextNode>,
   root: Node,
   highlightEnabled: boolean
-): void {
+): HighlightAnchorLink[] {
   if (highlightEnabled) {
-    highlightDetectedIocs(matches, { root, clearExisting: true });
-    return;
+    return highlightDetectedIocs(matches, { root, clearExisting: true }).anchorLinks;
   }
 
   clearIocHighlights(root);
+  return [];
 }
 
 export async function resolveIocDetectorScanOptions(): Promise<IocDetectorScanOptions> {
-  const includePrivateIpv4 = await getIncludePrivateIpv4ForContent();
-  return { ioc: { includePrivateIpv4 } };
+  const [includePrivateIpv4, enabledTypes] = await Promise.all([
+    getIncludePrivateIpv4ForContent(),
+    getIocTypeEnabledForContent(),
+  ]);
+  return { ioc: { includePrivateIpv4, enabledTypes } };
+}
+
+function buildScanSnapshotEntries(
+  matches: ReadonlyArray<DetectedIocInTextNode>,
+  anchorLinks: ReadonlyArray<HighlightAnchorLink>
+): TabScanSnapshotEntry[] {
+  if (anchorLinks.length > 0) {
+    return anchorLinks.map(({ type, value, anchorId }) => ({
+      type,
+      value,
+      anchorId,
+    }));
+  }
+
+  return buildTabScanSnapshotEntriesFromMatches(matches);
+}
+
+export async function publishTabScanSnapshot(
+  entries: ReadonlyArray<TabScanSnapshotEntry>
+): Promise<void> {
+  const snapshot = buildTabScanSnapshotPayload({
+    pageUrl: window.location.href,
+    entries: [...entries],
+  });
+  await safeRuntimeSendMessage(tabScanSnapshotMessage(snapshot));
 }
 
 export async function handleScanPageRequest(
@@ -48,7 +92,9 @@ export async function handleScanPageRequest(
   const scanOptions = await resolveIocDetectorScanOptions();
   const matches = scanTextNodesForIocs(root, scanOptions);
   const highlightEnabled = await getHighlightEnabledForContent();
-  applyHighlightForScan(matches, root, highlightEnabled);
+  const anchorLinks = applyHighlightForScan(matches, root, highlightEnabled);
+  const snapshotEntries = buildScanSnapshotEntries(matches, anchorLinks);
+  await publishTabScanSnapshot(snapshotEntries);
   logIocDetectionCount(matches.length);
   return { ok: true, payload: { count: matches.length } };
 }
@@ -58,18 +104,24 @@ export function setupScanPageListener(): void {
     if (!isScanPageMessage(message)) {
       return false;
     }
-    void handleScanPageRequest().then(sendResponse);
+    void handleScanPageRequest()
+      .then(sendResponse)
+      .catch((error) => {
+        rethrowUnlessStaleExtensionError(error);
+      });
     return true;
   });
 }
 
 export function setupHighlightStorageListener(): void {
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== "local") {
-      return;
-    }
-    if (changes[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED]?.newValue === false) {
-      clearIocHighlights(document.body);
-    }
+    runWithExtensionContext(() => {
+      if (areaName !== "local") {
+        return;
+      }
+      if (changes[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED]?.newValue === false) {
+        clearIocHighlights(document.body);
+      }
+    });
   });
 }

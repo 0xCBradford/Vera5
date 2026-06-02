@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { contentRegisterMessage, enrichIocMessage, pingMessage } from "../lib/messages";
+import { contentRegisterMessage, enrichIocMessage, getTabScanSummaryMessage, pingMessage, tabScanSnapshotMessage } from "../lib/messages";
+import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
+import { buildTabScanSummary } from "../lib/tabScanSummary";
 import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
 import {
   DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
@@ -26,6 +28,27 @@ function stubChromeStorage(store: Record<string, unknown>): void {
         },
         set: (values: Record<string, unknown>) => {
           Object.assign(store, values);
+          return Promise.resolve();
+        },
+      },
+      session: {
+        get: (keys: string | string[]) => {
+          const keyList = Array.isArray(keys) ? keys : [keys];
+          const result: Record<string, unknown> = {};
+          for (const key of keyList) {
+            result[key] = store[key];
+          }
+          return Promise.resolve(result);
+        },
+        set: (values: Record<string, unknown>) => {
+          Object.assign(store, values);
+          return Promise.resolve();
+        },
+        remove: (keys: string | string[]) => {
+          const keyList = Array.isArray(keys) ? keys : [keys];
+          for (const key of keyList) {
+            delete store[key];
+          }
           return Promise.resolve();
         },
       },
@@ -79,6 +102,29 @@ describe("message handler smoke", () => {
       error: "enrich request requires async handler",
     });
   });
+
+  it("defers TAB_SCAN_SNAPSHOT to the async router", () => {
+    expect(
+      routeIncomingMessage(
+        tabScanSnapshotMessage(
+          buildTabScanSnapshotPayload({
+            pageUrl: "https://example.com",
+            entries: [],
+          })
+        )
+      )
+    ).toEqual({
+      ok: false,
+      error: "tab scan snapshot requires async handler",
+    });
+  });
+
+  it("defers GET_TAB_SCAN_SUMMARY to the async router", () => {
+    expect(routeIncomingMessage(getTabScanSummaryMessage(12))).toEqual({
+      ok: false,
+      error: "tab scan summary requires async handler",
+    });
+  });
 });
 
 describe("message handler async enrich", () => {
@@ -112,5 +158,51 @@ describe("message handler async enrich", () => {
 
     expect(response.ok).toBe(true);
     expect(enrichWithAbuseIpdb).toHaveBeenCalledOnce();
+  });
+
+  it("routes TAB_SCAN_SNAPSHOT through the async router", async () => {
+    const snapshot = buildTabScanSnapshotPayload({
+      pageUrl: "https://example.com/alert",
+      scannedAt: 1_700_000_000_000,
+      entries: [
+        {
+          type: "ipv4",
+          value: "8.8.8.8",
+          anchorId: "vera5-hl-1",
+        },
+      ],
+    });
+
+    const response = await routeIncomingMessageAsync(
+      tabScanSnapshotMessage(snapshot),
+      { tab: { id: 12 } } as chrome.runtime.MessageSender
+    );
+
+    expect(response).toEqual({ ok: true });
+    expect(store["tabScanSnapshot:12"]).toEqual({ ...snapshot, tabId: 12 });
+  });
+
+  it("routes GET_TAB_SCAN_SUMMARY through the async router", async () => {
+    const snapshot = buildTabScanSnapshotPayload({
+      pageUrl: "https://example.com/alert",
+      scannedAt: 1_700_000_000_000,
+      entries: [
+        {
+          type: "ipv4",
+          value: "8.8.8.8",
+          anchorId: "vera5-hl-1",
+        },
+      ],
+    });
+    store["tabScanSnapshot:12"] = { ...snapshot, tabId: 12 };
+
+    const response = await routeIncomingMessageAsync(getTabScanSummaryMessage(12));
+
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        summary: buildTabScanSummary({ ...snapshot, tabId: 12 }),
+      },
+    });
   });
 });

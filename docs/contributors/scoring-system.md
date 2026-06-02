@@ -50,6 +50,9 @@ UI copy: `COMPOSITE_SCORE_DISAGREEMENT_NOTICE` via `hoverCardEnrichment.ts` and 
 | `scoring.ts` | Core math and band rules |
 | `hoverCardEnrichment.ts` | View-model: when to show score, reasoning chain, empty states |
 | `hoverCardOverlay.ts` | Production DOM |
+| `enrichmentExport.ts` | Markdown export: score label, reasoning chain, disagreement callout, explicit no-score when unavailable |
+
+Field contract and `schemaVersion`: [docs/export-artifacts.md](../export-artifacts.md).
 | `RiskScore.tsx`, `RiskScoreReasoningChain.tsx` | React test/dev UI |
 
 Overlay and React share reasoning builders; overlay does not show per-source contribution chips (tests may).
@@ -60,6 +63,7 @@ Overlay and React share reasoning builders; overlay does not show per-source con
 - `scoring.bands.golden.test.ts`
 - `scoring.vendorFixtures.golden.test.ts`
 - Overlay score sections: `hoverCardOverlay.test.ts`
+- Export score sections: `enrichmentExport.test.ts`
 
 When changing thresholds or weights, update golden fixtures and [docs/analyst-workflows.md](../analyst-workflows.md) interpretation tables if analyst-visible behavior changes.
 

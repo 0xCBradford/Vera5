@@ -289,6 +289,19 @@ export function buildVera5UiStylesCss(): string {
   text-transform: uppercase;
   color: var(--vera5-muted-label);
 }
+.vera5-hover-card-section-heading {
+  margin: 12px 0 10px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--vera5-muted-label);
+  line-height: 1.05;
+}
+.vera5-hover-card-intel-summary {
+  margin-bottom: 8px;
+}
 .vera5-hover-card-sources-list {
   margin: 0;
   padding: 0;
@@ -305,6 +318,14 @@ export function buildVera5UiStylesCss(): string {
   font-size: 11px;
   color: var(--vera5-muted-label);
   line-height: 1.4;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--vera5-accent);
+}
+.vera5-hover-card-source-item:last-child {
+  padding-bottom: 0;
+  margin-bottom: 0;
+  border-bottom: none;
 }
 .vera5-hover-card-source-badge {
   align-self: flex-start;
@@ -370,6 +391,91 @@ export function buildVera5UiStylesCss(): string {
   word-break: break-word;
   color: var(--vera5-text);
 }
+.vera5-hover-card-analyst-notes {
+  margin-top: 8px;
+}
+.vera5-hover-card-analyst-notes-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-analyst-notes-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-button-bg);
+  color: var(--vera5-text);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  resize: vertical;
+}
+.vera5-hover-card-analyst-notes-input:focus {
+  outline: 2px solid color-mix(in srgb, var(--vera5-accent) 35%, transparent);
+  outline-offset: 1px;
+}
+.vera5-hover-card-export {
+  margin-top: 8px;
+}
+.vera5-hover-card-export-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vera5-hover-card-export-button {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-button-bg);
+  color: var(--vera5-accent-text);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.vera5-hover-card-export-dropdown {
+  position: relative;
+}
+.vera5-hover-card-export-dropdown-menu {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 4px);
+  z-index: 1;
+  min-width: 100%;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border-radius: 4px;
+  border: 1px solid var(--vera5-border);
+  background-color: var(--vera5-button-bg);
+  box-shadow: var(--vera5-shadow);
+}
+.vera5-hover-card-export-dropdown-item {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--vera5-accent-text);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.vera5-hover-card-export-dropdown-item:hover,
+.vera5-hover-card-export-dropdown-item:focus-visible {
+  background-color: color-mix(in srgb, var(--vera5-accent) 12%, transparent);
+  outline: none;
+}
 .vera5-ioc-highlight {
   --vera5-highlight-accent: #1a5fb4;
   --vera5-highlight-underline: color-mix(in srgb, #1a5fb4 75%, transparent);
@@ -422,6 +528,7 @@ export function buildVera5UiStylesCss(): string {
 @media (prefers-reduced-motion: reduce) {
   .vera5-hover-card-panel,
   .vera5-hover-card-copy,
+  .vera5-hover-card-export-button,
   .vera5-hover-card-pivot-link,
   .vera5-hover-card-enrichment--loading,
   .vera5-ioc-highlight {

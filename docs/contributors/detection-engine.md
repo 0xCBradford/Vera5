@@ -21,8 +21,10 @@ For operator scan and triage context, see [docs/analyst-workflows.md](../analyst
 
 1. **Text collection** — `extension/src/content/textWalker.ts` walks eligible DOM text nodes (skips `script`, `style`, `textarea`, and metadata subtrees by default).
 2. **Matching** — `extension/src/lib/iocRegex.ts` applies conservative regex per IOC type.
-3. **Dedup and overlap** — `extension/src/content/detector.ts` resolves overlapping spans (URL beats domain, longest hash wins, etc.).
-4. **Highlighting** — `extension/src/content/highlighter.ts` underlines matches when highlighting is enabled.
+3. **Dedup and overlap** — `extension/src/content/detector.ts` resolves overlapping spans (URL beats domain, longest hash wins, etc.) and drops matches whose type is disabled in `iocTypeEnabled` storage.
+4. **Highlighting** — `extension/src/content/highlighter.ts` underlines matches when highlighting is enabled and assigns stable `data-vera5-anchor-id` values for tray navigation.
+5. **Scan snapshot** — after each scan, `extension/src/content/scanPage.ts` publishes a versioned per-tab snapshot (IOC type, value, anchor linkage) to `chrome.storage.session` via the service worker (`extension/src/lib/tabScanSnapshotStorage.ts`).
+6. **Scan summary** — popup and content consumers read a stable `TabScanSummary` view model through `GET_TAB_SCAN_SUMMARY` (`extension/src/lib/tabScanSummaryClient.ts`, `extension/src/content/tabScanSummaryContent.ts`).
 
 Scan entry: `extension/src/content/scanPage.ts`, invoked from the service worker on `scan-page` messages.
 
@@ -39,6 +41,7 @@ Notable behaviors:
 - Filename-style domains with denylisted TLDs (`chart.png`) are rejected.
 - Semver-like prefixes can suppress dotted quads mistaken for IPv4.
 - Private-space IPv4 is omitted when `includePrivateIpv4` is false in storage (default).
+- Disabled IOC types (`iocTypeEnabled`) are omitted after deduplication; Options exposes one checkbox per MVP type.
 - Scan stops after a text-node cap (performance guardrail) per `scanPage.ts`.
 
 ## Auto-scan

@@ -9,6 +9,7 @@ describe("enrichment message client IOC boundaries", () => {
   beforeEach(() => {
     vi.stubGlobal("chrome", {
       runtime: {
+        id: "test-extension-id",
         sendMessage: vi.fn().mockResolvedValue({
           ok: true,
           payload: {
@@ -61,5 +62,18 @@ describe("enrichment message client IOC boundaries", () => {
 
     expect(result).toBeNull();
     expect(chrome.runtime.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("returns null when the extension context is stale", async () => {
+    vi.mocked(chrome.runtime.sendMessage).mockRejectedValue(
+      new Error("Extension context invalidated")
+    );
+
+    const result = await requestEnrichmentFromServiceWorker({
+      value: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+    });
+
+    expect(result).toBeNull();
   });
 });

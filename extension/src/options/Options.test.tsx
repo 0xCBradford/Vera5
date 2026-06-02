@@ -7,7 +7,21 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
 import { STORAGE_KEY_API_KEYS } from "../lib/storage";
+import { IOC_TYPE_SETTINGS_ORDER } from "../lib/storage";
 import { Options } from "./Options";
+
+const IOC_TYPE_OPTION_LABELS: Record<
+  (typeof IOC_TYPE_SETTINGS_ORDER)[number],
+  string
+> = {
+  ipv4: "IPv4 addresses",
+  domain: "Domain names",
+  url: "URLs",
+  md5: "MD5 hashes",
+  sha1: "SHA1 hashes",
+  sha256: "SHA256 hashes",
+  cve: "CVE identifiers",
+};
 
 function renderOptions(): { container: HTMLDivElement; root: Root } {
   const container = document.createElement("div");
@@ -109,6 +123,49 @@ describe("Options API key inputs", () => {
     );
     expect(autoScanToggle).not.toBeNull();
     expect(autoScanToggle?.getAttribute("type")).toBe("checkbox");
+  });
+
+  it("renders per-type IOC detection toggles", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    for (const iocType of IOC_TYPE_SETTINGS_ORDER) {
+      expect(
+        mounted.container.querySelector(
+          `input[aria-label="Enable ${IOC_TYPE_OPTION_LABELS[iocType]}"]`
+        )
+      ).not.toBeNull();
+    }
+  });
+
+  it("renders private IPv4 and cache TTL controls", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="Include private-space IPv4 addresses"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="Default cache lifetime in seconds"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="AbuseIPDB cache lifetime in seconds"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="OTX cache lifetime in seconds"]'
+      )
+    ).not.toBeNull();
   });
 
   it("renders masked inputs for AbuseIPDB and OTX", async () => {

@@ -12,8 +12,12 @@ Vera5 persists analyst configuration in **`chrome.storage.local`** via `extensio
 | Source toggles | Per-vendor enable; URLScan and GreyNoise toggles affect pivots/preferences, not live API for those vendors in the current release |
 | Manual-only enrichment | Default on; blocks automatic fetch until **›** or explicit enrich |
 | Auto-scan | Default off; enables mutation-driven rescan |
-| `includePrivateIpv4` | Schema flag; private-space IPv4 omitted in detector when false |
-| Per-IOC-type flags | Present in schema; dedicated Options UI wiring may lag README limitations |
+| Per-IOC-type flags | Options checkboxes; defaults all MVP types on; scan omits disabled types |
+| `includePrivateIpv4` | Options checkbox; private-space IPv4 omitted in detector when off (default) |
+| Enrichment cache TTL | Global seconds field on Options; optional per-source overrides |
+| Analyst notes | Per-IOC notes in overlay card; stored under `analystNotes` in `chrome.storage.local` via `extension/src/lib/analystNotesStorage.ts` |
+| Tab scan snapshots | Last scan per browser tab (IOC type, value, highlight anchor id, page URL, timestamp) in `chrome.storage.session` via `extension/src/lib/tabScanSnapshotStorage.ts`; cleared when the tab closes |
+| Tab scan summaries | Stable consumer view (`TabScanSummary`: total count, per-type counts, entries) fetched via `GET_TAB_SCAN_SUMMARY` in `extension/src/lib/tabScanSummaryClient.ts` |
 
 Never commit storage dumps or API keys to git.
 
@@ -23,16 +27,27 @@ Never commit storage dumps or API keys to git.
 
 ## Export / import
 
-**Module:** `extension/src/lib/settingsExport.ts`
+| Module | Purpose |
+|--------|---------|
+| `extension/src/lib/settingsExport.ts` | Full settings snapshot; API keys optional on export |
+| `extension/src/lib/connectorProfileExport.ts` | Connector profile without keys: IOC types, rate-limit metadata, privacy warning text |
+
+### Settings export (`settingsExport.ts`)
 
 - Default export **omits** API keys unless the analyst opts in.
 - Import merges known fields; invalid shapes should fail safely (see `settingsExport.test.ts`).
+
+### Connector profile export (`connectorProfileExport.ts`)
+
+- Always **omits** API keys; import rejects documents that include key material.
+- Carries `preferences` (IOC-type and source toggles, manual-only mode, cache TTL), static `rateLimitMetadata`, and overlay `privacyWarnings`.
+- Import merges preferences into current settings and **never** overwrites stored API keys (see `connectorProfileExport.test.ts`).
 
 ## Content script sync
 
 Several flags sync on load and on `chrome.storage.onChanged`:
 
-- `highlightStorage.ts`, `manualOnlyStorage.ts`, `includePrivateIpv4Storage.ts`, `enrichmentSourceStorage.ts`, `autoScanStorage.ts`
+- `highlightStorage.ts`, `manualOnlyStorage.ts`, `includePrivateIpv4Storage.ts`, `iocTypeEnabledStorage.ts`, `enrichmentSourceStorage.ts`, `autoScanStorage.ts`
 
 When adding a new setting consumed in content scripts, follow the same listen/sync pattern to avoid stale tab state.
 

@@ -1,4 +1,5 @@
 import type { MessageResponse } from "../lib/messages";
+import { rethrowUnlessStaleExtensionError } from "../lib/extensionContext";
 import { handleScanPageRequest } from "./scanPage";
 
 export const DEFAULT_MUTATION_RESCAN_DEBOUNCE_MS = 400;
@@ -24,9 +25,11 @@ function clearPendingRescan(): void {
 }
 
 function runRescan(): void {
-  void handleScanPageRequest(activeRoot).then((result) => {
-    activeOnScan?.(result);
-  });
+  void handleScanPageRequest(activeRoot)
+    .then((result) => {
+      activeOnScan?.(result);
+    })
+    .catch(rethrowUnlessStaleExtensionError);
 }
 
 export function scheduleDebouncedRescan(): void {

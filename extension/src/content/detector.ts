@@ -22,6 +22,16 @@ export type IocDetectorScanOptions = {
 
 type TextSpan = { start: number; end: number };
 
+function isIocTypeEnabledForDetection(
+  type: IocType,
+  enabledTypes: IocRegexOptions["enabledTypes"]
+): boolean {
+  if (!enabledTypes) {
+    return true;
+  }
+  return enabledTypes[type] !== false;
+}
+
 const TYPE_PRIORITY: Record<IocType, number> = {
   url: 0,
   sha256: 1,
@@ -113,7 +123,13 @@ export function detectIocsInText(
     occupied.push({ start: match.start, end: match.end });
   }
 
-  return dedupeOverlappingMatches(results);
+  const deduped = dedupeOverlappingMatches(results);
+  if (!options.enabledTypes) {
+    return deduped;
+  }
+  return deduped.filter((match) =>
+    isIocTypeEnabledForDetection(match.type, options.enabledTypes)
+  );
 }
 
 export function scanTextNodesForIocs(

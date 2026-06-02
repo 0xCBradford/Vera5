@@ -1,0 +1,388 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden: enrichment export JSON snapshots > all enrichment sources disabled 1`] = `
+"{
+  "schemaVersion": 1,
+  "exportedAt": "2026-06-02T12:00:00.000Z",
+  "ioc": "8.8.8.8",
+  "iocType": "ipv4",
+  "iocTypeLabel": "IPv4 address",
+  "enrichmentState": "error",
+  "tags": [],
+  "sources": [],
+  "disabledSources": [
+    "abuseipdb",
+    "otx",
+    "urlscan",
+    "greynoise"
+  ],
+  "score": {
+    "mode": "unavailable",
+    "headline": "Risk score unavailable",
+    "detail": "Enable at least one enrichment source in settings to compute a local advisory score."
+  },
+  "disagreement": false,
+  "pivots": [
+    {
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
+    },
+    {
+      "provider": "otx",
+      "label": "OTX",
+      "href": "https://otx.alienvault.com/indicator/ip/8.8.8.8"
+    },
+    {
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/8.8.8.8"
+    },
+    {
+      "provider": "urlscan",
+      "label": "URLScan",
+      "href": "https://urlscan.io/search/#ip:8.8.8.8"
+    }
+  ]
+}"
+`;
+
+exports[`golden: enrichment export JSON snapshots > disagreement callout 1`] = `
+"{
+  "schemaVersion": 1,
+  "exportedAt": "2026-06-02T12:00:00.000Z",
+  "ioc": "8.8.8.8",
+  "iocType": "ipv4",
+  "iocTypeLabel": "IPv4 address",
+  "enrichmentState": "ready",
+  "summary": "95 abuse confidence",
+  "tags": [],
+  "sources": [
+    {
+      "sourceId": "abuseipdb",
+      "name": "AbuseIPDB",
+      "status": "ok",
+      "summary": "95 abuse confidence",
+      "tags": [],
+      "fromCache": false,
+      "badgeText": "Live"
+    },
+    {
+      "sourceId": "otx",
+      "name": "OTX",
+      "status": "ok",
+      "summary": "1 threat pulse",
+      "tags": [],
+      "fromCache": false,
+      "badgeText": "Live"
+    }
+  ],
+  "disabledSources": [],
+  "score": {
+    "mode": "available",
+    "label": "high",
+    "summaryText": "High risk (63/100)",
+    "compositeSignal": 63.29729729729729,
+    "reasoningLines": [
+      "AbuseIPDB: Critical (95/100, weight 1.00).",
+      "OTX: Suspicious (26/100, weight 0.85)."
+    ]
+  },
+  "disagreement": true,
+  "disagreementNotice": "Sources disagree: compare per-source details before deciding.",
+  "pivots": [
+    {
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
+    },
+    {
+      "provider": "otx",
+      "label": "OTX",
+      "href": "https://otx.alienvault.com/indicator/ip/8.8.8.8"
+    },
+    {
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/8.8.8.8"
+    },
+    {
+      "provider": "urlscan",
+      "label": "URLScan",
+      "href": "https://urlscan.io/search/#ip:8.8.8.8"
+    }
+  ]
+}"
+`;
+
+exports[`golden: enrichment export JSON snapshots > multi-source ready enrichment 1`] = `
+"{
+  "schemaVersion": 1,
+  "exportedAt": "2026-06-02T12:00:00.000Z",
+  "ioc": "185.220.101.4",
+  "iocType": "ipv4",
+  "iocTypeLabel": "IPv4 address",
+  "enrichmentState": "ready",
+  "summary": "74 abuse confidence",
+  "tags": [],
+  "sources": [
+    {
+      "sourceId": "abuseipdb",
+      "name": "AbuseIPDB",
+      "status": "ok",
+      "summary": "74 abuse confidence",
+      "tags": [],
+      "fromCache": true,
+      "lastUpdatedLine": "Last updated: Jun 2, 2026, 7:00 AM",
+      "badgeText": "Cached"
+    },
+    {
+      "sourceId": "otx",
+      "name": "OTX",
+      "status": "ok",
+      "summary": "3 threat pulses",
+      "tags": [],
+      "fromCache": false,
+      "badgeText": "Live"
+    }
+  ],
+  "disabledSources": [],
+  "score": {
+    "mode": "available",
+    "label": "high",
+    "summaryText": "High risk (59/100)",
+    "compositeSignal": 59.29729729729729,
+    "reasoningLines": [
+      "AbuseIPDB: High (74/100, weight 1.00).",
+      "OTX: Suspicious (42/100, weight 0.85)."
+    ]
+  },
+  "disagreement": false,
+  "pivots": [
+    {
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/185.220.101.4"
+    },
+    {
+      "provider": "otx",
+      "label": "OTX",
+      "href": "https://otx.alienvault.com/indicator/ip/185.220.101.4"
+    },
+    {
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/185.220.101.4"
+    },
+    {
+      "provider": "urlscan",
+      "label": "URLScan",
+      "href": "https://urlscan.io/search/#ip:185.220.101.4"
+    }
+  ]
+}"
+`;
+
+exports[`golden: enrichment export JSON snapshots > no enrichment results 1`] = `
+"{
+  "schemaVersion": 1,
+  "exportedAt": "2026-06-02T12:00:00.000Z",
+  "ioc": "8.8.8.8",
+  "iocType": "ipv4",
+  "iocTypeLabel": "IPv4 address",
+  "enrichmentState": "error",
+  "tags": [],
+  "sources": [],
+  "disabledSources": [],
+  "score": {
+    "mode": "none",
+    "headline": "Risk score unavailable",
+    "detail": "No enrichment source results are available to compute a local advisory score."
+  },
+  "disagreement": false,
+  "pivots": [
+    {
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
+    },
+    {
+      "provider": "otx",
+      "label": "OTX",
+      "href": "https://otx.alienvault.com/indicator/ip/8.8.8.8"
+    },
+    {
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/8.8.8.8"
+    },
+    {
+      "provider": "urlscan",
+      "label": "URLScan",
+      "href": "https://urlscan.io/search/#ip:8.8.8.8"
+    }
+  ]
+}"
+`;
+
+exports[`golden: enrichment export JSON snapshots > with analyst notes 1`] = `
+"{
+  "schemaVersion": 1,
+  "exportedAt": "2026-06-02T12:00:00.000Z",
+  "ioc": "8.8.8.8",
+  "iocType": "ipv4",
+  "iocTypeLabel": "IPv4 address",
+  "enrichmentState": "ready",
+  "summary": "84 abuse confidence",
+  "tags": [],
+  "sources": [
+    {
+      "sourceId": "abuseipdb",
+      "name": "AbuseIPDB",
+      "status": "ok",
+      "summary": "84 abuse confidence",
+      "tags": [],
+      "fromCache": false,
+      "badgeText": "Live"
+    }
+  ],
+  "disabledSources": [],
+  "score": {
+    "mode": "insufficient",
+    "label": "unknown",
+    "summaryText": "Unknown risk",
+    "compositeSignal": null,
+    "reasoningLines": [],
+    "reasoningEmptyDetail": "Blended score steps are not available until at least two sources return parseable evidence.",
+    "insufficientDetail": "At least two enabled sources must return parseable evidence for a blended composite score. Review per-source details below."
+  },
+  "disagreement": false,
+  "pivots": [
+    {
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
+    },
+    {
+      "provider": "otx",
+      "label": "OTX",
+      "href": "https://otx.alienvault.com/indicator/ip/8.8.8.8"
+    },
+    {
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/8.8.8.8"
+    },
+    {
+      "provider": "urlscan",
+      "label": "URLScan",
+      "href": "https://urlscan.io/search/#ip:8.8.8.8"
+    }
+  ],
+  "analystNotes": "Review firewall logs."
+}"
+`;
+
+exports[`golden: enrichment export markdown snapshots > all enrichment sources disabled 1`] = `
+"## Vera5 IOC Summary
+
+IOC: 8.8.8.8
+Type: IPv4 address
+
+Risk score unavailable
+
+Enable at least one enrichment source in settings to compute a local advisory score.
+
+### Source Summary
+
+- AbuseIPDB: AbuseIPDB is disabled. Enable it in extension settings to load enrichment.
+- OTX: OTX is disabled. Enable it in extension settings to load enrichment.
+- URLScan.io: URLScan.io is disabled. Enable it in extension settings to load enrichment.
+- GreyNoise: GreyNoise is disabled. Enable it in extension settings to load enrichment.
+"
+`;
+
+exports[`golden: enrichment export markdown snapshots > disagreement callout 1`] = `
+"## Vera5 IOC Summary
+
+IOC: 8.8.8.8
+Type: IPv4 address
+
+Summary: 95 abuse confidence
+
+Risk score: High risk (63/100)
+
+### How this score was computed
+
+1. AbuseIPDB: Critical (95/100, weight 1.00).
+2. OTX: Suspicious (26/100, weight 0.85).
+
+Sources disagree: compare per-source details before deciding.
+
+### Source Summary
+
+- AbuseIPDB (Live): 95 abuse confidence
+- OTX (Live): 1 threat pulse
+"
+`;
+
+exports[`golden: enrichment export markdown snapshots > multi-source ready enrichment 1`] = `
+"## Vera5 IOC Summary
+
+IOC: 185.220.101.4
+Type: IPv4 address
+
+Summary: 74 abuse confidence
+
+Risk score: High risk (59/100)
+
+### How this score was computed
+
+1. AbuseIPDB: High (74/100, weight 1.00).
+2. OTX: Suspicious (42/100, weight 0.85).
+
+### Source Summary
+
+- AbuseIPDB (Cached): 74 abuse confidence — Last updated: Jun 2, 2026, 7:00 AM
+- OTX (Live): 3 threat pulses
+"
+`;
+
+exports[`golden: enrichment export markdown snapshots > no enrichment results 1`] = `
+"## Vera5 IOC Summary
+
+IOC: 8.8.8.8
+Type: IPv4 address
+
+Risk score unavailable
+
+No enrichment source results are available to compute a local advisory score.
+"
+`;
+
+exports[`golden: enrichment export markdown snapshots > with analyst notes 1`] = `
+"## Vera5 IOC Summary
+
+IOC: 8.8.8.8
+Type: IPv4 address
+
+Summary: 84 abuse confidence
+
+Risk score: Unknown risk
+
+At least two enabled sources must return parseable evidence for a blended composite score. Review per-source details below.
+
+### How this score was computed
+
+Blended score steps are not available until at least two sources return parseable evidence.
+
+### Source Summary
+
+Source: AbuseIPDB · live
+84 abuse confidence
+
+### Analyst notes
+
+Review firewall logs.
+"
+`;

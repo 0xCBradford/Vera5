@@ -62,6 +62,14 @@ describe("service worker scan-page command routing", () => {
       tabs: {
         query: tabsQuery,
         sendMessage: tabsSendMessage,
+        onRemoved: { addListener: vi.fn() },
+      },
+      storage: {
+        session: {
+          get: vi.fn(async () => ({})),
+          set: vi.fn(async () => undefined),
+          remove: vi.fn(async () => undefined),
+        },
       },
     });
 

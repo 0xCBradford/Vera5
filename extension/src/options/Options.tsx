@@ -5,19 +5,36 @@ import {
   exportVera5SettingsJson,
   importVera5SettingsJson,
 } from "../lib/settingsExport";
-import type { ApiKeySlot, EnrichmentSourceEnabledRecord } from "../lib/storage";
+import type {
+  ApiKeySlot,
+  EnrichmentSourceCacheTtlRecord,
+  EnrichmentSourceEnabledRecord,
+  IocTypeEnabledRecord,
+} from "../lib/storage";
+import type { IocType } from "../lib/iocRegex";
 import {
   API_KEY_SLOTS,
+  DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
   getApiKey,
   getAutoScanEnabled,
+  getEnrichmentCacheTtlSecondsFromSettings,
+  getEnrichmentSourceCacheTtlSeconds,
   getEnrichmentSourceEnabled,
+  getIncludePrivateIpv4,
+  getIocTypeEnabled,
   getManualOnlyMode,
   hasApiKey,
+  IOC_TYPE_SETTINGS_ORDER,
   isMaskedApiKeyDisplay,
   maskApiKeyForDisplay,
+  readStoredCacheTtlSeconds,
   setApiKey,
   setAutoScanEnabled,
+  setEnrichmentCacheTtlSeconds,
+  setEnrichmentSourceCacheTtlSeconds,
   setEnrichmentSourceEnabled,
+  setIncludePrivateIpv4,
+  setIocTypeEnabled,
   setManualOnlyMode,
 } from "../lib/storage";
 
@@ -30,10 +47,45 @@ const ENRICHMENT_SOURCE_LABELS: Record<ApiKeySlot, string> = {
   greynoise: "GreyNoise",
 };
 
+const IOC_TYPE_OPTION_LABELS: Record<IocType, string> = {
+  ipv4: "IPv4 addresses",
+  domain: "Domain names",
+  url: "URLs",
+  md5: "MD5 hashes",
+  sha1: "SHA1 hashes",
+  sha256: "SHA256 hashes",
+  cve: "CVE identifiers",
+};
+
+function createDefaultIocTypeEnabledState(): IocTypeEnabledRecord {
+  const record: IocTypeEnabledRecord = {};
+  for (const iocType of IOC_TYPE_SETTINGS_ORDER) {
+    record[iocType] = true;
+  }
+  return record;
+}
+
 function createDefaultSourceEnabledState(): EnrichmentSourceEnabledRecord {
   return Object.fromEntries(
     API_KEY_SLOTS.map((sourceId) => [sourceId, false])
   ) as EnrichmentSourceEnabledRecord;
+}
+
+function createDefaultSourceCacheTtlDrafts(): Record<ApiKeySlot, string> {
+  return Object.fromEntries(
+    API_KEY_SLOTS.map((sourceId) => [sourceId, ""])
+  ) as Record<ApiKeySlot, string>;
+}
+
+function formatSourceCacheTtlDrafts(
+  overrides: EnrichmentSourceCacheTtlRecord
+): Record<ApiKeySlot, string> {
+  return Object.fromEntries(
+    API_KEY_SLOTS.map((sourceId) => [
+      sourceId,
+      overrides[sourceId] !== undefined ? String(overrides[sourceId]) : "",
+    ])
+  ) as Record<ApiKeySlot, string>;
 }
 
 type ApiKeyFieldState = {
@@ -190,6 +242,15 @@ export function Options() {
   const [manualOnlyMode, setManualOnlyModeState] = useState(true);
   const [enrichmentSourceEnabled, setEnrichmentSourceEnabledState] =
     useState<EnrichmentSourceEnabledRecord>(createDefaultSourceEnabledState());
+  const [iocTypeEnabled, setIocTypeEnabledState] =
+    useState<IocTypeEnabledRecord>(createDefaultIocTypeEnabledState());
+  const [includePrivateIpv4, setIncludePrivateIpv4State] = useState(false);
+  const [globalCacheTtlSeconds, setGlobalCacheTtlSecondsState] = useState(
+    String(DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS)
+  );
+  const [sourceCacheTtlDrafts, setSourceCacheTtlDraftsState] = useState<
+    Record<ApiKeySlot, string>
+  >(createDefaultSourceCacheTtlDrafts());
   const [includeApiKeysInExport, setIncludeApiKeysInExport] = useState(false);
   const [clearCacheState, setClearCacheState] = useState<
     "idle" | "clearing" | "cleared" | "error"
@@ -213,6 +274,10 @@ export function Options() {
       getAutoScanEnabled(),
       getManualOnlyMode(),
       getEnrichmentSourceEnabled(),
+      getIocTypeEnabled(),
+      getIncludePrivateIpv4(),
+      getEnrichmentCacheTtlSecondsFromSettings(),
+      getEnrichmentSourceCacheTtlSeconds(),
       ...OPTIONS_API_KEY_SLOTS.map(async (slot) => {
         const configured = await hasApiKey(slot);
         if (!configured) {
@@ -231,15 +296,32 @@ export function Options() {
         ] as const;
       }),
     ])
-      .then(([autoScanValue, manualOnlyValue, sourceEnabledValue, ...entries]) => {
-        setAutoScanEnabledState(autoScanValue);
-        setManualOnlyModeState(manualOnlyValue);
-        setEnrichmentSourceEnabledState(sourceEnabledValue);
-        setFieldStates(
-          Object.fromEntries(entries) as Record<ApiKeySlot, ApiKeyFieldState>
-        );
-        setReady(true);
-      })
+      .then(
+        ([
+          autoScanValue,
+          manualOnlyValue,
+          sourceEnabledValue,
+          iocTypeEnabledValue,
+          includePrivateIpv4Value,
+          globalCacheTtlValue,
+          sourceCacheTtlValue,
+          ...entries
+        ]) => {
+          setAutoScanEnabledState(autoScanValue);
+          setManualOnlyModeState(manualOnlyValue);
+          setEnrichmentSourceEnabledState(sourceEnabledValue);
+          setIocTypeEnabledState(iocTypeEnabledValue);
+          setIncludePrivateIpv4State(includePrivateIpv4Value);
+          setGlobalCacheTtlSecondsState(String(globalCacheTtlValue));
+          setSourceCacheTtlDraftsState(
+            formatSourceCacheTtlDrafts(sourceCacheTtlValue)
+          );
+          setFieldStates(
+            Object.fromEntries(entries) as Record<ApiKeySlot, ApiKeyFieldState>
+          );
+          setReady(true);
+        }
+      )
       .catch(() => {
         setReady(true);
       });
@@ -261,6 +343,50 @@ export function Options() {
       [sourceId]: checked,
     }));
     void setEnrichmentSourceEnabled(sourceId, checked);
+  };
+
+  const handleIocTypeToggle = (iocType: IocType, checked: boolean) => {
+    setIocTypeEnabledState((current) => ({
+      ...current,
+      [iocType]: checked,
+    }));
+    void setIocTypeEnabled(iocType, checked);
+  };
+
+  const handleIncludePrivateIpv4Toggle = (checked: boolean) => {
+    setIncludePrivateIpv4State(checked);
+    void setIncludePrivateIpv4(checked);
+  };
+
+  const handleGlobalCacheTtlBlur = () => {
+    const parsed = readStoredCacheTtlSeconds(
+      globalCacheTtlSeconds,
+      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS
+    );
+    setGlobalCacheTtlSecondsState(String(parsed));
+    void setEnrichmentCacheTtlSeconds(parsed);
+  };
+
+  const handleSourceCacheTtlBlur = (sourceId: ApiKeySlot) => {
+    const raw = sourceCacheTtlDrafts[sourceId].trim();
+    if (raw === "") {
+      setSourceCacheTtlDraftsState((current) => ({
+        ...current,
+        [sourceId]: "",
+      }));
+      void setEnrichmentSourceCacheTtlSeconds(sourceId, null);
+      return;
+    }
+
+    const parsed = readStoredCacheTtlSeconds(
+      raw,
+      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS
+    );
+    setSourceCacheTtlDraftsState((current) => ({
+      ...current,
+      [sourceId]: String(parsed),
+    }));
+    void setEnrichmentSourceCacheTtlSeconds(sourceId, parsed);
   };
 
   const handleClearCache = () => {
@@ -364,7 +490,7 @@ export function Options() {
         fontFamily: "system-ui, sans-serif",
       }}
     >
-      <h1 style={{ fontSize: 24, marginBottom: 8 }}>Vera5 Settings</h1>
+      <h1 style={{ fontSize: 24, marginBottom: 8 }}>VERA5 Settings</h1>
       <p style={{ margin: "0 0 24px", color: "#333" }}>
         Configure threat intelligence sources and extension preferences.
       </p>
@@ -394,6 +520,64 @@ export function Options() {
         </label>
         <p style={{ margin: 0, fontSize: 14, color: "#444" }}>
           When off, scan only with Scan page in the popup or the keyboard shortcut.
+        </p>
+        <h3
+          id="indicator-types-heading"
+          style={{ fontSize: 16, margin: "16px 0 8px" }}
+        >
+          Indicator types
+        </h3>
+        <p style={{ margin: "0 0 12px", fontSize: 14, color: "#444" }}>
+          Choose which indicator types Vera5 detects during page scans. Disabled
+          types are omitted from highlights and scan counts.
+        </p>
+        {IOC_TYPE_SETTINGS_ORDER.map((iocType) => (
+          <label
+            key={iocType}
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              cursor: ready ? "pointer" : "wait",
+              marginBottom: 12,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={iocTypeEnabled[iocType] !== false}
+              disabled={!ready}
+              onChange={(event) =>
+                handleIocTypeToggle(iocType, event.target.checked)
+              }
+              aria-label={`Enable ${IOC_TYPE_OPTION_LABELS[iocType]}`}
+            />
+            <span style={{ fontSize: 14 }}>{IOC_TYPE_OPTION_LABELS[iocType]}</span>
+          </label>
+        ))}
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+            cursor: ready ? "pointer" : "wait",
+            marginTop: 16,
+            marginBottom: 8,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={includePrivateIpv4}
+            disabled={!ready}
+            onChange={(event) =>
+              handleIncludePrivateIpv4Toggle(event.target.checked)
+            }
+            aria-label="Include private-space IPv4 addresses"
+          />
+          <span style={{ fontSize: 14 }}>Include private-space IPv4 addresses</span>
+        </label>
+        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#444" }}>
+          When off, RFC1918, loopback, and link-local IPv4 literals are omitted from
+          page scans. Enable for lab or internal SOC pages that use private ranges.
         </p>
         <label
           style={{
@@ -467,6 +651,89 @@ export function Options() {
           usage. Clearing the cache removes saved responses; your settings and API
           keys are not affected.
         </p>
+        <label
+          style={{
+            display: "block",
+            marginBottom: 16,
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: 14,
+              fontWeight: 600,
+              marginBottom: 6,
+            }}
+          >
+            Default cache lifetime (seconds)
+          </span>
+          <input
+            type="number"
+            min={0}
+            value={globalCacheTtlSeconds}
+            disabled={!ready}
+            onChange={(event) =>
+              setGlobalCacheTtlSecondsState(event.target.value)
+            }
+            onBlur={handleGlobalCacheTtlBlur}
+            aria-label="Default cache lifetime in seconds"
+            style={{
+              width: "100%",
+              maxWidth: 240,
+              boxSizing: "border-box",
+              padding: "8px 10px",
+              fontFamily: "system-ui, sans-serif",
+              fontSize: 14,
+            }}
+          />
+        </label>
+        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#444" }}>
+          Optional per-source overrides use the default above when left blank.
+        </p>
+        {API_KEY_SLOTS.map((sourceId) => (
+          <label
+            key={`${sourceId}-cache-ttl`}
+            style={{
+              display: "block",
+              marginBottom: 16,
+            }}
+          >
+            <span
+              style={{
+                display: "block",
+                fontSize: 14,
+                fontWeight: 600,
+                marginBottom: 6,
+              }}
+            >
+              {ENRICHMENT_SOURCE_LABELS[sourceId]} cache lifetime (seconds,
+              optional)
+            </span>
+            <input
+              type="number"
+              min={0}
+              value={sourceCacheTtlDrafts[sourceId]}
+              disabled={!ready}
+              placeholder="Use default"
+              onChange={(event) =>
+                setSourceCacheTtlDraftsState((current) => ({
+                  ...current,
+                  [sourceId]: event.target.value,
+                }))
+              }
+              onBlur={() => handleSourceCacheTtlBlur(sourceId)}
+              aria-label={`${ENRICHMENT_SOURCE_LABELS[sourceId]} cache lifetime in seconds`}
+              style={{
+                width: "100%",
+                maxWidth: 240,
+                boxSizing: "border-box",
+                padding: "8px 10px",
+                fontFamily: "system-ui, sans-serif",
+                fontSize: 14,
+              }}
+            />
+          </label>
+        ))}
         <button
           type="button"
           disabled={!ready || clearCacheState === "clearing"}

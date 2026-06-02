@@ -20,9 +20,11 @@ Guides for developers working on the Vera5 browser extension. These documents de
 | [enrichment-connectors.md](enrichment-connectors.md) | AbuseIPDB, OTX, parallel fetch, attribution |
 | [cache-and-rate-limits.md](cache-and-rate-limits.md) | TTL cache, 429 cooldown, manual refresh |
 | [scoring-system.md](scoring-system.md) | Composite bands, weights, disagreement, reasoning chain |
+| [export-artifacts.md](../export-artifacts.md) | JSON `schemaVersion` and markdown/JSON field contract |
 
 ## Related public docs
 
 - [docs/architecture.md](../architecture.md) — frozen MVP IOC and connector scope
+- [docs/export-artifacts.md](../export-artifacts.md) — case artifact export field contract
 - [docs/api-integrations.md](../api-integrations.md) — vendor quotas (user-oriented)
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) — PR workflow and quality gate
