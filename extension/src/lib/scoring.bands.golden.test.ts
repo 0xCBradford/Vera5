@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
-import { ENRICHMENT_SOURCE } from "./hoverCardEnrichment";
 import {
+  buildHoverCardSourceEntries,
+  ENRICHMENT_SOURCE,
+} from "./hoverCardEnrichment";
+import {
+  buildHoverCardRiskScoreView,
   COMPOSITE_RISK_LABEL,
-  computeCompositeRiskScore,
+  formatCompositeRiskLabelDisplay,
   signalStrengthToBand,
 } from "./scoring";
 
@@ -27,10 +31,10 @@ describe("golden: signalStrengthToBand thresholds", () => {
   );
 });
 
-describe("golden: composite bands with two agreeing abuse-confidence sources", () => {
+describe("golden: composite bands through hover-card overlay scoring path", () => {
   function pairSameAbuseConfidence(score: number) {
     const summary = `${score} abuse confidence`;
-    return [
+    return buildHoverCardSourceEntries([
       {
         sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
         sourceLabel: "AbuseIPDB",
@@ -43,7 +47,7 @@ describe("golden: composite bands with two agreeing abuse-confidence sources", (
         status: ENRICHMENT_SOURCE_STATUS.OK,
         summary,
       },
-    ] as const;
+    ]);
   }
 
   const cases = [
@@ -60,12 +64,18 @@ describe("golden: composite bands with two agreeing abuse-confidence sources", (
   ] as const;
 
   it.each(cases)(
-    "two-source abuse confidence $score → composite ~$composite → $label",
+    "two-source abuse confidence $score → overlay summary matches composite band",
     ({ score, composite, label }) => {
-      const result = computeCompositeRiskScore(pairSameAbuseConfidence(score));
-      expect(result.label).toBe(label);
-      expect(result.compositeSignal).toBeCloseTo(composite, 10);
-      expect(result.disagreement).toBe(false);
+      const view = buildHoverCardRiskScoreView(pairSameAbuseConfidence(score));
+      const labelText = formatCompositeRiskLabelDisplay(label);
+
+      expect(view.score.label).toBe(label);
+      expect(view.score.compositeSignal).toBeCloseTo(composite, 10);
+      expect(view.score.disagreement).toBe(false);
+      expect(view.summaryText).toBe(
+        `${labelText} risk (${Math.round(composite)}/100)`
+      );
+      expect(view.chain.sourceLines).toHaveLength(2);
     }
   );
 });

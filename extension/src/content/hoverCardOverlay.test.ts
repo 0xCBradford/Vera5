@@ -8,6 +8,8 @@ import {
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_LOADING_SUMMARY,
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
+  HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK,
+  HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY,
 } from "../lib/hoverCardEnrichment";
 import { IOC_TYPE } from "../lib/iocRegex";
 import * as copyText from "../lib/copyText";
@@ -18,6 +20,7 @@ import {
   type HoverCardEnrichmentState,
 } from "../lib/hoverCardEnrichment";
 import { HOVER_CARD_ENRICHMENT_MODIFIER_CLASS } from "../lib/vera5UiStyles";
+import { COMPOSITE_SCORE_DISAGREEMENT_NOTICE } from "../lib/scoring";
 import {
   buildHoverCardPanel,
   hideHoverCard,
@@ -34,6 +37,14 @@ import {
   HOVER_CARD_TAG_CLASS,
   HOVER_CARD_ATTRIBUTION_CLASS,
   HOVER_CARD_DISCLAIMER_CLASS,
+  HOVER_CARD_RISK_SCORE_CLASS,
+  HOVER_CARD_RISK_SCORE_LABEL_CLASS,
+  HOVER_CARD_RISK_SCORE_UNAVAILABLE_CLASS,
+  HOVER_CARD_RISK_SCORE_INSUFFICIENT_CLASS,
+  HOVER_CARD_RISK_DISAGREEMENT_CLASS,
+  HOVER_CARD_RISK_REASONING_CLASS,
+  HOVER_CARD_RISK_REASONING_CHAIN_CLASS,
+  HOVER_CARD_RISK_REASONING_STEP_CLASS,
   HOVER_CARD_ACTION_CLASS,
   HOVER_CARD_RETRY_HINT_CLASS,
   HOVER_CARD_SOURCE_DETAIL_CLASS,
@@ -213,6 +224,241 @@ describe("hover card overlay shell", () => {
     expect(copy).toHaveBeenCalledWith("8.8.8.8");
     expect(button?.className).toContain("vera5-hover-card-copy--copied");
     copy.mockRestore();
+  });
+});
+
+describe("overlay risk score presentation", () => {
+  const blendedSourceResults = buildHoverCardSourceEntries([
+    {
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+      sourceLabel: "AbuseIPDB",
+      status: "ok",
+      summary: "84 abuse confidence",
+    },
+    {
+      sourceId: ENRICHMENT_SOURCE.OTX,
+      sourceLabel: "OTX",
+      status: "ok",
+      summary: "4 threat pulses",
+    },
+  ]);
+
+  const disagreeingSourceResults = buildHoverCardSourceEntries([
+    {
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+      sourceLabel: "AbuseIPDB",
+      status: "ok",
+      summary: "95 abuse confidence",
+    },
+    {
+      sourceId: ENRICHMENT_SOURCE.OTX,
+      sourceLabel: "OTX",
+      status: "ok",
+      summary: "1 threat pulse",
+    },
+  ]);
+
+  it("omits the risk score section when enrichment has no source results", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+    });
+
+    expect(panel.querySelector(`.${HOVER_CARD_RISK_SCORE_CLASS}`)).toBeNull();
+    expect(panel.textContent).not.toContain("Risk score:");
+  });
+
+  it("omits the risk score section while enrichment is loading", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "loading",
+    });
+
+    expect(panel.querySelector(`.${HOVER_CARD_RISK_SCORE_CLASS}`)).toBeNull();
+    expect(panel.textContent).not.toContain("Risk score:");
+  });
+
+  it("renders unavailable score state instead of a composite label when all sources are disabled", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+      disabledSources: [
+        ENRICHMENT_SOURCE.ABUSEIPDB,
+        ENRICHMENT_SOURCE.OTX,
+        ENRICHMENT_SOURCE.URLSCAN,
+        ENRICHMENT_SOURCE.GREYNOISE,
+      ],
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "74 abuse confidence",
+        },
+      ]),
+    });
+
+    expect(panel.querySelector(`.${HOVER_CARD_RISK_SCORE_UNAVAILABLE_CLASS}`)).not.toBeNull();
+    expect(panel.textContent).toContain("Risk score unavailable");
+    expect(panel.querySelector(`.${HOVER_CARD_RISK_SCORE_LABEL_CLASS}`)).toBeNull();
+    expect(panel.textContent).not.toContain("Risk score:");
+  });
+
+  it("renders a blended composite score label with signal strength", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "84 abuse confidence",
+      sourceResults: blendedSourceResults,
+    });
+
+    const label = panel.querySelector(`.${HOVER_CARD_RISK_SCORE_LABEL_CLASS}`);
+    expect(label).not.toBeNull();
+    expect(label?.textContent).toMatch(
+      /Risk score:\s*(High|Suspicious|Critical) risk \(\d+\/100\)/
+    );
+    expect(label?.querySelector("strong")?.textContent).toMatch(
+      /(High|Suspicious|Critical) risk \(\d+\/100\)/
+    );
+  });
+
+  it("renders the disagreement callout after the reasoning chain for diverging sources", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "95 abuse confidence",
+      sourceResults: disagreeingSourceResults,
+    });
+
+    const scoreSection = panel.querySelector(`.${HOVER_CARD_RISK_SCORE_CLASS}`);
+    const chain = scoreSection?.querySelector(
+      `.${HOVER_CARD_RISK_REASONING_CHAIN_CLASS}`
+    );
+    const callout = scoreSection?.querySelector(
+      `.${HOVER_CARD_RISK_DISAGREEMENT_CLASS}`
+    );
+
+    expect(callout).not.toBeNull();
+    expect(callout?.getAttribute("role")).toBe("note");
+    expect(callout?.textContent).toBe(COMPOSITE_SCORE_DISAGREEMENT_NOTICE);
+    expect(
+      chain?.compareDocumentPosition(callout!) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+});
+
+describe("overlay reasoning chain presentation paths", () => {
+  const agreeingSourceResults = buildHoverCardSourceEntries([
+    {
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+      sourceLabel: "AbuseIPDB",
+      status: "ok",
+      summary: "74 abuse confidence",
+    },
+    {
+      sourceId: ENRICHMENT_SOURCE.OTX,
+      sourceLabel: "OTX",
+      status: "ok",
+      summary: "74 abuse confidence",
+    },
+  ]);
+
+  const disagreeingSourceResults = buildHoverCardSourceEntries([
+    {
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+      sourceLabel: "AbuseIPDB",
+      status: "ok",
+      summary: "95 abuse confidence",
+    },
+    {
+      sourceId: ENRICHMENT_SOURCE.OTX,
+      sourceLabel: "OTX",
+      status: "ok",
+      summary: "1 threat pulse",
+    },
+  ]);
+
+  const insufficientSourceResults = buildHoverCardSourceEntries([
+    {
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+      sourceLabel: "AbuseIPDB",
+      status: "ok",
+      summary: "12 abuse confidence",
+    },
+  ]);
+
+  function buildReadyPanel(
+    sourceResults: ReturnType<typeof buildHoverCardSourceEntries>
+  ) {
+    return buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+      sourceResults,
+    });
+  }
+
+  it("shows the reasoning chain section when blended composite evidence is available", () => {
+    const panel = buildReadyPanel(agreeingSourceResults);
+    const reasoning = panel.querySelector(`.${HOVER_CARD_RISK_REASONING_CLASS}`);
+
+    expect(reasoning).not.toBeNull();
+    expect(reasoning?.getAttribute("aria-label")).toBe("How this score was computed");
+    expect(panel.textContent).toContain("How this score was computed");
+    expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_REASONING_CHAIN_CLASS}`)
+    ).not.toBeNull();
+    expect(
+      panel.querySelector(".vera5-hover-card-risk-reasoning-empty")
+    ).toBeNull();
+  });
+
+  it("lists per-source reasoning lines in connector order", () => {
+    const panel = buildReadyPanel(agreeingSourceResults);
+    const steps = panel.querySelectorAll(`.${HOVER_CARD_RISK_REASONING_STEP_CLASS}`);
+
+    expect(steps).toHaveLength(2);
+    expect(steps[0]?.textContent).toContain("AbuseIPDB:");
+    expect(steps[1]?.textContent).toContain("OTX:");
+    expect(steps[0]?.textContent).toContain("74/100");
+    expect(steps[1]?.textContent).toContain("74/100");
+  });
+
+  it("shows the disagreement callout only when sources diverge materially", () => {
+    const agreeingPanel = buildReadyPanel(agreeingSourceResults);
+    const disagreeingPanel = buildReadyPanel(disagreeingSourceResults);
+
+    expect(
+      agreeingPanel.querySelector(`.${HOVER_CARD_RISK_DISAGREEMENT_CLASS}`)
+    ).toBeNull();
+    const callout = disagreeingPanel.querySelector(
+      `.${HOVER_CARD_RISK_DISAGREEMENT_CLASS}`
+    );
+    expect(callout).not.toBeNull();
+    expect(callout?.textContent).toBe(COMPOSITE_SCORE_DISAGREEMENT_NOTICE);
+  });
+
+  it("shows the empty reasoning state instead of a chain when blend evidence is insufficient", () => {
+    const panel = buildReadyPanel(insufficientSourceResults);
+
+    expect(
+      panel.querySelector(".vera5-hover-card-risk-reasoning-empty")
+    ).not.toBeNull();
+    expect(panel.textContent).toContain("Blended score steps are not available");
+    expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_REASONING_CHAIN_CLASS}`)
+    ).toBeNull();
+    expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_DISAGREEMENT_CLASS}`)
+    ).toBeNull();
   });
 });
 
@@ -490,10 +736,312 @@ describe("hover card overlay", () => {
 
     const footer = panel.querySelector(`.${HOVER_CARD_DISCLAIMER_CLASS}`);
     expect(footer?.getAttribute("aria-label")).toBe(
-      "Enrichment and risk score notice"
+      HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK
     );
     expect(panel.textContent).toContain(HOVER_CARD_ENRICHMENT_DISCLAIMER);
     expect(panel.textContent).toContain(HOVER_CARD_RISK_SCORE_DISCLAIMER);
+  });
+
+  it("shows source attribution alongside risk score for single-source ready enrichment", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "84 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "84 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          status: "ok",
+          summary: "4 threat pulses",
+        },
+      ]),
+    });
+
+    expect(panel.querySelector(`.${HOVER_CARD_RISK_SCORE_CLASS}`)).not.toBeNull();
+    expect(panel.textContent).toContain("Risk score:");
+    expect(panel.querySelector(`.${HOVER_CARD_ATTRIBUTION_CLASS}`)).toBeNull();
+    expect(panel.textContent).toContain(HOVER_CARD_ENRICHMENT_DISCLAIMER);
+    expect(panel.textContent).toContain(HOVER_CARD_RISK_SCORE_DISCLAIMER);
+  });
+
+  it("shows single-source attribution derived from source results when risk score is shown", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "12 abuse confidence",
+          fromCache: true,
+        },
+      ]),
+    });
+
+    const attribution = panel.querySelector(`.${HOVER_CARD_ATTRIBUTION_CLASS}`);
+    expect(attribution?.textContent).toBe("Source: AbuseIPDB · cached");
+    expect(panel.querySelector(`.${HOVER_CARD_RISK_SCORE_CLASS}`)).not.toBeNull();
+    expect(panel.textContent).toContain("Unknown risk");
+    expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_SCORE_INSUFFICIENT_CLASS}`)
+    ).not.toBeNull();
+  });
+
+  it("shows enrichment-only disclaimer when all sources are disabled and risk score is unavailable", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "74 abuse confidence",
+      disabledSources: [
+        ENRICHMENT_SOURCE.ABUSEIPDB,
+        ENRICHMENT_SOURCE.OTX,
+        ENRICHMENT_SOURCE.URLSCAN,
+        ENRICHMENT_SOURCE.GREYNOISE,
+      ],
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "74 abuse confidence",
+        },
+      ]),
+    });
+
+    const footer = panel.querySelector(`.${HOVER_CARD_DISCLAIMER_CLASS}`);
+    expect(footer?.getAttribute("aria-label")).toBe(
+      HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY
+    );
+    expect(panel.textContent).toContain(HOVER_CARD_ENRICHMENT_DISCLAIMER);
+    expect(panel.textContent).not.toContain(HOVER_CARD_RISK_SCORE_DISCLAIMER);
+    expect(panel.querySelector(`.${HOVER_CARD_RISK_SCORE_CLASS}`)).not.toBeNull();
+    expect(panel.textContent).toContain("Risk score unavailable");
+    expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_SCORE_UNAVAILABLE_CLASS}`)
+    ).not.toBeNull();
+  });
+
+  it("shows disagreement callout after reasoning chain without hiding enrichment disclaimers", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "95 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "95 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          status: "ok",
+          summary: "1 threat pulse",
+        },
+      ]),
+    });
+
+    expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_DISAGREEMENT_CLASS}`)
+    ).not.toBeNull();
+    expect(panel.textContent).toContain("Sources disagree:");
+    const reasoning = panel.querySelector(`.${HOVER_CARD_RISK_REASONING_CLASS}`);
+    expect(reasoning).not.toBeNull();
+    expect(
+      panel.querySelectorAll(`.${HOVER_CARD_RISK_REASONING_STEP_CLASS}`)
+    ).toHaveLength(2);
+    expect(panel.textContent).toContain("AbuseIPDB: Critical");
+    expect(panel.textContent).toContain("OTX: Suspicious");
+    const scoreSection = panel.querySelector(`.${HOVER_CARD_RISK_SCORE_CLASS}`);
+    const label = scoreSection?.querySelector(
+      `.${HOVER_CARD_RISK_SCORE_LABEL_CLASS}`
+    );
+    const chain = scoreSection?.querySelector(
+      `.${HOVER_CARD_RISK_REASONING_CHAIN_CLASS}`
+    );
+    const disagreement = scoreSection?.querySelector(
+      `.${HOVER_CARD_RISK_DISAGREEMENT_CLASS}`
+    );
+    expect(label?.compareDocumentPosition(chain!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(
+      chain?.compareDocumentPosition(disagreement!) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(panel.textContent).toContain(HOVER_CARD_ENRICHMENT_DISCLAIMER);
+    expect(panel.textContent).toContain(HOVER_CARD_RISK_SCORE_DISCLAIMER);
+  });
+
+  it("shows per-source reasoning lines for multi-source enrichment", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "84 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "84 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          status: "ok",
+          summary: "4 threat pulses",
+        },
+      ]),
+    });
+
+    expect(panel.textContent).toContain("How this score was computed");
+    expect(panel.textContent).toContain(
+      "AbuseIPDB: Critical (84/100, weight 1.00)."
+    );
+    expect(panel.textContent).toContain("OTX:");
+    expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_DISAGREEMENT_CLASS}`)
+    ).not.toBeNull();
+  });
+
+  it("shows unknown and empty reasoning chain when composite is unknown due to insufficient blend", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "12 abuse confidence",
+        },
+      ]),
+    });
+
+    expect(panel.textContent).toContain("Unknown risk");
+    expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_SCORE_INSUFFICIENT_CLASS}`)
+    ).not.toBeNull();
+    expect(panel.textContent).toContain("How this score was computed");
+    expect(
+      panel.querySelector(".vera5-hover-card-risk-reasoning-empty")
+    ).not.toBeNull();
+    expect(panel.textContent).toContain(
+      "Blended score steps are not available"
+    );
+    expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_REASONING_CHAIN_CLASS}`)
+    ).toBeNull();
   });
 
   it("shows missing-key message and open-settings action", () => {

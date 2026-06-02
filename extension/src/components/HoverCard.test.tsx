@@ -111,7 +111,7 @@ describe("HoverCard", () => {
     expect(mounted.container.textContent).toContain("extension settings");
   });
 
-  it("does not show a risk score when all enrichment sources are disabled", () => {
+  it("shows explicit unavailable state when all enrichment sources are disabled", () => {
     mounted = renderHoverCard({
       value: "8.8.8.8",
       type: IOC_TYPE.IPV4,
@@ -133,9 +133,10 @@ describe("HoverCard", () => {
     });
 
     expect(
-      mounted.container.querySelector(".vera5-hover-card-risk-score")
-    ).toBeNull();
-    expect(mounted.container.textContent).not.toContain("Risk score:");
+      mounted.container.querySelector(".vera5-hover-card-risk-score-unavailable")
+    ).not.toBeNull();
+    expect(mounted.container.textContent).toContain("Risk score unavailable");
+    expect(mounted.container.textContent).not.toContain("Risk score: High");
   });
 
   it("copies the IOC value when Copy is clicked", async () => {

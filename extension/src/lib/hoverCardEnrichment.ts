@@ -101,6 +101,50 @@ export function resolveHoverCardDisclaimerLines(
   return lines;
 }
 
+export const HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK =
+  "Enrichment and risk score notice";
+
+export const HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY =
+  "Enrichment notice";
+
+export function resolveHoverCardDisclaimerAriaLabel(
+  input: HoverCardDisclaimerInput = {}
+): string {
+  const lines = resolveHoverCardDisclaimerLines(input);
+  const includesRisk = lines.includes(HOVER_CARD_RISK_SCORE_DISCLAIMER);
+  const includesEnrichment = lines.includes(HOVER_CARD_ENRICHMENT_DISCLAIMER);
+  if (includesRisk && includesEnrichment) {
+    return HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK;
+  }
+  if (includesEnrichment) {
+    return HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY;
+  }
+  if (includesRisk) {
+    return "Risk score notice";
+  }
+  return HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY;
+}
+
+export function resolveEffectiveSourceAttribution(
+  sourceAttribution: EnrichmentSourceAttribution | undefined,
+  sourceResults: readonly HoverCardSourceEntry[]
+): EnrichmentSourceAttribution | undefined {
+  if (sourceAttribution?.sourceLabel.trim()) {
+    return sourceAttribution;
+  }
+  if (sourceResults.length !== 1) {
+    return undefined;
+  }
+  const entry = sourceResults[0];
+  if (!entry?.label.trim()) {
+    return undefined;
+  }
+  return {
+    sourceLabel: entry.label,
+    fromCache: entry.fromCache,
+  };
+}
+
 export function shouldShowMissingKeyAction(
   enrichmentState?: HoverCardEnrichmentState,
   errorCode?: string,
@@ -345,6 +389,23 @@ export function shouldShowRiskScore(
   return (sourceResults?.length ?? 0) > 0;
 }
 
+export function shouldShowRiskScoreSection(
+  disabledSources: readonly EnrichmentSourceId[] | undefined,
+  sourceResults: readonly HoverCardSourceEntry[] | undefined
+): boolean {
+  if (areAllEnrichmentSourcesDisabled(disabledSources ?? [])) {
+    return true;
+  }
+  return (sourceResults?.length ?? 0) > 0;
+}
+
+export function shouldIncludeRiskScoreDisclaimer(
+  disabledSources: readonly EnrichmentSourceId[] | undefined,
+  sourceResults: readonly HoverCardSourceEntry[] | undefined
+): boolean {
+  return shouldShowRiskScore(disabledSources, sourceResults);
+}
+
 export function shouldShowHoverCardDisclaimer(
   input: HoverCardDisclaimerInput = {}
 ): boolean {
@@ -460,6 +521,7 @@ export type HoverCardDisplayView = {
   showRateLimitRetryHint: boolean;
   singleSourceLastUpdatedLine?: string;
   showRiskScore: boolean;
+  includeRiskScoreDisclaimer: boolean;
   disclaimerLines: readonly string[];
   showDisclaimer: boolean;
   showFooter: boolean;
@@ -491,7 +553,7 @@ export function resolveHoverCardDisplayView(
     : undefined;
   const showAttribution = shouldShowEnrichmentSourceAttribution(
     enrichment.variant,
-    input.sourceAttribution,
+    resolveEffectiveSourceAttribution(input.sourceAttribution, sourceResults),
     sourceResults
   );
   const showMissingKeyAction = shouldShowMissingKeyAction(
@@ -506,15 +568,20 @@ export function resolveHoverCardDisplayView(
   );
   const singleSourceLastUpdatedLine =
     getSingleSourceLastUpdatedLine(sourceResults);
-  const showRiskScore = shouldShowRiskScore(disabledSources, sourceResults);
-  const disclaimerLines = resolveHoverCardDisclaimerLines({
+  const showRiskScore = shouldShowRiskScoreSection(
+    disabledSources,
+    sourceResults
+  );
+  const includeRiskScoreDisclaimer = shouldIncludeRiskScoreDisclaimer(
+    disabledSources,
+    sourceResults
+  );
+  const disclaimerInput: HoverCardDisclaimerInput = {
     enrichmentState: enrichment.variant,
-    includeRiskScoreDisclaimer: showRiskScore,
-  });
-  const showDisclaimer = shouldShowHoverCardDisclaimer({
-    enrichmentState: enrichment.variant,
-    includeRiskScoreDisclaimer: showRiskScore,
-  });
+    includeRiskScoreDisclaimer,
+  };
+  const disclaimerLines = resolveHoverCardDisclaimerLines(disclaimerInput);
+  const showDisclaimer = shouldShowHoverCardDisclaimer(disclaimerInput);
   const hasPivotLinks = (input.pivotLinkCount ?? 0) > 0;
   const showFooter =
     hasPivotLinks ||
@@ -528,6 +595,7 @@ export function resolveHoverCardDisplayView(
     showMissingKeyAction ||
     showRateLimitRetryHint ||
     Boolean(singleSourceLastUpdatedLine) ||
+    showRiskScore ||
     showDisclaimer;
 
   return {
@@ -542,6 +610,7 @@ export function resolveHoverCardDisplayView(
     showRateLimitRetryHint,
     singleSourceLastUpdatedLine,
     showRiskScore,
+    includeRiskScoreDisclaimer,
     disclaimerLines,
     showDisclaimer,
     showFooter,

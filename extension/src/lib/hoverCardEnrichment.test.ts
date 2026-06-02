@@ -17,6 +17,10 @@ import {
   resolveEnrichmentDisplay,
   resolveHoverCardDisclaimerLines,
   resolveHoverCardDisplayView,
+  resolveEffectiveSourceAttribution,
+  resolveHoverCardDisclaimerAriaLabel,
+  HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK,
+  HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY,
   resolveMultiSourceEnrichmentView,
   shouldShowEnrichmentSourceAttribution,
   shouldShowHoverCardDisclaimer,
@@ -24,6 +28,7 @@ import {
   shouldShowMultiSourceResults,
   shouldShowRateLimitRetryHint,
   shouldShowRiskScore,
+  shouldShowRiskScoreSection,
 } from "./hoverCardEnrichment";
 
 describe("hover card enrichment placeholders", () => {
@@ -120,7 +125,9 @@ describe("hover card enrichment placeholders", () => {
       },
     ];
     expect(shouldShowRiskScore(allDisabled, staleResults)).toBe(false);
+    expect(shouldShowRiskScoreSection(allDisabled, staleResults)).toBe(true);
     expect(shouldShowRiskScore(allDisabled, [])).toBe(false);
+    expect(shouldShowRiskScoreSection(allDisabled, [])).toBe(true);
     expect(
       shouldShowRiskScore([ENRICHMENT_SOURCE.ABUSEIPDB], staleResults)
     ).toBe(true);
@@ -327,34 +334,6 @@ describe("hover card enrichment placeholders", () => {
 });
 
 describe("hover card display view model", () => {
-  it("resolves shared enrich display flags for ready single-source enrichment", () => {
-    const view = resolveHoverCardDisplayView({
-      enrichmentState: "ready",
-      summary: "12 abuse confidence",
-      tags: ["US", "Fixed Line ISP"],
-      sourceAttribution: { sourceLabel: "AbuseIPDB" },
-      sourceResults: [
-        {
-          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
-          label: "AbuseIPDB",
-          status: "ok",
-          badgeText: "Live",
-          detail: "12 abuse confidence",
-        },
-      ],
-      pivotLinkCount: 2,
-    });
-
-    expect(view.enrichment.text).toBe("12 abuse confidence");
-    expect(view.showTags).toBe(true);
-    expect(view.enrichmentTags).toEqual(["US", "Fixed Line ISP"]);
-    expect(view.showAttribution).toBe(true);
-    expect(view.showMultiSourceResults).toBe(false);
-    expect(view.showFooter).toBe(true);
-    expect(view.showBelowSummary).toBe(true);
-    expect(view.showDisclaimer).toBe(true);
-  });
-
   it("hides attribution and card-level actions when multi-source rows are shown", () => {
     const view = resolveHoverCardDisplayView({
       enrichmentState: "ready",
@@ -384,8 +363,113 @@ describe("hover card display view model", () => {
 
     expect(view.showMultiSourceResults).toBe(true);
     expect(view.showAttribution).toBe(false);
+    expect(view.showRiskScore).toBe(true);
+    expect(view.showDisclaimer).toBe(true);
+    expect(view.disclaimerLines).toContain(HOVER_CARD_ENRICHMENT_DISCLAIMER);
+    expect(view.disclaimerLines).toContain(HOVER_CARD_RISK_SCORE_DISCLAIMER);
     expect(view.showMissingKeyAction).toBe(false);
     expect(view.showRateLimitRetryHint).toBe(false);
     expect(view.showFooter).toBe(true);
+  });
+
+  it("resolves shared enrich display flags for ready single-source enrichment", () => {
+    const view = resolveHoverCardDisplayView({
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      tags: ["US", "Fixed Line ISP"],
+      sourceAttribution: { sourceLabel: "AbuseIPDB" },
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "12 abuse confidence",
+        },
+      ],
+      pivotLinkCount: 2,
+    });
+
+    expect(view.enrichment.text).toBe("12 abuse confidence");
+    expect(view.showTags).toBe(true);
+    expect(view.enrichmentTags).toEqual(["US", "Fixed Line ISP"]);
+    expect(view.showAttribution).toBe(true);
+    expect(view.showRiskScore).toBe(true);
+    expect(view.showMultiSourceResults).toBe(false);
+    expect(view.showFooter).toBe(true);
+    expect(view.showBelowSummary).toBe(true);
+    expect(view.showDisclaimer).toBe(true);
+    expect(view.disclaimerLines).toContain(HOVER_CARD_ENRICHMENT_DISCLAIMER);
+    expect(view.disclaimerLines).toContain(HOVER_CARD_RISK_SCORE_DISCLAIMER);
+  });
+
+  it("derives single-source attribution from source results when risk score is shown", () => {
+    const sourceResults = [
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        label: "AbuseIPDB",
+        status: "ok" as const,
+        badgeText: "Cached",
+        detail: "12 abuse confidence",
+        fromCache: true,
+      },
+    ];
+    const view = resolveHoverCardDisplayView({
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults,
+      pivotLinkCount: 2,
+    });
+
+    expect(resolveEffectiveSourceAttribution(undefined, sourceResults)).toEqual({
+      sourceLabel: "AbuseIPDB",
+      fromCache: true,
+    });
+    expect(view.showAttribution).toBe(true);
+    expect(view.showRiskScore).toBe(true);
+    expect(view.includeRiskScoreDisclaimer).toBe(true);
+  });
+
+  it("shows risk score section without risk disclaimer when all sources are disabled", () => {
+    const view = resolveHoverCardDisplayView({
+      enrichmentState: "ready",
+      summary: "84 abuse confidence",
+      disabledSources: [
+        ENRICHMENT_SOURCE.ABUSEIPDB,
+        ENRICHMENT_SOURCE.OTX,
+        ENRICHMENT_SOURCE.URLSCAN,
+        ENRICHMENT_SOURCE.GREYNOISE,
+      ],
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "84 abuse confidence",
+        },
+      ],
+      pivotLinkCount: 0,
+    });
+
+    expect(view.showRiskScore).toBe(true);
+    expect(view.includeRiskScoreDisclaimer).toBe(false);
+    expect(view.disclaimerLines).toContain(HOVER_CARD_ENRICHMENT_DISCLAIMER);
+    expect(view.disclaimerLines).not.toContain(HOVER_CARD_RISK_SCORE_DISCLAIMER);
+  });
+
+  it("resolves disclaimer aria labels for enrichment-only and combined notices", () => {
+    expect(
+      resolveHoverCardDisclaimerAriaLabel({
+        enrichmentState: "ready",
+        includeRiskScoreDisclaimer: true,
+      })
+    ).toBe(HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK);
+    expect(
+      resolveHoverCardDisclaimerAriaLabel({
+        enrichmentState: "ready",
+        includeRiskScoreDisclaimer: false,
+      })
+    ).toBe(HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY);
   });
 });

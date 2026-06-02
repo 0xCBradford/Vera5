@@ -6,9 +6,12 @@ import {
   formatEnrichmentSourceAttribution,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
+  resolveEffectiveSourceAttribution,
   resolveHoverCardDisplayView,
+  resolveHoverCardDisclaimerAriaLabel,
   type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
+  type HoverCardDisclaimerInput,
   type HoverCardEnrichmentState,
   type HoverCardSourceEntry,
 } from "../lib/hoverCardEnrichment";
@@ -81,6 +84,14 @@ export function HoverCard({
     pivotLinkCount: pivotLinks.length,
   });
   const enrichment = view.enrichment;
+  const effectiveSourceAttribution = resolveEffectiveSourceAttribution(
+    sourceAttribution,
+    sourceResults
+  );
+  const disclaimerInput: HoverCardDisclaimerInput = {
+    enrichmentState: enrichment.variant,
+    includeRiskScoreDisclaimer: view.includeRiskScoreDisclaimer,
+  };
 
   useEffect(() => {
     ensureVera5UiStyles(document);
@@ -272,10 +283,10 @@ export function HoverCard({
           ))}
         </nav>
       ) : null}
-      {view.showAttribution && sourceAttribution ? (
+      {view.showAttribution && effectiveSourceAttribution ? (
         <p className="vera5-hover-card-attribution" role="note">
           {formatEnrichmentSourceAttribution(
-            sourceAttribution,
+            effectiveSourceAttribution,
             enrichment.variant
           )}
         </p>
@@ -283,7 +294,7 @@ export function HoverCard({
       {view.showDisclaimer ? (
         <footer
           className="vera5-hover-card-disclaimer"
-          aria-label="Enrichment and risk score notice"
+          aria-label={resolveHoverCardDisclaimerAriaLabel(disclaimerInput)}
         >
           {view.disclaimerLines.map((line) => (
             <p key={line} role="note">

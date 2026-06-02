@@ -5,9 +5,12 @@ import {
   formatEnrichmentSourceAttribution,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
+  resolveEffectiveSourceAttribution,
   resolveHoverCardDisplayView,
+  resolveHoverCardDisclaimerAriaLabel,
   type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
+  type HoverCardDisclaimerInput,
   type HoverCardEnrichmentState,
   type HoverCardSourceEntry,
 } from "../lib/hoverCardEnrichment";
@@ -25,6 +28,18 @@ import {
   type HoverCardViewport,
 } from "./hoverCardPosition";
 import { formatRawVendorJsonForDisplay } from "../lib/enrichmentRawResponse";
+import {
+  createHoverCardRiskReasoningSection,
+  resolveHoverCardRiskScorePresentation,
+  resolveRiskScoreReasoningPresentation,
+} from "../lib/scoring";
+
+export {
+  RISK_SCORE_REASONING_SECTION_CLASS as HOVER_CARD_RISK_REASONING_CLASS,
+  RISK_SCORE_REASONING_HEADING_CLASS as HOVER_CARD_RISK_REASONING_HEADING_CLASS,
+  RISK_SCORE_REASONING_CHAIN_CLASS as HOVER_CARD_RISK_REASONING_CHAIN_CLASS,
+  RISK_SCORE_REASONING_STEP_CLASS as HOVER_CARD_RISK_REASONING_STEP_CLASS,
+} from "../lib/scoring";
 
 export const HOVER_CARD_HOST_ID = "vera5-hover-card-host";
 
@@ -50,6 +65,15 @@ export const HOVER_CARD_SOURCE_BADGE_CLASS = "vera5-hover-card-source-badge";
 export const HOVER_CARD_SOURCE_DETAIL_CLASS = "vera5-hover-card-source-detail";
 export const HOVER_CARD_RAW_JSON_CLASS = "vera5-hover-card-raw-json";
 export const HOVER_CARD_RAW_JSON_BODY_CLASS = "vera5-hover-card-raw-json-body";
+export const HOVER_CARD_RISK_SCORE_CLASS = "vera5-hover-card-risk-score";
+export const HOVER_CARD_RISK_SCORE_LABEL_CLASS = "vera5-hover-card-risk-score-label";
+export const HOVER_CARD_RISK_DISAGREEMENT_CLASS = "vera5-hover-card-risk-disagreement";
+export const HOVER_CARD_RISK_SCORE_UNAVAILABLE_CLASS =
+  "vera5-hover-card-risk-score-unavailable";
+export const HOVER_CARD_RISK_SCORE_UNAVAILABLE_DETAIL_CLASS =
+  "vera5-hover-card-risk-score-unavailable-detail";
+export const HOVER_CARD_RISK_SCORE_INSUFFICIENT_CLASS =
+  "vera5-hover-card-risk-score-insufficient";
 
 const TYPE_LABELS: Record<IocType, string> = {
   ipv4: "IPv4 address",
@@ -79,7 +103,95 @@ function formatTypeLabel(type: IocType): string {
   return TYPE_LABELS[type];
 }
 
-export function createRawVendorJsonDetails(
+function createRiskScoreUnavailableSection(
+  headline: string,
+  detail: string,
+  doc: Document
+): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_RISK_SCORE_CLASS;
+  section.setAttribute("aria-label", "Risk score");
+
+  const headlineRow = doc.createElement("p");
+  headlineRow.className = HOVER_CARD_RISK_SCORE_UNAVAILABLE_CLASS;
+  headlineRow.textContent = headline;
+  section.appendChild(headlineRow);
+
+  const detailRow = doc.createElement("p");
+  detailRow.className = HOVER_CARD_RISK_SCORE_UNAVAILABLE_DETAIL_CLASS;
+  detailRow.setAttribute("role", "note");
+  detailRow.textContent = detail;
+  section.appendChild(detailRow);
+
+  return section;
+}
+
+function createRiskScoreSection(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): HTMLElement | null {
+  const disabledSources = payload.disabledSources ?? [];
+  const sourceResults = payload.sourceResults ?? [];
+  const presentation = resolveHoverCardRiskScorePresentation(
+    disabledSources,
+    sourceResults
+  );
+  if (!presentation) {
+    return null;
+  }
+
+  if (presentation.mode === "unavailable") {
+    return createRiskScoreUnavailableSection(
+      presentation.headline,
+      presentation.detail,
+      doc
+    );
+  }
+
+  const view = presentation.view;
+
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_RISK_SCORE_CLASS;
+  section.setAttribute("aria-label", "Risk score");
+
+  const labelRow = doc.createElement("p");
+  labelRow.className = HOVER_CARD_RISK_SCORE_LABEL_CLASS;
+  labelRow.textContent = "Risk score: ";
+  const emphasis = doc.createElement("strong");
+  emphasis.textContent = view.summaryText;
+  labelRow.appendChild(emphasis);
+  section.appendChild(labelRow);
+
+  if (presentation.insufficientCompositeNotice) {
+    const insufficient = doc.createElement("p");
+    insufficient.className = HOVER_CARD_RISK_SCORE_INSUFFICIENT_CLASS;
+    insufficient.setAttribute("role", "note");
+    insufficient.textContent = presentation.insufficientCompositeNotice;
+    section.appendChild(insufficient);
+  }
+
+  section.appendChild(
+    createHoverCardRiskReasoningSection(
+      resolveRiskScoreReasoningPresentation(
+        view,
+        presentation.insufficientCompositeNotice
+      ),
+      doc
+    )
+  );
+
+  if (view.chain.showDisagreement) {
+    const disagreement = doc.createElement("p");
+    disagreement.className = HOVER_CARD_RISK_DISAGREEMENT_CLASS;
+    disagreement.setAttribute("role", "note");
+    disagreement.textContent = view.chain.disagreementLine;
+    section.appendChild(disagreement);
+  }
+
+  return section;
+}
+
+function createRawVendorJsonDetails(
   rawVendorJson: string,
   doc: Document,
   summaryLabel: string = HOVER_CARD_RAW_JSON_SUMMARY_LABEL
@@ -251,6 +363,7 @@ function createEnrichmentTagsSection(
 
 function createHoverCardDisclaimerFooter(
   disclaimerLines: readonly string[],
+  disclaimerInput: HoverCardDisclaimerInput,
   doc: Document
 ): HTMLElement | null {
   if (disclaimerLines.length === 0) {
@@ -259,7 +372,10 @@ function createHoverCardDisclaimerFooter(
 
   const footer = doc.createElement("footer");
   footer.className = HOVER_CARD_DISCLAIMER_CLASS;
-  footer.setAttribute("aria-label", "Enrichment and risk score notice");
+  footer.setAttribute(
+    "aria-label",
+    resolveHoverCardDisclaimerAriaLabel(disclaimerInput)
+  );
 
   for (const line of disclaimerLines) {
     const paragraph = doc.createElement("p");
@@ -401,16 +517,28 @@ export function buildHoverCardPanel(
   const enrichmentTagsSection = view.showTags
     ? createEnrichmentTagsSection(view.enrichmentTags, doc)
     : null;
+  const effectiveSourceAttribution = resolveEffectiveSourceAttribution(
+    payload.sourceAttribution,
+    sourceResults
+  );
+  const disclaimerInput: HoverCardDisclaimerInput = {
+    enrichmentState: enrichment.variant,
+    includeRiskScoreDisclaimer: view.includeRiskScoreDisclaimer,
+  };
   const attributionFooter =
-    view.showAttribution && payload.sourceAttribution
+    view.showAttribution && effectiveSourceAttribution
       ? createSourceAttributionFooter(
-          payload.sourceAttribution,
+          effectiveSourceAttribution,
           enrichment.variant,
           doc
         )
       : null;
   const disclaimerFooter = view.showDisclaimer
-    ? createHoverCardDisclaimerFooter(view.disclaimerLines, doc)
+    ? createHoverCardDisclaimerFooter(
+        view.disclaimerLines,
+        disclaimerInput,
+        doc
+      )
     : null;
   const missingKeyAction = view.showMissingKeyAction
     ? createMissingKeyAction(doc)
@@ -422,8 +550,11 @@ export function buildHoverCardPanel(
   const singleSourceLastUpdated = view.singleSourceLastUpdatedLine
     ? createSingleSourceLastUpdated(view.singleSourceLastUpdatedLine, doc)
     : null;
-  const showFooter = view.showFooter;
   const showBelowSummary = view.showBelowSummary;
+  const showFooter = view.showFooter;
+  const riskScoreSection = view.showRiskScore
+    ? createRiskScoreSection(payload, doc)
+    : null;
 
   const panel = doc.createElement("aside");
   panel.className = HOVER_CARD_PANEL_CLASS;
@@ -464,6 +595,11 @@ export function buildHoverCardPanel(
     summaryRow.setAttribute("aria-busy", "true");
   }
   panel.appendChild(summaryRow);
+
+  if (riskScoreSection) {
+    riskScoreSection.style.marginBottom = showBelowSummary ? "8px" : "0";
+    panel.appendChild(riskScoreSection);
+  }
 
   if (missingKeyAction) {
     missingKeyAction.style.marginBottom = showBelowSummary ? "8px" : "0";

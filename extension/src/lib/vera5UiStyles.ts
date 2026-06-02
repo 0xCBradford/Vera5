@@ -114,11 +114,56 @@ export function buildVera5UiStylesCss(): string {
   font-size: 11px;
   color: var(--vera5-muted-label);
 }
+.vera5-hover-card-risk-score-unavailable {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-risk-score-insufficient {
+  margin: 0 0 6px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-risk-score-unavailable-detail {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--vera5-muted-label);
+}
 .vera5-hover-card-risk-disagreement {
   margin: 0 0 6px;
   font-size: 11px;
   line-height: 1.35;
   color: var(--vera5-error);
+}
+.vera5-hover-card-risk-reasoning {
+  margin: 0 0 6px;
+}
+.vera5-hover-card-risk-reasoning-heading {
+  margin: 0 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-risk-reasoning-chain {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vera5-accent-text);
+}
+.vera5-hover-card-risk-reasoning-step {
+  margin: 0 0 2px;
+}
+.vera5-hover-card-risk-reasoning-empty {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--vera5-muted-label);
 }
 .vera5-hover-card-risk-contributions {
   margin: 0;

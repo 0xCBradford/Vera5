@@ -5,11 +5,22 @@ import { describe, expect, it } from "vitest";
 import { normalizeAbuseIpdbCheckResponse } from "./abuseipdbConnector";
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
 import { normalizeOtxIndicatorResponse } from "./otxConnector";
-import { ENRICHMENT_SOURCE } from "./hoverCardEnrichment";
 import {
+  buildHoverCardSourceEntries,
+  ENRICHMENT_SOURCE,
+  type HoverCardSourceEntry,
+} from "./hoverCardEnrichment";
+import {
+  buildHoverCardRiskScoreView,
   COMPOSITE_RISK_LABEL,
   computeCompositeRiskScore,
+  formatCompositeScoreContributionLine,
+  resolveHoverCardRiskScorePresentation,
+  resolveRiskScoreReasoningPresentation,
+  RISK_SCORE_REASONING_EMPTY_DETAIL,
+  RISK_SCORE_UNAVAILABLE_INSUFFICIENT_DETAIL,
   signalStrengthToBand,
+  type HoverCardRiskScoreAvailablePresentation,
   type ScoringSourceInput,
 } from "./scoring";
 
@@ -31,6 +42,34 @@ function scoringInputFromNormalized(
     status: ENRICHMENT_SOURCE_STATUS.OK,
     summary,
   };
+}
+
+function sourceEntriesFromVendorSummaries(
+  pairs: ReadonlyArray<{
+    sourceId: (typeof ENRICHMENT_SOURCE)[keyof typeof ENRICHMENT_SOURCE];
+    sourceLabel: string;
+    summary: string | undefined;
+  }>
+): HoverCardSourceEntry[] {
+  return buildHoverCardSourceEntries(
+    pairs.map(({ sourceId, sourceLabel, summary }) => ({
+      sourceId,
+      sourceLabel,
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary,
+    }))
+  );
+}
+
+function expectOverlayScorePresentation(
+  sourceResults: readonly HoverCardSourceEntry[]
+): HoverCardRiskScoreAvailablePresentation {
+  const presentation = resolveHoverCardRiskScorePresentation([], sourceResults);
+  expect(presentation?.mode).toBe("score");
+  if (presentation?.mode !== "score") {
+    throw new Error("Expected score presentation");
+  }
+  return presentation;
 }
 
 describe("golden: vendor fixtures → composite score bands", () => {
@@ -141,5 +180,163 @@ describe("golden: vendor fixtures → composite score bands", () => {
     ]);
     expect(result.label).toBe(COMPOSITE_RISK_LABEL.UNKNOWN);
     expect(result.compositeSignal).toBeNull();
+  });
+});
+
+describe("golden: vendor fixtures → overlay-equivalent risk score output", () => {
+  it("paired AbuseIPDB and OTX fixtures match overlay composite label and reasoning chain", () => {
+    const abuseSummary = normalizeAbuseIpdbCheckResponse(
+      loadVendorFixture("abuseipdb/check-high-confidence.json")
+    )?.summary;
+    const otxSummary = normalizeOtxIndicatorResponse(
+      loadVendorFixture("otx/indicator-ipv4-pulses.json")
+    )?.summary;
+    const sourceResults = sourceEntriesFromVendorSummaries([
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        summary: abuseSummary,
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.OTX,
+        sourceLabel: "OTX",
+        summary: otxSummary,
+      },
+    ]);
+
+    const presentation = expectOverlayScorePresentation(sourceResults);
+    const { view } = presentation;
+
+    expect(view.summaryText).toBe("High risk (59/100)");
+    expect(view.score.label).toBe(COMPOSITE_RISK_LABEL.HIGH);
+    expect(view.score.compositeSignal).toBeCloseTo(59.297, 2);
+    expect(presentation.insufficientCompositeNotice).toBeNull();
+    expect(
+      resolveRiskScoreReasoningPresentation(view, presentation.insufficientCompositeNotice)
+        .mode
+    ).toBe("chain");
+    expect(view.chain.sourceLines).toEqual(
+      view.score.sources.map(formatCompositeScoreContributionLine)
+    );
+    expect(view.chain.sourceLines[0]).toContain("AbuseIPDB: High (74/100");
+    expect(view.chain.sourceLines[1]).toContain("OTX: Suspicious");
+  });
+
+  it("divergent vendor summaries match overlay disagreement presentation", () => {
+    const otxSummary = normalizeOtxIndicatorResponse(
+      loadVendorFixture("otx/indicator-ipv4-pulses.json")
+    )?.summary;
+    const sourceResults = sourceEntriesFromVendorSummaries([
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        summary: "92 abuse confidence",
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.OTX,
+        sourceLabel: "OTX",
+        summary: otxSummary,
+      },
+    ]);
+
+    const presentation = expectOverlayScorePresentation(sourceResults);
+    const { view } = presentation;
+
+    expect(view.summaryText).toBe("High risk (69/100)");
+    expect(view.chain.showDisagreement).toBe(true);
+    expect(presentation.insufficientCompositeNotice).toBeNull();
+    expect(
+      resolveRiskScoreReasoningPresentation(view, presentation.insufficientCompositeNotice)
+        .mode
+    ).toBe("chain");
+  });
+
+  it("reports-only AbuseIPDB fixture matches overlay suspicious blended label", () => {
+    const abuseSummary = normalizeAbuseIpdbCheckResponse(
+      loadVendorFixture("abuseipdb/check-reports-only.json")
+    )?.summary;
+    const sourceResults = sourceEntriesFromVendorSummaries([
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        summary: abuseSummary,
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.OTX,
+        sourceLabel: "OTX",
+        summary: "1 threat pulse",
+      },
+    ]);
+
+    const presentation = expectOverlayScorePresentation(sourceResults);
+    const { view } = presentation;
+
+    expect(view.summaryText).toBe("Suspicious risk (49/100)");
+    expect(view.score.disagreement).toBe(true);
+    expect(view.chain.showDisagreement).toBe(true);
+  });
+
+  it("single-source vendor fixture matches overlay unknown label and empty reasoning chain", () => {
+    const abuseSummary = normalizeAbuseIpdbCheckResponse(
+      loadVendorFixture("abuseipdb/check-high-confidence.json")
+    )?.summary;
+    const sourceResults = sourceEntriesFromVendorSummaries([
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        summary: abuseSummary,
+      },
+    ]);
+
+    const presentation = expectOverlayScorePresentation(sourceResults);
+    const { view } = presentation;
+
+    expect(view.summaryText).toBe("Unknown risk");
+    expect(presentation.insufficientCompositeNotice).toBe(
+      RISK_SCORE_UNAVAILABLE_INSUFFICIENT_DETAIL
+    );
+    const reasoning = resolveRiskScoreReasoningPresentation(
+      view,
+      presentation.insufficientCompositeNotice
+    );
+    expect(reasoning.mode).toBe("empty");
+    if (reasoning.mode === "empty") {
+      expect(reasoning.detail).toBe(RISK_SCORE_REASONING_EMPTY_DETAIL);
+    }
+  });
+
+  it("hover-card scoring path matches direct composite scoring for vendor summaries", () => {
+    const abuseSummary = normalizeAbuseIpdbCheckResponse(
+      loadVendorFixture("abuseipdb/check-high-confidence.json")
+    )?.summary;
+    const otxSummary = normalizeOtxIndicatorResponse(
+      loadVendorFixture("otx/indicator-ipv4-pulses.json")
+    )?.summary;
+
+    const direct = computeCompositeRiskScore([
+      scoringInputFromNormalized(
+        ENRICHMENT_SOURCE.ABUSEIPDB,
+        "AbuseIPDB",
+        abuseSummary
+      ),
+      scoringInputFromNormalized(ENRICHMENT_SOURCE.OTX, "OTX", otxSummary),
+    ]);
+    const overlayView = buildHoverCardRiskScoreView(
+      sourceEntriesFromVendorSummaries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          summary: abuseSummary,
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          summary: otxSummary,
+        },
+      ])
+    );
+
+    expect(overlayView.score).toEqual(direct);
+    expect(overlayView.summaryText).toBe("High risk (59/100)");
   });
 });
