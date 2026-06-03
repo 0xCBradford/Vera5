@@ -1,5 +1,6 @@
 import type { MessageResponse } from "../lib/messages";
 import { rethrowUnlessStaleExtensionError } from "../lib/extensionContext";
+import { isCurrentPageAllowedByDomainPolicy } from "./domainPolicyStorage";
 import { handleScanPageRequest } from "./scanPage";
 
 export const DEFAULT_MUTATION_RESCAN_DEBOUNCE_MS = 400;
@@ -24,7 +25,12 @@ function clearPendingRescan(): void {
   }
 }
 
-function runRescan(): void {
+async function runRescanIfAllowed(): Promise<void> {
+  const allowed = await isCurrentPageAllowedByDomainPolicy();
+  if (!allowed) {
+    return;
+  }
+
   void handleScanPageRequest(activeRoot)
     .then((result) => {
       activeOnScan?.(result);
@@ -36,7 +42,7 @@ export function scheduleDebouncedRescan(): void {
   clearPendingRescan();
   pendingTimer = setTimeout(() => {
     pendingTimer = null;
-    runRescan();
+    void runRescanIfAllowed();
   }, activeDebounceMs);
 }
 

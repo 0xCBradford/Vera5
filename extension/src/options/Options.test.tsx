@@ -7,6 +7,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
 import { STORAGE_KEY_API_KEYS } from "../lib/storage";
+import {
+  STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
+  STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
+} from "../lib/storage";
 import { IOC_TYPE_SETTINGS_ORDER } from "../lib/storage";
 import { Options } from "./Options";
 
@@ -345,5 +349,117 @@ describe("Options API key inputs", () => {
     expect(mounted.container.textContent).toContain("Settings exported.");
 
     clickSpy.mockRestore();
+  });
+});
+
+describe("Options pre-query notice preference", () => {
+  let store: Record<string, unknown>;
+  let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+  beforeEach(() => {
+    store = {};
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    vi.unstubAllGlobals();
+  });
+
+  it("renders first-run pre-query notice choice when preference is unset", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("Pre-query notices");
+    expect(
+      mounted.container.querySelector('button[type="button"]')
+    ).not.toBeNull();
+    expect(mounted.container.textContent).toContain("Show pre-query notices");
+    expect(mounted.container.textContent).toContain("Skip pre-query notices");
+  });
+
+  it("persists first-run choice and hides the prompt", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const skipButton = Array.from(
+      mounted.container.querySelectorAll("button")
+    ).find((button) => button.textContent === "Skip pre-query notices");
+
+    expect(skipButton).not.toBeUndefined();
+
+    await act(async () => {
+      skipButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]).toBe(false);
+    expect(store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]).toBe(true);
+    expect(mounted.container.textContent).not.toContain(
+      "Skip pre-query notices"
+    );
+
+    const toggle = mounted.container.querySelector(
+      'input[aria-label="Show pre-query notices"]'
+    ) as HTMLInputElement;
+    expect(toggle).not.toBeNull();
+    expect(toggle.checked).toBe(false);
+  });
+
+  it("renders trust section toggle when preference is already configured", async () => {
+    store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES] = true;
+    store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED] = true;
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).not.toContain(
+      "Skip pre-query notices"
+    );
+    expect(mounted.container.textContent).toContain("Trust & consent");
+
+    const toggle = mounted.container.querySelector(
+      'input[aria-label="Show pre-query notices"]'
+    ) as HTMLInputElement;
+    expect(toggle).not.toBeNull();
+    expect(toggle.checked).toBe(true);
   });
 });

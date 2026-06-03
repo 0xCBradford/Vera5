@@ -249,7 +249,34 @@ export function buildVera5UiStylesCss(): string {
 .vera5-hover-card-disclaimer p:last-child {
   margin-bottom: 0;
 }
-.vera5-hover-card-action {
+.vera5-pre-query-disclosure {
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--vera5-border);
+  border-radius: 6px;
+  background-color: var(--vera5-button-bg);
+}
+.vera5-pre-query-disclosure__message {
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--vera5-accent-text);
+}
+.vera5-pre-query-disclosure__remember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vera5-muted-label);
+  cursor: pointer;
+}
+.vera5-pre-query-disclosure__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
   display: inline-block;
   font-size: 11px;
   font-weight: 600;

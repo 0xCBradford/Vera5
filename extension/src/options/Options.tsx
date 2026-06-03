@@ -32,7 +32,9 @@ import {
   getIncludePrivateIpv4,
   getIocTypeEnabled,
   getManualOnlyMode,
+  getPreQueryNoticePreferenceConfigured,
   getShowDisabledSourcesInWorkspace,
+  getShowPreQueryNotices,
   hasApiKey,
   IOC_TYPE_SETTINGS_ORDER,
   isMaskedApiKeyDisplay,
@@ -46,6 +48,7 @@ import {
   setIncludePrivateIpv4,
   setIocTypeEnabled,
   setManualOnlyMode,
+  setPreQueryNoticePreference,
   setShowDisabledSourcesInWorkspace,
 } from "../lib/storage";
 
@@ -89,6 +92,7 @@ const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "scanning", label: "Scanning" },
   { id: "indicators", label: "Indicators" },
   { id: "sources", label: "Enrichment Sources" },
+  { id: "trust", label: "Trust & consent" },
   { id: "cache", label: "Cache" },
   { id: "backup", label: "Backup" },
   { id: "api-keys", label: "API Keys" },
@@ -480,6 +484,9 @@ export function Options() {
   const [includePrivateIpv4, setIncludePrivateIpv4State] = useState(false);
   const [showDisabledSourcesInWorkspace, setShowDisabledSourcesInWorkspaceState] =
     useState(false);
+  const [showPreQueryNotices, setShowPreQueryNoticesState] = useState(true);
+  const [preQueryNoticePreferenceConfigured, setPreQueryNoticePreferenceConfiguredState] =
+    useState(false);
   const [globalCacheTtlSeconds, setGlobalCacheTtlSecondsState] = useState(
     String(DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS)
   );
@@ -509,6 +516,8 @@ export function Options() {
       getIocTypeEnabled(),
       getIncludePrivateIpv4(),
       getShowDisabledSourcesInWorkspace(),
+      getShowPreQueryNotices(),
+      getPreQueryNoticePreferenceConfigured(),
       getEnrichmentCacheTtlSecondsFromSettings(),
       getEnrichmentSourceCacheTtlSeconds(),
       ...API_KEY_FIELD_SLOTS.map(async (slot) => {
@@ -537,6 +546,8 @@ export function Options() {
           iocTypeEnabledValue,
           includePrivateIpv4Value,
           showDisabledSourcesValue,
+          showPreQueryNoticesValue,
+          preQueryNoticePreferenceConfiguredValue,
           globalCacheTtlValue,
           sourceCacheTtlValue,
           ...entries
@@ -547,6 +558,10 @@ export function Options() {
           setIocTypeEnabledState(iocTypeEnabledValue);
           setIncludePrivateIpv4State(includePrivateIpv4Value);
           setShowDisabledSourcesInWorkspaceState(showDisabledSourcesValue);
+          setShowPreQueryNoticesState(showPreQueryNoticesValue);
+          setPreQueryNoticePreferenceConfiguredState(
+            preQueryNoticePreferenceConfiguredValue
+          );
           setGlobalCacheTtlSecondsState(String(globalCacheTtlValue));
           setSourceCacheTtlDraftsState(
             formatSourceCacheTtlDrafts(sourceCacheTtlValue)
@@ -630,6 +645,18 @@ export function Options() {
   const handleShowDisabledSourcesToggle = (checked: boolean) => {
     setShowDisabledSourcesInWorkspaceState(checked);
     void setShowDisabledSourcesInWorkspace(checked);
+  };
+
+  const handleShowPreQueryNoticesToggle = (checked: boolean) => {
+    setShowPreQueryNoticesState(checked);
+    setPreQueryNoticePreferenceConfiguredState(true);
+    void setPreQueryNoticePreference(checked);
+  };
+
+  const handlePreQueryNoticeFirstRunChoice = (showNotices: boolean) => {
+    setShowPreQueryNoticesState(showNotices);
+    setPreQueryNoticePreferenceConfiguredState(true);
+    void setPreQueryNoticePreference(showNotices);
   };
 
   const handleGlobalCacheTtlBlur = () => {
@@ -853,6 +880,48 @@ export function Options() {
               </p>
             </div>
           </header>
+
+          {ready && !preQueryNoticePreferenceConfigured ? (
+            <section
+              className="v5-card"
+              aria-labelledby="pre-query-first-run-heading"
+            >
+              <div className="v5-card__head">
+                <h2 id="pre-query-first-run-heading" className="v5-card__title">
+                  Pre-query notices
+                </h2>
+                <p className="v5-card__desc">
+                  Before Vera5 sends an indicator value to a threat intelligence
+                  vendor you enabled, choose whether to show a notice in the
+                  browser. You can change this later under Trust &amp; consent.
+                </p>
+              </div>
+              <div className="v5-card__body">
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: 12,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="v5-btn v5-btn--primary"
+                    onClick={() => handlePreQueryNoticeFirstRunChoice(true)}
+                  >
+                    Show pre-query notices
+                  </button>
+                  <button
+                    type="button"
+                    className="v5-btn v5-btn--ghost"
+                    onClick={() => handlePreQueryNoticeFirstRunChoice(false)}
+                  >
+                    Skip pre-query notices
+                  </button>
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           <section
             id="overview"
@@ -1163,6 +1232,32 @@ export function Options() {
                   );
                 })}
               </div>
+            </div>
+          </section>
+
+          <section
+            id="trust"
+            className="v5-card"
+            aria-labelledby="trust-heading"
+          >
+            <div className="v5-card__head">
+              <h2 id="trust-heading" className="v5-card__title">
+                Trust &amp; consent
+              </h2>
+              <p className="v5-card__desc">
+                Control transparency before live enrichment queries leave this
+                browser.
+              </p>
+            </div>
+            <div className="v5-card__body">
+              <ToggleRow
+                label="Show pre-query notices"
+                hint="When on, Vera5 shows a notice before sending an indicator value to a vendor you enabled during live enrichment."
+                ariaLabel="Show pre-query notices"
+                checked={showPreQueryNotices}
+                disabled={!ready}
+                onChange={handleShowPreQueryNoticesToggle}
+              />
             </div>
           </section>
 

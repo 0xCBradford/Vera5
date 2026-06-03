@@ -3,6 +3,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IOC_TYPE } from "../lib/iocRegex";
+import { STORAGE_KEY_SHOW_PRE_QUERY_NOTICES } from "../lib/storage";
+import {
+  STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
+} from "./domainPolicyStorage";
 import { scanTextNodesForIocs } from "./detector";
 import { CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED } from "./highlightStorage";
 import {
@@ -27,6 +31,15 @@ import {
   IOC_HIGHLIGHT_CLASS,
 } from "./highlighter";
 
+vi.mock("./domainPolicyStorage", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("./domainPolicyStorage")>();
+  return {
+    ...actual,
+    isEnrichmentAllowedForCurrentPage: vi.fn(async () => true),
+  };
+});
+
 vi.mock("./enrichmentSourceStorage", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("./enrichmentSourceStorage")>();
@@ -36,6 +49,7 @@ vi.mock("./enrichmentSourceStorage", async (importOriginal) => {
   return {
     ...actual,
     getEnrichmentSourceEnabledForContent: vi.fn(async () => sources),
+    getShowPreQueryNoticesForContent: vi.fn(async () => false),
     loadWorkspaceEnrichmentSourceContext: vi.fn(async () => ({
       sources,
       showDisabledSourcesInWorkspace: true,
@@ -55,9 +69,9 @@ vi.mock("./enrichmentMessageClient", async (importOriginal) => {
 });
 
 async function flushAsyncWork(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let index = 0; index < 8; index += 1) {
+    await Promise.resolve();
+  }
 }
 
 describe("enrichment pipeline regression", () => {
@@ -65,7 +79,11 @@ describe("enrichment pipeline regression", () => {
   let teardownTrigger: (() => void) | null = null;
 
   beforeEach(() => {
-    store = { [CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED]: true };
+    store = {
+      [CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED]: true,
+      [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: false,
+      [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]: true,
+    };
     vi.stubGlobal("chrome", {
       runtime: {
         sendMessage: vi.fn().mockResolvedValue({ ok: false, error: "test stub" }),

@@ -6,9 +6,15 @@ import { IOC_TYPE } from "../lib/iocRegex";
 import {
   cancelPendingHoverEnrichment,
   DEFAULT_HOVER_ENRICHMENT_DEBOUNCE_MS,
+  DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
+  resolvePreQueryDisclosure,
   runBackgroundEnrichment,
   scheduleDebouncedBackgroundEnrichment,
 } from "./enrichmentBackgroundFetch";
+import {
+  STORAGE_KEY_DOMAIN_DENYLIST,
+  STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
+} from "./domainPolicyStorage";
 import * as enrichmentMessageClient from "./enrichmentMessageClient";
 import {
   HOVER_CARD_PANEL_CLASS,
@@ -23,6 +29,8 @@ vi.mock("./enrichmentSourceStorage", () => ({
     urlscan: false,
     greynoise: false,
   })),
+  getShowPreQueryNoticesForContent: vi.fn(async () => false),
+  setShowPreQueryNoticesForContent: vi.fn(async () => {}),
 }));
 
 vi.mock("./enrichmentMessageClient", async (importOriginal) => {
@@ -35,6 +43,17 @@ vi.mock("./enrichmentMessageClient", async (importOriginal) => {
 });
 
 import * as enrichmentSourceStorage from "./enrichmentSourceStorage";
+import { hasPendingPreQueryDisclosure } from "../lib/enrichmentPolicy";
+
+async function waitForPreQueryDisclosurePending(): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (hasPendingPreQueryDisclosure()) {
+      return;
+    }
+    await Promise.resolve();
+  }
+  throw new Error("Expected pre-query disclosure to enter pending state");
+}
 
 describe("debounced hover enrichment fetch", () => {
   beforeEach(() => {
@@ -53,6 +72,14 @@ describe("debounced hover enrichment fetch", () => {
       urlscan: false,
       greynoise: false,
     });
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      false
+    );
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockResolvedValue(
+      undefined
+    );
   });
 
   it("debounces rapid schedules into one service worker request", async () => {
@@ -138,6 +165,7 @@ describe("background enrichment with mocked service worker fetch results", () =>
     cancelPendingHoverEnrichment();
     document.body.replaceChildren();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
     vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockReset();
     vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockResolvedValue({
       abuseipdb: true,
@@ -145,6 +173,14 @@ describe("background enrichment with mocked service worker fetch results", () =>
       urlscan: false,
       greynoise: false,
     });
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      false
+    );
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockResolvedValue(
+      undefined
+    );
   });
 
   it("does not call the service worker when no live sources are enabled", async () => {
@@ -440,5 +476,286 @@ describe("background enrichment with mocked service worker fetch results", () =>
     expect(panel?.textContent).toContain("OTX · Error");
     expect(panel?.textContent).toContain("OTX rate limit reached");
     expect(panel?.querySelectorAll(".vera5-hover-card-source-badge")).toHaveLength(2);
+  });
+});
+
+describe("pre-query disclosure before live enrich", () => {
+  beforeEach(() => {
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "soc.example.com" },
+    });
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: () => Promise.resolve({}),
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    cancelPendingHoverEnrichment();
+    document.body.replaceChildren();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockResolvedValue({
+      abuseipdb: true,
+      otx: false,
+      urlscan: false,
+      greynoise: false,
+    });
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      false
+    );
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockResolvedValue(
+      undefined
+    );
+  });
+
+  it("shows inline disclosure and waits for analyst consent before fetching", async () => {
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      true
+    );
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    vi.mocked(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).mockResolvedValue({
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "18 abuse confidence",
+        },
+      ],
+      primary: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "18 abuse confidence",
+      },
+    });
+
+    const enrichmentPromise = runBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    await waitForPreQueryDisclosurePending();
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).not.toHaveBeenCalled();
+
+    const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(panel?.textContent).toContain(
+      "Vera5 will query AbuseIPDB with this IPv4 address: 8.8.8.8"
+    );
+    expect(panel?.querySelector(".vera5-pre-query-disclosure")).not.toBeNull();
+
+    resolvePreQueryDisclosure({ proceed: true, rememberDismiss: false });
+    await enrichmentPromise;
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).toHaveBeenCalledTimes(1);
+    const enrichedPanel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(enrichedPanel?.textContent).toContain("18 abuse confidence");
+  });
+
+  it("cancels enrichment when the analyst dismisses the disclosure", async () => {
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      true
+    );
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const enrichmentPromise = runBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    await waitForPreQueryDisclosurePending();
+
+    resolvePreQueryDisclosure({ proceed: false, rememberDismiss: false });
+    await enrichmentPromise;
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).not.toHaveBeenCalled();
+    const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(panel?.querySelector(".vera5-pre-query-disclosure")).toBeNull();
+  });
+
+  it("persists remember-dismiss when the analyst opts out of future notices", async () => {
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      true
+    );
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    vi.mocked(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).mockResolvedValue({
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "live summary",
+        },
+      ],
+      primary: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "live summary",
+      },
+    });
+
+    const enrichmentPromise = runBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    await waitForPreQueryDisclosurePending();
+
+    resolvePreQueryDisclosure({ proceed: true, rememberDismiss: true });
+    await enrichmentPromise;
+
+    expect(
+      enrichmentSourceStorage.setShowPreQueryNoticesForContent
+    ).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("domain policy enrich gate", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "mail.example.com" },
+    });
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    cancelPendingHoverEnrichment();
+    document.body.replaceChildren();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockResolvedValue({
+      abuseipdb: true,
+      otx: false,
+      urlscan: false,
+      greynoise: false,
+    });
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      false
+    );
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockResolvedValue(
+      undefined
+    );
+  });
+
+  it("blocks outbound enrichment on denylisted hosts when the enrich gate is enabled", async () => {
+    store[STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED] = true;
+    store[STORAGE_KEY_DOMAIN_DENYLIST] = ["mail.example.com"];
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await runBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).not.toHaveBeenCalled();
+    const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(panel?.textContent).toContain(DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE);
+  });
+
+  it("allows outbound enrichment when the enrich gate is disabled", async () => {
+    store[STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED] = false;
+    store[STORAGE_KEY_DOMAIN_DENYLIST] = ["mail.example.com"];
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    vi.mocked(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).mockResolvedValue({
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "18 abuse confidence",
+        },
+      ],
+      primary: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "18 abuse confidence",
+      },
+    });
+
+    await runBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).toHaveBeenCalledTimes(1);
   });
 });

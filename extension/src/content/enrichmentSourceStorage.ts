@@ -3,6 +3,10 @@ import {
   ENRICHMENT_SOURCE_ORDER,
   isEnrichmentSourceId,
 } from "../lib/enrichmentSourceRegistry";
+import {
+  STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
+  setPreQueryNoticePreference,
+} from "../lib/storage";
 import { safeStorageLocalGet } from "../lib/extensionContext";
 
 export const CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED =
@@ -51,6 +55,20 @@ export async function getShowDisabledSourcesInWorkspaceForContent(): Promise<boo
     CONTENT_STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE
   );
   return result[CONTENT_STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE] === true;
+}
+
+export async function getShowPreQueryNoticesForContent(): Promise<boolean> {
+  const result = await safeStorageLocalGet(STORAGE_KEY_SHOW_PRE_QUERY_NOTICES);
+  if (result[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES] === undefined) {
+    return true;
+  }
+  return result[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES] === true;
+}
+
+export async function setShowPreQueryNoticesForContent(
+  enabled: boolean
+): Promise<void> {
+  await setPreQueryNoticePreference(enabled);
 }
 
 export function listDisabledEnrichmentSourceIds(

@@ -34,6 +34,8 @@ Enrichment actions on the page feed the shared view model; production overlay an
 - When `displayValue` differs from the refanged `value`, shows **On page** and **Refanged** indicator rows via `resolveIndicatorValuePresentation()`.
 - Separate **Copy defanged** and **Copy refanged** header actions when those values differ (`resolveIndicatorCopyActions()`); otherwise a single **Copy Indicator** button copies the refanged value.
 - URL indicators include an **Open live URL** action that requires analyst confirmation before opening the refanged URL in a new tab (`confirmOpenLiveUrl()` / `openLiveUrlInNewTab()`).
+- When pre-query notices are enabled, live enrichment shows an inline **Before querying vendors** section on the card (`preQueryDisclosure` on the overlay payload). Copy names the enabled vendors and indicator value; **Send query** / **Cancel** gate the debounced fetch in `extension/src/content/enrichmentBackgroundFetch.ts`; **Don't show this notice again** writes `showPreQueryNotices` via `setShowPreQueryNoticesForContent()`.
+- When `domainPolicyEnrichGateEnabled` is on, the same hostname allow/deny policy used for auto-scan blocks live enrichment before pre-query disclosure or service-worker fetch; the card shows a domain-policy error instead of calling vendors.
 
 This is the **primary operator surface** documented in [README.md](../../README.md) and [docs/analyst-workflows.md](../analyst-workflows.md).
 

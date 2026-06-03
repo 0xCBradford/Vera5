@@ -1,7 +1,7 @@
 import {
-  CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED,
-  getAutoScanEnabledForContent,
-} from "./autoScanStorage";
+  DOMAIN_POLICY_CONTENT_STORAGE_KEYS,
+  isAutoScanAllowedForCurrentPage,
+} from "./domainPolicyStorage";
 import { runWithExtensionContext } from "../lib/extensionContext";
 import {
   setupDebouncedMutationRescan,
@@ -9,6 +9,11 @@ import {
 } from "./mutationRescan";
 
 let stopAutoScan: (() => void) | null = null;
+let trackedHostname = "";
+
+function readCurrentHostname(doc: Document = document): string {
+  return doc.location.hostname.trim().toLowerCase();
+}
 
 export function applyAutoScanEnabled(enabled: boolean): void {
   if (stopAutoScan) {
@@ -24,24 +29,40 @@ export function applyAutoScanEnabled(enabled: boolean): void {
   stopAutoScan = setupDebouncedMutationRescan({ enabled: true });
 }
 
-export async function syncAutoScanWithStorage(): Promise<void> {
-  const enabled = await getAutoScanEnabledForContent();
-  applyAutoScanEnabled(enabled);
+export async function refreshAutoScanState(doc: Document = document): Promise<void> {
+  const hostname = readCurrentHostname(doc);
+  if (hostname !== trackedHostname) {
+    trackedHostname = hostname;
+  }
+
+  const allowed = await isAutoScanAllowedForCurrentPage(doc);
+  applyAutoScanEnabled(allowed);
 }
 
-export function setupAutoScanStorageListener(): void {
+export async function syncAutoScanWithStorage(
+  doc: Document = document
+): Promise<void> {
+  trackedHostname = readCurrentHostname(doc);
+  await refreshAutoScanState(doc);
+}
+
+export function setupAutoScanStorageListener(doc: Document = document): void {
   chrome.storage.onChanged.addListener((changes, areaName) => {
     runWithExtensionContext(() => {
       if (areaName !== "local") {
         return;
       }
 
-      if (!(CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED in changes)) {
+      const relevantChange = DOMAIN_POLICY_CONTENT_STORAGE_KEYS.some(
+        (key) => key in changes
+      );
+      if (!relevantChange) {
         return;
       }
 
-      const newValue = changes[CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED]?.newValue;
-      applyAutoScanEnabled(Boolean(newValue));
+      void refreshAutoScanState(doc);
     });
   });
 }
+
+export { isAutoScanAllowedForCurrentPage };

@@ -8,6 +8,8 @@ import {
   getAutoScanEnabled,
   getEnrichmentSourceEnabled,
   getManualOnlyMode,
+  getPreQueryNoticePreferenceConfigured,
+  getShowPreQueryNotices,
   getExtensionEnabled,
   getHighlightEnabled,
   getIncludePrivateIpv4,
@@ -19,6 +21,7 @@ import {
   setIncludePrivateIpv4,
   setIocTypeEnabled,
   setManualOnlyMode,
+  setPreQueryNoticePreference,
   STORAGE_KEY_MANUAL_ONLY_MODE,
   hasApiKey,
   isMaskedApiKeyDisplay,
@@ -49,6 +52,12 @@ import {
   STORAGE_KEY_SCHEMA_VERSION,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
   STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE,
+  STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
+  STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
+  STORAGE_KEY_DOMAIN_POLICY_MODE,
+  STORAGE_KEY_DOMAIN_ALLOWLIST,
+  STORAGE_KEY_DOMAIN_DENYLIST,
+  STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
   STORAGE_KEYS,
   VERA5_SETTINGS_READ_KEYS,
   VERA5_SETTINGS_STORAGE_KEYS,
@@ -331,6 +340,12 @@ describe("migrate-safe defaults", () => {
     expect(defaults.autoScanEnabled).toBe(false);
     expect(defaults.manualOnlyMode).toBe(true);
     expect(defaults.includePrivateIpv4).toBe(false);
+    expect(defaults.showPreQueryNotices).toBe(true);
+    expect(defaults.preQueryNoticePreferenceConfigured).toBe(false);
+    expect(defaults.domainPolicyMode).toBe("allow_by_default");
+    expect(defaults.domainAllowlist).toEqual([]);
+    expect(defaults.domainDenylist).toEqual([]);
+    expect(defaults.domainPolicyEnrichGateEnabled).toBe(true);
     expect(defaults.enrichmentCacheTtlSeconds).toBe(
       DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS
     );
@@ -398,6 +413,12 @@ describe("migrate-safe defaults", () => {
         [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]:
           createDefaultVera5Settings().enrichmentSourceEnabled,
         [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]: false,
+        [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: true,
+        [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]: false,
+        [STORAGE_KEY_DOMAIN_POLICY_MODE]: "allow_by_default",
+        [STORAGE_KEY_DOMAIN_ALLOWLIST]: [],
+        [STORAGE_KEY_DOMAIN_DENYLIST]: [],
+        [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]: true,
         [STORAGE_KEY_IOC_TYPE_ENABLED]: {
           ipv4: true,
           domain: true,
@@ -504,6 +525,39 @@ describe("api key accessors", () => {
     await setApiKey("abuseipdb", "   ");
     await expect(getApiKey("abuseipdb")).resolves.toBe("");
     expect(store[STORAGE_KEY_API_KEYS]).toEqual({});
+  });
+});
+
+describe("pre-query notice preference storage", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults to showing notices with first-run prompt pending", async () => {
+    await expect(getShowPreQueryNotices()).resolves.toBe(true);
+    await expect(getPreQueryNoticePreferenceConfigured()).resolves.toBe(false);
+  });
+
+  it("perserves first-run choice and marks preference configured", async () => {
+    await setPreQueryNoticePreference(false);
+    expect(store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]).toBe(false);
+    expect(store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]).toBe(true);
+    await expect(getShowPreQueryNotices()).resolves.toBe(false);
+    await expect(getPreQueryNoticePreferenceConfigured()).resolves.toBe(true);
+  });
+
+  it("marks preference configured when toggling show notices", async () => {
+    await setPreQueryNoticePreference(true);
+    await setPreQueryNoticePreference(false);
+    expect(store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]).toBe(true);
+    await expect(getShowPreQueryNotices()).resolves.toBe(false);
   });
 });
 

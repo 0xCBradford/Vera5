@@ -11,7 +11,9 @@ Vera5 persists analyst configuration in **`chrome.storage.local`** via `extensio
 | API keys | AbuseIPDB, OTX (masked in Options UI after save) |
 | Source toggles | Per-vendor enable; URLScan and GreyNoise toggles affect pivots/preferences, not live API for those vendors in the current release |
 | Manual-only enrichment | Default on; blocks automatic fetch until **›** or explicit enrich |
-| Auto-scan | Default off; enables mutation-driven rescan |
+| Pre-query notices | Options first-run choice + **Trust & consent** toggle (`showPreQueryNotices`, `preQueryNoticePreferenceConfigured`); default shows notices until the analyst chooses. When enabled, the production hover card shows an inline disclosure (vendor names and indicator value) with **Send query** / **Cancel** before live enrichment leaves the browser; **Don't show this notice again** persists the same global preference as turning the toggle off. Gate logic: `extension/src/lib/enrichmentPolicy.ts`; content sync: `getShowPreQueryNoticesForContent()` in `enrichmentSourceStorage.ts`. |
+| Auto-scan | Default off; enables mutation-driven rescan. Respects domain policy (`domainPolicyMode`, `domainAllowlist`, `domainDenylist`): allow-by-default blocks denylisted hosts; deny-by-default runs only on allowlisted hosts. Content sync via `domainPolicyStorage.ts` and `autoScan.ts`. |
+| Domain policy enrich gate | Default on (`domainPolicyEnrichGateEnabled`); when enabled, live enrichment on the current tab hostname is blocked by the same allow/deny policy before any vendor request leaves the browser (`isEnrichmentAllowedForCurrentPage()` in `domainPolicyStorage.ts`, gate in `enrichmentBackgroundFetch.ts`). |
 | Per-IOC-type flags | Options checkboxes; defaults all MVP types on; scan omits disabled types |
 | `includePrivateIpv4` | Options checkbox; private-space IPv4 omitted in detector when off (default) |
 | Enrichment cache TTL | Global seconds field on Options; optional per-source overrides |
@@ -47,7 +49,7 @@ Never commit storage dumps or API keys to git.
 
 Several flags sync on load and on `chrome.storage.onChanged`:
 
-- `highlightStorage.ts`, `manualOnlyStorage.ts`, `includePrivateIpv4Storage.ts`, `iocTypeEnabledStorage.ts`, `enrichmentSourceStorage.ts`, `autoScanStorage.ts`
+- `highlightStorage.ts`, `manualOnlyStorage.ts`, `includePrivateIpv4Storage.ts`, `iocTypeEnabledStorage.ts`, `enrichmentSourceStorage.ts`, `autoScanStorage.ts`, `domainPolicyStorage.ts`
 
 When adding a new setting consumed in content scripts, follow the same listen/sync pattern to avoid stale tab state.
 

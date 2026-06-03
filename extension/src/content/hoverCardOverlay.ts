@@ -56,6 +56,11 @@ import {
   resolveEffectiveSourceAttribution,
   resolveHoverCardDisplayView,
   resolveHoverCardDisclaimerAriaLabel,
+  PRE_QUERY_DISCLOSURE_CANCEL_LABEL,
+  PRE_QUERY_DISCLOSURE_HEADING,
+  PRE_QUERY_DISCLOSURE_REMEMBER_LABEL,
+  PRE_QUERY_DISCLOSURE_SECTION_ARIA_LABEL,
+  PRE_QUERY_DISCLOSURE_SEND_LABEL,
   resolveIndicatorCopyActions,
   resolveIndicatorValuePresentation,
   shouldOfferLiveUrlOpen,
@@ -66,8 +71,10 @@ import {
   type HoverCardSourceEntry,
   type WhyDetectedView,
 } from "../lib/hoverCardEnrichment";
-import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
 import { getPivotRecipes } from "../lib/pivots";
+import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
+import { ENRICHMENT_SOURCE_LABELS } from "../lib/enrichmentSourceRegistry";
+import { buildPreQueryDisclosureMessage, cancelPreQueryDisclosure, resolvePreQueryDisclosure } from "../lib/enrichmentPolicy";
 import {
   buildEnrichmentSummaryClassName,
   ensureVera5UiStyles,
@@ -236,6 +243,9 @@ export type HoverCardOverlayPayload = {
   showDisabledSourcesInWorkspace?: boolean;
   sourceResults?: readonly HoverCardSourceEntry[];
   analystNotes?: string;
+  preQueryDisclosure?: {
+    sourceIds: readonly EnrichmentSourceId[];
+  };
 };
 
 function formatTypeLabel(type: IocType): string {
@@ -662,6 +672,83 @@ export function createOpenLiveUrlButton(
     openLiveUrlInNewTab(liveUrl, docView);
   });
   return button;
+}
+
+function createPreQueryDisclosureSection(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): HTMLElement | null {
+  const disclosure = payload.preQueryDisclosure;
+  if (!disclosure || disclosure.sourceIds.length === 0) {
+    return null;
+  }
+
+  const sourceLabels = disclosure.sourceIds.map(
+    (sourceId) => ENRICHMENT_SOURCE_LABELS[sourceId]
+  );
+  const message = buildPreQueryDisclosureMessage({
+    sourceLabels,
+    value: payload.displayValue ?? payload.value,
+    typeLabel: formatTypeLabel(payload.type),
+  });
+
+  const section = doc.createElement("section");
+  section.className = "vera5-pre-query-disclosure";
+  section.setAttribute("aria-label", PRE_QUERY_DISCLOSURE_SECTION_ARIA_LABEL);
+
+  section.appendChild(createSectionHeading(PRE_QUERY_DISCLOSURE_HEADING, doc));
+
+  const body = doc.createElement("p");
+  body.className = "vera5-pre-query-disclosure__message";
+  body.setAttribute("role", "note");
+  body.textContent = message;
+  section.appendChild(body);
+
+  const rememberLabel = doc.createElement("label");
+  rememberLabel.className = "vera5-pre-query-disclosure__remember";
+  const rememberCheckbox = doc.createElement("input");
+  rememberCheckbox.type = "checkbox";
+  rememberCheckbox.setAttribute(
+    "aria-label",
+    PRE_QUERY_DISCLOSURE_REMEMBER_LABEL
+  );
+  rememberLabel.appendChild(rememberCheckbox);
+  rememberLabel.append(` ${PRE_QUERY_DISCLOSURE_REMEMBER_LABEL}`);
+  section.appendChild(rememberLabel);
+
+  const actions = doc.createElement("div");
+  actions.className = "vera5-pre-query-disclosure__actions";
+
+  const sendButton = doc.createElement("button");
+  sendButton.type = "button";
+  sendButton.className = HOVER_CARD_ACTION_CLASS;
+  sendButton.textContent = PRE_QUERY_DISCLOSURE_SEND_LABEL;
+  sendButton.setAttribute("aria-label", PRE_QUERY_DISCLOSURE_SEND_LABEL);
+  sendButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    resolvePreQueryDisclosure({
+      proceed: true,
+      rememberDismiss: rememberCheckbox.checked,
+    });
+  });
+  actions.appendChild(sendButton);
+
+  const cancelButton = doc.createElement("button");
+  cancelButton.type = "button";
+  cancelButton.className = HOVER_CARD_ACTION_CLASS;
+  cancelButton.textContent = PRE_QUERY_DISCLOSURE_CANCEL_LABEL;
+  cancelButton.setAttribute("aria-label", PRE_QUERY_DISCLOSURE_CANCEL_LABEL);
+  cancelButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    resolvePreQueryDisclosure({
+      proceed: false,
+      rememberDismiss: false,
+    });
+  });
+  actions.appendChild(cancelButton);
+
+  section.appendChild(actions);
+  return section;
 }
 
 export function buildExportRecordFromPayload(
@@ -1626,6 +1713,7 @@ export function buildHoverCardPanel(
   const whyDetectedSection = whyDetectedView
     ? createWhyDetectedSection(whyDetectedView, doc)
     : null;
+  const preQueryDisclosureSection = createPreQueryDisclosureSection(payload, doc);
 
   const panel = doc.createElement("aside");
   panel.className = HOVER_CARD_PANEL_CLASS;
@@ -1666,6 +1754,11 @@ export function buildHoverCardPanel(
   if (whyDetectedSection) {
     whyDetectedSection.style.marginBottom = "8px";
     panel.appendChild(whyDetectedSection);
+  }
+
+  if (preQueryDisclosureSection) {
+    preQueryDisclosureSection.style.marginBottom = "8px";
+    panel.appendChild(preQueryDisclosureSection);
   }
 
   const intelSection = doc.createElement("section");
@@ -1892,6 +1985,7 @@ export function refreshHoverCardIfOpen(doc: Document = document): void {
 }
 
 export function hideHoverCard(doc: Document = document): void {
+  cancelPreQueryDisclosure();
   const host = doc.getElementById(HOVER_CARD_HOST_ID);
   if (!host) {
     return;

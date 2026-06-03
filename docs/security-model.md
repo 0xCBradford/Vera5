@@ -65,6 +65,88 @@ For a visual summary of IOC and data boundaries, see the **IOC and data boundary
 
 **Telemetry:** No usage analytics or crash reporting to Vera5 by default.
 
+## Domain policy and sensitive sites
+
+Vera5 can gate **auto-scan** and **live enrichment** on the hostname of the page you are viewing. Policy is stored locally in extension settings (`domainPolicyMode`, `domainAllowlist`, `domainDenylist`). When the domain enrich gate is enabled (default), the same rules block vendor API calls before pre-query disclosure runs.
+
+| Mode | Behavior |
+|------|----------|
+| Allow by default (current product default) | Auto-scan and enrichment run on all hosts **except** those on the denylist. |
+| Deny by default | Auto-scan and enrichment run **only** on hosts in the allowlist. |
+
+Lists are empty until you add entries (Options UI for list management is not shipped in the current release; values can be set via extension storage or a future settings import).
+
+### Pattern syntax
+
+Entries are normalized to lowercase. Supported forms match the domain policy matcher in the extension:
+
+| Form | Example | Matches |
+|------|---------|---------|
+| Exact hostname | `mail.company.com` | That host only |
+| Prefix wildcard | `mail.*` | `mail` and `mail.<label>` (for example `mail.google.com`, `mail.contoso.com`) |
+| Suffix wildcard | `*.corp.example` | `corp.example` and `<label>.corp.example` |
+
+Use prefix patterns for common webmail layouts (`mail.*`, `webmail.*`). Use suffix patterns for internal zones (`*.internal`, `*.corp.example`).
+
+### Suggested sensitive-domain patterns
+
+The tables below are **starting points** for your denylist when using allow-by-default, or for review before allowlisting when using deny-by-default. Adjust for your organization’s DNS and SaaS tenants. Vera5 does not ship a mandatory blocklist in the current release.
+
+#### Webmail and personal email
+
+Accidental enrichment on webmail can associate message-adjacent indicators (headers, URLs, addresses) with third-party threat-intel vendors.
+
+| Suggested pattern | Notes |
+|-------------------|-------|
+| `mail.*` | Corporate and provider webmail hosts (`mail.contoso.com`, `mail.proton.me`) |
+| `webmail.*` | Alternate webmail prefixes |
+| `outlook.office.com`, `outlook.live.com` | Microsoft consumer and M365 webmail |
+| `mail.google.com` | Gmail web |
+| `mail.yahoo.com` | Yahoo Mail web |
+
+#### Banking and financial services
+
+Online banking and payment portals often sit on regulated domains where outbound indicator queries may be restricted or require explicit approval.
+
+| Suggested pattern | Notes |
+|-------------------|-------|
+| Exact institution hosts | Prefer known login, wire, and treasury portals (for example `chase.com`, `wellsfargo.com`, or your regional equivalents) |
+| `*.bank` | Matches hosts ending in `.bank` where your providers use that layout—verify against live DNS before relying on TLD-style rules |
+
+Avoid overly broad prefix wildcards (for example `online.*`) on shared analyst machines; they can block legitimate SOC and vendor sites.
+
+#### Health and patient portals
+
+Patient charts, lab results, and telehealth sessions may contain PHI-adjacent indicators.
+
+| Suggested pattern | Notes |
+|-------------------|-------|
+| Exact portal hosts | Insurer, hospital, and telehealth login domains your workforce uses |
+| `*.mychart.org` | Common MyChart-style patient portal naming (validate against your providers) |
+| Suffix patterns for health zones | Internal clinical or research zones (for example `*.clinical.corp.example`) when you operate split DNS |
+
+Treat health-related origins like high-sensitivity workflow: add them to the denylist, or use deny-by-default and allowlist only approved SOC destinations.
+
+#### Internal HR and workforce systems
+
+HR portals, performance tools, and payroll sites expose employee identifiers, compensation context, and internal routing data.
+
+| Suggested pattern | Notes |
+|-------------------|-------|
+| Exact internal hosts | `hr.company.com`, `people.company.internal`, VPN-only HR zones |
+| `hr.*`, `people.*` | Common internal naming—tune to your corporate DNS |
+| `*.workday.com`, `*.successfactors.com`, `*.ultipro.com` | Common SaaS HR platforms; prefer exact tenant subdomains when known |
+| `*.internal`, `*.corp.example` | Broad intranet suffix patterns to block passive scan and enrich on internal browsing |
+
+### Applying patterns safely
+
+- **Pre-query disclosure** still applies when enrichment is allowed; domain policy is an additional gate, not a replacement for analyst consent.
+- **Manual-only enrichment** (default on) reduces accidental live queries; combine with denylist entries on sensitive hosts.
+- **Auto-scan** (default off) respects the same lists; enabling auto-scan on webmail increases passive indicator handling in page text even when vendor calls stay blocked.
+- Review patterns after DNS or SaaS migrations; stale denylist entries are harmless, missing entries are not.
+
+For workflow context, see [analyst-workflows.md](analyst-workflows.md) (manual-only enrichment and sensitive cases).
+
 ## Permission changes
 
 Any new permission or host pattern requires an update to this document, [SECURITY.md](../SECURITY.md), the manifest, and the Chrome Web Store listing so analysts can review the change before upgrading.
@@ -91,4 +173,5 @@ npm run verify:security
 
 - [SECURITY.md](../SECURITY.md) — vulnerability reporting and high-level threat model
 - [architecture.md](architecture.md) — codebase layout, MVP IOC types, connector order
+- [analyst-workflows.md](analyst-workflows.md) — analyst-facing workflow guidance
 - [README.md](../README.md) — install and development workflow

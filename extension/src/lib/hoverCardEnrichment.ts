@@ -679,6 +679,13 @@ export const HOVER_CARD_OPEN_LIVE_URL_LABEL = "Open live URL";
 export const HOVER_CARD_OPEN_LIVE_URL_CONFIRM_MESSAGE =
   "This opens the live URL in a new browser tab. The destination may be malicious or unreachable. Continue?";
 
+export const PRE_QUERY_DISCLOSURE_SECTION_ARIA_LABEL = "Pre-query notice";
+export const PRE_QUERY_DISCLOSURE_HEADING = "Before querying vendors";
+export const PRE_QUERY_DISCLOSURE_SEND_LABEL = "Send query";
+export const PRE_QUERY_DISCLOSURE_CANCEL_LABEL = "Cancel";
+export const PRE_QUERY_DISCLOSURE_REMEMBER_LABEL =
+  "Don't show this notice again";
+
 export type IndicatorValuePresentation = {
   onPageValue: string;
   refangedValue: string;

@@ -2520,3 +2520,25 @@ describe("hover card keyboard focus", () => {
     expect(document.activeElement).toBe(copyButton);
   });
 });
+
+describe("pre-query disclosure section", () => {
+  it("renders vendor query notice with send, cancel, and remember actions", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "empty",
+      preQueryDisclosure: {
+        sourceIds: ["abuseipdb"],
+      },
+    });
+
+    expect(panel.textContent).toContain(
+      "Vera5 will query AbuseIPDB with this IPv4 address: 8.8.8.8"
+    );
+    expect(panel.querySelector(".vera5-pre-query-disclosure")).not.toBeNull();
+    expect(panel.textContent).toContain("Before querying vendors");
+    expect(panel.textContent).toContain("Send query");
+    expect(panel.textContent).toContain("Cancel");
+    expect(panel.textContent).toContain("Don't show this notice again");
+  });
+});

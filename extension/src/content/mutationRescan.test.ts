@@ -135,4 +135,39 @@ describe("debounced mutation rescan stub", () => {
     vi.advanceTimersByTime(DEFAULT_MUTATION_RESCAN_DEBOUNCE_MS);
     expect(onScan).not.toHaveBeenCalled();
   });
+
+  it("skips rescans when the current domain is denylisted", async () => {
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: () =>
+            Promise.resolve({
+              domainDenylist: ["blocked.example.com"],
+            }),
+        },
+      },
+    });
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "blocked.example.com" },
+    });
+
+    const onScan = vi.fn();
+    const root = document.createElement("div");
+    document.body.replaceChildren(root);
+
+    setupDebouncedMutationRescan({
+      enabled: true,
+      debounceMs: DEFAULT_MUTATION_RESCAN_DEBOUNCE_MS,
+      root,
+      onScan,
+    });
+
+    scheduleDebouncedRescan();
+    vi.advanceTimersByTime(DEFAULT_MUTATION_RESCAN_DEBOUNCE_MS);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onScan).not.toHaveBeenCalled();
+  });
 });

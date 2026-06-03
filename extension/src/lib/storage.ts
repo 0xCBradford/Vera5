@@ -1,4 +1,11 @@
 import type { EnrichmentSourceId } from "./hoverCardEnrichment";
+import {
+  createDefaultDomainPolicy,
+  normalizeDomainPolicyList,
+  normalizeDomainPolicyMode,
+  type DomainPolicy,
+  type DomainPolicyMode,
+} from "./domainPolicy";
 import type { IocType } from "./iocRegex";
 import {
   API_KEY_STORAGE_SLOTS,
@@ -26,6 +33,16 @@ export const STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS =
   "enrichmentSourceCacheTtlSeconds";
 export const STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE =
   "showDisabledSourcesInWorkspace";
+export const STORAGE_KEY_SHOW_PRE_QUERY_NOTICES = "showPreQueryNotices";
+export const STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED =
+  "preQueryNoticePreferenceConfigured";
+export const STORAGE_KEY_DOMAIN_POLICY_MODE = "domainPolicyMode";
+export const STORAGE_KEY_DOMAIN_ALLOWLIST = "domainAllowlist";
+export const STORAGE_KEY_DOMAIN_DENYLIST = "domainDenylist";
+export const STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED =
+  "domainPolicyEnrichGateEnabled";
+
+export type { DomainPolicy, DomainPolicyMode };
 
 export const STORAGE_KEYS = {
   EXTENSION_ENABLED: STORAGE_KEY_EXTENSION_ENABLED,
@@ -42,6 +59,14 @@ export const STORAGE_KEYS = {
     STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
   SHOW_DISABLED_SOURCES_IN_WORKSPACE:
     STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE,
+  SHOW_PRE_QUERY_NOTICES: STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
+  PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED:
+    STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
+  DOMAIN_POLICY_MODE: STORAGE_KEY_DOMAIN_POLICY_MODE,
+  DOMAIN_ALLOWLIST: STORAGE_KEY_DOMAIN_ALLOWLIST,
+  DOMAIN_DENYLIST: STORAGE_KEY_DOMAIN_DENYLIST,
+  DOMAIN_POLICY_ENRICH_GATE_ENABLED:
+    STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
 } as const;
 
 export type ApiKeySlot = ApiKeyStorageSlot;
@@ -71,6 +96,12 @@ export type Vera5Settings = {
   enrichmentCacheTtlSeconds: number;
   enrichmentSourceCacheTtlSeconds: EnrichmentSourceCacheTtlRecord;
   showDisabledSourcesInWorkspace: boolean;
+  showPreQueryNotices: boolean;
+  preQueryNoticePreferenceConfigured: boolean;
+  domainPolicyMode: DomainPolicyMode;
+  domainAllowlist: string[];
+  domainDenylist: string[];
+  domainPolicyEnrichGateEnabled: boolean;
 };
 
 export type Vera5StorageRaw = {
@@ -86,6 +117,12 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS]?: unknown;
   [STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS]?: unknown;
   [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]?: unknown;
+  [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]?: unknown;
+  [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]?: unknown;
+  [STORAGE_KEY_DOMAIN_POLICY_MODE]?: unknown;
+  [STORAGE_KEY_DOMAIN_ALLOWLIST]?: unknown;
+  [STORAGE_KEY_DOMAIN_DENYLIST]?: unknown;
+  [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]?: unknown;
 };
 
 export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
@@ -100,6 +137,12 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_IOC_TYPE_ENABLED,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
   STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE,
+  STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
+  STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
+  STORAGE_KEY_DOMAIN_POLICY_MODE,
+  STORAGE_KEY_DOMAIN_ALLOWLIST,
+  STORAGE_KEY_DOMAIN_DENYLIST,
+  STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
 ];
 
 export const VERA5_SETTINGS_READ_KEYS: readonly string[] = [
@@ -213,6 +256,12 @@ export function createDefaultVera5Settings(): Vera5Settings {
     enrichmentSourceCacheTtlSeconds:
       createDefaultEnrichmentSourceCacheTtlRecord(),
     showDisabledSourcesInWorkspace: false,
+    showPreQueryNotices: true,
+    preQueryNoticePreferenceConfigured: false,
+    domainPolicyMode: createDefaultDomainPolicy().mode,
+    domainAllowlist: [],
+    domainDenylist: [],
+    domainPolicyEnrichGateEnabled: true,
   };
 }
 
@@ -356,6 +405,25 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
       raw[STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE],
       defaults.showDisabledSourcesInWorkspace
     ),
+    showPreQueryNotices: readStoredBoolean(
+      raw[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES],
+      defaults.showPreQueryNotices
+    ),
+    preQueryNoticePreferenceConfigured: readStoredBoolean(
+      raw[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED],
+      defaults.preQueryNoticePreferenceConfigured
+    ),
+    domainPolicyMode: normalizeDomainPolicyMode(
+      raw[STORAGE_KEY_DOMAIN_POLICY_MODE]
+    ),
+    domainAllowlist: normalizeDomainPolicyList(
+      raw[STORAGE_KEY_DOMAIN_ALLOWLIST]
+    ),
+    domainDenylist: normalizeDomainPolicyList(raw[STORAGE_KEY_DOMAIN_DENYLIST]),
+    domainPolicyEnrichGateEnabled: readStoredBoolean(
+      raw[STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED],
+      defaults.domainPolicyEnrichGateEnabled
+    ),
   };
 }
 
@@ -390,6 +458,14 @@ export function vera5SettingsToStoragePayload(
       settings.enrichmentSourceCacheTtlSeconds,
     [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]:
       settings.showDisabledSourcesInWorkspace,
+    [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: settings.showPreQueryNotices,
+    [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]:
+      settings.preQueryNoticePreferenceConfigured,
+    [STORAGE_KEY_DOMAIN_POLICY_MODE]: settings.domainPolicyMode,
+    [STORAGE_KEY_DOMAIN_ALLOWLIST]: settings.domainAllowlist,
+    [STORAGE_KEY_DOMAIN_DENYLIST]: settings.domainDenylist,
+    [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]:
+      settings.domainPolicyEnrichGateEnabled,
   };
 }
 
@@ -587,6 +663,29 @@ export async function setShowDisabledSourcesInWorkspace(
   await chrome.storage.local.set({
     [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]: enabled,
   });
+}
+
+export async function getShowPreQueryNotices(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.showPreQueryNotices;
+}
+
+export async function getPreQueryNoticePreferenceConfigured(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.preQueryNoticePreferenceConfigured;
+}
+
+export async function setPreQueryNoticePreference(
+  showNotices: boolean
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: showNotices,
+    [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]: true,
+  });
+}
+
+export async function setShowPreQueryNotices(enabled: boolean): Promise<void> {
+  await setPreQueryNoticePreference(enabled);
 }
 
 export function maskApiKeyForDisplay(key: string): string {

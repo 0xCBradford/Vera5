@@ -20,6 +20,7 @@ export const ENRICHMENT_ERROR_CODE = {
   UNSUPPORTED_TYPE: "unsupported_type",
   NETWORK: "network_error",
   DISABLED: "disabled",
+  DOMAIN_POLICY: "domain_policy",
   VENDOR: "vendor_error",
 } as const;
 
