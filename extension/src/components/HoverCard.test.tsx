@@ -70,6 +70,43 @@ describe("HoverCard", () => {
     ).not.toBeNull();
   });
 
+  it("renders Why detected panel when provenance is present", () => {
+    mounted = renderHoverCard({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      ruleId: "ioc.regex.ipv4",
+      sourceTextHint: "Contact 8.8.8.8 for details.",
+    });
+
+    const section = mounted.container.querySelector(".vera5-why-detected");
+    expect(section).not.toBeNull();
+    expect(mounted.container.textContent).toContain("Why detected?");
+    expect(mounted.container.textContent).toContain("Type: IPv4 address");
+    expect(mounted.container.textContent).toContain(
+      "Matched an IPv4 address in visible text, including bracket-dot defanged forms."
+    );
+    expect(mounted.container.textContent).toContain(
+      "Source context: Contact 8.8.8.8 for details."
+    );
+    expect(mounted.container.textContent).toContain("Ignored overlaps: none");
+  });
+
+  it("renders on-page and refanged values when displayValue differs", () => {
+    mounted = renderHoverCard({
+      value: "https://example.com/evil",
+      displayValue: "hxxps://example[.]com/evil",
+      type: IOC_TYPE.URL,
+      ruleId: "ioc.regex.url",
+      sourceTextHint: "Ticket hxxps://example[.]com/evil",
+    });
+
+    expect(mounted.container.querySelector(".vera5-hover-card-value")).toBeNull();
+    expect(mounted.container.textContent).toContain("On page: hxxps://example[.]com/evil");
+    expect(mounted.container.textContent).toContain(
+      "Refanged: https://example.com/evil"
+    );
+  });
+
   it("injects shared UI styles on mount", () => {
     mounted = renderHoverCard({
       value: "8.8.8.8",
@@ -141,7 +178,7 @@ describe("HoverCard", () => {
     expect(mounted.container.textContent).not.toContain("Risk score: High");
   });
 
-  it("copies the IOC value when Copy is clicked", async () => {
+  it("copies the IOC value when Copy Indicator is clicked", async () => {
     const copy = vi
       .spyOn(copyText, "copyTextToClipboard")
       .mockResolvedValue(true);
@@ -151,8 +188,8 @@ describe("HoverCard", () => {
       type: IOC_TYPE.IPV4,
     });
 
-    const button = mounted.container.querySelector("button");
-    expect(button?.textContent).toBe("Copy");
+    const button = mounted.container.querySelector(".vera5-hover-card-copy");
+    expect(button?.textContent).toBe("Copy Indicator");
     await act(async () => {
       button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
@@ -161,6 +198,67 @@ describe("HoverCard", () => {
     expect(button?.textContent).toBe("Copied");
     expect(button?.className).toContain("vera5-hover-card-copy--copied");
     copy.mockRestore();
+  });
+
+  it("copies defanged and refanged values separately when displayValue differs", async () => {
+    const copy = vi
+      .spyOn(copyText, "copyTextToClipboard")
+      .mockResolvedValue(true);
+
+    mounted = renderHoverCard({
+      value: "https://example.com/evil",
+      displayValue: "hxxps://example[.]com/evil",
+      type: IOC_TYPE.URL,
+    });
+
+    const buttons = Array.from(
+      mounted.container.querySelectorAll<HTMLButtonElement>(".vera5-hover-card-copy")
+    );
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "Copy defanged",
+      "Copy refanged",
+    ]);
+
+    await act(async () => {
+      buttons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(copy).toHaveBeenCalledWith("hxxps://example[.]com/evil");
+
+    await act(async () => {
+      buttons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(copy).toHaveBeenCalledWith("https://example.com/evil");
+
+    copy.mockRestore();
+  });
+
+  it("confirms before opening a live URL from the hover card", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+
+    mounted = renderHoverCard({
+      value: "https://example.com/evil",
+      type: IOC_TYPE.URL,
+    });
+
+    const openButton = Array.from(
+      mounted.container.querySelectorAll<HTMLButtonElement>(".vera5-hover-card-action")
+    ).find((button) => button.textContent === "Open live URL");
+    expect(openButton).toBeDefined();
+
+    await act(async () => {
+      openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(
+      "https://example.com/evil",
+      "_blank",
+      "noopener,noreferrer"
+    );
+
+    confirm.mockRestore();
+    open.mockRestore();
   });
 });
 

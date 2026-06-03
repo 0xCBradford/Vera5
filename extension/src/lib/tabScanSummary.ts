@@ -16,7 +16,7 @@ import {
   formatSourceStatusBadge,
   type HoverCardSourceEntryStatus,
 } from "./hoverCardEnrichment";
-import { IOC_TYPE, type IocType } from "./iocRegex";
+import { IOC_TYPE, type IocMatchProvenance, type IocType } from "./iocRegex";
 import {
   API_KEY_SLOTS,
   getVera5Settings,
@@ -267,6 +267,26 @@ export function countIocsByType(
   return counts;
 }
 
+export function resolveTrayEntryMatchProvenance(
+  entry: TabScanSummaryEntry
+): IocMatchProvenance | null {
+  if (
+    typeof entry.ruleId !== "string" ||
+    entry.ruleId.length === 0 ||
+    typeof entry.sourceTextHint !== "string" ||
+    entry.sourceTextHint.length === 0
+  ) {
+    return null;
+  }
+  return {
+    ruleId: entry.ruleId,
+    sourceTextHint: entry.sourceTextHint,
+    ...(entry.ignoredOverlaps && entry.ignoredOverlaps.length > 0
+      ? { ignoredOverlaps: [...entry.ignoredOverlaps] }
+      : {}),
+  };
+}
+
 export function buildTabScanSummary(snapshot: TabScanSnapshot): TabScanSummary {
   return {
     schemaVersion: TAB_SCAN_SUMMARY_SCHEMA_VERSION,
@@ -288,13 +308,25 @@ function isTabScanSummaryEntry(value: unknown): value is TabScanSummaryEntry {
     return false;
   }
   const record = value as Record<string, unknown>;
-  return (
+  const hasCore =
     isIocType(record.type) &&
     typeof record.value === "string" &&
     record.value.length > 0 &&
     typeof record.anchorId === "string" &&
-    record.anchorId.length > 0
-  );
+    record.anchorId.length > 0;
+  if (!hasCore) {
+    return false;
+  }
+  if (record.ruleId !== undefined && typeof record.ruleId !== "string") {
+    return false;
+  }
+  if (
+    record.sourceTextHint !== undefined &&
+    typeof record.sourceTextHint !== "string"
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function isTabScanSummary(value: unknown): value is TabScanSummary {

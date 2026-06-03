@@ -29,6 +29,11 @@ Enrichment actions on the page feed the shared view model; production overlay an
 - Keyboard opens move focus to the first card control (typically **Copy Indicator**); **Escape** closes the card and restores focus to the opening highlight when the card was opened from the keyboard.
 - With a highlight focused, **ArrowDown** / **ArrowUp** move to the next or previous highlight in document order (wraps at the ends). With the page focused after scan, **ArrowDown** focuses the first highlight and **ArrowUp** focuses the last. Triage navigation closes an open hover card without opening the next indicator.
 - Shows type, value, enrichment rows, Live/Cached/Error badges, raw JSON panel, copy, recommended next pivots with source-attributed links, composite risk score, reasoning chain when data allows, and a local **Analyst notes** textarea keyed per indicator (`extension/src/lib/analystNotesSession.ts` with persistence in `extension/src/lib/analystNotesStorage.ts`).
+- Carries optional detection provenance on the overlay payload and panel root (`ruleId`, `sourceTextHint` as `data-vera5-rule-id` / `data-vera5-source-text-hint`), populated from highlight datasets when the card opens from a scanned match.
+- Renders a **Why detected?** section when provenance is present: indicator type, rule reason (`formatDetectionRuleReason`), source text hint, and any overlapping matches dropped during dedupe (`ignoredOverlaps`). Built via `buildWhyDetectedView()` / `createWhyDetectedSection()` in the overlay panel.
+- When `displayValue` differs from the refanged `value`, shows **On page** and **Refanged** indicator rows via `resolveIndicatorValuePresentation()`.
+- Separate **Copy defanged** and **Copy refanged** header actions when those values differ (`resolveIndicatorCopyActions()`); otherwise a single **Copy Indicator** button copies the refanged value.
+- URL indicators include an **Open live URL** action that requires analyst confirmation before opening the refanged URL in a new tab (`confirmOpenLiveUrl()` / `openLiveUrlInNewTab()`).
 
 This is the **primary operator surface** documented in [README.md](../../README.md) and [docs/analyst-workflows.md](../analyst-workflows.md).
 
@@ -40,6 +45,15 @@ This is the **primary operator surface** documented in [README.md](../../README.
 - **Not** injected into arbitrary web pages in production builds.
 - May render **per-source contribution chips** that the overlay omits; scoring rules still come from `extension/src/lib/scoring.ts`.
 - Mirrors the overlay **Analyst notes** textarea for tests and dev.
+- Accepts optional `ruleId`, `sourceTextHint`, `ignoredOverlaps`, and `displayValue` props and exposes provenance on the panel root for test consumers.
+- Mirrors the overlay **Why detected?** section and refanged value pair when provenance and `displayValue` are present.
+- Mirrors defanged/refanged copy actions and the URL **Open live URL** confirmation flow via the shared helpers in `hoverCardEnrichment.ts`.
+
+## Tray provenance
+
+Popup and workspace sidebar tray rows expose snapshot entry provenance via `resolveTrayEntryMatchProvenance()` in `extension/src/lib/tabScanSummary.ts` and `data-vera5-rule-id` / `data-vera5-source-text-hint` on each tray row element.
+
+Each tray row includes a collapsible **Why detected?** details panel (popup React UI and workspace DOM) using the same `buildWhyDetectedView()` view model as the hover card.
 
 ## Shared view-model
 

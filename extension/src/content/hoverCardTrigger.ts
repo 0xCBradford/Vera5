@@ -15,6 +15,8 @@ import {
 import {
   IOC_ENRICH_ICON_CLASS,
   IOC_HIGHLIGHT_CLASS,
+  readIocHighlightDisplayValue,
+  readIocHighlightProvenance,
   resolveAdjacentIocHighlight,
 } from "./highlighter";
 import {
@@ -59,9 +61,14 @@ export function buildHoverCardPayloadFromHighlight(
     return null;
   }
 
+  const provenance = readIocHighlightProvenance(highlight);
+  const displayValue = readIocHighlightDisplayValue(highlight);
+
   return {
     value,
     type,
+    ...(provenance ?? {}),
+    ...(displayValue ? { displayValue } : {}),
     enrichmentState: "empty",
   };
 }

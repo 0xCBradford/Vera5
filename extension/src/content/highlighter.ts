@@ -1,4 +1,9 @@
-import type { IocType } from "../lib/iocRegex";
+import type {
+  IgnoredOverlapMatch,
+  IocMatchProvenance,
+  IocRuleId,
+  IocType,
+} from "../lib/iocRegex";
 import {
   ensureVera5UiStyles,
   VERA5_UI_STYLE_ID,
@@ -28,6 +33,10 @@ export type HighlightAnchorLink = {
   anchorId: string;
   type: IocType;
   value: string;
+  ruleId: IocRuleId;
+  sourceTextHint: string;
+  displayValue?: string;
+  ignoredOverlaps?: readonly IgnoredOverlapMatch[];
 };
 
 export type HighlightResult = {
@@ -59,6 +68,63 @@ function highlightScope(root: Node): ParentNode {
 
 export function ensureIocHighlightStyles(doc: Document = document): void {
   ensureVera5UiStyles(doc);
+}
+
+export function readIocHighlightDisplayValue(highlight: HTMLElement): string | undefined {
+  return highlight.dataset.vera5DisplayValue;
+}
+
+export function readIocHighlightProvenance(
+  highlight: HTMLElement
+): IocMatchProvenance | null {
+  const ruleId = highlight.dataset.vera5RuleId;
+  const sourceTextHint = highlight.dataset.vera5SourceTextHint;
+  if (!ruleId || !sourceTextHint) {
+    return null;
+  }
+  return {
+    ruleId: ruleId as IocRuleId,
+    sourceTextHint,
+    ignoredOverlaps: readIocHighlightIgnoredOverlaps(highlight),
+  };
+}
+
+function readIocHighlightIgnoredOverlaps(
+  highlight: HTMLElement
+): IgnoredOverlapMatch[] {
+  const raw = highlight.dataset.vera5IgnoredOverlaps;
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    const overlaps: IgnoredOverlapMatch[] = [];
+    for (const item of parsed) {
+      if (item === null || typeof item !== "object") {
+        continue;
+      }
+      const record = item as Record<string, unknown>;
+      if (
+        typeof record.type === "string" &&
+        typeof record.value === "string" &&
+        typeof record.ruleId === "string" &&
+        record.value.length > 0 &&
+        record.ruleId.length > 0
+      ) {
+        overlaps.push({
+          type: record.type as IocType,
+          value: record.value,
+          ruleId: record.ruleId as IocRuleId,
+        });
+      }
+    }
+    return overlaps;
+  } catch {
+    return [];
+  }
 }
 
 export function clearIocHighlights(root: Node = document.body): number {
@@ -104,6 +170,14 @@ function createHighlightSpan(
   span.dataset.vera5Type = match.type;
   span.dataset.vera5Value = match.value;
   span.dataset.vera5AnchorId = anchorId;
+  span.dataset.vera5RuleId = match.ruleId;
+  span.dataset.vera5SourceTextHint = match.sourceTextHint;
+  if (match.displayValue) {
+    span.dataset.vera5DisplayValue = match.displayValue;
+  }
+  if (match.ignoredOverlaps && match.ignoredOverlaps.length > 0) {
+    span.dataset.vera5IgnoredOverlaps = JSON.stringify(match.ignoredOverlaps);
+  }
 
   const badgeLabel = TYPE_BADGE_LABEL[match.type] ?? match.type.toUpperCase();
   span.setAttribute("role", "button");
@@ -206,6 +280,12 @@ function highlightTextNode(
       anchorId,
       type: match.type,
       value: match.value,
+      ruleId: match.ruleId,
+      sourceTextHint: match.sourceTextHint,
+      ...(match.displayValue ? { displayValue: match.displayValue } : {}),
+      ...(match.ignoredOverlaps && match.ignoredOverlaps.length > 0
+        ? { ignoredOverlaps: [...match.ignoredOverlaps] }
+        : {}),
     });
     cursor = match.end;
     applied += 1;

@@ -57,17 +57,25 @@ function stubChromeForEnrichSelectionTests(): void {
 
 describe("resolveIocMatchFromSelectionText", () => {
   it("returns an exact IPv4 match from selected text", () => {
-    expect(resolveIocMatchFromSelectionText("8.8.8.8")).toEqual({
-      value: "8.8.8.8",
-      type: "ipv4",
-    });
+    expect(resolveIocMatchFromSelectionText("8.8.8.8")).toEqual(
+      expect.objectContaining({
+        value: "8.8.8.8",
+        type: "ipv4",
+        ruleId: "ioc.regex.ipv4",
+        sourceTextHint: "8.8.8.8",
+      })
+    );
   });
 
   it("detects an IOC embedded in selected prose", () => {
-    expect(resolveIocMatchFromSelectionText("Contact 192.0.2.1 today.")).toEqual({
-      value: "192.0.2.1",
-      type: "ipv4",
-    });
+    expect(resolveIocMatchFromSelectionText("Contact 192.0.2.1 today.")).toEqual(
+      expect.objectContaining({
+        value: "192.0.2.1",
+        type: "ipv4",
+        ruleId: "ioc.regex.ipv4",
+        sourceTextHint: expect.stringContaining("192.0.2.1"),
+      })
+    );
   });
 
   it("returns null when no indicator is present", () => {

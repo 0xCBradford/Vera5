@@ -9,6 +9,7 @@ import {
   findSha256InText,
   findUrlsInText,
   IOC_TYPE,
+  refangIndicatorText,
 } from "./iocRegex";
 
 function valuesOfType(
@@ -103,6 +104,46 @@ describe("iocRegex defanged URLs", () => {
     expect(values).toContain("https://example.com/path");
     expect(values).toContain("http://192.0.2.1/x");
   });
+
+  it("detects bracket-dot and bracket-scheme defanged URLs", () => {
+    const text =
+      "Ticket hxxps://example[.]com/evil and http[:]//malware[.]test/path?q=1";
+    const values = valuesOfType(findUrlsInText(text), IOC_TYPE.URL);
+    expect(values).toContain("https://example.com/evil");
+    expect(values).toContain("http://malware.test/path?q=1");
+  });
+
+  it("detects hxxp bracket-scheme separators", () => {
+    const text = "Link hxxp[://]example[.]com/login";
+    const values = valuesOfType(findUrlsInText(text), IOC_TYPE.URL);
+    expect(values).toContain("http://example.com/login");
+  });
+
+  it("preserves defanged page text in displayValue", () => {
+    const text = "Ticket hxxps://example[.]com/evil";
+    const match = findUrlsInText(text)[0];
+    expect(match?.value).toBe("https://example.com/evil");
+    expect(match?.displayValue).toBe("hxxps://example[.]com/evil");
+  });
+});
+
+describe("iocRegex defanged domains and IPv4", () => {
+  it("detects bracket-dot defanged domains", () => {
+    const text = "C2 evil[.]example[.]com and parenthesis evil(.)example(dot)com";
+    const values = valuesOfType(findDomainsInText(text), IOC_TYPE.DOMAIN);
+    expect(values).toContain("evil.example.com");
+    expect(values).toContain("evil.example.com");
+  });
+
+  it("detects bracket-dot defanged IPv4 addresses", () => {
+    const text = "Beacon 192[.]0[.]2[.]1 and alt 10[dot]0[dot]0[dot]1";
+    const values = valuesOfType(
+      findIpv4InText(text, { includePrivateIpv4: true }),
+      IOC_TYPE.IPV4
+    );
+    expect(values).toContain("192.0.2.1");
+    expect(values).toContain("10.0.0.1");
+  });
 });
 
 describe("iocRegex false-positive controls", () => {
@@ -161,5 +202,50 @@ describe("iocRegex false-positive controls", () => {
     expect(hashes).toHaveLength(1);
     expect(hashes[0].type).toBe(IOC_TYPE.SHA256);
     expect(hashes[0].value).toBe(sha256);
+  });
+});
+
+describe("refangIndicatorText", () => {
+  it.each<[string, string]>([
+    ["hxxps://example[.]com/evil", "https://example.com/evil"],
+    ["hxxp[://]example[.]com/x", "http://example.com/x"],
+    ["http[:]//host[dot]example(dot)com", "http://host.example.com"],
+    ["192[.]0[.]2[.]1", "192.0.2.1"],
+    ["evil(.)example[dot]com", "evil.example.com"],
+  ])("refangs %s to %s", (input, expected) => {
+    expect(refangIndicatorText(input)).toBe(expected);
+  });
+});
+
+describe("iocRegex match provenance", () => {
+  it("attaches rule id and source text hint to each match", () => {
+    const text = "Contact 8.8.8.8 or visit https://example.com/login";
+    const ipv4 = findIpv4InText(text)[0];
+    const url = findUrlsInText(text)[0];
+
+    expect(ipv4).toMatchObject({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      ruleId: "ioc.regex.ipv4",
+      sourceTextHint: expect.stringContaining("8.8.8.8"),
+    });
+    expect(url).toMatchObject({
+      type: IOC_TYPE.URL,
+      ruleId: "ioc.regex.url",
+      sourceTextHint: expect.stringContaining("example.com"),
+    });
+  });
+
+  it("attaches rule id and source text hint to defanged URL matches", () => {
+    const text = "Ticket hxxps://example[.]com/evil";
+    const match = findUrlsInText(text)[0];
+
+    expect(match).toMatchObject({
+      value: "https://example.com/evil",
+      displayValue: "hxxps://example[.]com/evil",
+      type: IOC_TYPE.URL,
+      ruleId: "ioc.regex.url",
+      sourceTextHint: expect.stringContaining("hxxps://example[.]com/evil"),
+    });
   });
 });

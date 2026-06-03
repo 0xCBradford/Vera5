@@ -89,11 +89,27 @@ function buildScanSnapshotEntries(
   anchorLinks: ReadonlyArray<HighlightAnchorLink>
 ): TabScanSnapshotEntry[] {
   if (anchorLinks.length > 0) {
-    return anchorLinks.map(({ type, value, anchorId }) => ({
-      type,
-      value,
-      anchorId,
-    }));
+    return anchorLinks.map(
+      ({
+        type,
+        value,
+        anchorId,
+        ruleId,
+        sourceTextHint,
+        displayValue,
+        ignoredOverlaps,
+      }) => ({
+        type,
+        value,
+        anchorId,
+        ruleId,
+        sourceTextHint,
+        ...(displayValue ? { displayValue } : {}),
+        ...(ignoredOverlaps && ignoredOverlaps.length > 0
+          ? { ignoredOverlaps: [...ignoredOverlaps] }
+          : {}),
+      })
+    );
   }
 
   return buildTabScanSnapshotEntriesFromMatches(matches);

@@ -14,6 +14,12 @@ import {
   formatDisabledSourceMessage,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
+import {
+  formatDetectionRuleReason,
+  IOC_TYPE,
+  type IocMatchProvenance,
+  type IocType,
+} from "./iocRegex";
 
 export type HoverCardEnrichmentState = "empty" | "loading" | "error" | "ready";
 
@@ -615,3 +621,127 @@ export function resolveHoverCardDisplayView(
   };
 }
 
+export const HOVER_CARD_WHY_DETECTED_HEADING = "Why detected?";
+export const HOVER_CARD_WHY_DETECTED_SECTION_ARIA_LABEL = "Why detected?";
+
+const DETECTION_TYPE_LABEL: Record<IocType, string> = {
+  [IOC_TYPE.IPV4]: "IPv4 address",
+  [IOC_TYPE.DOMAIN]: "Domain",
+  [IOC_TYPE.URL]: "URL",
+  [IOC_TYPE.MD5]: "MD5 hash",
+  [IOC_TYPE.SHA1]: "SHA1 hash",
+  [IOC_TYPE.SHA256]: "SHA256 hash",
+  [IOC_TYPE.CVE]: "CVE ID",
+};
+
+export function formatDetectionTypeLabel(type: IocType): string {
+  return DETECTION_TYPE_LABEL[type];
+}
+
+export type WhyDetectedOverlapView = {
+  typeLabel: string;
+  value: string;
+  reason: string;
+};
+
+export type WhyDetectedView = {
+  typeLabel: string;
+  reason: string;
+  sourceTextHint: string;
+  ignoredOverlaps: WhyDetectedOverlapView[];
+};
+
+export function buildWhyDetectedView(
+  input: IocMatchProvenance & { type: IocType }
+): WhyDetectedView | null {
+  if (!input.ruleId || !input.sourceTextHint) {
+    return null;
+  }
+  return {
+    typeLabel: formatDetectionTypeLabel(input.type),
+    reason: formatDetectionRuleReason(input.ruleId),
+    sourceTextHint: input.sourceTextHint,
+    ignoredOverlaps: (input.ignoredOverlaps ?? []).map((overlap) => ({
+      typeLabel: formatDetectionTypeLabel(overlap.type),
+      value: overlap.value,
+      reason: formatDetectionRuleReason(overlap.ruleId),
+    })),
+  };
+}
+
+export const HOVER_CARD_ON_PAGE_VALUE_LABEL = "On page:";
+export const HOVER_CARD_REFANGED_VALUE_LABEL = "Refanged:";
+export const HOVER_CARD_COPY_INDICATOR_LABEL = "Copy Indicator";
+export const HOVER_CARD_COPY_DEFANGED_LABEL = "Copy defanged";
+export const HOVER_CARD_COPY_REFANGED_LABEL = "Copy refanged";
+export const HOVER_CARD_COPY_COPIED_LABEL = "Copied";
+export const HOVER_CARD_OPEN_LIVE_URL_LABEL = "Open live URL";
+export const HOVER_CARD_OPEN_LIVE_URL_CONFIRM_MESSAGE =
+  "This opens the live URL in a new browser tab. The destination may be malicious or unreachable. Continue?";
+
+export type IndicatorValuePresentation = {
+  onPageValue: string;
+  refangedValue: string;
+  showRefangedPair: boolean;
+};
+
+export type IndicatorCopyAction = {
+  copyValue: string;
+  label: string;
+  ariaLabel: string;
+};
+
+export function resolveIndicatorValuePresentation(input: {
+  value: string;
+  displayValue?: string;
+}): IndicatorValuePresentation {
+  const refangedValue = input.value;
+  const onPageValue = input.displayValue ?? input.value;
+  return {
+    onPageValue,
+    refangedValue,
+    showRefangedPair: onPageValue !== refangedValue,
+  };
+}
+
+export function resolveIndicatorCopyActions(
+  presentation: IndicatorValuePresentation
+): IndicatorCopyAction[] {
+  if (presentation.showRefangedPair) {
+    return [
+      {
+        copyValue: presentation.onPageValue,
+        label: HOVER_CARD_COPY_DEFANGED_LABEL,
+        ariaLabel: `Copy defanged indicator ${presentation.onPageValue}`,
+      },
+      {
+        copyValue: presentation.refangedValue,
+        label: HOVER_CARD_COPY_REFANGED_LABEL,
+        ariaLabel: `Copy refanged indicator ${presentation.refangedValue}`,
+      },
+    ];
+  }
+
+  return [
+    {
+      copyValue: presentation.refangedValue,
+      label: HOVER_CARD_COPY_INDICATOR_LABEL,
+      ariaLabel: `Copy indicator ${presentation.refangedValue}`,
+    },
+  ];
+}
+
+export function shouldOfferLiveUrlOpen(type: IocType): boolean {
+  return type === IOC_TYPE.URL;
+}
+
+export function confirmOpenLiveUrl(win: Pick<Window, "confirm"> = window): boolean {
+  return win.confirm(HOVER_CARD_OPEN_LIVE_URL_CONFIRM_MESSAGE);
+}
+
+export function openLiveUrlInNewTab(
+  url: string,
+  win: Pick<Window, "open"> = window
+): void {
+  win.open(url, "_blank", "noopener,noreferrer");
+}

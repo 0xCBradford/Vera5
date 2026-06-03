@@ -4,6 +4,7 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { IOC_RULE_ID } from "../lib/iocRegex";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import * as tabScanSummary from "../lib/tabScanSummary";
@@ -14,9 +15,27 @@ const sampleSummary = buildTabScanSummary({
     pageUrl: "https://example.com/alert",
     scannedAt: 1_700_000_000_000,
     entries: [
-      { type: "ipv4", value: "8.8.8.8", anchorId: "vera5-hl-1" },
-      { type: "ipv4", value: "192.0.2.1", anchorId: "vera5-hl-2" },
-      { type: "cve", value: "CVE-2021-44228", anchorId: "vera5-hl-3" },
+      {
+        type: "ipv4",
+        value: "8.8.8.8",
+        anchorId: "vera5-hl-1",
+        ruleId: IOC_RULE_ID.IPV4,
+        sourceTextHint: "Contact 8.8.8.8 for details.",
+      },
+      {
+        type: "ipv4",
+        value: "192.0.2.1",
+        anchorId: "vera5-hl-2",
+        ruleId: IOC_RULE_ID.IPV4,
+        sourceTextHint: "192.0.2.1",
+      },
+      {
+        type: "cve",
+        value: "CVE-2021-44228",
+        anchorId: "vera5-hl-3",
+        ruleId: IOC_RULE_ID.CVE,
+        sourceTextHint: "CVE-2021-44228",
+      },
     ],
   }),
   tabId: 7,
@@ -89,6 +108,7 @@ describe("Popup IOC tray", () => {
   beforeEach(() => {
     writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
+    vi.spyOn(tabScanSummary, "loadTrayEntryEnrichmentStatuses").mockResolvedValue({});
   });
 
   it("shows the pre-scan empty prompt when no summary exists", async () => {
@@ -121,6 +141,14 @@ describe("Popup IOC tray", () => {
     expect(mounted.container.textContent).toContain("CVE (1)");
     expect(mounted.container.textContent).toContain("8.8.8.8");
     expect(mounted.container.textContent).toContain("CVE-2021-44228");
+
+    const firstRow = mounted.container.querySelector<HTMLElement>(
+      "[data-vera5-tray-entry='true']"
+    );
+    expect(firstRow?.dataset.vera5RuleId).toBe("ioc.regex.ipv4");
+    expect(firstRow?.dataset.vera5SourceTextHint).toBe(
+      "Contact 8.8.8.8 for details."
+    );
   });
 
   it("shows source-attributed enrichment hints without blocking tray navigation", async () => {

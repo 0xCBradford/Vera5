@@ -1,0 +1,33 @@
+{
+  "name": "vera5",
+  "version": "1.0.0",
+  "description": "Browser extension for on-demand indicator detection on pages you browse. After a scan, matching indicators can be highlighted; clicking a highlight opens an overlay with copy, export, recommended next pivots, and optional threat intelligence enrichment.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"No tests specified\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vera5io/Vera5.git"
+  },
+  "keywords": [
+    "cybersecurity",
+    "threat-intelligence",
+    "ioc",
+    "osint",
+    "soc",
+    "dfir",
+    "browser-extension",
+    "cti"
+  ],
+  "author": "VERA5",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Vera5io/Vera5/issues"
+  },
+  "homepage": "https://vera5.io"
+}

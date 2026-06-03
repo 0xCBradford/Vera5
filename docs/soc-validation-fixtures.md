@@ -47,7 +47,7 @@ All fixtures embed a subset of [`sample-iocs.txt`](../examples/sample-iocs.txt).
 |------|----------------|
 | IPv4 | `192.0.2.1`, `8.8.8.8` |
 | Domain | `malware.testcategory.com` |
-| URL | `https://example.com/login`, `https://example.com/login?ref=analyst` |
+| URL | `https://example.com/login`, `https://example.com/login?ref=analyst` (also appears defanged as `hxxps://example.com/login?ref=analyst` in the expanded indicator list) |
 | MD5 | `d41d8cd98f00b204e9800998ecf8427e` |
 | CVE | `CVE-2021-44228`, `CVE-2017-0144` |
 

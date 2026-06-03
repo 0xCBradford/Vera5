@@ -25,10 +25,17 @@ import {
   resolveTrayTemplateCopyFeedback,
   resolveTrayTemplateExportFeedback,
   type IocTypeFilter,
+  resolveTrayEntryMatchProvenance,
   type TabScanSummary,
   type TabScanSummaryEntry,
   type TrayEntryEnrichmentStatus,
 } from "../lib/tabScanSummary";
+import {
+  buildWhyDetectedView,
+  HOVER_CARD_REFANGED_VALUE_LABEL,
+  HOVER_CARD_WHY_DETECTED_HEADING,
+  resolveIndicatorValuePresentation,
+} from "../lib/hoverCardEnrichment";
 import {
   getExtensionEnabled,
   getHighlightEnabled,
@@ -43,6 +50,118 @@ import {
 } from "../lib/workspaceTrayState";
 
 export type PopupTrayView = "prompt" | "scanning" | "empty" | "results";
+
+function trayWhyDetectedDetailsStyle(): CSSProperties {
+  return {
+    width: "100%",
+    marginTop: 4,
+    fontSize: 11,
+    lineHeight: 1.45,
+    color: POPUP_THEME.muted,
+  };
+}
+
+function TrayIndicatorValue({ entry }: { entry: TabScanSummaryEntry }) {
+  const presentation = resolveIndicatorValuePresentation({
+    value: entry.value,
+    displayValue: entry.displayValue,
+  });
+
+  if (!presentation.showRefangedPair) {
+    return (
+      <span
+        style={{
+          color: POPUP_THEME.text,
+          wordBreak: "break-all",
+          flex: 1,
+        }}
+      >
+        {presentation.refangedValue}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 2,
+        flex: 1,
+        minWidth: 0,
+      }}
+    >
+      <span style={{ color: POPUP_THEME.text, wordBreak: "break-all" }}>
+        {presentation.onPageValue}
+      </span>
+      <span
+        style={{
+          color: POPUP_THEME.muted,
+          wordBreak: "break-all",
+          fontSize: 11,
+        }}
+      >
+        {HOVER_CARD_REFANGED_VALUE_LABEL} {presentation.refangedValue}
+      </span>
+    </span>
+  );
+}
+
+function WhyDetectedTrayDetails({
+  entry,
+}: {
+  entry: TabScanSummaryEntry;
+}) {
+  const view = buildWhyDetectedView({
+    type: entry.type,
+    ruleId: entry.ruleId,
+    sourceTextHint: entry.sourceTextHint,
+    ignoredOverlaps: entry.ignoredOverlaps,
+  });
+  if (!view) {
+    return null;
+  }
+
+  return (
+    <details
+      className="vera5-tray-why-detected"
+      style={trayWhyDetectedDetailsStyle()}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <summary
+        style={{
+          cursor: "pointer",
+          color: POPUP_THEME.accent,
+          fontWeight: 600,
+        }}
+      >
+        {HOVER_CARD_WHY_DETECTED_HEADING}
+      </summary>
+      <div style={{ marginTop: 4 }}>
+        <p style={{ margin: "0 0 4px" }}>Type: {view.typeLabel}</p>
+        <p style={{ margin: "0 0 4px" }}>Reason: {view.reason}</p>
+        <p style={{ margin: "0 0 4px", wordBreak: "break-word" }}>
+          Source context: {view.sourceTextHint}
+        </p>
+        {view.ignoredOverlaps.length > 0 ? (
+          <>
+            <p style={{ margin: "0 0 4px" }}>Ignored overlaps:</p>
+            <ul style={{ margin: 0, paddingLeft: 16 }}>
+              {view.ignoredOverlaps.map((overlap) => (
+                <li key={`${overlap.typeLabel}-${overlap.value}`}>
+                  {overlap.typeLabel} {overlap.value} — {overlap.reason}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : (
+          <p style={{ margin: 0 }}>Ignored overlaps: none</p>
+        )}
+      </div>
+    </details>
+  );
+}
 
 export function resolvePopupTrayView(input: {
   enabled: boolean;
@@ -664,12 +783,19 @@ export function Popup() {
                 >
                   {filteredEntries.map((entry) => {
                     const enrichmentStatus = trayEnrichmentStatuses[entry.anchorId];
+                    const provenance = resolveTrayEntryMatchProvenance(entry);
 
                     return (
                     <li
                       key={entry.anchorId}
                       role="button"
                       tabIndex={0}
+                      data-vera5-tray-entry="true"
+                      data-vera5-type={entry.type}
+                      data-vera5-value={entry.value}
+                      data-vera5-anchor-id={entry.anchorId}
+                      data-vera5-rule-id={provenance?.ruleId}
+                      data-vera5-source-text-hint={provenance?.sourceTextHint}
                       aria-label={buildTrayRowNavigationAriaLabel(
                         entry.value,
                         enrichmentStatus
@@ -684,8 +810,8 @@ export function Popup() {
                       }}
                       style={{
                         display: "flex",
-                        alignItems: "flex-start",
-                        gap: 8,
+                        flexDirection: "column",
+                        gap: 6,
                         padding: "6px 8px",
                         borderRadius: 6,
                         border: `1px solid ${POPUP_THEME.border}`,
@@ -695,6 +821,13 @@ export function Popup() {
                         cursor: "pointer",
                       }}
                     >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 8,
+                        }}
+                      >
                       <span
                         aria-hidden="true"
                         style={{
@@ -718,15 +851,7 @@ export function Popup() {
                           minWidth: 0,
                         }}
                       >
-                        <span
-                          style={{
-                            color: POPUP_THEME.text,
-                            wordBreak: "break-all",
-                            flex: 1,
-                          }}
-                        >
-                          {entry.value}
-                        </span>
+                        <TrayIndicatorValue entry={entry} />
                         {enrichmentStatus ? (
                           <span
                             aria-hidden="true"
@@ -736,6 +861,8 @@ export function Popup() {
                           </span>
                         ) : null}
                       </span>
+                      </div>
+                      <WhyDetectedTrayDetails entry={entry} />
                     </li>
                     );
                   })}

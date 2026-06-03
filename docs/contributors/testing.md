@@ -20,7 +20,7 @@ Vitest discovers tests alongside source (`*.test.ts`, `*.test.tsx`) under `exten
 
 | Area | Example files |
 |------|----------------|
-| Detection | `detector.test.ts`, `iocRegex.test.ts`, `fixtureTuning.test.ts` (includes `examples/sample-alert.html`, `sample-blog.html`, `sample-splunk-export.html`, `sample-security-onion-alert.html`) |
+| Detection | `detector.test.ts`, `iocRegex.test.ts`, `fixtureTuning.test.ts` (includes `examples/sample-alert.html`, `sample-blog.html`, `sample-splunk-export.html`, `sample-security-onion-alert.html`); defang/refang and match provenance coverage in `iocRegex.test.ts`, `tabScanSnapshot.test.ts`, `tabScanSummary.test.ts`, `highlighter.test.ts`, `scanPage.test.ts`, and `hoverCardTrigger.test.ts` |
 | Overlay / card | `hoverCardOverlay.test.ts`, `hoverCardEnrichment.test.ts`, `RiskScore.test.tsx` |
 | Enrichment | `enrichmentHandler.test.ts`, `abuseipdbConnector.test.ts`, `otxConnector.test.ts` |
 | Cache / cooldown | `cache.test.ts`, `enrichmentCooldown.test.ts` |

@@ -1,11 +1,20 @@
-import { IOC_TYPE, type IocType } from "./iocRegex";
+import {
+  IOC_TYPE,
+  type IgnoredOverlapMatch,
+  type IocRuleId,
+  type IocType,
+} from "./iocRegex";
 
-export const TAB_SCAN_SNAPSHOT_SCHEMA_VERSION = 1;
+export const TAB_SCAN_SNAPSHOT_SCHEMA_VERSION = 2;
 
 export type TabScanSnapshotEntry = {
   type: IocType;
   value: string;
   anchorId: string;
+  ruleId: IocRuleId;
+  sourceTextHint: string;
+  displayValue?: string;
+  ignoredOverlaps?: readonly IgnoredOverlapMatch[];
 };
 
 export type TabScanSnapshotPayload = {
@@ -52,12 +61,22 @@ export function buildTabScanSnapshotEntriesFromMatches(
     value: string;
     start: number;
     end: number;
+    ruleId: IocRuleId;
+    sourceTextHint: string;
+    displayValue?: string;
+    ignoredOverlaps?: readonly IgnoredOverlapMatch[];
   }>
 ): TabScanSnapshotEntry[] {
   return matches.map((match) => ({
     type: match.type,
     value: match.value,
     anchorId: buildLogicalAnchorId(match.type, match.start, match.end),
+    ruleId: match.ruleId,
+    sourceTextHint: match.sourceTextHint,
+    ...(match.displayValue ? { displayValue: match.displayValue } : {}),
+    ...(match.ignoredOverlaps && match.ignoredOverlaps.length > 0
+      ? { ignoredOverlaps: [...match.ignoredOverlaps] }
+      : {}),
   }));
 }
 
@@ -65,18 +84,36 @@ function isIocType(value: unknown): value is IocType {
   return typeof value === "string" && IOC_TYPES.has(value);
 }
 
-function isTabScanSnapshotEntry(value: unknown): value is TabScanSnapshotEntry {
+function hasMatchProvenance(record: Record<string, unknown>): boolean {
+  return (
+    typeof record.ruleId === "string" &&
+    record.ruleId.length > 0 &&
+    typeof record.sourceTextHint === "string" &&
+    record.sourceTextHint.length > 0
+  );
+}
+
+function isTabScanSnapshotEntry(
+  value: unknown,
+  schemaVersion: number
+): value is TabScanSnapshotEntry {
   if (value === null || typeof value !== "object") {
     return false;
   }
   const record = value as Record<string, unknown>;
-  return (
+  const hasCore =
     isIocType(record.type) &&
     typeof record.value === "string" &&
     record.value.length > 0 &&
     typeof record.anchorId === "string" &&
-    record.anchorId.length > 0
-  );
+    record.anchorId.length > 0;
+  if (!hasCore) {
+    return false;
+  }
+  if (schemaVersion >= TAB_SCAN_SNAPSHOT_SCHEMA_VERSION) {
+    return hasMatchProvenance(record);
+  }
+  return true;
 }
 
 export function isTabScanSnapshotPayload(
@@ -86,7 +123,11 @@ export function isTabScanSnapshotPayload(
     return false;
   }
   const record = value as Record<string, unknown>;
-  if (record.schemaVersion !== TAB_SCAN_SNAPSHOT_SCHEMA_VERSION) {
+  const schemaVersion = record.schemaVersion;
+  if (
+    schemaVersion !== 1 &&
+    schemaVersion !== TAB_SCAN_SNAPSHOT_SCHEMA_VERSION
+  ) {
     return false;
   }
   if (typeof record.pageUrl !== "string") {
@@ -98,5 +139,7 @@ export function isTabScanSnapshotPayload(
   if (!Array.isArray(record.entries)) {
     return false;
   }
-  return record.entries.every(isTabScanSnapshotEntry);
+  return record.entries.every((entry) =>
+    isTabScanSnapshotEntry(entry, schemaVersion as number)
+  );
 }

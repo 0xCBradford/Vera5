@@ -84,6 +84,21 @@ export function buildVera5UiStylesCss(): string {
   font-size: 12px;
   word-break: break-all;
 }
+.vera5-hover-card-value-on-page {
+  margin: 0 0 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  word-break: break-all;
+  color: var(--vera5-text);
+}
+.vera5-hover-card-refanged-value {
+  margin: 0 0 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  word-break: break-all;
+  color: var(--vera5-muted-label);
+}
 .vera5-hover-card-enrichment {
   margin: 0;
   font-size: 12px;
@@ -428,6 +443,51 @@ export function buildVera5UiStylesCss(): string {
   white-space: pre-wrap;
   word-break: break-word;
   color: var(--vera5-text);
+}
+.vera5-why-detected {
+  margin-top: 4px;
+}
+.vera5-why-detected-row {
+  margin: 0 0 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--vera5-muted-label);
+}
+.vera5-why-detected-context {
+  word-break: break-word;
+}
+.vera5-why-detected-overlaps-heading {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vera5-muted-label);
+}
+.vera5-why-detected-list {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--vera5-muted-label);
+}
+.vera5-why-detected-item {
+  margin-bottom: 2px;
+  word-break: break-word;
+}
+.vera5-tray-why-detected {
+  width: 100%;
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--vera5-muted-label);
+}
+.vera5-tray-why-detected summary {
+  cursor: pointer;
+  color: var(--vera5-accent-text);
+  font-weight: 600;
+  list-style-position: outside;
+}
+.vera5-tray-why-detected .vera5-why-detected {
+  margin-top: 4px;
 }
 .vera5-hover-card-analyst-notes {
   margin-top: 8px;
@@ -1022,8 +1082,9 @@ html.vera5-workspace-open {
 }
 .vera5-workspace-tray-row {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   padding: 6px 8px;
   border-radius: 6px;
   border: 1px solid #475569;
@@ -1031,6 +1092,11 @@ html.vera5-workspace-open {
   font-size: 12px;
   line-height: 1.4;
   cursor: pointer;
+}
+.vera5-workspace-tray-row-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
 }
 .vera5-workspace-tray-row[aria-selected="true"] {
   border-color: #60a5fa;
@@ -1050,6 +1116,21 @@ html.vera5-workspace-open {
   min-width: 0;
   word-break: break-all;
   color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.vera5-workspace-tray-value-on-page {
+  display: block;
+  word-break: break-all;
+  color: #e2e8f0;
+}
+.vera5-workspace-tray-refanged-value {
+  display: block;
+  word-break: break-all;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #94a3b8;
 }
 .vera5-workspace-tray-hint {
   flex-shrink: 0;

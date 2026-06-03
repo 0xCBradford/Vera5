@@ -10,12 +10,146 @@ export const IOC_TYPE = {
 
 export type IocType = (typeof IOC_TYPE)[keyof typeof IOC_TYPE];
 
+export const IOC_RULE_ID = {
+  URL: "ioc.regex.url",
+  SHA256: "ioc.regex.sha256",
+  SHA1: "ioc.regex.sha1",
+  MD5: "ioc.regex.md5",
+  CVE: "ioc.regex.cve",
+  IPV4: "ioc.regex.ipv4",
+  DOMAIN: "ioc.regex.domain",
+} as const;
+
+export type IocRuleId = (typeof IOC_RULE_ID)[keyof typeof IOC_RULE_ID];
+
 export type IocMatch = {
   value: string;
   type: IocType;
   start: number;
   end: number;
+  ruleId: IocRuleId;
+  sourceTextHint: string;
+  displayValue?: string;
+  ignoredOverlaps?: readonly IgnoredOverlapMatch[];
 };
+
+export type IgnoredOverlapMatch = {
+  type: IocType;
+  value: string;
+  ruleId: IocRuleId;
+};
+
+export type IocMatchProvenance = {
+  ruleId: IocRuleId;
+  sourceTextHint: string;
+  ignoredOverlaps?: readonly IgnoredOverlapMatch[];
+};
+
+const DEFAULT_SOURCE_TEXT_HINT_RADIUS = 32;
+const DEFAULT_SOURCE_TEXT_HINT_MAX_LENGTH = 80;
+
+export function formatDetectionRuleReason(ruleId: IocRuleId): string {
+  switch (ruleId) {
+    case IOC_RULE_ID.URL:
+      return "Matched a visible URL in page text, including defanged hxxp and bracket-dot forms.";
+    case IOC_RULE_ID.SHA256:
+      return "Matched a 64-character hexadecimal SHA-256 hash.";
+    case IOC_RULE_ID.SHA1:
+      return "Matched a 40-character hexadecimal SHA-1 hash.";
+    case IOC_RULE_ID.MD5:
+      return "Matched a 32-character hexadecimal MD5 hash.";
+    case IOC_RULE_ID.CVE:
+      return "Matched a CVE identifier (CVE-YYYY-NNNN+).";
+    case IOC_RULE_ID.IPV4:
+      return "Matched an IPv4 address in visible text, including bracket-dot defanged forms.";
+    case IOC_RULE_ID.DOMAIN:
+      return "Matched a domain name in visible text, including bracket-dot defanged forms.";
+    default: {
+      const exhaustive: never = ruleId;
+      return exhaustive;
+    }
+  }
+}
+
+export function ruleIdForIocType(type: IocType): IocRuleId {
+  switch (type) {
+    case IOC_TYPE.URL:
+      return IOC_RULE_ID.URL;
+    case IOC_TYPE.SHA256:
+      return IOC_RULE_ID.SHA256;
+    case IOC_TYPE.SHA1:
+      return IOC_RULE_ID.SHA1;
+    case IOC_TYPE.MD5:
+      return IOC_RULE_ID.MD5;
+    case IOC_TYPE.CVE:
+      return IOC_RULE_ID.CVE;
+    case IOC_TYPE.IPV4:
+      return IOC_RULE_ID.IPV4;
+    case IOC_TYPE.DOMAIN:
+      return IOC_RULE_ID.DOMAIN;
+    default: {
+      const exhaustive: never = type;
+      return exhaustive;
+    }
+  }
+}
+
+export function buildSourceTextHint(
+  text: string,
+  start: number,
+  end: number,
+  options: { radius?: number; maxLength?: number } = {}
+): string {
+  const radius = options.radius ?? DEFAULT_SOURCE_TEXT_HINT_RADIUS;
+  const maxLength = options.maxLength ?? DEFAULT_SOURCE_TEXT_HINT_MAX_LENGTH;
+  const hintStart = Math.max(0, start - radius);
+  const hintEnd = Math.min(text.length, end + radius);
+  let hint = text.slice(hintStart, hintEnd).replace(/\s+/g, " ").trim();
+  if (hintStart > 0) {
+    hint = `…${hint}`;
+  }
+  if (hintEnd < text.length) {
+    hint = `${hint}…`;
+  }
+  if (hint.length <= maxLength) {
+    return hint;
+  }
+  const matchText = text.slice(start, end);
+  const matchIndex = hint.indexOf(matchText);
+  if (matchIndex === -1) {
+    return hint.slice(0, maxLength - 1) + "…";
+  }
+  const beforeBudget = Math.floor((maxLength - matchText.length) / 2);
+  const sliceStart = Math.max(0, matchIndex - beforeBudget);
+  let trimmed = hint.slice(sliceStart, sliceStart + maxLength);
+  if (sliceStart > 0) {
+    trimmed = `…${trimmed.replace(/^…/, "")}`;
+  }
+  if (sliceStart + maxLength < hint.length) {
+    trimmed = `${trimmed.replace(/…$/, "")}…`;
+  }
+  return trimmed;
+}
+
+function buildIocMatch(
+  text: string,
+  type: IocType,
+  ruleId: IocRuleId,
+  start: number,
+  end: number,
+  value: string,
+  displayValue?: string
+): IocMatch {
+  return {
+    value,
+    type,
+    start,
+    end,
+    ruleId,
+    sourceTextHint: buildSourceTextHint(text, start, end),
+    ...(displayValue ? { displayValue } : {}),
+  };
+}
 
 export type IocTypeEnableMap = Partial<Record<IocType, boolean>>;
 
@@ -31,19 +165,27 @@ const HASH_LENGTHS: ReadonlyArray<{ length: number; type: IocType }> = [
 ];
 
 const IPV4_OCTET = "(?:25[0-5]|2[0-4]\\d|1?\\d?\\d)";
+const BRACKET_DOT = "(?:\\[\\.\\]|\\(\\\\.\\)|\\[dot\\]|\\(dot\\))";
+const IPV4_SEPARATOR = "(?:\\.|" + BRACKET_DOT + ")";
 const IPV4_PATTERN = new RegExp(
-  `(?<![\\d.])(${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET})(?![\\d.])`,
-  "g"
-);
-
-const DOMAIN_LABEL = "[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?";
-const DOMAIN_PATTERN = new RegExp(
-  `(?<![@/\\w.-])((?:${DOMAIN_LABEL}\\.)+[a-zA-Z]{2,63})(?![@\\w.])`,
+  `(?<![\\d.])(${IPV4_OCTET}${IPV4_SEPARATOR}${IPV4_OCTET}${IPV4_SEPARATOR}${IPV4_OCTET}${IPV4_SEPARATOR}${IPV4_OCTET})(?![\\d.])`,
   "gi"
 );
 
-const URL_PATTERN =
-  /(?<![\w/])(https?:\/\/[^\s<>"'[\]{}|\\^`]+|hxxps?:\/\/[^\s<>"'[\]{}|\\^`]+)/gi;
+const DOMAIN_LABEL = "[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?";
+const DOMAIN_SEPARATOR = "(?:\\.|" + BRACKET_DOT + ")";
+const DOMAIN_PATTERN = new RegExp(
+  `(?<![@/\\w.-])((?:${DOMAIN_LABEL}${DOMAIN_SEPARATOR})+[a-zA-Z]{2,63})(?![@\\w.])`,
+  "gi"
+);
+
+const URL_SCHEME = "(?:https?|hxxps?)";
+const URL_SCHEME_SEPARATOR = "(?::\\/\\/|\\[:\\/\\/\\]|\\[:\\]\\/\\/)";
+const URL_BODY_CHAR = "(?:[^\\s<>\"'{}|\\\\^\\x60]|" + BRACKET_DOT + ")";
+const URL_PATTERN = new RegExp(
+  `(?<![\\w/])(${URL_SCHEME}${URL_SCHEME_SEPARATOR}${URL_BODY_CHAR}+)`,
+  "gi"
+);
 
 const CVE_PATTERN =
   /(?<![A-Za-z0-9_-])(CVE-\d{4}-\d{4,})(?![A-Za-z0-9_-])/gi;
@@ -208,10 +350,21 @@ function trimUrlTrailingPunctuation(value: string): string {
   return value.replace(/[.,;:!?)]+$/g, "");
 }
 
+export function refangIndicatorText(value: string): string {
+  return value
+    .replace(/\[:\/\/\]/gi, "://")
+    .replace(/\[:]\/\//gi, "://")
+    .replace(/\[:]/gi, ":")
+    .replace(/\[\.\]/g, ".")
+    .replace(/\(\.\)/g, ".")
+    .replace(/\[dot\]/gi, ".")
+    .replace(/\(dot\)/gi, ".")
+    .replace(/^hxxps:\/\//i, "https://")
+    .replace(/^hxxp:\/\//i, "http://");
+}
+
 function normalizeDefangedUrl(value: string): string {
-  return value.replace(/^hxxps?:\/\//i, (scheme) =>
-    scheme.toLowerCase().startsWith("hxxps") ? "https://" : "http://"
-  );
+  return refangIndicatorText(value);
 }
 
 function isFileExtensionDomain(value: string): boolean {
@@ -252,6 +405,7 @@ function collectPatternMatches(
   text: string,
   pattern: RegExp,
   type: IocType,
+  ruleId: IocRuleId,
   accept: (value: string, start: number, end: number) => boolean,
   transform?: (value: string) => string
 ): IocMatch[] {
@@ -265,7 +419,17 @@ function collectPatternMatches(
     const transformed = transform ? transform(raw) : raw;
     const end = start + raw.length;
     if (accept(transformed, start, end)) {
-      matches.push({ value: transformed, type, start, end });
+      matches.push(
+        buildIocMatch(
+          text,
+          type,
+          ruleId,
+          start,
+          end,
+          transformed,
+          raw !== transformed ? raw : undefined
+        )
+      );
     }
     result = re.exec(text);
   }
@@ -282,6 +446,7 @@ function findHashByLength(
     text,
     hashPatternForLength(length),
     type,
+    ruleIdForIocType(type),
     (value, start, end) => {
       if (value.length !== length) {
         return false;
@@ -348,6 +513,7 @@ export function findCvesInText(
     text,
     CVE_PATTERN,
     IOC_TYPE.CVE,
+    IOC_RULE_ID.CVE,
     (value, start, end) => {
       if (!isValidCveId(value)) {
         return false;
@@ -370,6 +536,7 @@ export function findIpv4InText(
     text,
     IPV4_PATTERN,
     IOC_TYPE.IPV4,
+    IOC_RULE_ID.IPV4,
     (value, start, end) => {
       const octets = parseIpv4(value);
       if (!octets) {
@@ -388,7 +555,8 @@ export function findIpv4InText(
         return false;
       }
       return true;
-    }
+    },
+    refangIndicatorText
   );
 }
 
@@ -397,6 +565,7 @@ export function findUrlsInText(text: string): IocMatch[] {
     text,
     URL_PATTERN,
     IOC_TYPE.URL,
+    IOC_RULE_ID.URL,
     (value) => {
       const trimmed = trimUrlTrailingPunctuation(value);
       if (trimmed.length < 10) {
@@ -422,6 +591,7 @@ export function findDomainsInText(
     text,
     DOMAIN_PATTERN,
     IOC_TYPE.DOMAIN,
+    IOC_RULE_ID.DOMAIN,
     (value, start, end) => {
       const normalized = value.toLowerCase();
       if (!domainHasValidLabels(value)) {
@@ -441,7 +611,7 @@ export function findDomainsInText(
       }
       return true;
     },
-    (value) => value.toLowerCase()
+    (value) => refangIndicatorText(value).toLowerCase()
   );
 }
 

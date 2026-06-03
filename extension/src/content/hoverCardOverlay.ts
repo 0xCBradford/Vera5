@@ -1,4 +1,4 @@
-import type { IocType } from "../lib/iocRegex";
+import type { IgnoredOverlapMatch, IocRuleId, IocType } from "../lib/iocRegex";
 import { resolveHoverCardAnalystNote, primeAnalystNoteForIoc, setSessionAnalystNote } from "../lib/analystNotesSession";
 import { normalizeIocNoteKey } from "../lib/analystNotesStorage";
 import { copyTextToClipboard } from "../lib/copyText";
@@ -44,14 +44,27 @@ import {
   HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
+  HOVER_CARD_WHY_DETECTED_HEADING,
+  HOVER_CARD_WHY_DETECTED_SECTION_ARIA_LABEL,
+  HOVER_CARD_ON_PAGE_VALUE_LABEL,
+  HOVER_CARD_REFANGED_VALUE_LABEL,
+  HOVER_CARD_COPY_COPIED_LABEL,
+  HOVER_CARD_OPEN_LIVE_URL_LABEL,
+  buildWhyDetectedView,
+  confirmOpenLiveUrl,
+  openLiveUrlInNewTab,
   resolveEffectiveSourceAttribution,
   resolveHoverCardDisplayView,
   resolveHoverCardDisclaimerAriaLabel,
+  resolveIndicatorCopyActions,
+  resolveIndicatorValuePresentation,
+  shouldOfferLiveUrlOpen,
   type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
   type HoverCardDisclaimerInput,
   type HoverCardEnrichmentState,
   type HoverCardSourceEntry,
+  type WhyDetectedView,
 } from "../lib/hoverCardEnrichment";
 import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
 import { getPivotRecipes } from "../lib/pivots";
@@ -189,6 +202,10 @@ export const HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID =
   "vera5-hover-card-scan-export-template-select";
 export const HOVER_CARD_SECTION_HEADING_CLASS = "vera5-hover-card-section-heading";
 export const HOVER_CARD_INTEL_SUMMARY_CLASS = "vera5-hover-card-intel-summary";
+export const HOVER_CARD_WHY_DETECTED_CLASS = "vera5-why-detected";
+export const HOVER_CARD_WHY_DETECTED_LIST_CLASS = "vera5-why-detected-list";
+export const HOVER_CARD_WHY_DETECTED_ITEM_CLASS = "vera5-why-detected-item";
+export const TRAY_WHY_DETECTED_CLASS = "vera5-tray-why-detected";
 
 const TYPE_LABELS: Record<IocType, string> = {
   ipv4: "IPv4 address",
@@ -203,6 +220,10 @@ const TYPE_LABELS: Record<IocType, string> = {
 export type HoverCardOverlayPayload = {
   value: string;
   type: IocType;
+  displayValue?: string;
+  ruleId?: IocRuleId;
+  sourceTextHint?: string;
+  ignoredOverlaps?: readonly IgnoredOverlapMatch[];
   summary?: string;
   tags?: readonly string[];
   sourceAttribution?: EnrichmentSourceAttribution;
@@ -576,30 +597,70 @@ function createRateLimitRetryHint(retryHint: string, doc: Document): HTMLElement
 }
 
 function createCopyIndicatorButton(
-  value: string,
+  copyValue: string,
+  label: string,
+  ariaLabel: string,
   doc: Document
 ): HTMLButtonElement {
   const button = doc.createElement("button");
   button.type = "button";
   button.className = HOVER_CARD_COPY_BUTTON_CLASS;
-  button.textContent = "Copy Indicator";
-  button.setAttribute("aria-label", `Copy indicator ${value}`);
+  button.textContent = label;
+  button.setAttribute("aria-label", ariaLabel);
 
   button.addEventListener("click", () => {
-    void copyTextToClipboard(value).then((success) => {
+    void copyTextToClipboard(copyValue).then((success) => {
       if (!success) {
         return;
       }
-      button.textContent = "Copied";
+      button.textContent = HOVER_CARD_COPY_COPIED_LABEL;
       button.classList.add("vera5-hover-card-copy--copied");
       const docView = doc.defaultView ?? window;
       scheduleCopyFeedbackReset(() => {
-        button.textContent = "Copy Indicator";
+        button.textContent = label;
         button.classList.remove("vera5-hover-card-copy--copied");
       }, docView);
     });
   });
 
+  return button;
+}
+
+function createIndicatorCopyActions(
+  payload: Pick<HoverCardOverlayPayload, "value" | "displayValue">,
+  doc: Document
+): DocumentFragment {
+  const fragment = doc.createDocumentFragment();
+  const presentation = resolveIndicatorValuePresentation(payload);
+  for (const action of resolveIndicatorCopyActions(presentation)) {
+    fragment.appendChild(
+      createCopyIndicatorButton(
+        action.copyValue,
+        action.label,
+        action.ariaLabel,
+        doc
+      )
+    );
+  }
+  return fragment;
+}
+
+export function createOpenLiveUrlButton(
+  liveUrl: string,
+  doc: Document
+): HTMLButtonElement {
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = HOVER_CARD_ACTION_CLASS;
+  button.textContent = HOVER_CARD_OPEN_LIVE_URL_LABEL;
+  button.setAttribute("aria-label", HOVER_CARD_OPEN_LIVE_URL_LABEL);
+  button.addEventListener("click", () => {
+    const docView = doc.defaultView ?? window;
+    if (!confirmOpenLiveUrl(docView)) {
+      return;
+    }
+    openLiveUrlInNewTab(liveUrl, docView);
+  });
   return button;
 }
 
@@ -1392,6 +1453,89 @@ function createDetailClearButton(
   return button;
 }
 
+export function createIndicatorValueSection(
+  payload: Pick<HoverCardOverlayPayload, "value" | "displayValue">,
+  doc: Document
+): DocumentFragment {
+  const fragment = doc.createDocumentFragment();
+  const presentation = resolveIndicatorValuePresentation(payload);
+
+  if (!presentation.showRefangedPair) {
+    const valueRow = doc.createElement("p");
+    valueRow.className = "vera5-hover-card-value";
+    valueRow.textContent = presentation.refangedValue;
+    fragment.appendChild(valueRow);
+    return fragment;
+  }
+
+  const onPageRow = doc.createElement("p");
+  onPageRow.className = "vera5-hover-card-value-on-page";
+  onPageRow.textContent = `${HOVER_CARD_ON_PAGE_VALUE_LABEL} ${presentation.onPageValue}`;
+  fragment.appendChild(onPageRow);
+
+  const refangedRow = doc.createElement("p");
+  refangedRow.className = "vera5-hover-card-refanged-value";
+  refangedRow.textContent = `${HOVER_CARD_REFANGED_VALUE_LABEL} ${presentation.refangedValue}`;
+  fragment.appendChild(refangedRow);
+
+  return fragment;
+}
+
+export function createWhyDetectedSection(
+  view: WhyDetectedView,
+  doc: Document,
+  options: { compact?: boolean; omitHeading?: boolean } = {}
+): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = options.compact
+    ? `${HOVER_CARD_WHY_DETECTED_CLASS} ${TRAY_WHY_DETECTED_CLASS}`
+    : HOVER_CARD_WHY_DETECTED_CLASS;
+  section.setAttribute("aria-label", HOVER_CARD_WHY_DETECTED_SECTION_ARIA_LABEL);
+
+  if (!options.omitHeading) {
+    section.appendChild(createSectionHeading(HOVER_CARD_WHY_DETECTED_HEADING, doc));
+  }
+
+  const typeRow = doc.createElement("p");
+  typeRow.className = "vera5-why-detected-row";
+  typeRow.textContent = `Type: ${view.typeLabel}`;
+  section.appendChild(typeRow);
+
+  const reasonRow = doc.createElement("p");
+  reasonRow.className = "vera5-why-detected-row";
+  reasonRow.textContent = `Reason: ${view.reason}`;
+  section.appendChild(reasonRow);
+
+  const contextRow = doc.createElement("p");
+  contextRow.className = "vera5-why-detected-row vera5-why-detected-context";
+  contextRow.textContent = `Source context: ${view.sourceTextHint}`;
+  section.appendChild(contextRow);
+
+  if (view.ignoredOverlaps.length > 0) {
+    const overlapsHeading = doc.createElement("p");
+    overlapsHeading.className = "vera5-why-detected-overlaps-heading";
+    overlapsHeading.textContent = "Ignored overlaps:";
+    section.appendChild(overlapsHeading);
+
+    const list = doc.createElement("ul");
+    list.className = HOVER_CARD_WHY_DETECTED_LIST_CLASS;
+    for (const overlap of view.ignoredOverlaps) {
+      const item = doc.createElement("li");
+      item.className = HOVER_CARD_WHY_DETECTED_ITEM_CLASS;
+      item.textContent = `${overlap.typeLabel} ${overlap.value} — ${overlap.reason}`;
+      list.appendChild(item);
+    }
+    section.appendChild(list);
+  } else {
+    const noneRow = doc.createElement("p");
+    noneRow.className = "vera5-why-detected-row";
+    noneRow.textContent = "Ignored overlaps: none";
+    section.appendChild(noneRow);
+  }
+
+  return section;
+}
+
 export function buildHoverCardPanel(
   payload: HoverCardOverlayPayload,
   doc: Document = document,
@@ -1473,11 +1617,26 @@ export function buildHoverCardPanel(
     doc
   );
   const exportSection = createExportSection(payload, doc);
+  const whyDetectedView = buildWhyDetectedView({
+    type: payload.type,
+    ruleId: payload.ruleId,
+    sourceTextHint: payload.sourceTextHint,
+    ignoredOverlaps: payload.ignoredOverlaps,
+  });
+  const whyDetectedSection = whyDetectedView
+    ? createWhyDetectedSection(whyDetectedView, doc)
+    : null;
 
   const panel = doc.createElement("aside");
   panel.className = HOVER_CARD_PANEL_CLASS;
   panel.setAttribute("role", "region");
   panel.setAttribute("aria-label", `Indicator details for ${payload.value}`);
+  if (payload.ruleId) {
+    panel.dataset.vera5RuleId = payload.ruleId;
+  }
+  if (payload.sourceTextHint) {
+    panel.dataset.vera5SourceTextHint = payload.sourceTextHint;
+  }
 
   const headerRow = doc.createElement("div");
   headerRow.className = "vera5-hover-card-header";
@@ -1489,17 +1648,25 @@ export function buildHoverCardPanel(
 
   const headerActions = doc.createElement("div");
   headerActions.className = "vera5-hover-card-header-actions";
-  headerActions.appendChild(createCopyIndicatorButton(payload.value, doc));
+  headerActions.appendChild(createIndicatorCopyActions(payload, doc));
   if (options.detailClear) {
     headerActions.appendChild(createDetailClearButton(options.detailClear, doc));
   }
   headerRow.appendChild(headerActions);
   panel.appendChild(headerRow);
 
-  const valueRow = doc.createElement("p");
-  valueRow.className = "vera5-hover-card-value";
-  valueRow.textContent = payload.value;
-  panel.appendChild(valueRow);
+  panel.appendChild(createIndicatorValueSection(payload, doc));
+
+  if (shouldOfferLiveUrlOpen(payload.type)) {
+    const openLiveUrlButton = createOpenLiveUrlButton(payload.value, doc);
+    openLiveUrlButton.style.marginBottom = "8px";
+    panel.appendChild(openLiveUrlButton);
+  }
+
+  if (whyDetectedSection) {
+    whyDetectedSection.style.marginBottom = "8px";
+    panel.appendChild(whyDetectedSection);
+  }
 
   const intelSection = doc.createElement("section");
   intelSection.className = HOVER_CARD_INTEL_SUMMARY_CLASS;

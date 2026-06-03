@@ -130,6 +130,149 @@ const PIVOT_PANEL_GOLDEN_CASES: ReadonlyArray<{
   { type: IOC_TYPE.CVE, value: "CVE-2021-44228" },
 ];
 
+describe("match provenance exposure", () => {
+  it("stores provenance on hover card panel datasets", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      ruleId: "ioc.regex.ipv4",
+      sourceTextHint: "Contact 8.8.8.8 for details.",
+    });
+    expect(panel.dataset.vera5RuleId).toBe("ioc.regex.ipv4");
+    expect(panel.dataset.vera5SourceTextHint).toBe(
+      "Contact 8.8.8.8 for details."
+    );
+  });
+
+  it("renders Why detected panel with type, reason, context, and ignored overlaps", () => {
+    const panel = buildHoverCardPanel({
+      value: "https://example.com",
+      type: IOC_TYPE.URL,
+      ruleId: "ioc.regex.url",
+      sourceTextHint: "Visit https://example.com today",
+      ignoredOverlaps: [
+        {
+          type: IOC_TYPE.DOMAIN,
+          value: "example.com",
+          ruleId: "ioc.regex.domain",
+        },
+      ],
+    });
+
+    const section = panel.querySelector(".vera5-why-detected");
+    expect(section).not.toBeNull();
+    expect(section?.getAttribute("aria-label")).toBe("Why detected?");
+    expect(panel.textContent).toContain("Type: URL");
+    expect(panel.textContent).toContain(
+      "Matched a visible URL in page text, including defanged hxxp and bracket-dot forms."
+    );
+    expect(panel.textContent).toContain(
+      "Source context: Visit https://example.com today"
+    );
+    expect(panel.textContent).toContain("example.com");
+    expect(panel.textContent).toContain(
+      "Matched a domain name in visible text, including bracket-dot defanged forms."
+    );
+  });
+
+  it("renders on-page and refanged values when displayValue differs", () => {
+    const panel = buildHoverCardPanel({
+      value: "https://example.com/evil",
+      displayValue: "hxxps://example[.]com/evil",
+      type: IOC_TYPE.URL,
+      ruleId: "ioc.regex.url",
+      sourceTextHint: "Ticket hxxps://example[.]com/evil",
+    });
+
+    expect(panel.querySelector(".vera5-hover-card-value")).toBeNull();
+    expect(panel.querySelector(".vera5-hover-card-value-on-page")?.textContent).toBe(
+      "On page: hxxps://example[.]com/evil"
+    );
+    expect(panel.querySelector(".vera5-hover-card-refanged-value")?.textContent).toBe(
+      "Refanged: https://example.com/evil"
+    );
+  });
+
+  it("renders separate defanged and refanged copy actions when displayValue differs", async () => {
+    const copy = vi
+      .spyOn(copyText, "copyTextToClipboard")
+      .mockResolvedValue(true);
+
+    const panel = buildHoverCardPanel({
+      value: "https://example.com/evil",
+      displayValue: "hxxps://example[.]com/evil",
+      type: IOC_TYPE.URL,
+    });
+
+    const buttons = Array.from(
+      panel.querySelectorAll<HTMLButtonElement>(`.${HOVER_CARD_COPY_BUTTON_CLASS}`)
+    );
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "Copy defanged",
+      "Copy refanged",
+    ]);
+
+    buttons[0]?.click();
+    await vi.waitFor(() => {
+      expect(copy).toHaveBeenCalledWith("hxxps://example[.]com/evil");
+    });
+
+    buttons[1]?.click();
+    await vi.waitFor(() => {
+      expect(copy).toHaveBeenCalledWith("https://example.com/evil");
+    });
+
+    copy.mockRestore();
+  });
+
+  it("shows Open live URL for URL indicators and confirms before opening", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+
+    const panel = buildHoverCardPanel({
+      value: "https://example.com/evil",
+      type: IOC_TYPE.URL,
+    });
+
+    const openButton = Array.from(
+      panel.querySelectorAll<HTMLButtonElement>(`.${HOVER_CARD_ACTION_CLASS}`)
+    ).find((button) => button.textContent === "Open live URL");
+    expect(openButton).toBeDefined();
+    openButton?.click();
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith(
+      "https://example.com/evil",
+      "_blank",
+      "noopener,noreferrer"
+    );
+
+    confirm.mockRestore();
+    open.mockRestore();
+  });
+
+  it("does not open a live URL when the confirmation is cancelled", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+
+    const panel = buildHoverCardPanel({
+      value: "https://example.com/evil",
+      type: IOC_TYPE.URL,
+    });
+
+    const openButton = Array.from(
+      panel.querySelectorAll<HTMLButtonElement>(`.${HOVER_CARD_ACTION_CLASS}`)
+    ).find((button) => button.textContent === "Open live URL");
+    openButton?.click();
+
+    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(open).not.toHaveBeenCalled();
+
+    confirm.mockRestore();
+    open.mockRestore();
+  });
+});
+
 describe("pivot recipes panel content", () => {
   afterEach(() => {
     clearSessionAnalystNotes();

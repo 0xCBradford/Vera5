@@ -23,10 +23,17 @@ import {
   IOC_TYPE_TRAY_LABEL,
   listIocTypesPresentInSummary,
   loadTrayEntryEnrichmentStatuses,
+  resolveTrayEntryMatchProvenance,
   type IocTypeFilter,
   type TabScanSummary,
   type TrayEntryEnrichmentStatus,
 } from "../lib/tabScanSummary";
+import {
+  buildWhyDetectedView,
+  HOVER_CARD_REFANGED_VALUE_LABEL,
+  HOVER_CARD_WHY_DETECTED_HEADING,
+  resolveIndicatorValuePresentation,
+} from "../lib/hoverCardEnrichment";
 import {
   getTabScanTrayFilter,
   saveTabScanTrayFilter,
@@ -49,7 +56,9 @@ import {
 } from "./hoverCardTrigger";
 import {
   buildHoverCardPanel,
+  createWhyDetectedSection,
   setScanListExportContextProvider,
+  TRAY_WHY_DETECTED_CLASS,
   type HoverCardOverlayPayload,
 } from "./hoverCardOverlay";
 import {
@@ -1073,8 +1082,20 @@ function renderWorkspaceTop(doc: Document): void {
 
   for (const entry of filteredEntries) {
     const enrichmentStatus = workspaceState.trayEnrichmentStatuses[entry.anchorId];
+    const provenance = resolveTrayEntryMatchProvenance(entry);
     const row = doc.createElement("li");
     row.className = "vera5-workspace-tray-row";
+    row.dataset.vera5TrayEntry = "true";
+    row.dataset.vera5Type = entry.type;
+    row.dataset.vera5Value = entry.value;
+    row.dataset.vera5AnchorId = entry.anchorId;
+    if (provenance) {
+      row.dataset.vera5RuleId = provenance.ruleId;
+      row.dataset.vera5SourceTextHint = provenance.sourceTextHint;
+    }
+    if (entry.displayValue) {
+      row.dataset.vera5DisplayValue = entry.displayValue;
+    }
     row.tabIndex = 0;
     row.setAttribute("role", "button");
     row.setAttribute(
@@ -1103,18 +1124,63 @@ function renderWorkspaceTop(doc: Document): void {
     typeBadge.setAttribute("aria-hidden", "true");
     typeBadge.textContent = IOC_TYPE_TRAY_LABEL[entry.type];
 
-    const value = doc.createElement("span");
-    value.className = "vera5-workspace-tray-value";
-    value.textContent = entry.value;
+    const valuePresentation = resolveIndicatorValuePresentation({
+      value: entry.value,
+      displayValue: entry.displayValue,
+    });
+    const valueContainer = doc.createElement("span");
+    valueContainer.className = "vera5-workspace-tray-value";
+    if (valuePresentation.showRefangedPair) {
+      const onPage = doc.createElement("span");
+      onPage.className = "vera5-workspace-tray-value-on-page";
+      onPage.textContent = valuePresentation.onPageValue;
+      const refanged = doc.createElement("span");
+      refanged.className = "vera5-workspace-tray-refanged-value";
+      refanged.textContent = `${HOVER_CARD_REFANGED_VALUE_LABEL} ${valuePresentation.refangedValue}`;
+      valueContainer.append(onPage, refanged);
+    } else {
+      valueContainer.textContent = valuePresentation.refangedValue;
+    }
 
-    row.append(typeBadge, value);
+    const mainRow = doc.createElement("div");
+    mainRow.className = "vera5-workspace-tray-row-main";
+    mainRow.append(typeBadge, valueContainer);
 
     if (enrichmentStatus) {
       const hint = doc.createElement("span");
       hint.className = trayHintClassName(enrichmentStatus.badgeText);
       hint.setAttribute("aria-hidden", "true");
       hint.textContent = formatTrayRowEnrichmentHint(enrichmentStatus);
-      row.appendChild(hint);
+      mainRow.appendChild(hint);
+    }
+
+    row.appendChild(mainRow);
+
+    const whyDetectedView = buildWhyDetectedView({
+      type: entry.type,
+      ruleId: entry.ruleId,
+      sourceTextHint: entry.sourceTextHint,
+      ignoredOverlaps: entry.ignoredOverlaps,
+    });
+    if (whyDetectedView) {
+      const details = doc.createElement("details");
+      details.className = TRAY_WHY_DETECTED_CLASS;
+      details.addEventListener("click", (event) => {
+        event.stopPropagation();
+      });
+      details.addEventListener("keydown", (event) => {
+        event.stopPropagation();
+      });
+      const summary = doc.createElement("summary");
+      summary.textContent = HOVER_CARD_WHY_DETECTED_HEADING;
+      details.appendChild(summary);
+      details.appendChild(
+        createWhyDetectedSection(whyDetectedView, doc, {
+          compact: true,
+          omitHeading: true,
+        })
+      );
+      row.appendChild(details);
     }
 
     list.appendChild(row);

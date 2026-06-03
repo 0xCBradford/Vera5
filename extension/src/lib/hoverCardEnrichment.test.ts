@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildDisabledSourcePlaceholders,
   buildHoverCardSourceEntries,
@@ -30,7 +30,14 @@ import {
   shouldShowRateLimitRetryHint,
   shouldShowRiskScore,
   shouldShowRiskScoreSection,
+  buildWhyDetectedView,
+  confirmOpenLiveUrl,
+  openLiveUrlInNewTab,
+  resolveIndicatorCopyActions,
+  resolveIndicatorValuePresentation,
+  shouldOfferLiveUrlOpen,
 } from "./hoverCardEnrichment";
+import { IOC_RULE_ID, IOC_TYPE } from "./iocRegex";
 
 describe("hover card enrichment placeholders", () => {
   it("resolves loading, error, empty, and ready display text", () => {
@@ -462,5 +469,132 @@ describe("hover card display view model", () => {
         includeRiskScoreDisclaimer: false,
       })
     ).toBe(HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY);
+  });
+});
+
+describe("why detected view model", () => {
+  it("returns null when provenance is incomplete", () => {
+    expect(
+      buildWhyDetectedView({
+        type: IOC_TYPE.IPV4,
+        ruleId: IOC_RULE_ID.IPV4,
+        sourceTextHint: "",
+      })
+    ).toBeNull();
+  });
+
+  it("builds type, reason, context, and ignored overlap rows", () => {
+    const view = buildWhyDetectedView({
+      type: IOC_TYPE.URL,
+      ruleId: IOC_RULE_ID.URL,
+      sourceTextHint: "Visit https://example.com today",
+      ignoredOverlaps: [
+        {
+          type: IOC_TYPE.DOMAIN,
+          value: "example.com",
+          ruleId: IOC_RULE_ID.DOMAIN,
+        },
+      ],
+    });
+
+    expect(view).toEqual({
+      typeLabel: "URL",
+      reason: "Matched a visible URL in page text, including defanged hxxp and bracket-dot forms.",
+      sourceTextHint: "Visit https://example.com today",
+      ignoredOverlaps: [
+        {
+          typeLabel: "Domain",
+          value: "example.com",
+          reason:
+            "Matched a domain name in visible text, including bracket-dot defanged forms.",
+        },
+      ],
+    });
+  });
+});
+
+describe("indicator value presentation", () => {
+  it("shows refanged pair only when page text differs", () => {
+    expect(
+      resolveIndicatorValuePresentation({
+        value: "https://example.com/evil",
+        displayValue: "hxxps://example[.]com/evil",
+      })
+    ).toEqual({
+      onPageValue: "hxxps://example[.]com/evil",
+      refangedValue: "https://example.com/evil",
+      showRefangedPair: true,
+    });
+    expect(
+      resolveIndicatorValuePresentation({
+        value: "8.8.8.8",
+      })
+    ).toEqual({
+      onPageValue: "8.8.8.8",
+      refangedValue: "8.8.8.8",
+      showRefangedPair: false,
+    });
+  });
+});
+
+describe("indicator copy actions", () => {
+  it("returns defanged and refanged copy actions when page text differs", () => {
+    expect(
+      resolveIndicatorCopyActions(
+        resolveIndicatorValuePresentation({
+          value: "https://example.com/evil",
+          displayValue: "hxxps://example[.]com/evil",
+        })
+      )
+    ).toEqual([
+      {
+        copyValue: "hxxps://example[.]com/evil",
+        label: "Copy defanged",
+        ariaLabel: "Copy defanged indicator hxxps://example[.]com/evil",
+      },
+      {
+        copyValue: "https://example.com/evil",
+        label: "Copy refanged",
+        ariaLabel: "Copy refanged indicator https://example.com/evil",
+      },
+    ]);
+  });
+
+  it("returns a single copy action when page text matches refanged value", () => {
+    expect(
+      resolveIndicatorCopyActions(
+        resolveIndicatorValuePresentation({
+          value: "8.8.8.8",
+        })
+      )
+    ).toEqual([
+      {
+        copyValue: "8.8.8.8",
+        label: "Copy Indicator",
+        ariaLabel: "Copy indicator 8.8.8.8",
+      },
+    ]);
+  });
+});
+
+describe("live URL open safety", () => {
+  it("offers live URL open only for URL indicators", () => {
+    expect(shouldOfferLiveUrlOpen(IOC_TYPE.URL)).toBe(true);
+    expect(shouldOfferLiveUrlOpen(IOC_TYPE.DOMAIN)).toBe(false);
+  });
+
+  it("confirms before opening a live URL", () => {
+    const confirm = vi.fn(() => true);
+    const open = vi.fn();
+    confirmOpenLiveUrl({ confirm });
+    expect(confirm).toHaveBeenCalledWith(
+      "This opens the live URL in a new browser tab. The destination may be malicious or unreachable. Continue?"
+    );
+    openLiveUrlInNewTab("https://example.com/evil", { open });
+    expect(open).toHaveBeenCalledWith(
+      "https://example.com/evil",
+      "_blank",
+      "noopener,noreferrer"
+    );
   });
 });

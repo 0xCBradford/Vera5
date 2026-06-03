@@ -13,6 +13,8 @@ import {
   IOC_HIGHLIGHT_CLASS,
   IOC_HIGHLIGHT_STYLE_ID,
   listIocHighlightsInDocumentOrder,
+  readIocHighlightDisplayValue,
+  readIocHighlightProvenance,
   resolveAdjacentIocHighlight,
 } from "./highlighter";
 
@@ -55,11 +57,17 @@ describe("ioc highlighter", () => {
     expect(highlight?.dataset.vera5Type).toBe(IOC_TYPE.IPV4);
     expect(highlight?.dataset.vera5Value).toBe("8.8.8.8");
     expect(highlight?.dataset.vera5AnchorId).toMatch(/^vera5-hl-\d+$/);
+    expect(highlight?.dataset.vera5RuleId).toBe("ioc.regex.ipv4");
+    expect(highlight?.dataset.vera5SourceTextHint).toBe(
+      "Contact 8.8.8.8 for details."
+    );
     expect(result.anchorLinks).toEqual([
       {
         anchorId: highlight?.dataset.vera5AnchorId,
         type: IOC_TYPE.IPV4,
         value: "8.8.8.8",
+        ruleId: "ioc.regex.ipv4",
+        sourceTextHint: "Contact 8.8.8.8 for details.",
       },
     ]);
     expect(
@@ -69,9 +77,38 @@ describe("ioc highlighter", () => {
       highlight?.querySelector(`.${IOC_ENRICH_ICON_CLASS}`)?.textContent
     ).toBe("›");
     expect(highlight?.getAttribute("role")).toBe("button");
+    expect(readIocHighlightProvenance(highlight!)).toEqual({
+      ruleId: "ioc.regex.ipv4",
+      sourceTextHint: "Contact 8.8.8.8 for details.",
+      ignoredOverlaps: [],
+    });
 
     const beforeHeight = paragraph.offsetHeight;
     expect(paragraph.offsetHeight).toBe(beforeHeight);
+  });
+
+  it("highlights defanged URLs with on-page text and displayValue metadata", () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Ticket hxxps://example[.]com/evil";
+    document.body.appendChild(paragraph);
+
+    const matches = scanTextNodesForIocs(document.body);
+    highlightDetectedIocs(matches, { root: document.body });
+
+    const highlight = document.querySelector<HTMLSpanElement>(
+      `.${IOC_HIGHLIGHT_CLASS}`
+    );
+    expect(highlight).not.toBeNull();
+    expect(highlight?.textContent).toContain("hxxps://example[.]com/evil");
+    expect(highlight?.dataset.vera5Value).toBe("https://example.com/evil");
+    expect(readIocHighlightDisplayValue(highlight!)).toBe(
+      "hxxps://example[.]com/evil"
+    );
+    expect(readIocHighlightProvenance(highlight!)).toEqual({
+      ruleId: "ioc.regex.url",
+      sourceTextHint: "Ticket hxxps://example[.]com/evil",
+      ignoredOverlaps: [],
+    });
   });
 
   it("highlights multiple IOCs in one text node without losing surrounding text", () => {

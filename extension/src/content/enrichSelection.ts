@@ -1,6 +1,6 @@
 import type { MessageResponse } from "../lib/messages";
 import { extractExactIocValue } from "../lib/iocRequestBoundaries";
-import { IOC_TYPE, type IocRegexOptions, type IocType } from "../lib/iocRegex";
+import { IOC_TYPE, ruleIdForIocType, type IocMatch, type IocRegexOptions, type IocType } from "../lib/iocRegex";
 import {
   logUnlessBenignExtensionError,
   rethrowUnlessStaleExtensionError,
@@ -89,17 +89,10 @@ export function resolveHighlightFromSelection(doc: Document = document): HTMLEle
 export function resolveIocMatchFromSelectionText(
   text: string,
   iocOptions: IocRegexOptions = {}
-): { value: string; type: IocType } | null {
+): IocMatch | null {
   const trimmed = text.trim();
   if (trimmed.length === 0) {
     return null;
-  }
-
-  for (const type of Object.values(IOC_TYPE)) {
-    const exact = extractExactIocValue(trimmed, type);
-    if (exact) {
-      return { value: exact, type };
-    }
   }
 
   const matches = detectIocsInText(trimmed, iocOptions);
@@ -107,8 +100,32 @@ export function resolveIocMatchFromSelectionText(
     return null;
   }
 
-  const best = [...matches].sort((a, b) => b.value.length - a.value.length)[0];
-  return best ? { value: best.value, type: best.type } : null;
+  for (const type of Object.values(IOC_TYPE)) {
+    const exact = extractExactIocValue(trimmed, type);
+    if (!exact) {
+      continue;
+    }
+    const exactMatch = matches.find(
+      (match) =>
+        match.type === type &&
+        match.value === exact &&
+        match.start === 0 &&
+        match.end === trimmed.length
+    );
+    if (exactMatch) {
+      return exactMatch;
+    }
+    return {
+      value: exact,
+      type,
+      start: 0,
+      end: trimmed.length,
+      ruleId: ruleIdForIocType(type),
+      sourceTextHint: trimmed,
+    };
+  }
+
+  return [...matches].sort((a, b) => b.value.length - a.value.length)[0] ?? null;
 }
 
 export async function resolveIocFromActiveSelection(
@@ -116,6 +133,8 @@ export async function resolveIocFromActiveSelection(
 ): Promise<{
   value: string;
   type: IocType;
+  ruleId?: IocMatch["ruleId"];
+  sourceTextHint?: string;
   highlight: HTMLElement | null;
   range: Range | null;
 } | null> {
@@ -133,6 +152,8 @@ export async function resolveIocFromActiveSelection(
     return {
       value: payload.value,
       type: payload.type,
+      ruleId: payload.ruleId,
+      sourceTextHint: payload.sourceTextHint,
       highlight,
       range: null,
     };
@@ -148,7 +169,10 @@ export async function resolveIocFromActiveSelection(
   }
 
   return {
-    ...match,
+    value: match.value,
+    type: match.type,
+    ruleId: match.ruleId,
+    sourceTextHint: match.sourceTextHint,
     highlight: null,
     range,
   };
@@ -200,6 +224,8 @@ export async function openEnrichmentForResolvedSelection(
   const basePayload: HoverCardOverlayPayload = {
     value: resolved.value,
     type: resolved.type,
+    ruleId: resolved.ruleId,
+    sourceTextHint: resolved.sourceTextHint,
     enrichmentState: "empty",
   };
 

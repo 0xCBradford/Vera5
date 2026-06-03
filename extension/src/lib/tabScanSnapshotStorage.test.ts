@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { IOC_RULE_ID } from "./iocRegex";
 import {
   buildTabScanSnapshotPayload,
   tabScanSnapshotStorageKey,
@@ -59,6 +60,8 @@ describe("tabScanSnapshotStorage", () => {
           type: "ipv4",
           value: "8.8.8.8",
           anchorId: "vera5-hl-1",
+          ruleId: IOC_RULE_ID.IPV4,
+          sourceTextHint: "8.8.8.8",
         },
       ],
     });
@@ -93,6 +96,8 @@ describe("tabScanSnapshotStorage", () => {
           type: "domain",
           value: "example.com",
           anchorId: "vera5-hl-2",
+          ruleId: IOC_RULE_ID.DOMAIN,
+          sourceTextHint: "example.com",
         },
       ],
     });
@@ -125,6 +130,8 @@ describe("tabScanSnapshotStorage", () => {
           type: "ipv4",
           value: "8.8.8.8",
           anchorId: "vera5-hl-1",
+          ruleId: IOC_RULE_ID.IPV4,
+          sourceTextHint: "8.8.8.8",
         },
       ],
     });

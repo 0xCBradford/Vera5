@@ -34,6 +34,12 @@ function uniqueMatchValues(
   return [...new Set(matchValues(matches))];
 }
 
+function findMatch<
+  T extends { type: string; value: string; displayValue?: string }
+>(matches: readonly T[], type: string, value: string): T | undefined {
+  return matches.find((match) => match.type === type && match.value === value);
+}
+
 describe("fixture tuning against sample HTML", () => {
   it("sample-alert.html visible text matches documented IOCs and suppresses decoys", () => {
     const html = loadFixture("sample-alert.html");
@@ -46,6 +52,14 @@ describe("fixture tuning against sample HTML", () => {
     expect(values).toContain(`${IOC_TYPE.URL}:https://example.com/login`);
     expect(values).toContain(
       `${IOC_TYPE.URL}:https://example.com/login?ref=analyst`
+    );
+    const defangedUrlMatch = findMatch(
+      matches,
+      IOC_TYPE.URL,
+      "https://example.com/login?ref=analyst"
+    );
+    expect(defangedUrlMatch?.displayValue).toBe(
+      "hxxps://example.com/login?ref=analyst"
     );
     expect(values).toContain(`${IOC_TYPE.DOMAIN}:malware.testcategory.com`);
     expect(values).toContain(

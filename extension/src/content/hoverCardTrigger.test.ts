@@ -30,6 +30,7 @@ import {
   HOVER_CARD_PANEL_CLASS,
 } from "./hoverCardOverlay";
 import {
+  buildHoverCardPayloadFromHighlight,
   openHoverCardForHighlight,
   resolveIocHighlight,
   setupHoverCardTrigger,
@@ -126,6 +127,43 @@ describe("hover card manual enrich trigger", () => {
     }
     return highlight;
   }
+
+  it("buildHoverCardPayloadFromHighlight exposes match provenance", () => {
+    const highlight = mountHighlightedIpv4();
+    expect(buildHoverCardPayloadFromHighlight(highlight)).toEqual({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      ruleId: "ioc.regex.ipv4",
+      sourceTextHint: "Contact 8.8.8.8 for details.",
+      ignoredOverlaps: [],
+      enrichmentState: "empty",
+    });
+  });
+
+  it("buildHoverCardPayloadFromHighlight preserves defanged displayValue", () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Ticket hxxps://example[.]com/evil";
+    document.body.appendChild(paragraph);
+    highlightDetectedIocs(scanTextNodesForIocs(document.body), {
+      root: document.body,
+    });
+    const highlight = document.querySelector<HTMLSpanElement>(
+      `.${IOC_HIGHLIGHT_CLASS}`
+    );
+    if (!highlight) {
+      throw new Error("expected a highlighted IOC");
+    }
+
+    expect(buildHoverCardPayloadFromHighlight(highlight)).toEqual({
+      value: "https://example.com/evil",
+      displayValue: "hxxps://example[.]com/evil",
+      type: IOC_TYPE.URL,
+      ruleId: "ioc.regex.url",
+      sourceTextHint: "Ticket hxxps://example[.]com/evil",
+      ignoredOverlaps: [],
+      enrichmentState: "empty",
+    });
+  });
 
   function mountMultipleHighlightedIpv4(): HTMLSpanElement[] {
     const paragraph = document.createElement("p");

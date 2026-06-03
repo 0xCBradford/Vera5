@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { IocType } from "../lib/iocRegex";
+import type { IgnoredOverlapMatch, IocRuleId, IocType } from "../lib/iocRegex";
 import {
   getSessionAnalystNote,
   primeAnalystNoteForIoc,
@@ -15,9 +15,20 @@ import {
   HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
+  HOVER_CARD_WHY_DETECTED_SECTION_ARIA_LABEL,
+  HOVER_CARD_ON_PAGE_VALUE_LABEL,
+  HOVER_CARD_REFANGED_VALUE_LABEL,
+  HOVER_CARD_COPY_COPIED_LABEL,
+  HOVER_CARD_OPEN_LIVE_URL_LABEL,
+  buildWhyDetectedView,
+  confirmOpenLiveUrl,
+  openLiveUrlInNewTab,
   resolveEffectiveSourceAttribution,
   resolveHoverCardDisplayView,
   resolveHoverCardDisclaimerAriaLabel,
+  resolveIndicatorCopyActions,
+  resolveIndicatorValuePresentation,
+  shouldOfferLiveUrlOpen,
   type EnrichmentSourceAttribution,
   type EnrichmentSourceId,
   type HoverCardDisclaimerInput,
@@ -49,6 +60,10 @@ const TYPE_LABELS: Record<IocType, string> = {
 export type HoverCardProps = {
   value: string;
   type: IocType;
+  displayValue?: string;
+  ruleId?: IocRuleId;
+  sourceTextHint?: string;
+  ignoredOverlaps?: readonly IgnoredOverlapMatch[];
   summary?: string;
   tags?: readonly string[];
   sourceAttribution?: EnrichmentSourceAttribution;
@@ -68,6 +83,10 @@ export function formatHoverCardTypeLabel(type: IocType): string {
 export function HoverCard({
   value,
   type,
+  displayValue,
+  ruleId,
+  sourceTextHint,
+  ignoredOverlaps,
   summary,
   tags = [],
   sourceAttribution,
@@ -80,7 +99,15 @@ export function HoverCard({
   analystNotes,
 }: HoverCardProps) {
   const typeLabel = formatHoverCardTypeLabel(type);
-  const [copied, setCopied] = useState(false);
+  const valuePresentation = resolveIndicatorValuePresentation({ value, displayValue });
+  const copyActions = resolveIndicatorCopyActions(valuePresentation);
+  const whyDetectedView = buildWhyDetectedView({
+    type,
+    ruleId,
+    sourceTextHint,
+    ignoredOverlaps,
+  });
+  const [copiedCopyValue, setCopiedCopyValue] = useState<string | null>(null);
   const [note, setNote] = useState(() =>
     analystNotes ?? getSessionAnalystNote(value)
   );
@@ -118,16 +145,23 @@ export function HoverCard({
     });
   }, [analystNotes, value]);
 
-  const handleCopy = () => {
-    void copyTextToClipboard(value).then((success) => {
+  const handleCopy = (copyValue: string) => {
+    void copyTextToClipboard(copyValue).then((success) => {
       if (!success) {
         return;
       }
-      setCopied(true);
+      setCopiedCopyValue(copyValue);
       scheduleCopyFeedbackReset(() => {
-        setCopied(false);
+        setCopiedCopyValue(null);
       });
     });
+  };
+
+  const handleOpenLiveUrl = () => {
+    if (!confirmOpenLiveUrl(window)) {
+      return;
+    }
+    openLiveUrlInNewTab(value, window);
   };
 
   const handleNoteChange = (nextNote: string) => {
@@ -140,23 +174,86 @@ export function HoverCard({
       className="vera5-hover-card-panel"
       role="region"
       aria-label={`Indicator details for ${value}`}
+      data-vera5-rule-id={ruleId}
+      data-vera5-source-text-hint={sourceTextHint}
     >
       <div className="vera5-hover-card-header">
         <span className="vera5-hover-card-type">{typeLabel}</span>
+        {copyActions.map((action) => {
+          const copied = copiedCopyValue === action.copyValue;
+          return (
+            <button
+              key={action.label}
+              type="button"
+              className={
+                copied
+                  ? "vera5-hover-card-copy vera5-hover-card-copy--copied"
+                  : "vera5-hover-card-copy"
+              }
+              onClick={() => {
+                handleCopy(action.copyValue);
+              }}
+              aria-label={action.ariaLabel}
+            >
+              {copied ? HOVER_CARD_COPY_COPIED_LABEL : action.label}
+            </button>
+          );
+        })}
+      </div>
+      {valuePresentation.showRefangedPair ? (
+        <>
+          <p className="vera5-hover-card-value-on-page">
+            {HOVER_CARD_ON_PAGE_VALUE_LABEL} {valuePresentation.onPageValue}
+          </p>
+          <p className="vera5-hover-card-refanged-value">
+            {HOVER_CARD_REFANGED_VALUE_LABEL} {valuePresentation.refangedValue}
+          </p>
+        </>
+      ) : (
+        <p className="vera5-hover-card-value">{valuePresentation.refangedValue}</p>
+      )}
+      {shouldOfferLiveUrlOpen(type) ? (
         <button
           type="button"
-          className={
-            copied
-              ? "vera5-hover-card-copy vera5-hover-card-copy--copied"
-              : "vera5-hover-card-copy"
-          }
-          onClick={handleCopy}
-          aria-label={`Copy indicator ${value}`}
+          className="vera5-hover-card-action"
+          aria-label={HOVER_CARD_OPEN_LIVE_URL_LABEL}
+          onClick={handleOpenLiveUrl}
+          style={{ marginBottom: 8 }}
         >
-          {copied ? "Copied" : "Copy"}
+          {HOVER_CARD_OPEN_LIVE_URL_LABEL}
         </button>
-      </div>
-      <p className="vera5-hover-card-value">{value}</p>
+      ) : null}
+      {whyDetectedView ? (
+        <section
+          className="vera5-why-detected"
+          aria-label={HOVER_CARD_WHY_DETECTED_SECTION_ARIA_LABEL}
+          style={{ marginBottom: 8 }}
+        >
+          <p className="vera5-hover-card-section-heading">Why detected?</p>
+          <p className="vera5-why-detected-row">Type: {whyDetectedView.typeLabel}</p>
+          <p className="vera5-why-detected-row">Reason: {whyDetectedView.reason}</p>
+          <p className="vera5-why-detected-row vera5-why-detected-context">
+            Source context: {whyDetectedView.sourceTextHint}
+          </p>
+          {whyDetectedView.ignoredOverlaps.length > 0 ? (
+            <>
+              <p className="vera5-why-detected-overlaps-heading">Ignored overlaps:</p>
+              <ul className="vera5-why-detected-list">
+                {whyDetectedView.ignoredOverlaps.map((overlap) => (
+                  <li
+                    key={`${overlap.typeLabel}-${overlap.value}`}
+                    className="vera5-why-detected-item"
+                  >
+                    {overlap.typeLabel} {overlap.value} — {overlap.reason}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="vera5-why-detected-row">Ignored overlaps: none</p>
+          )}
+        </section>
+      ) : null}
       <p
         className={buildEnrichmentSummaryClassName(enrichment.variant)}
         role={enrichment.variant === "error" ? "alert" : "status"}

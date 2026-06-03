@@ -113,11 +113,36 @@ describe("handleScanPageRequest", () => {
         type: "ipv4",
         value: "8.8.8.8",
         anchorId: expect.stringMatching(/^vera5-hl-\d+$/),
+        ruleId: "ioc.regex.ipv4",
+        sourceTextHint: "Contact 8.8.8.8 today.",
       }),
     ]);
     expect(
       root.querySelector<HTMLElement>(`.${IOC_HIGHLIGHT_CLASS}`)?.dataset.vera5AnchorId
     ).toBe(message.snapshot.entries[0]?.anchorId);
+  });
+
+  it("persists defanged displayValue on scan snapshot entries", async () => {
+    store[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED] = true;
+    const root = mountPage(
+      "<p>Ticket hxxps://example[.]com/evil</p>"
+    );
+    await handleScanPageRequest(root);
+
+    const message = sendMessage.mock.calls[0]?.[0];
+    expect(message.snapshot.entries).toEqual([
+      expect.objectContaining({
+        type: "url",
+        value: "https://example.com/evil",
+        displayValue: "hxxps://example[.]com/evil",
+        ruleId: "ioc.regex.url",
+        sourceTextHint: "Ticket hxxps://example[.]com/evil",
+      }),
+    ]);
+    expect(
+      root.querySelector<HTMLElement>(`.${IOC_HIGHLIGHT_CLASS}`)?.dataset
+        .vera5DisplayValue
+    ).toBe("hxxps://example[.]com/evil");
   });
 
   it("persists logical anchor ids when highlighting is disabled", async () => {
@@ -127,6 +152,10 @@ describe("handleScanPageRequest", () => {
 
     const message = sendMessage.mock.calls[0]?.[0];
     expect(message.snapshot.entries[0]?.anchorId).toMatch(/^vera5-loc-ipv4-/);
+    expect(message.snapshot.entries[0]).toMatchObject({
+      ruleId: "ioc.regex.ipv4",
+      sourceTextHint: "Contact 8.8.8.8 today.",
+    });
     expect(root.querySelectorAll(`.${IOC_HIGHLIGHT_CLASS}`)).toHaveLength(0);
   });
 

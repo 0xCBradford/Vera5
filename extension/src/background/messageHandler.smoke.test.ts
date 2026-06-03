@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { contentRegisterMessage, enrichIocMessage, getTabScanSummaryMessage, MESSAGE, pingMessage, tabScanSnapshotMessage } from "../lib/messages";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
+import { IOC_RULE_ID } from "../lib/iocRegex";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
 import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
 import {
@@ -181,6 +182,8 @@ describe("message handler async enrich", () => {
           type: "ipv4",
           value: "8.8.8.8",
           anchorId: "vera5-hl-1",
+          ruleId: IOC_RULE_ID.IPV4,
+          sourceTextHint: "8.8.8.8",
         },
       ],
     });
@@ -203,6 +206,8 @@ describe("message handler async enrich", () => {
           type: "ipv4",
           value: "8.8.8.8",
           anchorId: "vera5-hl-1",
+          ruleId: IOC_RULE_ID.IPV4,
+          sourceTextHint: "8.8.8.8",
         },
       ],
     });

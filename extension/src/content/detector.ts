@@ -98,9 +98,26 @@ export function dedupeOverlappingMatches(
   const kept: DetectedIoc[] = [];
   for (const candidate of ordered) {
     const span = { start: candidate.start, end: candidate.end };
-    if (!kept.some((existing) => spansOverlap(span, existing))) {
-      kept.push(candidate);
+    const winnerIndex = kept.findIndex((existing) => spansOverlap(span, existing));
+    if (winnerIndex === -1) {
+      kept.push({
+        ...candidate,
+        ignoredOverlaps: candidate.ignoredOverlaps ? [...candidate.ignoredOverlaps] : [],
+      });
+      continue;
     }
+
+    const winner = kept[winnerIndex]!;
+    const ignoredOverlaps = [...(winner.ignoredOverlaps ?? [])];
+    ignoredOverlaps.push({
+      type: candidate.type,
+      value: candidate.value,
+      ruleId: candidate.ruleId,
+    });
+    kept[winnerIndex] = {
+      ...winner,
+      ignoredOverlaps,
+    };
   }
 
   return kept.sort((a, b) => a.start - b.start);

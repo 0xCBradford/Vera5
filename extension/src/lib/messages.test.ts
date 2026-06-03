@@ -19,6 +19,7 @@ import {
   enrichSelectionMessage,
   tabScanSnapshotMessage,
 } from "./messages";
+import { IOC_RULE_ID } from "./iocRegex";
 import { buildTabScanSnapshotPayload } from "./tabScanSnapshot";
 
 describe("Vera5 message envelopes", () => {
@@ -100,6 +101,8 @@ describe("Vera5 message envelopes", () => {
           type: "ipv4",
           value: "8.8.8.8",
           anchorId: "vera5-hl-1",
+          ruleId: IOC_RULE_ID.IPV4,
+          sourceTextHint: "8.8.8.8",
         },
       ],
     });

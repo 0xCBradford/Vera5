@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import * as cache from "./cache";
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
+import { IOC_RULE_ID } from "./iocRegex";
 import {
   buildTabScanCountSummaryText,
   buildTabScanIocListClipboardText,
@@ -15,7 +16,9 @@ import {
   loadTrayEntryEnrichmentStatuses,
   pickLatestTrayEnrichmentStatus,
   resolveTrayEntryEnrichmentStatus,
+  resolveTrayEntryMatchProvenance,
   TAB_SCAN_SUMMARY_SCHEMA_VERSION,
+  type TabScanSummaryEntry,
 } from "./tabScanSummary";
 import {
   buildTabScanSnapshotPayload,
@@ -28,9 +31,27 @@ describe("tabScanSummary", () => {
       pageUrl: "https://example.com/alert",
       scannedAt: 1_700_000_000_000,
       entries: [
-        { type: "ipv4", value: "8.8.8.8", anchorId: "vera5-hl-1" },
-        { type: "ipv4", value: "192.0.2.1", anchorId: "vera5-hl-2" },
-        { type: "cve", value: "CVE-2021-44228", anchorId: "vera5-hl-3" },
+        {
+          type: "ipv4",
+          value: "8.8.8.8",
+          anchorId: "vera5-hl-1",
+          ruleId: IOC_RULE_ID.IPV4,
+          sourceTextHint: "8.8.8.8",
+        },
+        {
+          type: "ipv4",
+          value: "192.0.2.1",
+          anchorId: "vera5-hl-2",
+          ruleId: IOC_RULE_ID.IPV4,
+          sourceTextHint: "192.0.2.1",
+        },
+        {
+          type: "cve",
+          value: "CVE-2021-44228",
+          anchorId: "vera5-hl-3",
+          ruleId: IOC_RULE_ID.CVE,
+          sourceTextHint: "CVE-2021-44228",
+        },
       ],
     }),
     tabId: 12,
@@ -191,5 +212,77 @@ describe("tabScanSummary", () => {
     });
 
     vi.unstubAllGlobals();
+  });
+
+  it("exposes match provenance from tray summary entries", () => {
+    const summary = buildTabScanSummary(snapshot);
+    expect(resolveTrayEntryMatchProvenance(summary.entries[0]!)).toEqual({
+      ruleId: IOC_RULE_ID.IPV4,
+      sourceTextHint: "8.8.8.8",
+    });
+    expect(
+      resolveTrayEntryMatchProvenance({
+        type: "ipv4",
+        value: "8.8.8.8",
+        anchorId: "legacy",
+      } as TabScanSummaryEntry)
+    ).toBeNull();
+  });
+
+  it("preserves displayValue on tray summary entries", () => {
+    const defangedSnapshot: TabScanSnapshot = {
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/alert",
+        scannedAt: 1_700_000_000_000,
+        entries: [
+          {
+            type: "url",
+            value: "https://example.com/evil",
+            displayValue: "hxxps://example[.]com/evil",
+            anchorId: "vera5-hl-3",
+            ruleId: IOC_RULE_ID.URL,
+            sourceTextHint: "Ticket hxxps://example[.]com/evil",
+          },
+        ],
+      }),
+      tabId: 1,
+    };
+
+    const summary = buildTabScanSummary(defangedSnapshot);
+    expect(summary.entries[0]).toMatchObject({
+      value: "https://example.com/evil",
+      displayValue: "hxxps://example[.]com/evil",
+      ruleId: IOC_RULE_ID.URL,
+      sourceTextHint: "Ticket hxxps://example[.]com/evil",
+    });
+  });
+
+  it("returns ignored overlaps from tray entry provenance", () => {
+    const entry: TabScanSummaryEntry = {
+      type: "url",
+      value: "https://example.com",
+      anchorId: "vera5-hl-4",
+      ruleId: IOC_RULE_ID.URL,
+      sourceTextHint: "Visit https://example.com today",
+      ignoredOverlaps: [
+        {
+          type: "domain",
+          value: "example.com",
+          ruleId: IOC_RULE_ID.DOMAIN,
+        },
+      ],
+    };
+
+    expect(resolveTrayEntryMatchProvenance(entry)).toEqual({
+      ruleId: IOC_RULE_ID.URL,
+      sourceTextHint: "Visit https://example.com today",
+      ignoredOverlaps: [
+        {
+          type: "domain",
+          value: "example.com",
+          ruleId: IOC_RULE_ID.DOMAIN,
+        },
+      ],
+    });
   });
 });
