@@ -4,6 +4,7 @@ import { IOC_TYPE } from "./iocRegex";
 import {
   buildPivotUrl,
   getPivotLinks,
+  getPivotRecipes,
   PIVOT_PROVIDER,
   type PivotProvider,
 } from "./pivots";
@@ -198,4 +199,136 @@ describe("pivot link templates", () => {
       buildPivotUrl(PIVOT_PROVIDER.VIRUSTOTAL, IOC_TYPE.SHA256, mixedCase)
     ).toBe(`https://www.virustotal.com/gui/file/${canonical}`);
   });
+});
+
+describe("pivot recipes", () => {
+  it("returns type-specific recipes with source attribution and pivot URLs", () => {
+    const recipes = getPivotRecipes(IOC_TYPE.IPV4, "8.8.8.8");
+
+    expect(recipes.map((recipe) => recipe.provider)).toEqual([
+      PIVOT_PROVIDER.ABUSEIPDB,
+      PIVOT_PROVIDER.OTX,
+      PIVOT_PROVIDER.VIRUSTOTAL,
+      PIVOT_PROVIDER.URLSCAN,
+    ]);
+    expect(recipes[0]).toMatchObject({
+      sourceLabel: "AbuseIPDB",
+      label: "AbuseIPDB",
+      href: "https://www.abuseipdb.com/check/8.8.8.8",
+    });
+    for (const recipe of recipes) {
+      expect(recipe.sourceLabel).toBe(recipe.label);
+      expect(recipe.guidance.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("omits providers without pivot URLs for the IOC type", () => {
+    const recipes = getPivotRecipes(IOC_TYPE.CVE, "CVE-2021-44228");
+
+    expect(recipes.map((recipe) => recipe.provider)).toEqual([
+      PIVOT_PROVIDER.VIRUSTOTAL,
+      PIVOT_PROVIDER.OTX,
+    ]);
+  });
+
+  it("prioritizes URLScan first for URL indicators", () => {
+    const recipes = getPivotRecipes(IOC_TYPE.URL, "https://example.com/login");
+
+    expect(recipes[0]?.provider).toBe(PIVOT_PROVIDER.URLSCAN);
+  });
+});
+
+const ENRICHMENT_CLAIM_GUIDANCE_PATTERNS: RegExp[] = [
+  /\b\d{1,3}\s*\/\s*\d+\b/,
+  /\b\d+\s*%\b/,
+  /\bflagged as\b/i,
+  /\bdetected as\b/i,
+  /\bis malicious\b/i,
+  /\bwas malicious\b/i,
+  /\bscore:\s*\d/i,
+  /\b\d+\s+vendors?\b/i,
+];
+
+const STATIC_RULE_VALUE_PAIRS: ReadonlyArray<{
+  type: IocType;
+  values: [string, string];
+}> = [
+  { type: IOC_TYPE.IPV4, values: ["8.8.8.8", "192.0.2.1"] },
+  { type: IOC_TYPE.DOMAIN, values: ["example.com", "malware.testcategory.com"] },
+  {
+    type: IOC_TYPE.URL,
+    values: ["https://example.com/login", "http://192.0.2.1/resource?id=1"],
+  },
+  {
+    type: IOC_TYPE.MD5,
+    values: [
+      "d41d8cd98f00b204e9800998ecf8427e",
+      "098f6bcd4621d373cade4e832627b4f6",
+    ],
+  },
+  {
+    type: IOC_TYPE.SHA1,
+    values: [
+      "aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8",
+      "356a192b7913b04c54574d18c28d46e6395428ab",
+    ],
+  },
+  {
+    type: IOC_TYPE.SHA256,
+    values: [
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "2c26b46b68ffc68ff99b453c1d3041340ed2d577d11d5f04651cae7b5f7c181",
+    ],
+  },
+  { type: IOC_TYPE.CVE, values: ["CVE-2021-44228", "CVE-2017-0144"] },
+];
+
+function guidanceByProvider(
+  type: IocType,
+  value: string
+): Map<PivotProvider, string> {
+  return new Map(
+    getPivotRecipes(type, value).map((recipe) => [
+      recipe.provider,
+      recipe.guidance,
+    ])
+  );
+}
+
+describe("pivot recipe static rules", () => {
+  it.each(STATIC_RULE_VALUE_PAIRS)(
+    "keeps guidance identical for different $type values",
+    ({ type, values }) => {
+      const [firstValue, secondValue] = values;
+      const firstGuidance = guidanceByProvider(type, firstValue);
+      const secondGuidance = guidanceByProvider(type, secondValue);
+
+      expect(firstGuidance.size).toBeGreaterThan(0);
+      expect([...firstGuidance.keys()]).toEqual([...secondGuidance.keys()]);
+      for (const [provider, guidance] of firstGuidance) {
+        expect(secondGuidance.get(provider)).toBe(guidance);
+      }
+    }
+  );
+
+  it.each(PIVOT_GOLDEN_CASES)(
+    "never embeds the indicator value in guidance for $type $value",
+    ({ type, value }) => {
+      for (const recipe of getPivotRecipes(type, value)) {
+        expect(recipe.guidance.toLowerCase()).not.toContain(value.toLowerCase());
+        expect(recipe.guidance).not.toContain(recipe.href);
+      }
+    }
+  );
+
+  it.each(PIVOT_GOLDEN_CASES)(
+    "avoids enrichment-style vendor score or detection claims for $type $value",
+    ({ type, value }) => {
+      for (const recipe of getPivotRecipes(type, value)) {
+        for (const pattern of ENRICHMENT_CLAIM_GUIDANCE_PATTERNS) {
+          expect(recipe.guidance).not.toMatch(pattern);
+        }
+      }
+    }
+  );
 });

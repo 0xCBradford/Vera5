@@ -1,3 +1,4 @@
+import { copyTextToClipboard } from "./copyText";
 import {
   buildEnrichmentExportMarkdown,
   buildEnrichmentExportScoreSectionLines,
@@ -382,4 +383,14 @@ export function downloadTrayTemplateExportFile(
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
+}
+
+export async function copyTrayTemplateExportToClipboard(
+  templateId: ExportTemplateId,
+  records: readonly NormalizedEnrichmentRecord[]
+): Promise<boolean> {
+  if (records.length === 0) {
+    return false;
+  }
+  return copyTextToClipboard(renderTraySubsetExportTemplate(templateId, records));
 }

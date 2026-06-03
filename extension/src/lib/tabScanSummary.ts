@@ -375,3 +375,30 @@ export function resolveTrayTemplateExportFeedback(input: {
   const noun = input.count === 1 ? "indicator" : "indicators";
   return `Exported ${input.count} ${noun} as ${getExportTemplateLabel(input.templateId)}.`;
 }
+
+export function resolveTraySubsetCopyFeedback(input: {
+  success: boolean;
+  count: number;
+  format: TraySubsetExportFormat;
+}): string {
+  if (!input.success) {
+    return input.format === "markdown"
+      ? "Could not copy Markdown."
+      : "Could not copy JSON.";
+  }
+  const noun = input.count === 1 ? "indicator" : "indicators";
+  const formatLabel = input.format === "markdown" ? "Markdown" : "JSON";
+  return `Copied ${input.count} filtered ${noun} as ${formatLabel}.`;
+}
+
+export function resolveTrayTemplateCopyFeedback(input: {
+  success: boolean;
+  count: number;
+  templateId: ExportTemplateId;
+}): string {
+  if (!input.success) {
+    return `Could not copy ${getExportTemplateLabel(input.templateId)}.`;
+  }
+  const noun = input.count === 1 ? "indicator" : "indicators";
+  return `Copied ${input.count} filtered ${noun} as ${getExportTemplateLabel(input.templateId)}.`;
+}

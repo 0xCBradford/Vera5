@@ -6,6 +6,8 @@ import {
   resolveTrayCopyFeedback,
   resolveTrayExportFeedback,
   resolveTrayNavigationFeedback,
+  resolveTraySubsetCopyFeedback,
+  resolveTrayTemplateCopyFeedback,
   resolveTrayTemplateExportFeedback,
   trayEnrichmentHintStyle,
 } from "./Popup";
@@ -163,6 +165,30 @@ describe("resolveTrayTemplateExportFeedback", () => {
         templateId: "obsidian-note",
       })
     ).toBe("Could not export Obsidian note.");
+  });
+});
+
+describe("resolveTraySubsetCopyFeedback", () => {
+  it("returns success messages for filtered subset copies", () => {
+    expect(
+      resolveTraySubsetCopyFeedback({
+        success: true,
+        count: 2,
+        format: "markdown",
+      })
+    ).toBe("Copied 2 filtered indicators as Markdown.");
+  });
+});
+
+describe("resolveTrayTemplateCopyFeedback", () => {
+  it("returns success messages for template copies", () => {
+    expect(
+      resolveTrayTemplateCopyFeedback({
+        success: true,
+        count: 1,
+        templateId: "analyst-update",
+      })
+    ).toBe("Copied 1 filtered indicator as Analyst update.");
   });
 });
 

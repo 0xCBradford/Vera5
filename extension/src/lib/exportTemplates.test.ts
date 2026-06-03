@@ -1,13 +1,15 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { IOC_TYPE } from "./iocRegex";
 import { buildNormalizedEnrichmentRecord } from "./enrichmentExport";
 import {
   buildExportTemplateFieldContext,
+  copyTrayTemplateExportToClipboard,
   getExportTemplateLabel,
   listExportTemplateIds,
   renderExportTemplate,
   renderTraySubsetExportTemplate,
 } from "./exportTemplates";
+import * as copyText from "./copyText";
 
 const EXPORTED_AT = "2026-06-02T12:00:00.000Z";
 
@@ -82,5 +84,19 @@ describe("exportTemplates", () => {
     expect(output).toContain("8.8.8.8");
     expect(output).toContain("CVE-2021-44228");
     expect(output).toContain("\n\n---\n\n");
+  });
+
+  it("copies tray subset template output to the clipboard", async () => {
+    const copy = vi
+      .spyOn(copyText, "copyTextToClipboard")
+      .mockResolvedValue(true);
+
+    const copied = await copyTrayTemplateExportToClipboard("analyst-update", [
+      sampleRecord,
+    ]);
+
+    expect(copied).toBe(true);
+    expect(copy.mock.calls[0]?.[0]).toContain("Vera5 triage for 8.8.8.8");
+    copy.mockRestore();
   });
 });

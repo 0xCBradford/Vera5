@@ -25,7 +25,7 @@ Vitest discovers tests alongside source (`*.test.ts`, `*.test.tsx`) under `exten
 | Enrichment | `enrichmentHandler.test.ts`, `abuseipdbConnector.test.ts`, `otxConnector.test.ts` |
 | Cache / cooldown | `cache.test.ts`, `enrichmentCooldown.test.ts` |
 | Scoring | `scoring.test.ts`, `scoring.bands.golden.test.ts`, `scoring.vendorFixtures.golden.test.ts` |
-| Export artifacts | `enrichmentExport.test.ts` (contract coverage), `enrichmentExport.golden.test.ts` (format snapshots) |
+| Export artifacts | `enrichmentExport.test.ts` (contract coverage), `enrichmentExport.golden.test.ts` (format snapshots), `exportTemplates.test.ts` (template routing), `exportTemplates.golden.test.ts` (per-template snapshots) |
 | Background smoke | `messageHandler.smoke.test.ts` (`npm run test:smoke`) |
 
 Golden tests lock band mapping, vendor fixture summaries, and markdown/JSON export artifacts; update snapshots deliberately when product rules change.

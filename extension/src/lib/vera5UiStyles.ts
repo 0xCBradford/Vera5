@@ -271,6 +271,39 @@ export function buildVera5UiStylesCss(): string {
   flex-wrap: wrap;
   gap: 6px;
 }
+.vera5-hover-card-pivot-recipes {
+  margin-bottom: 8px;
+}
+.vera5-hover-card-pivot-recipes-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vera5-hover-card-pivot-recipe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.vera5-hover-card-pivot-recipe:last-child {
+  margin-bottom: 0;
+}
+.vera5-hover-card-pivot-recipe-source {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--vera5-accent) 18%, var(--vera5-button-bg));
+  color: var(--vera5-accent-text);
+}
+.vera5-hover-card-pivot-recipe-guidance {
+  flex: 1 1 100%;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vera5-muted);
+}
 .vera5-hover-card-pivot-link {
   font-size: 11px;
   font-weight: 600;

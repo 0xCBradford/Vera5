@@ -7,11 +7,15 @@ import {
   copyEnrichmentExportJsonToClipboard,
   copyEnrichmentExportMarkdownToClipboard,
   copyEnrichmentExportTxtToClipboard,
+  copyTraySubsetExportJsonToClipboard,
   downloadEnrichmentExportFile,
+  downloadTraySubsetExportFile,
   type EnrichmentExportFileFormat,
   type NormalizedEnrichmentRecord,
+  type TraySubsetExportFormat,
 } from "../lib/enrichmentExport";
 import {
+  copyTrayTemplateExportToClipboard,
   downloadTrayTemplateExportFile,
   getExportTemplateLabel,
   isExportTemplateId,
@@ -23,6 +27,9 @@ import {
   buildTraySubsetEnrichmentRecords,
   filterTabScanSummaryEntries,
   resolveTrayCopyFeedback,
+  resolveTrayExportFeedback,
+  resolveTraySubsetCopyFeedback,
+  resolveTrayTemplateCopyFeedback,
   resolveTrayTemplateExportFeedback,
   type IocTypeFilter,
   type TabScanSummary,
@@ -47,7 +54,7 @@ import {
   type HoverCardSourceEntry,
 } from "../lib/hoverCardEnrichment";
 import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
-import { getPivotLinks } from "../lib/pivots";
+import { getPivotRecipes } from "../lib/pivots";
 import {
   buildEnrichmentSummaryClassName,
   ensureVera5UiStyles,
@@ -89,6 +96,14 @@ export function getLastHoverCardPayload(): HoverCardOverlayPayload | null {
 export const HOVER_CARD_PANEL_CLASS = "vera5-hover-card-panel";
 export const HOVER_CARD_COPY_BUTTON_CLASS = "vera5-hover-card-copy";
 export const HOVER_CARD_PIVOT_NAV_CLASS = "vera5-hover-card-pivots";
+export const HOVER_CARD_PIVOT_RECIPES_CLASS = "vera5-hover-card-pivot-recipes";
+export const HOVER_CARD_PIVOT_RECIPES_LIST_CLASS =
+  "vera5-hover-card-pivot-recipes-list";
+export const HOVER_CARD_PIVOT_RECIPE_CLASS = "vera5-hover-card-pivot-recipe";
+export const HOVER_CARD_PIVOT_RECIPE_SOURCE_CLASS =
+  "vera5-hover-card-pivot-recipe-source";
+export const HOVER_CARD_PIVOT_RECIPE_GUIDANCE_CLASS =
+  "vera5-hover-card-pivot-recipe-guidance";
 export const HOVER_CARD_PIVOT_LINK_CLASS = "vera5-hover-card-pivot-link";
 export const HOVER_CARD_ENRICHMENT_CLASS = "vera5-hover-card-enrichment";
 export const HOVER_CARD_TAGS_CLASS = "vera5-hover-card-tags";
@@ -284,30 +299,49 @@ function createRawVendorJsonDetails(
   return details;
 }
 
-function createPivotLinksNav(
+function createPivotRecipesPanel(
   payload: HoverCardOverlayPayload,
   doc: Document
 ): HTMLElement | null {
-  const pivotLinks = getPivotLinks(payload.type, payload.value);
-  if (pivotLinks.length === 0) {
+  const recipes = getPivotRecipes(payload.type, payload.value);
+  if (recipes.length === 0) {
     return null;
   }
 
-  const nav = doc.createElement("nav");
-  nav.className = HOVER_CARD_PIVOT_NAV_CLASS;
-  nav.setAttribute("aria-label", "Open indicator in external sources");
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_PIVOT_RECIPES_CLASS;
+  section.setAttribute("aria-label", "Recommended next pivots");
 
-  for (const link of pivotLinks) {
+  section.appendChild(createSectionHeading("Recommended next pivots", doc));
+
+  const list = doc.createElement("ul");
+  list.className = HOVER_CARD_PIVOT_RECIPES_LIST_CLASS;
+
+  for (const recipe of recipes) {
+    const item = doc.createElement("li");
+    item.className = HOVER_CARD_PIVOT_RECIPE_CLASS;
+
+    const sourceBadge = doc.createElement("span");
+    sourceBadge.className = HOVER_CARD_PIVOT_RECIPE_SOURCE_CLASS;
+    sourceBadge.textContent = recipe.sourceLabel;
+
     const anchor = doc.createElement("a");
     anchor.className = HOVER_CARD_PIVOT_LINK_CLASS;
-    anchor.href = link.href;
+    anchor.href = recipe.href;
     anchor.target = "_blank";
     anchor.rel = "noopener noreferrer";
-    anchor.textContent = link.label;
-    nav.appendChild(anchor);
+    anchor.textContent = recipe.label;
+
+    const guidance = doc.createElement("span");
+    guidance.className = HOVER_CARD_PIVOT_RECIPE_GUIDANCE_CLASS;
+    guidance.textContent = recipe.guidance;
+
+    item.append(sourceBadge, anchor, guidance);
+    list.appendChild(item);
   }
 
-  return nav;
+  section.appendChild(list);
+  return section;
 }
 
 function createSourceResultsSection(
@@ -783,7 +817,19 @@ function buildCopyDropdownActions(
 ): readonly ExportDropdownItem[] {
   return [
     ...buildScanListCopyDropdownActions(doc, statusEl),
+    ...buildScanListTemplateCopyDropdownActions(statusEl),
     ...buildExportFormatActions(buildRecord, doc, "copy"),
+  ];
+}
+
+function buildExportDropdownActions(
+  buildRecord: () => ReturnType<typeof buildExportRecordFromPayload>,
+  doc: Document,
+  statusEl: HTMLElement
+): readonly ExportDropdownItem[] {
+  return [
+    ...buildScanListExportDropdownActions(doc, statusEl),
+    ...buildExportFormatActions(buildRecord, doc, "export"),
   ];
 }
 
@@ -873,6 +919,163 @@ function resetScanExportCache(): void {
   scanExportCachePromise = null;
 }
 
+function withScanExportRecords(
+  statusEl: HTMLElement,
+  run: (cache: ScanExportCache) => void | Promise<void>,
+  onError?: () => void
+): void {
+  const execute = (cache: ScanExportCache): void => {
+    void Promise.resolve(run(cache)).catch(() => {
+      if (onError) {
+        onError();
+        return;
+      }
+      setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+    });
+  };
+
+  if (scanExportCache && scanExportCache.records.length > 0) {
+    execute(scanExportCache);
+    warmScanExportCache();
+    return;
+  }
+
+  setScanExportStatus(statusEl, SCAN_EXPORT_PREPARING_MESSAGE, false);
+  void (scanExportCachePromise ?? refreshScanExportCache())
+    .then((cache) => {
+      scanExportCache = cache;
+      execute(cache);
+      warmScanExportCache();
+    })
+    .catch(() => {
+      if (onError) {
+        onError();
+        return;
+      }
+      setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+    });
+}
+
+function runTraySubsetExport(
+  cache: ScanExportCache,
+  format: TraySubsetExportFormat,
+  doc: Document
+): boolean {
+  if (!cache.context || cache.records.length === 0) {
+    return false;
+  }
+  if (format === "markdown") {
+    downloadTrayTemplateExportFile("markdown-report", cache.records, doc);
+  } else {
+    downloadTraySubsetExportFile(cache.records, format, doc);
+  }
+  return true;
+}
+
+function buildScanListExportDropdownActions(
+  doc: Document,
+  statusEl: HTMLElement
+): readonly ExportDropdownItem[] {
+  const formats: readonly {
+    format: TraySubsetExportFormat;
+    label: string;
+  }[] = [
+    { format: "markdown", label: "Export filtered Markdown" },
+    { format: "json", label: "Export filtered JSON" },
+  ];
+
+  return formats.map(({ format, label }) => ({
+    label,
+    action: () => {
+      withScanExportRecords(
+        statusEl,
+        (cache) => {
+          if (!runTraySubsetExport(cache, format, doc)) {
+            setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+            return;
+          }
+          setScanExportStatus(
+            statusEl,
+            resolveTrayExportFeedback({
+              success: true,
+              count: cache.records.length,
+              format,
+            }),
+            true
+          );
+        },
+        () => {
+          setScanExportStatus(
+            statusEl,
+            resolveTrayExportFeedback({
+              success: false,
+              count: 0,
+              format,
+            }),
+            false
+          );
+        }
+      );
+    },
+  }));
+}
+
+function buildScanListTemplateCopyDropdownActions(
+  statusEl: HTMLElement
+): readonly ExportDropdownItem[] {
+  const formats: readonly {
+    format: TraySubsetExportFormat;
+    label: string;
+  }[] = [
+    { format: "markdown", label: "Copy filtered Markdown" },
+    { format: "json", label: "Copy filtered JSON" },
+  ];
+
+  return formats.map(({ format, label }) => ({
+    label,
+    action: () => {
+      withScanExportRecords(
+        statusEl,
+        async (cache) => {
+          if (!cache.context || cache.records.length === 0) {
+            setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+            return;
+          }
+
+          const copied =
+            format === "markdown"
+              ? await copyTrayTemplateExportToClipboard(
+                  "markdown-report",
+                  cache.records
+                )
+              : await copyTraySubsetExportJsonToClipboard(cache.records);
+
+          setScanExportStatus(
+            statusEl,
+            resolveTraySubsetCopyFeedback({
+              success: copied,
+              count: cache.records.length,
+              format,
+            }),
+            copied
+          );
+        },
+        () => {
+          setScanExportStatus(
+            statusEl,
+            resolveTraySubsetCopyFeedback({
+              success: false,
+              count: 0,
+              format,
+            }),
+            false
+          );
+        }
+      );
+    },
+  }));
+}
+
 function createTemplateExportRow(
   doc: Document,
   statusEl: HTMLElement
@@ -913,46 +1116,26 @@ function createTemplateExportRow(
       return;
     }
 
-    const runTemplateExport = (cache: ScanExportCache): boolean => {
-      if (!cache.context) {
-        setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
-        return false;
-      }
-      if (cache.records.length === 0) {
-        setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
-        return false;
-      }
-
-      downloadTrayTemplateExportFile(selectedTemplate, cache.records, doc);
-      setScanExportStatus(
-        statusEl,
-        resolveTrayTemplateExportFeedback({
-          success: true,
-          count: cache.records.length,
-          templateId: selectedTemplate,
-        }),
-        true
-      );
-      return true;
-    };
-
-    if (scanExportCache && scanExportCache.records.length > 0) {
-      runTemplateExport(scanExportCache);
-      warmScanExportCache();
-      return;
-    }
-
-    setScanExportStatus(statusEl, SCAN_EXPORT_PREPARING_MESSAGE, false);
-    void (scanExportCachePromise ?? refreshScanExportCache())
-      .then((cache) => {
-        scanExportCache = cache;
-        if (!runTemplateExport(cache)) {
-          warmScanExportCache();
+    withScanExportRecords(
+      statusEl,
+      (cache) => {
+        if (!cache.context || cache.records.length === 0) {
+          setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
           return;
         }
-        warmScanExportCache();
-      })
-      .catch(() => {
+
+        downloadTrayTemplateExportFile(selectedTemplate, cache.records, doc);
+        setScanExportStatus(
+          statusEl,
+          resolveTrayTemplateExportFeedback({
+            success: true,
+            count: cache.records.length,
+            templateId: selectedTemplate,
+          }),
+          true
+        );
+      },
+      () => {
         setScanExportStatus(
           statusEl,
           resolveTrayTemplateExportFeedback({
@@ -962,10 +1145,67 @@ function createTemplateExportRow(
           }),
           false
         );
-      });
+      }
+    );
   });
 
-  templateRow.append(templateLabel, templateSelect, exportTemplateButton);
+  const copyTemplateButton = doc.createElement("button");
+  copyTemplateButton.type = "button";
+  copyTemplateButton.className = HOVER_CARD_EXPORT_BUTTON_CLASS;
+  copyTemplateButton.textContent = "Copy template";
+  copyTemplateButton.setAttribute(
+    "aria-label",
+    "Copy filtered indicators using the selected template"
+  );
+
+  copyTemplateButton.addEventListener("click", () => {
+    const selectedTemplate = templateSelect.value;
+    if (!isExportTemplateId(selectedTemplate)) {
+      return;
+    }
+
+    withScanExportRecords(
+      statusEl,
+      async (cache) => {
+        if (!cache.context || cache.records.length === 0) {
+          setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+          return;
+        }
+
+        const copied = await copyTrayTemplateExportToClipboard(
+          selectedTemplate,
+          cache.records
+        );
+        setScanExportStatus(
+          statusEl,
+          resolveTrayTemplateCopyFeedback({
+            success: copied,
+            count: cache.records.length,
+            templateId: selectedTemplate,
+          }),
+          copied
+        );
+      },
+      () => {
+        setScanExportStatus(
+          statusEl,
+          resolveTrayTemplateCopyFeedback({
+            success: false,
+            count: 0,
+            templateId: selectedTemplate,
+          }),
+          false
+        );
+      }
+    );
+  });
+
+  templateRow.append(
+    templateLabel,
+    templateSelect,
+    exportTemplateButton,
+    copyTemplateButton
+  );
   return templateRow;
 }
 
@@ -1014,7 +1254,7 @@ function createExportSection(
     createActionDropdown(
       "Export",
       "Export case artifacts as a file",
-      buildExportFormatActions(buildRecord, doc, "export"),
+      buildExportDropdownActions(buildRecord, doc, statusEl),
       doc
     )
   );
@@ -1119,7 +1359,7 @@ export function buildHoverCardPanel(
 ): HTMLElement {
   ensureVera5UiStyles(doc);
 
-  const pivotLinks = getPivotLinks(payload.type, payload.value);
+  const pivotRecipes = getPivotRecipes(payload.type, payload.value);
   const sourceResults = payload.sourceResults ?? [];
   const view = resolveHoverCardDisplayView({
     enrichmentState: payload.enrichmentState,
@@ -1131,7 +1371,7 @@ export function buildHoverCardPanel(
     retryHint: payload.retryHint,
     disabledSources: payload.disabledSources,
     sourceResults,
-    pivotLinkCount: pivotLinks.length,
+    pivotLinkCount: pivotRecipes.length,
   });
   const enrichment = view.enrichment;
   const sourceResultsSection = view.showMultiSourceResults
@@ -1145,7 +1385,7 @@ export function buildHoverCardPanel(
     view.disabledSourcePlaceholders,
     doc
   );
-  const pivotNav = createPivotLinksNav(payload, doc);
+  const pivotRecipesPanel = createPivotRecipesPanel(payload, doc);
   const enrichmentTagsSection = view.showTags
     ? createEnrichmentTagsSection(view.enrichmentTags, doc)
     : null;
@@ -1285,8 +1525,8 @@ export function buildHoverCardPanel(
   if (disabledSourcesSection) {
     panel.appendChild(disabledSourcesSection);
   }
-  if (pivotNav) {
-    panel.appendChild(pivotNav);
+  if (pivotRecipesPanel) {
+    panel.appendChild(pivotRecipesPanel);
   }
   analystNotesSection.style.marginBottom = showFooter ? "8px" : "0";
   panel.appendChild(analystNotesSection);

@@ -19,6 +19,8 @@ import {
   loadTrayEntryEnrichmentStatuses,
   resolveTrayCopyFeedback,
   resolveTrayExportFeedback,
+  resolveTraySubsetCopyFeedback,
+  resolveTrayTemplateCopyFeedback,
   resolveTrayTemplateExportFeedback,
   type IocTypeFilter,
   type TabScanSummary,
@@ -52,6 +54,8 @@ export { resolveTrayNavigationFeedback };
 export {
   resolveTrayCopyFeedback,
   resolveTrayExportFeedback,
+  resolveTraySubsetCopyFeedback,
+  resolveTrayTemplateCopyFeedback,
   resolveTrayTemplateExportFeedback,
 };
 

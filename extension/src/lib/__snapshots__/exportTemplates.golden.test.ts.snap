@@ -1,0 +1,140 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden: export template edge snapshots > jira-comment with all enrichment sources disabled 1`] = `
+"h3. Vera5 IOC triage — 8.8.8.8
+
+*Type:* IPv4 address
+*Risk score:* Risk score unavailable
+
+h4. Source summary
+
+AbuseIPDB: AbuseIPDB is disabled. Enable it in extension settings to load enrichment.
+OTX: OTX is disabled. Enable it in extension settings to load enrichment.
+URLScan.io: URLScan.io is disabled. Enable it in extension settings to load enrichment.
+GreyNoise: GreyNoise is disabled. Enable it in extension settings to load enrichment.
+
+h4. Score reasoning
+
+No enrichment source results are available to compute a local advisory score.
+
+_Exported 2026-06-02T12:00:00.000Z via Vera5._"
+`;
+
+exports[`golden: export template snapshot (analyst-update) > renders a stable single-IOC artifact 1`] = `"Vera5 triage for 185.220.101.4 (IPv4 address). Summary: 74 abuse confidence. Tags: DE, Hosting. Risk score: High risk (59/100). Analyst notes: Correlate with firewall deny logs."`;
+
+exports[`golden: export template snapshot (csv-row) > renders a stable single-IOC artifact 1`] = `"185.220.101.4,ipv4,74 abuse confidence,High risk (59/100),"DE, Hosting","- AbuseIPDB (Cached): 74 abuse confidence [DE, Hosting] — Last updated: Jun 2, 2026, 7:00 AM | - OTX (Live): 3 threat pulses [scanning]",Correlate with firewall deny logs.,2026-06-02T12:00:00.000Z"`;
+
+exports[`golden: export template snapshot (jira-comment) > renders a stable single-IOC artifact 1`] = `
+"h3. Vera5 IOC triage — 185.220.101.4
+
+*Type:* IPv4 address
+*Summary:* 74 abuse confidence
+*Tags:* DE, Hosting
+*Risk score:* High risk (59/100)
+
+h4. Source summary
+
+- AbuseIPDB (Cached): 74 abuse confidence [DE, Hosting] — Last updated: Jun 2, 2026, 7:00 AM
+- OTX (Live): 3 threat pulses [scanning]
+
+h4. Score reasoning
+
+AbuseIPDB: High (74/100, weight 1.00).
+OTX: Suspicious (42/100, weight 0.85).
+
+h4. Analyst notes
+
+Correlate with firewall deny logs.
+
+_Exported 2026-06-02T12:00:00.000Z via Vera5._"
+`;
+
+exports[`golden: export template snapshot (markdown-report) > renders a stable single-IOC artifact 1`] = `
+"## Vera5 IOC Summary
+
+IOC: 185.220.101.4
+Type: IPv4 address
+
+Summary: 74 abuse confidence
+
+Tags: DE, Hosting
+
+Risk score: High risk (59/100)
+
+### How this score was computed
+
+1. AbuseIPDB: High (74/100, weight 1.00).
+2. OTX: Suspicious (42/100, weight 0.85).
+
+### Source Summary
+
+- AbuseIPDB (Cached): 74 abuse confidence [DE, Hosting] — Last updated: Jun 2, 2026, 7:00 AM
+- OTX (Live): 3 threat pulses [scanning]
+
+### Analyst notes
+
+Correlate with firewall deny logs.
+"
+`;
+
+exports[`golden: export template snapshot (obsidian-note) > renders a stable single-IOC artifact 1`] = `
+"---
+ioc: 185.220.101.4
+ioc_type: ipv4
+exported_at: 2026-06-02T12:00:00.000Z
+source: Vera5
+---
+
+# Vera5 IOC — 185.220.101.4
+
+- Type: IPv4 address
+- Summary: 74 abuse confidence
+- Tags: DE, Hosting
+- Risk score: High risk (59/100)
+
+## Source Summary
+
+- AbuseIPDB (Cached): 74 abuse confidence [DE, Hosting] — Last updated: Jun 2, 2026, 7:00 AM
+- OTX (Live): 3 threat pulses [scanning]
+
+Risk score: High risk (59/100)
+
+### How this score was computed
+
+1. AbuseIPDB: High (74/100, weight 1.00).
+2. OTX: Suspicious (42/100, weight 0.85).
+
+## Analyst notes
+
+Correlate with firewall deny logs."
+`;
+
+exports[`golden: export template snapshot (thehive-case-note) > renders a stable single-IOC artifact 1`] = `
+"[Vera5] 185.220.101.4 (IPv4 address)
+
+Summary: 74 abuse confidence
+Risk score: High risk (59/100)
+
+Sources:
+- AbuseIPDB (Cached): 74 abuse confidence [DE, Hosting] — Last updated: Jun 2, 2026, 7:00 AM
+- OTX (Live): 3 threat pulses [scanning]
+
+Analyst notes:
+Correlate with firewall deny logs.
+
+Exported 2026-06-02T12:00:00.000Z via Vera5."
+`;
+
+exports[`golden: tray subset export template snapshots > analyst-update joins records with separators 1`] = `
+"Vera5 triage for 185.220.101.4 (IPv4 address). Summary: 74 abuse confidence. Tags: DE, Hosting. Risk score: High risk (59/100). Analyst notes: Correlate with firewall deny logs.
+
+---
+
+Vera5 triage for CVE-2021-44228 (CVE ID). Summary: Log4Shell. Risk score: Unknown risk."
+`;
+
+exports[`golden: tray subset export template snapshots > csv-row joins header and rows 1`] = `
+"ioc,ioc_type,summary,risk_score,tags,sources,analyst_notes,exported_at
+185.220.101.4,ipv4,74 abuse confidence,High risk (59/100),"DE, Hosting","- AbuseIPDB (Cached): 74 abuse confidence [DE, Hosting] — Last updated: Jun 2, 2026, 7:00 AM | - OTX (Live): 3 threat pulses [scanning]",Correlate with firewall deny logs.,2026-06-02T12:00:00.000Z
+CVE-2021-44228,cve,Log4Shell,Unknown risk,,OTX: 12 related pulses,,2026-06-02T12:00:00.000Z"
+`;

@@ -17,6 +17,19 @@ export type PivotLink = {
   href: string;
 };
 
+export type PivotRecipe = {
+  provider: PivotProvider;
+  sourceLabel: string;
+  label: string;
+  href: string;
+  guidance: string;
+};
+
+type PivotRecipeRule = {
+  provider: PivotProvider;
+  guidance: string;
+};
+
 const PIVOT_LABELS: Record<PivotProvider, string> = {
   virustotal: "VirusTotal",
   otx: "OTX",
@@ -140,4 +153,104 @@ export function getPivotLinks(type: IocType, value: string): PivotLink[] {
     });
   }
   return links;
+}
+
+// Pivot guidance is static analyst workflow copy only; never derived from enrichment API responses.
+const FILE_HASH_PIVOT_RECIPE_RULES: readonly PivotRecipeRule[] = [
+  {
+    provider: PIVOT_PROVIDER.VIRUSTOTAL,
+    guidance: "Compare file detections and sandbox behavior.",
+  },
+  {
+    provider: PIVOT_PROVIDER.OTX,
+    guidance: "Review pulses and related indicators for the hash.",
+  },
+  {
+    provider: PIVOT_PROVIDER.URLSCAN,
+    guidance: "Find pages or downloads referencing the hash.",
+  },
+];
+
+const PIVOT_RECIPE_RULES: Record<IocType, readonly PivotRecipeRule[]> = {
+  [IOC_TYPE.IPV4]: [
+    {
+      provider: PIVOT_PROVIDER.ABUSEIPDB,
+      guidance: "Check abuse confidence and network ownership.",
+    },
+    {
+      provider: PIVOT_PROVIDER.OTX,
+      guidance: "Review community pulses and related indicators.",
+    },
+    {
+      provider: PIVOT_PROVIDER.VIRUSTOTAL,
+      guidance: "Compare detections across vendors.",
+    },
+    {
+      provider: PIVOT_PROVIDER.URLSCAN,
+      guidance: "Search related scans and hosting context.",
+    },
+  ],
+  [IOC_TYPE.DOMAIN]: [
+    {
+      provider: PIVOT_PROVIDER.VIRUSTOTAL,
+      guidance: "Review domain reputation and DNS records.",
+    },
+    {
+      provider: PIVOT_PROVIDER.OTX,
+      guidance: "Check passive DNS and threat pulses.",
+    },
+    {
+      provider: PIVOT_PROVIDER.URLSCAN,
+      guidance: "Find pages and certificates tied to the domain.",
+    },
+  ],
+  [IOC_TYPE.URL]: [
+    {
+      provider: PIVOT_PROVIDER.URLSCAN,
+      guidance: "Inspect page content, redirects, and resources.",
+    },
+    {
+      provider: PIVOT_PROVIDER.VIRUSTOTAL,
+      guidance: "Review URL reputation and related files.",
+    },
+    {
+      provider: PIVOT_PROVIDER.OTX,
+      guidance: "Check pulses and related indicators for the URL.",
+    },
+  ],
+  [IOC_TYPE.MD5]: FILE_HASH_PIVOT_RECIPE_RULES,
+  [IOC_TYPE.SHA1]: FILE_HASH_PIVOT_RECIPE_RULES,
+  [IOC_TYPE.SHA256]: FILE_HASH_PIVOT_RECIPE_RULES,
+  [IOC_TYPE.CVE]: [
+    {
+      provider: PIVOT_PROVIDER.VIRUSTOTAL,
+      guidance: "Search vendor coverage and related indicators.",
+    },
+    {
+      provider: PIVOT_PROVIDER.OTX,
+      guidance: "Review pulses and advisories for the CVE.",
+    },
+  ],
+};
+
+export function getPivotRecipes(type: IocType, value: string): PivotRecipe[] {
+  const rules = PIVOT_RECIPE_RULES[type] ?? [];
+  const recipes: PivotRecipe[] = [];
+
+  for (const rule of rules) {
+    const href = buildPivotUrl(rule.provider, type, value);
+    if (!href) {
+      continue;
+    }
+    const sourceLabel = PIVOT_LABELS[rule.provider];
+    recipes.push({
+      provider: rule.provider,
+      sourceLabel,
+      label: sourceLabel,
+      href,
+      guidance: rule.guidance,
+    });
+  }
+
+  return recipes;
 }

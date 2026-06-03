@@ -1,6 +1,6 @@
 # Vera5
 
-Browser extension for on-demand indicator detection on pages you browse. After a scan, matching indicators can be highlighted; clicking a highlight opens a hover card with copy, static deep-links, and—when configured—live threat intelligence from sources you enable. Settings, API keys, enrichment cache, analyst notes, and preferences stay in local browser storage. Vera5 does not operate a shared enrichment backend; you supply API keys and they remain on your machine.
+Browser extension for on-demand indicator detection on pages you browse. After a scan, matching indicators can be highlighted; clicking a highlight opens an overlay with copy, export, **Recommended next pivots**, and—when configured—live threat intelligence from sources you enable. Settings, API keys, enrichment cache, analyst notes, and preferences stay in local browser storage. Vera5 does not operate a shared enrichment backend; you supply API keys and they remain on your machine.
 
 ## Operator surfaces
 
@@ -8,7 +8,7 @@ On `http://` and `https://` tabs, day-to-day triage runs through the **content-s
 
 | Surface | Where it runs | Role |
 |---------|---------------|------|
-| **On-page overlay** | Content script on the active page | Highlights, hover card (type, value, enrichment summary, per-source badges, local composite risk score with reasoning chain, **analyst notes**, **Copy all** / **Copy filtered**, **Export Markdown** / **Export JSON**, **Template** select with **Export template**, per-indicator **Export** / **Copy** menus, pivot links). Open by clicking a highlight after scan. |
+| **On-page overlay** | Content script on the active page | Highlights, hover card (type, value, enrichment summary, per-source badges, local composite risk score with reasoning chain, **Recommended next pivots** with source-attributed links and static guidance, **analyst notes**, filtered-subset **Copy** / **Export** menus, **Template** select with **Export template** / **Copy template**, per-indicator **Export** / **Copy** menus). Open by clicking a highlight after scan. |
 | **Toolbar popup** | Extension action popup | Extension on/off, **Highlight indicators**, **Scan page**, **Settings**, **Permissions**, and—after scan—the **Detected indicators** tray (filters, counts, navigation). Reopens the last scan summary for the active tab when you open the popup again. |
 | **Settings (options) page** | Dedicated options tab | Masked API keys, enrichment source toggles, indicator-type toggles, private-space IPv4 detection, cache lifetime fields, manual-only mode, auto-scan, **Clear cache**, settings export/import. |
 | **React hover card** | Unit tests only | **Not injected into page tabs.** Shared scoring logic with the on-page overlay; tests also render per-source contribution chips the production overlay omits. |
@@ -23,32 +23,31 @@ Diagram overviews in those docs: [Local mode — what runs where](docs/local-mod
 |------------|----------|
 | **Install** | `npm run build` in `extension/`, then load `extension/dist/` in Chrome. |
 | **Toolbar popup** | **Extension enabled**; **Highlight indicators** (default on); **Scan page**; **Settings** and **Permissions** shortcuts. After scan, the **Detected indicators** section lists IOCs for the active tab (see **IOC tray**). |
-| **IOC tray** | Scrollable list with per-type filter chips and count summary (for example `11 indicators · 2 IP · 1 CVE`). Click a row to scroll to the page highlight and open the on-page overlay. Optional source-attributed status hints (for example `OTX · Cached`) when a stored enrichment result exists. Clear feedback when a row’s highlight is missing after DOM changes—rescan to refresh. Bulk copy/export/template controls live on the overlay and respect the popup’s active filter chip. |
+| **IOC tray** | Scrollable list with per-type filter chips and count summary (for example `11 indicators · 2 IP · 1 CVE`). Click a row to scroll to the page highlight and open the on-page overlay. Optional source-attributed status hints (for example `OTX · Cached`) when a stored enrichment result exists. Clear feedback when a row’s highlight is missing after DOM changes—rescan to refresh. Bulk copy, export, and ticket-template actions live on the overlay and respect the tab’s stored tray filter (popup or workspace sidebar). |
 | **On-page highlights** | After scan, detected indicators get an inline underline, type badge, and **›** enrich control when highlighting is enabled. |
-| **Hover card** | Click a highlight for the **on-page overlay**: indicator type and value, enrichment summary, tag chips when returned, per-source rows with **Live** / **Cached** / **Error** / **Skipped** badges, **Last updated**, optional redacted **Raw response**, **Analyst notes** (local per-indicator field, persisted in extension storage), **Copy**, **Export** / **Copy** dropdowns (Markdown, JSON, TXT), and pivot links. Dismiss with Escape or an outside click. |
+| **Hover card** | Click a highlight for the **on-page overlay**: indicator type and value, enrichment summary, tag chips when returned, per-source rows with **Live** / **Cached** / **Error** / **Skipped** badges, **Last updated**, optional redacted **Raw response**, **Recommended next pivots** (vendor badge, link, static guidance per IOC type), **Analyst notes** (local per-indicator field, persisted in extension storage), per-indicator and filtered-subset **Export** / **Copy** dropdowns, and a **Template** row (**Export template** / **Copy template**). Dismiss with Escape or an outside click. |
 | **Composite risk score** | When enrichment returns per-source results, a **Risk score** section shows a locally computed advisory band (**Unknown**–**Critical**, with **/100** when a blended composite is available), a **How this score was computed** panel (ordered per-source lines from normalized summaries, or an explicit empty state when blending is not possible), and a **Sources disagree** note when source bands diverge materially. Requires at least two parseable OK enrichment results for a blended **/100** label; otherwise expect **Unknown risk**, an insufficient-data notice, and an empty reasoning chain. If every enrichment source is disabled, the section shows **Risk score unavailable** with settings guidance. Footer disclaimers may appear when scoring applies. Same rules power the React hover card in unit tests, which additionally shows per-source contribution chips. |
 | **Live enrichment** | **AbuseIPDB** (IPv4) and **OTX** (IPv4, domain, URL, MD5, SHA1, SHA256, CVE) when enabled with a saved API key. Enabled sources are queried in parallel from the service worker; partial success keeps working sources visible while failures stay per source. Only the indicator value is sent to vendors. |
 | **Enrichment cache** | Successful responses are stored locally per indicator and per source; error and skipped outcomes from live enrichment are stored too so the popup tray can show the last known status without re-fetching. Default time-to-live is about one hour; adjust the global seconds value on the options page, with optional per-source overrides. Repeat enrichment reuses cache until expiry. **Clear cache** removes stored responses without changing keys or toggles. |
 | **Manual refresh** | **›** on a highlight forces a live fetch for that indicator, bypassing cache and removing cached entries for that indicator first. Manual refresh also bypasses the global rate-limit cooldown gate (vendors may still return HTTP 429). |
 | **Enrichment errors** | Missing API key shows **Open settings** on the overlay; HTTP 429 shows per-source backoff and retry hints and starts a global cooldown that blocks further automatic enrichment until the window passes; invalid keys, timeouts, and other vendor errors include source attribution. |
 | **Quota protection** | With manual-only enrichment off, rapid card opens debounce auto-fetch (~400 ms) to the last indicator selected. |
-| **Static pivots** | Opens VirusTotal, OTX, AbuseIPDB (IPv4), or URLScan in a new tab where supported. Vera5 does not proxy navigation. |
-| **Analyst notes** | Per-indicator note field on the on-page overlay; saved locally per IOC and survives extension reloads. |
-| **Case export format** | Documented markdown, JSON, and plain-text (`schemaVersion: 1` for JSON) from the normalized enrichment record—composite score, reasoning chain, disagreement callout, per-source summary rows, optional analyst notes, and pivot links. The on-page overlay **Export** / **Copy** menus write one indicator at a time; **Copy all**, **Copy filtered**, **Export Markdown**, **Export JSON**, and **Template** / **Export template** on the same overlay export filtered scan subsets from cached enrichment per listed IOC when present. Contract: [docs/export-artifacts.md](docs/export-artifacts.md). Sample layout: **Example exported markdown** below. |
+| **Pivot recipes** | **Recommended next pivots** lists type-specific links to VirusTotal, OTX, AbuseIPDB (IPv4), and URLScan where supported, each with a source badge and static workflow guidance. Guidance is authored copy only—it does not repeat live enrichment scores or vendor ratios. Vera5 does not proxy navigation. |
+| **Case export formats** | Markdown, JSON, and plain-text per indicator (`schemaVersion: 1` for JSON), plus ticket templates (**Jira comment**, **TheHive case note**, **Analyst update**, **Obsidian note**, **Markdown report**, **CSV rows**). All derive from the normalized enrichment record—composite score, reasoning chain, disagreement callout, per-source rows, optional analyst notes, and pivot links in markdown/JSON. Per-indicator **Export** / **Copy** menus write one IOC at a time. Filtered scan subsets use **Copy all**, **Copy filtered**, **Copy filtered Markdown** / **JSON**, **Export filtered Markdown** / **JSON**, and **Export template** / **Copy template** (clipboard or download only). Markdown/JSON field contract: [docs/export-artifacts.md](docs/export-artifacts.md). Samples: **Example exported markdown** and **Example ticket templates** below. |
 | **Options page** | Masked API keys for **AbuseIPDB** and **OTX**; enable toggles for AbuseIPDB, OTX, URLScan.io, and GreyNoise; **Indicator types** checkboxes (IPv4, domain, URL, hashes, CVE); **Include private-space IPv4 addresses**; default and per-source **cache lifetime** (seconds); auto-scan; manual-only enrichment (default on); cache clear; settings export/import (keys omitted from export unless you opt in). |
 | **Auto-scan** | Optional rescan after DOM changes (debounced). Off by default. |
 | **Background worker** | Message routing, scan command, tab scan-summary storage for the popup tray, enrichment cache, global rate-limit cooldown, and parallel AbuseIPDB/OTX fetches. |
 | **IOC detection** | Visible text nodes on demand; skips `script`, `style`, `textarea`, and metadata subtrees; does not scan attributes. Types: IPv4, domain, URL, MD5, SHA1, SHA256, CVE—with false-positive guards and overlap deduplication. Disable individual types under **Indicator types** in settings. Private-space IPv4 (RFC1918, loopback, link-local) is omitted by default; enable **Include private-space IPv4 addresses** when needed. Stops after 2,500 text nodes per scan. |
 | **Build** | `npm run build` emits `dist/`, then runs `verify:dist` and `verify:security`. `npm run check` runs lint and unit tests. |
 
-Not supported: live enrichment from URLScan.io or GreyNoise (toggles and pivot links only; no API key fields for those sources).
+Not supported: live enrichment from URLScan.io or GreyNoise (no API key fields on the options page). The URLScan.io toggle stores preference and enables pivot recipe links; the GreyNoise toggle stores preference only.
 
 ## Configuration flow
 
 1. Build and load the extension (see below).
 2. Open **Vera5 Settings**.
 3. Enter **AbuseIPDB** and/or **OTX** API keys.
-4. Enable sources under **Enrichment sources** (URLScan.io and GreyNoise toggles store preferences and pivot links only—no live API calls).
+4. Enable sources under **Enrichment sources** (URLScan.io enables pivot recipe links only; GreyNoise stores preference only—neither performs live API enrichment).
 5. Under **Scanning**, choose which **Indicator types** to detect and whether to **Include private-space IPv4 addresses**.
 6. Under **Enrichment cache**, set the default cache lifetime (seconds) and optional per-source overrides.
 7. Choose **Manual-only enrichment** (default on) or allow automatic fetch when opening the card (debounced across quick clicks).
@@ -56,7 +55,7 @@ Not supported: live enrichment from URLScan.io or GreyNoise (toggles and pivot l
 9. Use **Clear cache** to drop stored vendor responses.
 10. Use **Export settings** to back up preferences (API keys omitted unless you opt in).
 11. Add **Analyst notes** on the overlay when triaging an indicator; notes persist locally.
-12. On dense pages, scan once and use the popup **IOC tray** to filter and jump to highlights; on the overlay use **Copy all**, **Copy filtered**, **Export Markdown**, **Export JSON**, or **Export template** for the active filter.
+12. On dense pages, scan once and use the popup **IOC tray** to filter and jump to highlights; on the overlay use filtered-subset copy/export actions or pick a ticket template (**Jira comment**, **TheHive case note**, **Analyst update**, **Obsidian note**, **Markdown report**, **CSV rows**) and **Export template** or **Copy template** for the active filter.
 
 More detail: [docs/architecture.md](docs/architecture.md), [docs/api-integrations.md](docs/api-integrations.md), [docs/analyst-workflows.md](docs/analyst-workflows.md), [docs/export-artifacts.md](docs/export-artifacts.md).
 
@@ -122,6 +121,33 @@ Review firewall logs.
 
 Field contract and JSON export shape: [docs/export-artifacts.md](docs/export-artifacts.md).
 
+## Example ticket templates
+
+Ticket-oriented templates render from the same normalized enrichment record as markdown/JSON export. Choose a template on the overlay **Template** row, then **Export template** (download) or **Copy template** (clipboard). Filtered scan subsets join multiple IOCs (CSV uses one header row; other templates separate records with `---`).
+
+**Analyst update** (plain text, one IOC):
+
+```text
+Vera5 triage for 185.220.101.4 (IPv4 address). Summary: 74 abuse confidence. Tags: DE, Hosting. Risk score: High risk (59/100).
+```
+
+**Jira comment** (excerpt):
+
+```markdown
+h3. Vera5 IOC triage — 185.220.101.4
+
+*Type:* IPv4 address
+*Summary:* 74 abuse confidence
+*Risk score:* High risk (59/100)
+
+h4. Source summary
+
+AbuseIPDB: 74 abuse confidence
+OTX: 3 threat pulses
+```
+
+Other templates (**TheHive case note**, **Obsidian note** with front matter, **Markdown report**, **CSV rows**) follow the same field contract. Pivot recipe guidance on the overlay stays separate from template output and remains static workflow copy only.
+
 ## Repository contents
 
 | Area | Role |
@@ -145,7 +171,7 @@ Field contract and JSON export shape: [docs/export-artifacts.md](docs/export-art
 | `extension/src/background/` | Service worker, enrichment handler, cache, cooldown. |
 | `extension/src/content/` | Detection, highlights, **production on-page overlay**, debounced fetch, auto-scan. |
 | `extension/src/components/` | React hover card and risk score UI for unit tests (shared scoring with the overlay; not injected into page tabs). |
-| `extension/src/lib/` | IOC regex, connectors, storage, cache, scoring, export builders, analyst notes, pivots, UI styles. |
+| `extension/src/lib/` | IOC regex, connectors, storage, cache, scoring, export builders, export templates, analyst notes, pivots, UI styles. |
 | `extension/src/popup/` | Toolbar popup: enable, highlights, scan, IOC tray (filters, navigation, status hints). |
 | `extension/src/options/` | Settings page (keys, toggles, indicator types, cache TTL, export/import). |
 
@@ -178,11 +204,11 @@ python -m http.server 8080
 2. Enable the extension and highlighting, then **Scan page**.
 3. Open the popup **Detected indicators** tray: confirm count summary and type filters on a dense page such as `sample-alert.html`; click a tray row to jump to a highlight and open the overlay.
 4. Save API keys and enable AbuseIPDB and/or OTX in settings.
-5. Click a highlighted IPv4 (use **›** first when manual-only is on). With both sources enabled, check the **Risk score** label, **How this score was computed** panel (or its empty-state note when only one source has parseable data), per-source badges, optional **Raw response**, **Analyst notes**, **Export** / **Copy** menus, and footer disclaimers when a score is shown.
-6. Reopen the popup and confirm source-attributed tray hints (for example `OTX · Cached`) on enriched rows; on the overlay, try **Copy filtered**, **Export Markdown**, or **Export template** for a filtered subset.
+5. Click a highlighted IPv4 (use **›** first when manual-only is on). With both sources enabled, check the **Risk score** label, **How this score was computed** panel (or its empty-state note when only one source has parseable data), per-source badges, optional **Raw response**, **Recommended next pivots**, **Analyst notes**, **Export** / **Copy** menus, the **Template** row, and footer disclaimers when a score is shown.
+6. Reopen the popup and confirm source-attributed tray hints (for example `OTX · Cached`) on enriched rows; on the overlay, try **Copy filtered**, **Export filtered Markdown**, **Copy template** with **Analyst update** or **Jira comment**, or **Export template** with **CSV rows** for a filtered subset.
 7. Reopen the same indicator on the page and confirm **Cached** / **· cached** and **Last updated**; use **›** to force a fresh fetch.
-8. Try a domain, URL, or hash with OTX enabled.
-9. Confirm **Copy** and pivot links on the overlay.
+8. Try a domain, URL, or hash with OTX enabled and confirm **Recommended next pivots** order and guidance match the IOC type.
+9. Confirm per-indicator **Copy** / **Export** and **Recommended next pivots** links on the overlay.
 
 ## Permissions
 
@@ -191,7 +217,7 @@ python -m http.server 8080
 | `storage` | Settings, masked API keys, enrichment cache, analyst notes, toggles (`chrome.storage.local`); per-tab scan summaries for the popup tray (`chrome.storage.session`). |
 | `activeTab` | Tab-scoped extension actions. |
 | `scripting` | Declared in the manifest (see [docs/security-model.md](docs/security-model.md)). IOC detection and the overlay run through the registered content script on matched pages. |
-| `host_permissions` (`http://*/*`, `https://*/*`) | Content scripts, visible-text reads for detection, and HTTPS enrichment calls (indicator values only). Pivot links are normal browser navigation. |
+| `host_permissions` (`http://*/*`, `https://*/*`) | Content scripts, visible-text reads for detection, and HTTPS enrichment calls (indicator values only). Pivot recipe links open in the browser like normal navigation. |
 
 [docs/security-model.md](docs/security-model.md), [SECURITY.md](SECURITY.md), [`extension/public/manifest.json`](extension/public/manifest.json).
 

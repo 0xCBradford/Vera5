@@ -16,7 +16,8 @@ import {
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK,
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY,
 } from "../lib/hoverCardEnrichment";
-import { IOC_TYPE } from "../lib/iocRegex";
+import { IOC_TYPE, type IocType } from "../lib/iocRegex";
+import { getPivotRecipes } from "../lib/pivots";
 import * as copyText from "../lib/copyText";
 import { REDACTED_VALUE_PLACEHOLDER } from "../lib/enrichmentRawResponse";
 import {
@@ -34,7 +35,11 @@ import {
   HOVER_CARD_PANEL_CLASS,
   HOVER_CARD_ENRICHMENT_CLASS,
   HOVER_CARD_PIVOT_LINK_CLASS,
-  HOVER_CARD_PIVOT_NAV_CLASS,
+  HOVER_CARD_PIVOT_RECIPES_CLASS,
+  HOVER_CARD_PIVOT_RECIPES_LIST_CLASS,
+  HOVER_CARD_PIVOT_RECIPE_CLASS,
+  HOVER_CARD_PIVOT_RECIPE_GUIDANCE_CLASS,
+  HOVER_CARD_PIVOT_RECIPE_SOURCE_CLASS,
   HOVER_CARD_RAW_JSON_BODY_CLASS,
   HOVER_CARD_RAW_JSON_CLASS,
   HOVER_CARD_SOURCES_CLASS,
@@ -78,18 +83,158 @@ function queryOverlayEnrichmentSummary(panel: ParentNode): HTMLElement | null {
   return panel.querySelector(`.${HOVER_CARD_ENRICHMENT_CLASS}`);
 }
 
+function readPivotGuidanceText(panel: ParentNode): string[] {
+  return Array.from(
+    panel.querySelectorAll(`.${HOVER_CARD_PIVOT_RECIPE_GUIDANCE_CLASS}`)
+  ).map((node) => node.textContent ?? "");
+}
+
+type PivotRecipePanelRow = {
+  sourceLabel: string;
+  linkLabel: string;
+  href: string;
+  guidance: string;
+};
+
+function readPivotRecipePanelRows(panel: ParentNode): PivotRecipePanelRow[] {
+  return Array.from(
+    panel.querySelectorAll(`.${HOVER_CARD_PIVOT_RECIPE_CLASS}`)
+  ).map((item) => ({
+    sourceLabel:
+      item.querySelector(`.${HOVER_CARD_PIVOT_RECIPE_SOURCE_CLASS}`)
+        ?.textContent ?? "",
+    linkLabel:
+      item.querySelector(`.${HOVER_CARD_PIVOT_LINK_CLASS}`)?.textContent ?? "",
+    href:
+      item.querySelector(`.${HOVER_CARD_PIVOT_LINK_CLASS}`)?.getAttribute("href") ??
+      "",
+    guidance:
+      item.querySelector(`.${HOVER_CARD_PIVOT_RECIPE_GUIDANCE_CLASS}`)
+        ?.textContent ?? "",
+  }));
+}
+
+const PIVOT_PANEL_GOLDEN_CASES: ReadonlyArray<{
+  type: IocType;
+  value: string;
+}> = [
+  { type: IOC_TYPE.IPV4, value: "8.8.8.8" },
+  { type: IOC_TYPE.DOMAIN, value: "example.com" },
+  { type: IOC_TYPE.URL, value: "https://example.com/login" },
+  {
+    type: IOC_TYPE.SHA256,
+    value: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  },
+  { type: IOC_TYPE.CVE, value: "CVE-2021-44228" },
+];
+
+describe("pivot recipes panel content", () => {
+  afterEach(() => {
+    clearSessionAnalystNotes();
+  });
+
+  it.each(PIVOT_PANEL_GOLDEN_CASES)(
+    "renders source badges, links, and guidance from getPivotRecipes for $type",
+    ({ type, value }) => {
+      const panel = buildHoverCardPanel({ value, type });
+      const section = panel.querySelector(`.${HOVER_CARD_PIVOT_RECIPES_CLASS}`);
+
+      expect(section).not.toBeNull();
+      expect(section?.getAttribute("aria-label")).toBe("Recommended next pivots");
+      expect(panel.textContent).toContain("Recommended next pivots");
+
+      const expectedRecipes = getPivotRecipes(type, value);
+      const rows = readPivotRecipePanelRows(panel);
+
+      expect(rows).toHaveLength(expectedRecipes.length);
+      expect(rows.map((row) => row.sourceLabel)).toEqual(
+        expectedRecipes.map((recipe) => recipe.sourceLabel)
+      );
+      expect(rows.map((row) => row.linkLabel)).toEqual(
+        expectedRecipes.map((recipe) => recipe.label)
+      );
+      expect(rows.map((row) => row.href)).toEqual(
+        expectedRecipes.map((recipe) => recipe.href)
+      );
+      expect(rows.map((row) => row.guidance)).toEqual(
+        expectedRecipes.map((recipe) => recipe.guidance)
+      );
+
+      const list = panel.querySelector(`.${HOVER_CARD_PIVOT_RECIPES_LIST_CLASS}`);
+      expect(list?.children).toHaveLength(expectedRecipes.length);
+
+      const links = Array.from(
+        panel.querySelectorAll(`.${HOVER_CARD_PIVOT_LINK_CLASS}`)
+      );
+      for (const recipe of expectedRecipes) {
+        const link = links.find(
+          (anchor) => anchor.getAttribute("href") === recipe.href
+        );
+        expect(link?.textContent).toBe(recipe.label);
+        expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+        expect(link?.getAttribute("target")).toBe("_blank");
+      }
+    }
+  );
+
+  it("orders URL indicators with URLScan first in the panel", () => {
+    const value = "https://example.com/login";
+    const panel = buildHoverCardPanel({
+      value,
+      type: IOC_TYPE.URL,
+    });
+
+    expect(readPivotRecipePanelRows(panel).map((row) => row.sourceLabel)).toEqual(
+      getPivotRecipes(IOC_TYPE.URL, value).map((recipe) => recipe.sourceLabel)
+    );
+    expect(readPivotRecipePanelRows(panel)[0]?.sourceLabel).toBe("URLScan");
+  });
+
+  it("does not inject enrichment summaries into pivot guidance rows", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "100% abusive — 45/70 vendors flagged malicious",
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "100% abusive confidence with 45/70 vendor consensus",
+        },
+      ],
+    });
+
+    for (const guidance of readPivotGuidanceText(panel)) {
+      expect(guidance).not.toMatch(/\b100\s*%\b/);
+      expect(guidance).not.toMatch(/\b45\s*\/\s*70\b/);
+    }
+    expect(readPivotRecipePanelRows(panel).map((row) => row.guidance)).toEqual(
+      getPivotRecipes(IOC_TYPE.IPV4, "8.8.8.8").map((recipe) => recipe.guidance)
+    );
+  });
+});
+
 describe("hover card overlay shell", () => {
   afterEach(() => {
     clearSessionAnalystNotes();
   });
 
-  it("renders static pivot links for IPv4 indicators", () => {
+  it("renders recommended pivot recipes with source attribution for IPv4 indicators", () => {
     const panel = buildHoverCardPanel({
       value: "8.8.8.8",
       type: IOC_TYPE.IPV4,
     });
 
-    expect(panel.querySelector(`.${HOVER_CARD_PIVOT_NAV_CLASS}`)).not.toBeNull();
+    expect(
+      panel.querySelector(`.${HOVER_CARD_PIVOT_RECIPES_CLASS}`)
+    ).not.toBeNull();
+    expect(panel.textContent).toContain("Recommended next pivots");
+    expect(
+      panel.querySelectorAll(`.${HOVER_CARD_PIVOT_RECIPE_SOURCE_CLASS}`).length
+    ).toBeGreaterThan(0);
     const vtLink = panel.querySelector(
       `.${HOVER_CARD_PIVOT_LINK_CLASS}[href="https://www.virustotal.com/gui/ip-address/8.8.8.8"]`
     );
@@ -203,7 +348,7 @@ describe("hover card overlay shell", () => {
     }
   });
 
-  it("shows ready summary and keeps pivot links visible together", () => {
+  it("shows ready summary and keeps pivot recipes visible together", () => {
     const panel = buildHoverCardPanel({
       value: "8.8.8.8",
       type: IOC_TYPE.IPV4,
@@ -212,10 +357,53 @@ describe("hover card overlay shell", () => {
     });
 
     expect(panel.textContent).toContain("Known scanner activity.");
-    expect(panel.querySelector(`.${HOVER_CARD_PIVOT_NAV_CLASS}`)).not.toBeNull();
+    expect(
+      panel.querySelector(`.${HOVER_CARD_PIVOT_RECIPES_CLASS}`)
+    ).not.toBeNull();
     expect(queryOverlayEnrichmentSummary(panel)?.className).toContain(
       HOVER_CARD_ENRICHMENT_MODIFIER_CLASS.ready
     );
+  });
+
+  it("keeps pivot guidance static when enrichment summaries change", () => {
+    const baselinePanel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    const enrichedPanel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "100% abusive — 45/70 vendors flagged malicious",
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "100% abusive confidence with 45/70 vendor consensus",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "ok",
+          badgeText: "Live",
+          detail: "Score 92/100 — detected as malicious by 45 vendors",
+        },
+      ],
+    });
+
+    expect(readPivotGuidanceText(baselinePanel)).toEqual(
+      readPivotGuidanceText(enrichedPanel)
+    );
+    expect(enrichedPanel.textContent).toContain(
+      "100% abusive — 45/70 vendors flagged malicious"
+    );
+    for (const guidance of readPivotGuidanceText(enrichedPanel)) {
+      expect(guidance).not.toMatch(/\b45\s*\/\s*70\b/);
+      expect(guidance).not.toMatch(/\b100\s*%\b/);
+      expect(guidance).not.toMatch(/flagged malicious/i);
+    }
   });
 
   it("hides attribution footer while loading", () => {
@@ -1727,6 +1915,18 @@ describe("hover card overlay", () => {
       type: IOC_TYPE.IPV4,
     });
 
+    const exportDropdown = panel.querySelectorAll(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`
+    )[0];
+    const exportTrigger = exportDropdown?.querySelector(
+      `.${HOVER_CARD_EXPORT_BUTTON_CLASS}`
+    ) as HTMLButtonElement | null;
+    exportTrigger?.click();
+    const exportMenuLabels = Array.from(
+      exportDropdown?.querySelectorAll(`.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`) ??
+        []
+    ).map((item) => item.textContent);
+
     const copyDropdown = panel.querySelectorAll(
       `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`
     )[1];
@@ -1745,10 +1945,21 @@ describe("hover card overlay", () => {
       panel.querySelectorAll(`.${HOVER_CARD_EXPORT_BUTTON_CLASS}`)
     ).find((button) => button.textContent === "Copy all");
 
+    expect(exportMenuLabels).toContain("Export filtered Markdown");
+    expect(exportMenuLabels).toContain("Export filtered JSON");
     expect(menuLabels).toContain("Copy all");
     expect(menuLabels).toContain("Copy filtered");
+    expect(menuLabels).toContain("Copy filtered Markdown");
+    expect(menuLabels).toContain("Copy filtered JSON");
     expect(flatCopyAllButton).toBeUndefined();
     expect(templateSelect?.disabled).toBe(false);
+    expect(
+      Array.from(panel.querySelectorAll(`.${HOVER_CARD_EXPORT_BUTTON_CLASS}`)).map(
+        (button) => button.textContent
+      )
+    ).toEqual(
+      expect.arrayContaining(["Export template", "Copy template"])
+    );
   });
 
   it("copies all indicators when Copy all is clicked", async () => {
@@ -1886,6 +2097,115 @@ describe("hover card overlay", () => {
     download.mockRestore();
   });
 
+  it("exports filtered markdown through the template engine after scan cache warms", async () => {
+    const scanSummary = buildTabScanSummary({
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/alert",
+        entries: [{ type: "ipv4", value: "8.8.8.8", anchorId: "vera5-hl-1" }],
+      }),
+      tabId: 7,
+    });
+    vi.spyOn(tabScanSummaryContent, "getTabScanSummaryForCurrentTab").mockResolvedValue(
+      scanSummary
+    );
+    vi.spyOn(tabScanSnapshotStorage, "getTabScanTrayFilter").mockResolvedValue("all");
+    const records = [
+      buildNormalizedEnrichmentRecord({
+        value: "8.8.8.8",
+        iocType: IOC_TYPE.IPV4,
+      }),
+    ];
+    vi.spyOn(tabScanSummary, "buildTraySubsetEnrichmentRecords").mockResolvedValue(
+      records
+    );
+    const download = vi
+      .spyOn(exportTemplates, "downloadTrayTemplateExportFile")
+      .mockImplementation(() => undefined);
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await vi.waitFor(() => {
+      expect(tabScanSummary.buildTraySubsetEnrichmentRecords).toHaveBeenCalled();
+    });
+
+    const exportDropdown = panel.querySelectorAll(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`
+    )[0];
+    const exportTrigger = exportDropdown?.querySelector(
+      `.${HOVER_CARD_EXPORT_BUTTON_CLASS}`
+    ) as HTMLButtonElement | null;
+    exportTrigger?.click();
+    const exportMarkdownItem = Array.from(
+      exportDropdown?.querySelectorAll(`.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`) ??
+        []
+    ).find(
+      (item) => item.textContent === "Export filtered Markdown"
+    ) as HTMLButtonElement | undefined;
+    exportMarkdownItem?.click();
+
+    await vi.waitFor(() => {
+      expect(download).toHaveBeenCalledWith("markdown-report", records, document);
+    });
+
+    download.mockRestore();
+  });
+
+  it("copies the selected template after scan cache warms", async () => {
+    const scanSummary = buildTabScanSummary({
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/alert",
+        entries: [{ type: "ipv4", value: "8.8.8.8", anchorId: "vera5-hl-1" }],
+      }),
+      tabId: 7,
+    });
+    vi.spyOn(tabScanSummaryContent, "getTabScanSummaryForCurrentTab").mockResolvedValue(
+      scanSummary
+    );
+    vi.spyOn(tabScanSnapshotStorage, "getTabScanTrayFilter").mockResolvedValue("all");
+    const records = [
+      buildNormalizedEnrichmentRecord({
+        value: "8.8.8.8",
+        iocType: IOC_TYPE.IPV4,
+      }),
+    ];
+    vi.spyOn(tabScanSummary, "buildTraySubsetEnrichmentRecords").mockResolvedValue(
+      records
+    );
+    const copyTemplate = vi
+      .spyOn(exportTemplates, "copyTrayTemplateExportToClipboard")
+      .mockResolvedValue(true);
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await vi.waitFor(() => {
+      expect(tabScanSummary.buildTraySubsetEnrichmentRecords).toHaveBeenCalled();
+    });
+
+    const templateSelect = panel.querySelector(
+      `#${HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID}`
+    ) as HTMLSelectElement | null;
+    templateSelect!.value = "thehive-case-note";
+
+    const copyTemplateButton = Array.from(
+      panel.querySelectorAll(`.${HOVER_CARD_EXPORT_BUTTON_CLASS}`)
+    ).find((button) => button.textContent === "Copy template") as
+      | HTMLButtonElement
+      | undefined;
+    copyTemplateButton?.click();
+
+    await vi.waitFor(() => {
+      expect(copyTemplate).toHaveBeenCalledWith("thehive-case-note", records);
+    });
+
+    copyTemplate.mockRestore();
+  });
+
   it("downloads markdown from the export dropdown menu", () => {
     const download = vi
       .spyOn(enrichmentExport, "downloadEnrichmentExportFile")
@@ -1906,10 +2226,13 @@ describe("hover card overlay", () => {
     ) as HTMLButtonElement | null;
     exportTrigger?.click();
 
-    const menuItems = exportDropdown?.querySelectorAll(
-      `.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`
-    );
-    (menuItems[0] as HTMLButtonElement | undefined)?.click();
+    const exportMarkdownItem = Array.from(
+      exportDropdown?.querySelectorAll(`.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`) ??
+        []
+    ).find((item) => item.textContent === "Export Markdown") as
+      | HTMLButtonElement
+      | undefined;
+    exportMarkdownItem?.click();
 
     expect(download).toHaveBeenCalledWith(
       expect.objectContaining({
