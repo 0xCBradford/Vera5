@@ -9,10 +9,12 @@ import {
 import { getEnrichmentSourceEnabledForContent } from "./enrichmentSourceStorage";
 import {
   getLastHoverCardAnchor,
+  getLastHoverCardPayload,
   showHoverCardNearAnchor,
   type HoverCardOverlayPayload,
 } from "./hoverCardOverlay";
 import { setAutoEnrichmentFetcher } from "./enrichmentAutoFetch";
+import { tryUpdateWorkspaceDetailPayload, isWorkspaceTargetForPayload } from "./workspaceSelectionState";
 
 export const DEFAULT_HOVER_ENRICHMENT_DEBOUNCE_MS = 400;
 
@@ -59,6 +61,36 @@ export type BackgroundEnrichmentOptions = {
   bypassCache?: boolean;
 };
 
+function applyIndicatorDetailPayload(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): boolean {
+  if (tryUpdateWorkspaceDetailPayload(payload, doc)) {
+    return true;
+  }
+
+  const anchor = getLastHoverCardAnchor();
+  const hoverPayload = getLastHoverCardPayload();
+  if (anchor && hoverPayload?.value === payload.value) {
+    showHoverCardNearAnchor(anchor, payload, doc);
+    return true;
+  }
+
+  return tryUpdateWorkspaceDetailPayload(payload, doc);
+}
+
+function hasIndicatorDetailTarget(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): boolean {
+  if (isWorkspaceTargetForPayload(payload, doc)) {
+    return true;
+  }
+  const anchor = getLastHoverCardAnchor();
+  const hoverPayload = getLastHoverCardPayload();
+  return Boolean(anchor && hoverPayload?.value === payload.value);
+}
+
 export async function runBackgroundEnrichment(
   payload: HoverCardOverlayPayload,
   doc: Document = document,
@@ -68,8 +100,7 @@ export async function runBackgroundEnrichment(
     return;
   }
 
-  const anchor = getLastHoverCardAnchor();
-  if (!anchor) {
+  if (!hasIndicatorDetailTarget(payload, doc)) {
     return;
   }
 
@@ -79,8 +110,7 @@ export async function runBackgroundEnrichment(
     payload.type
   );
   if (enabledLiveSourceIds.length === 0) {
-    showHoverCardNearAnchor(
-      anchor,
+    applyIndicatorDetailPayload(
       {
         ...payload,
         enrichmentState: "error",
@@ -92,8 +122,7 @@ export async function runBackgroundEnrichment(
     return;
   }
 
-  showHoverCardNearAnchor(
-    anchor,
+  applyIndicatorDetailPayload(
     { ...payload, enrichmentState: "loading" },
     doc
   );
@@ -110,8 +139,7 @@ export async function runBackgroundEnrichment(
   const fetchResult = await requestEnrichmentFromServiceWorker(enrichRequest);
 
   if (!fetchResult || fetchResult.sources.length === 0) {
-    showHoverCardNearAnchor(
-      anchor,
+    applyIndicatorDetailPayload(
       {
         ...payload,
         enrichmentState: "error",
@@ -122,8 +150,7 @@ export async function runBackgroundEnrichment(
     return;
   }
 
-  showHoverCardNearAnchor(
-    anchor,
+  applyIndicatorDetailPayload(
     mapEnrichmentResultsToPayload(payload, fetchResult.sources),
     doc
   );

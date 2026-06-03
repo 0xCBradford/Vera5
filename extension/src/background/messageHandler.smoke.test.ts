@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { contentRegisterMessage, enrichIocMessage, getTabScanSummaryMessage, pingMessage, tabScanSnapshotMessage } from "../lib/messages";
+import { contentRegisterMessage, enrichIocMessage, getTabScanSummaryMessage, MESSAGE, pingMessage, tabScanSnapshotMessage } from "../lib/messages";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
 import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
@@ -77,6 +77,18 @@ describe("message handler smoke", () => {
       ok: true,
       payload: { pong: true },
     });
+  });
+
+  it("opens the options page for OPEN_OPTIONS_PAGE", () => {
+    const openOptionsPage = vi.fn();
+    vi.stubGlobal("chrome", {
+      runtime: { openOptionsPage },
+    });
+    expect(routeIncomingMessage({ type: MESSAGE.OPEN_OPTIONS_PAGE })).toEqual({
+      ok: true,
+    });
+    expect(openOptionsPage).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
   });
 
   it("acknowledges CONTENT_REGISTER", () => {
@@ -178,7 +190,7 @@ describe("message handler async enrich", () => {
       { tab: { id: 12 } } as chrome.runtime.MessageSender
     );
 
-    expect(response).toEqual({ ok: true });
+    expect(response).toEqual({ ok: true, payload: { tabId: 12 } });
     expect(store["tabScanSnapshot:12"]).toEqual({ ...snapshot, tabId: 12 });
   });
 

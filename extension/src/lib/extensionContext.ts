@@ -1,7 +1,13 @@
+import { openOptionsPageMessage } from "./messages";
+
 const STALE_EXTENSION_ERROR_FRAGMENTS = [
   "Extension context invalidated",
   "Receiving end does not exist",
   "The message port closed before a response was received",
+] as const;
+
+const STORAGE_ACCESS_DENIED_FRAGMENTS = [
+  "Access to storage is not allowed from this context",
 ] as const;
 
 export function isExtensionContextInvalidated(): boolean {
@@ -40,8 +46,33 @@ export function isStaleExtensionError(error: unknown): boolean {
   );
 }
 
+export function isStorageAccessDeniedError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "";
+  if (message.length === 0) {
+    return false;
+  }
+  return STORAGE_ACCESS_DENIED_FRAGMENTS.some((fragment) =>
+    message.includes(fragment)
+  );
+}
+
+export function isBenignExtensionError(error: unknown): boolean {
+  return isStaleExtensionError(error) || isStorageAccessDeniedError(error);
+}
+
+export function logUnlessBenignExtensionError(error: unknown): void {
+  if (!isBenignExtensionError(error)) {
+    console.error(error);
+  }
+}
+
 export function rethrowUnlessStaleExtensionError(error: unknown): void {
-  if (!isStaleExtensionError(error)) {
+  if (!isBenignExtensionError(error)) {
     throw error;
   }
 }
@@ -60,8 +91,75 @@ export async function safeStorageLocalGet(
   try {
     return await chrome.storage.local.get(keys);
   } catch (error) {
-    rethrowUnlessStaleExtensionError(error);
+    if (isBenignExtensionError(error)) {
+      return {};
+    }
+    throw error;
+  }
+}
+
+export async function safeStorageSessionGet(
+  keys: string | string[] | Record<string, unknown> | null
+): Promise<Record<string, unknown>> {
+  if (typeof chrome === "undefined" || !chrome.storage?.session) {
     return {};
+  }
+
+  if (isExtensionContextInvalidated()) {
+    return {};
+  }
+
+  try {
+    return await chrome.storage.session.get(keys);
+  } catch (error) {
+    if (isBenignExtensionError(error)) {
+      return {};
+    }
+    throw error;
+  }
+}
+
+export async function safeStorageSessionSet(
+  items: Record<string, unknown>
+): Promise<boolean> {
+  if (typeof chrome === "undefined" || !chrome.storage?.session) {
+    return false;
+  }
+
+  if (isExtensionContextInvalidated()) {
+    return false;
+  }
+
+  try {
+    await chrome.storage.session.set(items);
+    return true;
+  } catch (error) {
+    if (isBenignExtensionError(error)) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+export async function safeStorageSessionRemove(
+  keys: string | string[]
+): Promise<boolean> {
+  if (typeof chrome === "undefined" || !chrome.storage?.session) {
+    return false;
+  }
+
+  if (isExtensionContextInvalidated()) {
+    return false;
+  }
+
+  try {
+    await chrome.storage.session.remove(keys);
+    return true;
+  } catch (error) {
+    if (isBenignExtensionError(error)) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -80,8 +178,10 @@ export async function safeStorageLocalSet(
     await chrome.storage.local.set(items);
     return true;
   } catch (error) {
-    rethrowUnlessStaleExtensionError(error);
-    return false;
+    if (isBenignExtensionError(error)) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -100,8 +200,10 @@ export async function safeStorageLocalRemove(
     await chrome.storage.local.remove(keys);
     return true;
   } catch (error) {
-    rethrowUnlessStaleExtensionError(error);
-    return false;
+    if (isBenignExtensionError(error)) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -125,11 +227,16 @@ export function safeOpenOptionsPage(): void {
     return;
   }
 
-  try {
-    void chrome.runtime.openOptionsPage();
-  } catch (error) {
-    rethrowUnlessStaleExtensionError(error);
+  if (typeof chrome.runtime.openOptionsPage === "function") {
+    try {
+      void chrome.runtime.openOptionsPage();
+      return;
+    } catch (error) {
+      rethrowUnlessStaleExtensionError(error);
+    }
   }
+
+  void safeRuntimeSendMessage(openOptionsPageMessage());
 }
 
 export function runWithExtensionContext(fn: () => void): void {

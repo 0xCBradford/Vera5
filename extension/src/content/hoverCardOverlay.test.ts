@@ -60,11 +60,19 @@ import {
   HOVER_CARD_EXPORT_DROPDOWN_CLASS,
   HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS,
   HOVER_CARD_EXPORT_SECTION_CLASS,
+  HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID,
   buildExportRecordFromPayload,
   showHoverCardNearAnchor,
   updateHoverCardAnalystNoteIfOpen,
 } from "./hoverCardOverlay";
 import * as enrichmentExport from "../lib/enrichmentExport";
+import * as exportTemplates from "../lib/exportTemplates";
+import { buildNormalizedEnrichmentRecord } from "../lib/enrichmentExport";
+import { buildTabScanSummary } from "../lib/tabScanSummary";
+import * as tabScanSummary from "../lib/tabScanSummary";
+import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
+import * as tabScanSnapshotStorage from "../lib/tabScanSnapshotStorage";
+import * as tabScanSummaryContent from "./tabScanSummaryContent";
 
 function queryOverlayEnrichmentSummary(panel: ParentNode): HTMLElement | null {
   return panel.querySelector(`.${HOVER_CARD_ENRICHMENT_CLASS}`);
@@ -233,7 +241,7 @@ describe("hover card overlay shell", () => {
     });
 
     const button = panel.querySelector(`.${HOVER_CARD_COPY_BUTTON_CLASS}`);
-    expect(button?.textContent).toBe("Copy");
+    expect(button?.textContent).toBe("Copy Indicator");
     button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await vi.waitFor(() => {
       expect(button?.textContent).toBe("Copied");
@@ -1699,14 +1707,86 @@ describe("hover card overlay", () => {
     });
 
     const exportSection = panel.querySelector(`.${HOVER_CARD_EXPORT_SECTION_CLASS}`);
-    const dropdowns = panel.querySelectorAll(`.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`);
-    const triggers = panel.querySelectorAll(`.${HOVER_CARD_EXPORT_BUTTON_CLASS}`);
+    const dropdowns = exportSection?.querySelectorAll(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`
+    );
+    const dropdownTriggers = exportSection?.querySelectorAll(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS} .${HOVER_CARD_EXPORT_BUTTON_CLASS}`
+    );
 
     expect(exportSection).not.toBeNull();
     expect(dropdowns).toHaveLength(2);
-    expect(triggers).toHaveLength(2);
-    expect(triggers[0]?.textContent).toBe("Export");
-    expect(triggers[1]?.textContent).toBe("Copy");
+    expect(dropdownTriggers).toHaveLength(2);
+    expect(dropdownTriggers?.[0]?.textContent).toBe("Export");
+    expect(dropdownTriggers?.[1]?.textContent).toBe("Copy");
+  });
+
+  it("renders scan list copy actions in the copy dropdown and enabled template controls", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const copyDropdown = panel.querySelectorAll(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`
+    )[1];
+    const copyTrigger = copyDropdown?.querySelector(
+      `.${HOVER_CARD_EXPORT_BUTTON_CLASS}`
+    ) as HTMLButtonElement | null;
+    copyTrigger?.click();
+
+    const menuLabels = Array.from(
+      copyDropdown?.querySelectorAll(`.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`) ?? []
+    ).map((item) => item.textContent);
+    const templateSelect = panel.querySelector(
+      `#${HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID}`
+    ) as HTMLSelectElement | null;
+    const flatCopyAllButton = Array.from(
+      panel.querySelectorAll(`.${HOVER_CARD_EXPORT_BUTTON_CLASS}`)
+    ).find((button) => button.textContent === "Copy all");
+
+    expect(menuLabels).toContain("Copy all");
+    expect(menuLabels).toContain("Copy filtered");
+    expect(flatCopyAllButton).toBeUndefined();
+    expect(templateSelect?.disabled).toBe(false);
+  });
+
+  it("copies all indicators when Copy all is clicked", async () => {
+    const scanSummary = buildTabScanSummary({
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/alert",
+        entries: [
+          { type: "ipv4", value: "8.8.8.8", anchorId: "vera5-hl-1" },
+          { type: "ipv4", value: "192.0.2.1", anchorId: "vera5-hl-2" },
+        ],
+      }),
+      tabId: 7,
+    });
+    vi.spyOn(tabScanSummaryContent, "getTabScanSummaryForCurrentTab").mockResolvedValue(
+      scanSummary
+    );
+    vi.spyOn(tabScanSnapshotStorage, "getTabScanTrayFilter").mockResolvedValue("all");
+    const copyAll = vi.spyOn(copyText, "copyTextToClipboard").mockResolvedValue(true);
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    const copyDropdown = panel.querySelectorAll(
+      `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`
+    )[1];
+    const copyTrigger = copyDropdown?.querySelector(
+      `.${HOVER_CARD_EXPORT_BUTTON_CLASS}`
+    ) as HTMLButtonElement | null;
+    copyTrigger?.click();
+    const copyAllMenuItem = Array.from(
+      copyDropdown?.querySelectorAll(`.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`) ?? []
+    ).find((item) => item.textContent === "Copy all") as HTMLButtonElement | undefined;
+    copyAllMenuItem?.click();
+
+    await vi.waitFor(() => {
+      expect(copyAll).toHaveBeenCalledWith("8.8.8.8\n192.0.2.1");
+    });
   });
 
   it("copies markdown from the copy dropdown menu", async () => {
@@ -1729,9 +1809,9 @@ describe("hover card overlay", () => {
     ) as HTMLButtonElement | null;
     copyTrigger?.click();
 
-    const menuItem = copyDropdown?.querySelector(
-      `.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`
-    ) as HTMLButtonElement | null;
+    const menuItem = Array.from(
+      copyDropdown?.querySelectorAll(`.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`) ?? []
+    ).find((item) => item.textContent === "Copy Markdown") as HTMLButtonElement | null;
     menuItem?.click();
 
     await vi.waitFor(() => {
@@ -1743,6 +1823,67 @@ describe("hover card overlay", () => {
     });
 
     copyMarkdown.mockRestore();
+  });
+
+  it("downloads template export when Export template is clicked after scan cache warms", async () => {
+    const scanSummary = buildTabScanSummary({
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/alert",
+        entries: [
+          { type: "ipv4", value: "8.8.8.8", anchorId: "vera5-hl-1" },
+          { type: "ipv4", value: "192.0.2.1", anchorId: "vera5-hl-2" },
+        ],
+      }),
+      tabId: 7,
+    });
+    vi.spyOn(tabScanSummaryContent, "getTabScanSummaryForCurrentTab").mockResolvedValue(
+      scanSummary
+    );
+    vi.spyOn(tabScanSnapshotStorage, "getTabScanTrayFilter").mockResolvedValue("all");
+    const records = [
+      buildNormalizedEnrichmentRecord({
+        value: "8.8.8.8",
+        iocType: IOC_TYPE.IPV4,
+      }),
+      buildNormalizedEnrichmentRecord({
+        value: "192.0.2.1",
+        iocType: IOC_TYPE.IPV4,
+      }),
+    ];
+    const buildRecords = vi
+      .spyOn(tabScanSummary, "buildTraySubsetEnrichmentRecords")
+      .mockResolvedValue(records);
+    const download = vi
+      .spyOn(exportTemplates, "downloadTrayTemplateExportFile")
+      .mockImplementation(() => undefined);
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await vi.waitFor(() => {
+      expect(buildRecords).toHaveBeenCalled();
+    });
+
+    const templateSelect = panel.querySelector(
+      `#${HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID}`
+    ) as HTMLSelectElement | null;
+    templateSelect!.value = "jira-comment";
+
+    const exportTemplateButton = Array.from(
+      panel.querySelectorAll(`.${HOVER_CARD_EXPORT_BUTTON_CLASS}`)
+    ).find((button) => button.textContent === "Export template") as
+      | HTMLButtonElement
+      | undefined;
+    exportTemplateButton?.click();
+
+    await vi.waitFor(() => {
+      expect(download).toHaveBeenCalledWith("jira-comment", records, document);
+    });
+
+    buildRecords.mockRestore();
+    download.mockRestore();
   });
 
   it("downloads markdown from the export dropdown menu", () => {

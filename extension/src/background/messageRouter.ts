@@ -3,6 +3,7 @@ import {
   MESSAGE,
   type MessageResponse,
 } from "../lib/messages";
+import { openExtensionSitePermissionsPage } from "../lib/extensionSitePermissions";
 import {
   handleGetTabScanSummaryMessage,
   handleTabScanSnapshotMessage,
@@ -27,6 +28,28 @@ export function routeIncomingMessage(raw: unknown): MessageResponse {
       return { ok: false, error: "tab scan summary requires async handler" };
     case MESSAGE.ENRICH_IOC:
       return { ok: false, error: "enrich request requires async handler" };
+    case MESSAGE.OPEN_OPTIONS_PAGE:
+      return handleOpenOptionsPageMessage();
+    case MESSAGE.OPEN_SITE_PERMISSIONS:
+      return handleOpenSitePermissionsMessage();
+  }
+}
+
+function handleOpenOptionsPageMessage(): MessageResponse {
+  try {
+    void chrome.runtime.openOptionsPage();
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "could not open options page" };
+  }
+}
+
+function handleOpenSitePermissionsMessage(): MessageResponse {
+  try {
+    openExtensionSitePermissionsPage();
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "could not open site permissions page" };
   }
 }
 

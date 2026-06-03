@@ -13,9 +13,14 @@ export const MESSAGE = {
   PING: "PING",
   CONTENT_REGISTER: "CONTENT_REGISTER",
   SCAN_PAGE: "SCAN_PAGE",
+  NAVIGATE_TO_IOC_ANCHOR: "NAVIGATE_TO_IOC_ANCHOR",
+  TOGGLE_WORKSPACE: "TOGGLE_WORKSPACE",
+  OPEN_WORKSPACE: "OPEN_WORKSPACE",
   TAB_SCAN_SNAPSHOT: "TAB_SCAN_SNAPSHOT",
   GET_TAB_SCAN_SUMMARY: "GET_TAB_SCAN_SUMMARY",
   ENRICH_IOC: "ENRICH_IOC",
+  OPEN_OPTIONS_PAGE: "OPEN_OPTIONS_PAGE",
+  OPEN_SITE_PERMISSIONS: "OPEN_SITE_PERMISSIONS",
 } as const;
 
 export type MessageType = (typeof MESSAGE)[keyof typeof MESSAGE];
@@ -25,6 +30,12 @@ export type ContentRegisterMessage = {
   type: typeof MESSAGE.CONTENT_REGISTER;
 };
 export type ScanPageMessage = { type: typeof MESSAGE.SCAN_PAGE };
+export type NavigateToIocAnchorMessage = {
+  type: typeof MESSAGE.NAVIGATE_TO_IOC_ANCHOR;
+  anchorId: string;
+};
+export type ToggleWorkspaceMessage = { type: typeof MESSAGE.TOGGLE_WORKSPACE };
+export type OpenWorkspaceMessage = { type: typeof MESSAGE.OPEN_WORKSPACE };
 export type TabScanSnapshotMessage = {
   type: typeof MESSAGE.TAB_SCAN_SNAPSHOT;
   snapshot: TabScanSnapshotPayload;
@@ -40,13 +51,19 @@ export type EnrichIocMessage = {
   sourceId?: EnrichmentSourceId;
   bypassCache?: boolean;
 };
+export type OpenOptionsPageMessage = { type: typeof MESSAGE.OPEN_OPTIONS_PAGE };
+export type OpenSitePermissionsMessage = {
+  type: typeof MESSAGE.OPEN_SITE_PERMISSIONS;
+};
 
 export type Vera5Message =
   | PingMessage
   | ContentRegisterMessage
   | TabScanSnapshotMessage
   | GetTabScanSummaryMessage
-  | EnrichIocMessage;
+  | EnrichIocMessage
+  | OpenOptionsPageMessage
+  | OpenSitePermissionsMessage;
 
 export type MessageResponse =
   | { ok: true; payload?: unknown }
@@ -64,10 +81,45 @@ export function scanPageMessage(): ScanPageMessage {
   return { type: MESSAGE.SCAN_PAGE };
 }
 
+export function navigateToIocAnchorMessage(
+  anchorId: string
+): NavigateToIocAnchorMessage {
+  return { type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR, anchorId };
+}
+
+export function toggleWorkspaceMessage(): ToggleWorkspaceMessage {
+  return { type: MESSAGE.TOGGLE_WORKSPACE };
+}
+
+export function openWorkspaceMessage(): OpenWorkspaceMessage {
+  return { type: MESSAGE.OPEN_WORKSPACE };
+}
+
+export function isNavigateToIocAnchorMessage(
+  raw: unknown
+): raw is NavigateToIocAnchorMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.NAVIGATE_TO_IOC_ANCHOR) {
+    return false;
+  }
+  return typeof record.anchorId === "string" && record.anchorId.length > 0;
+}
+
 export function tabScanSnapshotMessage(
   snapshot: TabScanSnapshotPayload
 ): TabScanSnapshotMessage {
   return { type: MESSAGE.TAB_SCAN_SNAPSHOT, snapshot };
+}
+
+export function openOptionsPageMessage(): OpenOptionsPageMessage {
+  return { type: MESSAGE.OPEN_OPTIONS_PAGE };
+}
+
+export function openSitePermissionsMessage(): OpenSitePermissionsMessage {
+  return { type: MESSAGE.OPEN_SITE_PERMISSIONS };
 }
 
 export function getTabScanSummaryMessage(
@@ -172,6 +224,24 @@ export function isScanPageMessage(raw: unknown): raw is ScanPageMessage {
   );
 }
 
+export function isToggleWorkspaceMessage(raw: unknown): raw is ToggleWorkspaceMessage {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.TOGGLE_WORKSPACE
+  );
+}
+
+export function isOpenWorkspaceMessage(raw: unknown): raw is OpenWorkspaceMessage {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.OPEN_WORKSPACE
+  );
+}
+
 export function isVera5Message(raw: unknown): raw is Vera5Message {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
@@ -186,6 +256,8 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   return (
     type === MESSAGE.PING ||
     type === MESSAGE.CONTENT_REGISTER ||
-    type === MESSAGE.ENRICH_IOC
+    type === MESSAGE.ENRICH_IOC ||
+    type === MESSAGE.OPEN_OPTIONS_PAGE ||
+    type === MESSAGE.OPEN_SITE_PERMISSIONS
   );
 }

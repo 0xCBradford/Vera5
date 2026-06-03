@@ -22,6 +22,7 @@ import {
   copyEnrichmentExportTxtToClipboard,
   buildEnrichmentExportFilename,
   buildEnrichmentExportTxt,
+  buildTraySubsetExportMarkdown,
   ENRICHMENT_EXPORT_ANALYST_NOTES_HEADING,
   ENRICHMENT_EXPORT_HEADING,
   ENRICHMENT_EXPORT_NO_ENRICHMENT_DETAIL,
@@ -31,7 +32,9 @@ import {
   formatExportSourceSummaryLine,
   hasEnrichmentExportRiskScoreData,
   serializeEnrichmentExportJson,
+  serializeTraySubsetExportJson,
   shouldRenderEnrichmentExportNoScoreSection,
+  TRAY_SUBSET_EXPORT_MARKDOWN_SEPARATOR,
 } from "./enrichmentExport";
 import {
   COMPOSITE_SCORE_DISAGREEMENT_NOTICE,
@@ -997,4 +1000,37 @@ describe("export contract: schemaVersion, score, disagreement, and no-score path
       }
     }
   );
+});
+
+describe("tray subset export builders", () => {
+  const firstRecord = buildNormalizedEnrichmentRecord({
+    value: "8.8.8.8",
+    iocType: IOC_TYPE.IPV4,
+    exportedAt: EXPORTED_AT,
+  });
+  const secondRecord = buildNormalizedEnrichmentRecord({
+    value: "CVE-2021-44228",
+    iocType: IOC_TYPE.CVE,
+    exportedAt: EXPORTED_AT,
+  });
+
+  it("joins per-IOC markdown exports for tray subsets", () => {
+    const markdown = buildTraySubsetExportMarkdown([firstRecord, secondRecord]);
+    expect(markdown).toContain("8.8.8.8");
+    expect(markdown).toContain("CVE-2021-44228");
+    expect(markdown).toContain(TRAY_SUBSET_EXPORT_MARKDOWN_SEPARATOR);
+  });
+
+  it("serializes tray subset JSON as an array of export documents", () => {
+    const parsed = JSON.parse(
+      serializeTraySubsetExportJson([firstRecord, secondRecord])
+    ) as Array<{ ioc: string; schemaVersion: number }>;
+
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0]?.schemaVersion).toBe(ENRICHMENT_EXPORT_SCHEMA_VERSION);
+    expect(parsed.map((entry) => entry.ioc)).toEqual([
+      "8.8.8.8",
+      "CVE-2021-44228",
+    ]);
+  });
 });

@@ -393,7 +393,7 @@ export async function invalidateEnrichmentCacheEntry(
   return true;
 }
 
-export async function readCachedEnrichmentSourceResult(
+export async function readStoredEnrichmentSourceResult(
   iocValue: string,
   sourceId: EnrichmentSourceId,
   nowMs: number = Date.now()
@@ -404,15 +404,31 @@ export async function readCachedEnrichmentSourceResult(
   }
 
   const restored = normalizeEnrichmentSourceResult(entry.payload);
-  if (!restored || restored.status !== ENRICHMENT_SOURCE_STATUS.OK) {
+  if (!restored) {
     return null;
   }
 
+  const fromCache =
+    restored.status === ENRICHMENT_SOURCE_STATUS.OK ? true : restored.fromCache;
+
   return {
     ...restored,
-    fromCache: true,
+    ...(fromCache === true ? { fromCache: true } : {}),
     fetchedAt: new Date(entry.fetchedAt).toISOString(),
   };
+}
+
+export async function readCachedEnrichmentSourceResult(
+  iocValue: string,
+  sourceId: EnrichmentSourceId,
+  nowMs: number = Date.now()
+): Promise<EnrichmentSourceResult | null> {
+  const stored = await readStoredEnrichmentSourceResult(iocValue, sourceId, nowMs);
+  if (!stored || stored.status !== ENRICHMENT_SOURCE_STATUS.OK) {
+    return null;
+  }
+
+  return stored;
 }
 
 export async function cacheEnrichmentSourceResult(
@@ -420,10 +436,7 @@ export async function cacheEnrichmentSourceResult(
   sourceId: EnrichmentSourceId,
   result: EnrichmentSourceResult
 ): Promise<void> {
-  if (
-    result.status !== ENRICHMENT_SOURCE_STATUS.OK ||
-    result.fromCache === true
-  ) {
+  if (result.fromCache === true) {
     return;
   }
 

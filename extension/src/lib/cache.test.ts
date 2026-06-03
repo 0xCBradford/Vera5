@@ -22,6 +22,7 @@ import {
   pruneExpiredEnrichmentCacheEntries,
   pruneExpiredEnrichmentCacheEntriesForSources,
   readCachedEnrichmentSourceResult,
+  readStoredEnrichmentSourceResult,
   readValidEnrichmentCacheEntry,
   removeEnrichmentCacheEntriesForIoc,
   resolveEnrichmentCacheTtlSeconds,
@@ -524,6 +525,61 @@ describe("enrichment cache read/write with settings TTL", () => {
     });
   });
 
+  it("returns stored error and skipped enrichment results", async () => {
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: nowMs - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.ERROR,
+          errorMessage: "Rate limited",
+        },
+      },
+      "1.1.1.1|otx": {
+        fetchedAt: nowMs - 2_000,
+        payload: {
+          sourceId: "otx",
+          sourceLabel: "OTX",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorMessage: "Source is disabled in extension settings.",
+        },
+      },
+    };
+
+    await expect(
+      readStoredEnrichmentSourceResult("8.8.8.8", "abuseipdb", nowMs)
+    ).resolves.toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorMessage: "Rate limited",
+    });
+    await expect(
+      readStoredEnrichmentSourceResult("1.1.1.1", "otx", nowMs)
+    ).resolves.toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+    });
+    await expect(
+      readCachedEnrichmentSourceResult("8.8.8.8", "abuseipdb", nowMs)
+    ).resolves.toBeNull();
+  });
+
+  it("persists error and skipped live results for tray status hints", async () => {
+    await cacheEnrichmentSourceResult("8.8.8.8", "abuseipdb", {
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorMessage: "Unauthorized",
+    });
+
+    await expect(
+      readStoredEnrichmentSourceResult("8.8.8.8", "abuseipdb")
+    ).resolves.toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorMessage: "Unauthorized",
+    });
+  });
+
   it("persists successful live results for later cache hits", async () => {
     await cacheEnrichmentSourceResult("8.8.8.8", "otx", {
       sourceId: "otx",
@@ -578,14 +634,7 @@ describe("enrichment cache read/write with settings TTL", () => {
     expect(cache["10.0.0.0|abuseipdb"]).toBeUndefined();
   });
 
-  it("does not cache error or already-cached results", async () => {
-    await cacheEnrichmentSourceResult("8.8.8.8", "abuseipdb", {
-      sourceId: "abuseipdb",
-      sourceLabel: "AbuseIPDB",
-      status: ENRICHMENT_SOURCE_STATUS.ERROR,
-      errorCode: "rate_limited",
-      errorMessage: "Rate limited.",
-    });
+  it("does not cache already-cached results", async () => {
     await cacheEnrichmentSourceResult("1.1.1.1", "otx", {
       sourceId: "otx",
       sourceLabel: "OTX",
@@ -595,5 +644,23 @@ describe("enrichment cache read/write with settings TTL", () => {
     });
 
     expect(store[STORAGE_KEY_ENRICHMENT_CACHE]).toBeUndefined();
+  });
+
+  it("persists error results for tray status hints", async () => {
+    await cacheEnrichmentSourceResult("8.8.8.8", "abuseipdb", {
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: "rate_limited",
+      errorMessage: "Rate limited.",
+    });
+
+    const cache = store[STORAGE_KEY_ENRICHMENT_CACHE] as Record<
+      string,
+      { payload: unknown }
+    >;
+    expect(cache["8.8.8.8|abuseipdb"]?.payload).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+    });
   });
 });

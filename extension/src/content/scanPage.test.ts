@@ -81,7 +81,12 @@ describe("handleScanPageRequest", () => {
       <p>CVE-2021-44228</p>
     `);
     const response = await handleScanPageRequest(root);
-    expect(response).toEqual({ ok: true, payload: { count: 2 } });
+    expect(response).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 2 }),
+      })
+    );
   });
 
   it("persists scan snapshot entries with highlight anchor linkage", async () => {
@@ -140,14 +145,24 @@ describe("handleScanPageRequest", () => {
   it("omits private-space IPv4 when includePrivateIpv4 is unset", async () => {
     const root = mountPage("<p>Public 8.8.8.8 private 192.168.0.1</p>");
     const response = await handleScanPageRequest(root);
-    expect(response).toEqual({ ok: true, payload: { count: 1 } });
+    expect(response).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 1 }),
+      })
+    );
   });
 
   it("includes private-space IPv4 when includePrivateIpv4 is enabled in storage", async () => {
     store[CONTENT_STORAGE_KEY_INCLUDE_PRIVATE_IPV4] = true;
     const root = mountPage("<p>Public 8.8.8.8 private 192.168.0.1</p>");
     const response = await handleScanPageRequest(root);
-    expect(response).toEqual({ ok: true, payload: { count: 2 } });
+    expect(response).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 2 }),
+      })
+    );
   });
 
   it("omits disabled IOC types from scan counts", async () => {
@@ -162,7 +177,12 @@ describe("handleScanPageRequest", () => {
     };
     const root = mountPage("<p>8.8.8.8 CVE-2021-44228 https://example.com</p>");
     const response = await handleScanPageRequest(root);
-    expect(response).toEqual({ ok: true, payload: { count: 2 } });
+    expect(response).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 2 }),
+      })
+    );
   });
 });
 
@@ -279,10 +299,12 @@ describe("setupScanPageListener", () => {
     expect(handled).toBe(true);
 
     await vi.waitFor(() => {
-      expect(sendResponse).toHaveBeenCalledWith({
-        ok: true,
-        payload: { count: 1 },
-      });
+      expect(sendResponse).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ok: true,
+          payload: expect.objectContaining({ count: 1 }),
+        })
+      );
     });
     expect(
       document.querySelectorAll(`.${IOC_HIGHLIGHT_CLASS}`).length

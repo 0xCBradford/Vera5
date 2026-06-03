@@ -5,10 +5,12 @@ import {
   getTabScanSummaryMessage,
   isEnrichIocMessage,
   isGetTabScanSummaryMessage,
+  isNavigateToIocAnchorMessage,
   isScanPageMessage,
   isTabScanSnapshotMessage,
   isVera5Message,
   MESSAGE,
+  navigateToIocAnchorMessage,
   pingMessage,
   scanPageMessage,
   tabScanSnapshotMessage,
@@ -28,6 +30,19 @@ describe("Vera5 message envelopes", () => {
 
   it("builds SCAN_PAGE", () => {
     expect(scanPageMessage()).toEqual({ type: MESSAGE.SCAN_PAGE });
+  });
+
+  it("builds NAVIGATE_TO_IOC_ANCHOR", () => {
+    expect(navigateToIocAnchorMessage("vera5-hl-1")).toEqual({
+      type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
+      anchorId: "vera5-hl-1",
+    });
+    expect(isNavigateToIocAnchorMessage(navigateToIocAnchorMessage("vera5-hl-1"))).toBe(
+      true
+    );
+    expect(isNavigateToIocAnchorMessage({ type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR, anchorId: "" })).toBe(
+      false
+    );
   });
 
   it("accepts known service worker envelopes", () => {

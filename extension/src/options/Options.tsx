@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { clearEnrichmentCache } from "../lib/cache";
+import { prefersReducedMotion } from "../lib/motionPreference";
 import {
   downloadVera5SettingsExport,
   exportVera5SettingsJson,
@@ -47,6 +48,13 @@ const ENRICHMENT_SOURCE_LABELS: Record<ApiKeySlot, string> = {
   greynoise: "GreyNoise",
 };
 
+const ENRICHMENT_SOURCE_DESCRIPTIONS: Record<ApiKeySlot, string> = {
+  abuseipdb: "IP reputation and abuse confidence scoring.",
+  otx: "AlienVault Open Threat Exchange pulses.",
+  urlscan: "URL and domain scan intelligence.",
+  greynoise: "Internet background-noise context.",
+};
+
 const IOC_TYPE_OPTION_LABELS: Record<IocType, string> = {
   ipv4: "IPv4 addresses",
   domain: "Domain names",
@@ -56,6 +64,62 @@ const IOC_TYPE_OPTION_LABELS: Record<IocType, string> = {
   sha256: "SHA256 hashes",
   cve: "CVE identifiers",
 };
+
+const IOC_TYPE_SHORT_LABELS: Record<IocType, string> = {
+  ipv4: "IPv4",
+  domain: "Domain",
+  url: "URL",
+  md5: "MD5",
+  sha1: "SHA1",
+  sha256: "SHA256",
+  cve: "CVE",
+};
+
+const IOC_TYPE_CODES: Record<IocType, string> = {
+  ipv4: "IPV4",
+  domain: "DOM",
+  url: "URL",
+  md5: "MD5",
+  sha1: "SHA1",
+  sha256: "256",
+  cve: "CVE",
+};
+
+const NAV_SECTIONS: { id: string; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "scanning", label: "Scanning" },
+  { id: "indicators", label: "Indicators" },
+  { id: "sources", label: "Enrichment Sources" },
+  { id: "cache", label: "Cache" },
+  { id: "backup", label: "Backup" },
+  { id: "api-keys", label: "API Keys" },
+];
+
+const CACHE_PRESETS: { label: string; seconds: number }[] = [
+  { label: "15 min", seconds: 900 },
+  { label: "1 hour", seconds: 3600 },
+  { label: "6 hours", seconds: 21600 },
+  { label: "24 hours", seconds: 86400 },
+];
+
+function formatCacheTtl(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "No caching";
+  }
+  if (seconds % 86400 === 0) {
+    const days = seconds / 86400;
+    return `${days} day${days === 1 ? "" : "s"}`;
+  }
+  if (seconds % 3600 === 0) {
+    const hours = seconds / 3600;
+    return `${hours} hour${hours === 1 ? "" : "s"}`;
+  }
+  if (seconds % 60 === 0) {
+    const minutes = seconds / 60;
+    return `${minutes} min`;
+  }
+  return `${seconds} sec`;
+}
 
 function createDefaultIocTypeEnabledState(): IocTypeEnabledRecord {
   const record: IocTypeEnabledRecord = {};
@@ -86,6 +150,121 @@ function formatSourceCacheTtlDrafts(
       overrides[sourceId] !== undefined ? String(overrides[sourceId]) : "",
     ])
   ) as Record<ApiKeySlot, string>;
+}
+
+function scrollToSection(id: string): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  const element = document.getElementById(id);
+  if (!element) {
+    return;
+  }
+  const behavior: ScrollBehavior =
+    typeof window !== "undefined" && prefersReducedMotion(window)
+      ? "auto"
+      : "smooth";
+  element.scrollIntoView({ behavior, block: "start" });
+}
+
+function CheckIcon() {
+  return (
+    <svg
+      width="11"
+      height="11"
+      viewBox="0 0 12 12"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M2.5 6.3 5 8.6l4.5-5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect
+        x="3"
+        y="7"
+        width="10"
+        height="6.5"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+      />
+      <path
+        d="M5.2 7V5.2a2.8 2.8 0 0 1 5.6 0V7"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+type SwitchProps = {
+  ariaLabel: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+};
+
+function Switch({ ariaLabel, checked, disabled, onChange }: SwitchProps) {
+  return (
+    <span className={`v5-toggle${disabled ? " v5-toggle--disabled" : ""}`}>
+      <input
+        type="checkbox"
+        className="v5-toggle__input"
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+        aria-label={ariaLabel}
+      />
+      <span className="v5-toggle__track" aria-hidden="true">
+        <span className="v5-toggle__thumb" />
+      </span>
+    </span>
+  );
+}
+
+type ToggleRowProps = {
+  label: string;
+  hint?: string;
+  ariaLabel: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+};
+
+function ToggleRow({
+  label,
+  hint,
+  ariaLabel,
+  checked,
+  disabled,
+  onChange,
+}: ToggleRowProps) {
+  return (
+    <label className="v5-row" style={{ cursor: disabled ? "wait" : "pointer" }}>
+      <span className="v5-row__text">
+        <span className="v5-row__label">{label}</span>
+        {hint ? <span className="v5-row__hint">{hint}</span> : null}
+      </span>
+      <Switch
+        ariaLabel={ariaLabel}
+        checked={checked}
+        disabled={disabled}
+        onChange={onChange}
+      />
+    </label>
+  );
 }
 
 type ApiKeyFieldState = {
@@ -119,12 +298,13 @@ function ApiKeyField({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
     "idle"
   );
+  const [revealed, setRevealed] = useState(false);
 
   const displayValue = fieldState.editing
     ? fieldState.draft
     : fieldState.configured
       ? fieldState.maskedPreview
-  : fieldState.draft;
+      : fieldState.draft;
 
   const handleFocus = () => {
     if (!ready) {
@@ -166,58 +346,68 @@ function ApiKeyField({
   };
 
   return (
-    <label
-      style={{
-        display: "block",
-        marginBottom: 16,
-      }}
-    >
+    <label className="v5-field">
       <span
+        className="v5-field__label"
         style={{
-          display: "block",
-          fontSize: 14,
-          fontWeight: 600,
-          marginBottom: 6,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
         }}
       >
-        {label} API key
+        <span>{label} API key</span>
+        {fieldState.configured && !fieldState.editing ? (
+          <span className="v5-badge v5-badge--on">
+            <span className="v5-badge__dot" />
+            Key saved
+          </span>
+        ) : (
+          <span className="v5-badge v5-badge--off">No key</span>
+        )}
       </span>
-      <input
-        type="password"
-        name={`api-key-${slot}`}
-        value={displayValue}
-        disabled={!ready}
-        autoComplete="off"
-        spellCheck={false}
-        placeholder={
-          fieldState.configured && !fieldState.editing
-            ? "Click to replace the saved key"
-            : "Paste your API key"
-        }
-        onFocus={handleFocus}
-        onChange={(event) => onDraftChange(slot, event.target.value)}
-        onBlur={handleBlur}
-        aria-label={`${label} API key`}
-        style={{
-          width: "100%",
-          boxSizing: "border-box",
-          padding: "8px 10px",
-          fontFamily: "system-ui, sans-serif",
-          fontSize: 14,
-        }}
-      />
+      <span className="v5-key">
+        <input
+          className="v5-input v5-input--mono"
+          type={revealed ? "text" : "password"}
+          name={`api-key-${slot}`}
+          value={displayValue}
+          disabled={!ready}
+          autoComplete="off"
+          spellCheck={false}
+          placeholder={
+            fieldState.configured && !fieldState.editing
+              ? "Click to replace the saved key"
+              : "Paste your API key"
+          }
+          onFocus={handleFocus}
+          onChange={(event) => onDraftChange(slot, event.target.value)}
+          onBlur={handleBlur}
+          aria-label={`${label} API key`}
+        />
+        <button
+          type="button"
+          className="v5-key__toggle"
+          onClick={() => setRevealed((current) => !current)}
+          aria-label={revealed ? `Hide ${label} API key` : `Show ${label} API key`}
+          aria-pressed={revealed}
+        >
+          {revealed ? "Hide" : "Show"}
+        </button>
+      </span>
       {fieldState.configured && !fieldState.editing ? (
-        <span style={{ display: "block", fontSize: 12, marginTop: 4, color: "#555" }}>
+        <span className="v5-status v5-status--muted">
           Key saved. Only the last four characters are shown.
         </span>
       ) : null}
       {saveState === "saved" ? (
-        <span style={{ display: "block", fontSize: 12, marginTop: 4, color: "#0d6b0d" }}>
+        <span className="v5-status v5-status--success" role="status">
+          <CheckIcon />
           Saved locally.
         </span>
       ) : null}
       {saveState === "error" ? (
-        <span style={{ display: "block", fontSize: 12, marginTop: 4, color: "#b00020" }}>
+        <span className="v5-status v5-status--error" role="status">
           Could not save this key. Try again.
         </span>
       ) : null}
@@ -237,6 +427,7 @@ function createEmptyFieldState(): ApiKeyFieldState {
 export function Options() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
+  const [activeSection, setActiveSection] = useState("overview");
   const [settingsReloadToken, setSettingsReloadToken] = useState(0);
   const [autoScanEnabled, setAutoScanEnabledState] = useState(false);
   const [manualOnlyMode, setManualOnlyModeState] = useState(true);
@@ -327,6 +518,40 @@ export function Options() {
       });
   }, [settingsReloadToken]);
 
+  useEffect(() => {
+    if (
+      typeof IntersectionObserver === "undefined" ||
+      typeof document === "undefined"
+    ) {
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (observerEntries) => {
+        const visible = observerEntries
+          .filter((entry) => entry.isIntersecting)
+          .sort(
+            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top
+          );
+        if (visible[0]?.target.id) {
+          setActiveSection(visible[0].target.id);
+        }
+      },
+      { rootMargin: "-15% 0px -75% 0px", threshold: 0 }
+    );
+    for (const section of NAV_SECTIONS) {
+      const element = document.getElementById(section.id);
+      if (element) {
+        observer.observe(element);
+      }
+    }
+    return () => observer.disconnect();
+  }, []);
+
+  const handleNavClick = (id: string) => {
+    setActiveSection(id);
+    scrollToSection(id);
+  };
+
   const handleAutoScanToggle = (checked: boolean) => {
     setAutoScanEnabledState(checked);
     void setAutoScanEnabled(checked);
@@ -365,6 +590,11 @@ export function Options() {
     );
     setGlobalCacheTtlSecondsState(String(parsed));
     void setEnrichmentCacheTtlSeconds(parsed);
+  };
+
+  const applyGlobalCachePreset = (seconds: number) => {
+    setGlobalCacheTtlSecondsState(String(seconds));
+    void setEnrichmentCacheTtlSeconds(seconds);
   };
 
   const handleSourceCacheTtlBlur = (sourceId: ApiKeySlot) => {
@@ -481,423 +711,574 @@ export function Options() {
     await setApiKey(slot, value);
   };
 
+  const enabledIocTypes = IOC_TYPE_SETTINGS_ORDER.filter(
+    (iocType) => iocTypeEnabled[iocType] !== false
+  );
+  const enabledSources = API_KEY_SLOTS.filter(
+    (sourceId) => enrichmentSourceEnabled[sourceId] === true
+  );
+  const parsedGlobalTtl = Number(globalCacheTtlSeconds);
+
+  const sourceStatus = (
+    sourceId: ApiKeySlot
+  ): { className: string; label: string; withDot: boolean } => {
+    const enabled = enrichmentSourceEnabled[sourceId] === true;
+    if (!enabled) {
+      return { className: "v5-badge--off", label: "Disabled", withDot: false };
+    }
+    const keyed = OPTIONS_API_KEY_SLOTS.includes(sourceId);
+    if (keyed && !fieldStates[sourceId]?.configured) {
+      return { className: "v5-badge--warn", label: "No API key", withDot: true };
+    }
+    if (keyed) {
+      return { className: "v5-badge--on", label: "Connected", withDot: true };
+    }
+    return { className: "v5-badge--on", label: "Enabled", withDot: true };
+  };
+
   return (
-    <main
-      style={{
-        maxWidth: 640,
-        margin: "24px auto",
-        padding: "0 16px",
-        fontFamily: "system-ui, sans-serif",
-      }}
-    >
-      <h1 style={{ fontSize: 24, marginBottom: 8 }}>VERA5 Settings</h1>
-      <p style={{ margin: "0 0 24px", color: "#333" }}>
-        Configure threat intelligence sources and extension preferences.
-      </p>
-      <section aria-labelledby="scanning-heading" style={{ marginBottom: 32 }}>
-        <h2 id="scanning-heading" style={{ fontSize: 18, margin: "0 0 8px" }}>
-          Scanning
-        </h2>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-            cursor: ready ? "pointer" : "wait",
-            marginBottom: 8,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={autoScanEnabled}
-            disabled={!ready}
-            onChange={(event) => handleAutoScanToggle(event.target.checked)}
-            aria-label="Automatically scan when the page changes"
-          />
-          <span style={{ fontSize: 14 }}>
-            Automatically scan when the page changes
-          </span>
-        </label>
-        <p style={{ margin: 0, fontSize: 14, color: "#444" }}>
-          When off, scan only with Scan page in the popup or the keyboard shortcut.
-        </p>
-        <h3
-          id="indicator-types-heading"
-          style={{ fontSize: 16, margin: "16px 0 8px" }}
-        >
-          Indicator types
-        </h3>
-        <p style={{ margin: "0 0 12px", fontSize: 14, color: "#444" }}>
-          Choose which indicator types Vera5 detects during page scans. Disabled
-          types are omitted from highlights and scan counts.
-        </p>
-        {IOC_TYPE_SETTINGS_ORDER.map((iocType) => (
-          <label
-            key={iocType}
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 8,
-              cursor: ready ? "pointer" : "wait",
-              marginBottom: 12,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={iocTypeEnabled[iocType] !== false}
-              disabled={!ready}
-              onChange={(event) =>
-                handleIocTypeToggle(iocType, event.target.checked)
-              }
-              aria-label={`Enable ${IOC_TYPE_OPTION_LABELS[iocType]}`}
-            />
-            <span style={{ fontSize: 14 }}>{IOC_TYPE_OPTION_LABELS[iocType]}</span>
-          </label>
-        ))}
-        <label
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-            cursor: ready ? "pointer" : "wait",
-            marginTop: 16,
-            marginBottom: 8,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={includePrivateIpv4}
-            disabled={!ready}
-            onChange={(event) =>
-              handleIncludePrivateIpv4Toggle(event.target.checked)
-            }
-            aria-label="Include private-space IPv4 addresses"
-          />
-          <span style={{ fontSize: 14 }}>Include private-space IPv4 addresses</span>
-        </label>
-        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#444" }}>
-          When off, RFC1918, loopback, and link-local IPv4 literals are omitted from
-          page scans. Enable for lab or internal SOC pages that use private ranges.
-        </p>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-            cursor: ready ? "pointer" : "wait",
-            marginTop: 16,
-            marginBottom: 8,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={manualOnlyMode}
-            disabled={!ready}
-            onChange={(event) => handleManualOnlyToggle(event.target.checked)}
-            aria-label="Manual-only enrichment"
-          />
-          <span style={{ fontSize: 14 }}>Manual-only enrichment</span>
-        </label>
-        <p style={{ margin: 0, fontSize: 14, color: "#444" }}>
-          When on, threat intelligence loads only when you use the enrich control on
-          a highlight. When off, Vera5 may request enrichment automatically when you
-          open an indicator card.
-        </p>
-      </section>
-      <section
-        aria-labelledby="enrichment-sources-heading"
-        style={{ marginBottom: 32 }}
-      >
-        <h2
-          id="enrichment-sources-heading"
-          style={{ fontSize: 18, margin: "0 0 8px" }}
-        >
-          Enrichment sources
-        </h2>
-        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#444" }}>
-          Choose which threat intelligence sources Vera5 may use when enrichment is
-          available. Disabled sources stay off the hover card and are not queried.
-        </p>
-        {API_KEY_SLOTS.map((sourceId) => (
-          <label
-            key={sourceId}
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 8,
-              cursor: ready ? "pointer" : "wait",
-              marginBottom: 12,
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={enrichmentSourceEnabled[sourceId] === true}
-              disabled={!ready}
-              onChange={(event) =>
-                handleSourceToggle(sourceId, event.target.checked)
-              }
-              aria-label={`Enable ${ENRICHMENT_SOURCE_LABELS[sourceId]}`}
-            />
-            <span style={{ fontSize: 14 }}>{ENRICHMENT_SOURCE_LABELS[sourceId]}</span>
-          </label>
-        ))}
-      </section>
-      <section aria-labelledby="cache-heading" style={{ marginBottom: 32 }}>
-        <h2 id="cache-heading" style={{ fontSize: 18, margin: "0 0 8px" }}>
-          Enrichment cache
-        </h2>
-        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#444" }}>
-          Vera5 stores recent threat intelligence responses locally to reduce API
-          usage. Clearing the cache removes saved responses; your settings and API
-          keys are not affected.
-        </p>
-        <label
-          style={{
-            display: "block",
-            marginBottom: 16,
-          }}
-        >
-          <span
-            style={{
-              display: "block",
-              fontSize: 14,
-              fontWeight: 600,
-              marginBottom: 6,
-            }}
-          >
-            Default cache lifetime (seconds)
-          </span>
-          <input
-            type="number"
-            min={0}
-            value={globalCacheTtlSeconds}
-            disabled={!ready}
-            onChange={(event) =>
-              setGlobalCacheTtlSecondsState(event.target.value)
-            }
-            onBlur={handleGlobalCacheTtlBlur}
-            aria-label="Default cache lifetime in seconds"
-            style={{
-              width: "100%",
-              maxWidth: 240,
-              boxSizing: "border-box",
-              padding: "8px 10px",
-              fontFamily: "system-ui, sans-serif",
-              fontSize: 14,
-            }}
-          />
-        </label>
-        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#444" }}>
-          Optional per-source overrides use the default above when left blank.
-        </p>
-        {API_KEY_SLOTS.map((sourceId) => (
-          <label
-            key={`${sourceId}-cache-ttl`}
-            style={{
-              display: "block",
-              marginBottom: 16,
-            }}
-          >
-            <span
-              style={{
-                display: "block",
-                fontSize: 14,
-                fontWeight: 600,
-                marginBottom: 6,
-              }}
-            >
-              {ENRICHMENT_SOURCE_LABELS[sourceId]} cache lifetime (seconds,
-              optional)
+    <main className="v5-app">
+      <div className="v5-topbar">
+        <span className="v5-topbar__saved">
+          <span className="v5-topbar__dot" aria-hidden="true" />
+          Saved automatically
+        </span>
+      </div>
+      <div className="v5-shell">
+        <aside className="v5-sidebar">
+          <div className="v5-brand">
+            <span className="v5-brand__mark" aria-hidden="true" />
+            <span>
+              <span className="v5-brand__name">VERA5</span>
+              <span className="v5-brand__sub">Threat intel settings</span>
             </span>
-            <input
-              type="number"
-              min={0}
-              value={sourceCacheTtlDrafts[sourceId]}
-              disabled={!ready}
-              placeholder="Use default"
-              onChange={(event) =>
-                setSourceCacheTtlDraftsState((current) => ({
-                  ...current,
-                  [sourceId]: event.target.value,
-                }))
-              }
-              onBlur={() => handleSourceCacheTtlBlur(sourceId)}
-              aria-label={`${ENRICHMENT_SOURCE_LABELS[sourceId]} cache lifetime in seconds`}
-              style={{
-                width: "100%",
-                maxWidth: 240,
-                boxSizing: "border-box",
-                padding: "8px 10px",
-                fontFamily: "system-ui, sans-serif",
-                fontSize: 14,
-              }}
-            />
-          </label>
-        ))}
-        <button
-          type="button"
-          disabled={!ready || clearCacheState === "clearing"}
-          onClick={handleClearCache}
-          aria-label="Clear enrichment cache"
-          style={{
-            padding: "8px 14px",
-            fontFamily: "system-ui, sans-serif",
-            fontSize: 14,
-            cursor: ready && clearCacheState !== "clearing" ? "pointer" : "wait",
-          }}
-        >
-          {clearCacheState === "clearing" ? "Clearing…" : "Clear cache"}
-        </button>
-        {clearCacheState === "cleared" ? (
-          <span
-            role="status"
-            style={{ display: "block", fontSize: 12, marginTop: 8, color: "#0d6b0d" }}
+          </div>
+          <nav className="v5-nav" aria-label="Settings sections">
+            {NAV_SECTIONS.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                className={`v5-nav__item${
+                  activeSection === section.id ? " v5-nav__item--active" : ""
+                }`}
+                aria-current={activeSection === section.id ? "true" : undefined}
+                onClick={() => handleNavClick(section.id)}
+              >
+                <span className="v5-nav__dot" aria-hidden="true" />
+                {section.label}
+              </button>
+            ))}
+          </nav>
+          <div className="v5-sidebar__footer">
+            <div className="v5-info-note__title">Local-first by design</div>
+            <div className="v5-lock">
+              <span className="v5-lock__icon">
+                <LockIcon />
+              </span>
+              <span className="v5-lock__text">
+                Settings stored locally. VERA5 never receives your API keys.
+              </span>
+            </div>
+          </div>
+        </aside>
+
+        <div className="v5-content">
+          <header className="v5-page-head">
+            <div>
+              <h1 className="v5-page-title">Settings</h1>
+              <p className="v5-page-sub">
+                Configure threat intelligence sources and extension preferences.
+              </p>
+            </div>
+          </header>
+
+          <section
+            id="overview"
+            className="v5-card"
+            aria-labelledby="overview-heading"
           >
-            Enrichment cache cleared.
-          </span>
-        ) : null}
-        {clearCacheState === "error" ? (
-          <span
-            role="status"
-            style={{ display: "block", fontSize: 12, marginTop: 8, color: "#b00020" }}
+            <div className="v5-card__head">
+              <h2 id="overview-heading" className="v5-card__title">
+                Overview
+              </h2>
+              <p className="v5-card__desc">
+                A snapshot of how VERA5 is currently scanning and enriching this
+                browser.
+              </p>
+            </div>
+            <div className="v5-card__body">
+              <div className="v5-overview-grid">
+                <div className="v5-stat">
+                  <div className="v5-stat__label">Indicator types</div>
+                  <div className="v5-stat__value">
+                    {enabledIocTypes.length}
+                    <small> / {IOC_TYPE_SETTINGS_ORDER.length} enabled</small>
+                  </div>
+                  <div className="v5-chips">
+                    {enabledIocTypes.length > 0 ? (
+                      enabledIocTypes.map((iocType) => (
+                        <span key={iocType} className="v5-chip">
+                          {IOC_TYPE_SHORT_LABELS[iocType]}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="v5-chip v5-chip--muted">None</span>
+                    )}
+                  </div>
+                </div>
+                <div className="v5-stat">
+                  <div className="v5-stat__label">Enrichment sources</div>
+                  <div className="v5-stat__value">
+                    {enabledSources.length}
+                    <small> / {API_KEY_SLOTS.length} enabled</small>
+                  </div>
+                  <div className="v5-chips">
+                    {enabledSources.length > 0 ? (
+                      enabledSources.map((sourceId) => (
+                        <span key={sourceId} className="v5-chip">
+                          {ENRICHMENT_SOURCE_LABELS[sourceId]}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="v5-chip v5-chip--muted">None</span>
+                    )}
+                  </div>
+                </div>
+                <div className="v5-stat">
+                  <div className="v5-stat__label">Cache lifetime</div>
+                  <div className="v5-stat__value">
+                    {formatCacheTtl(parsedGlobalTtl)}
+                  </div>
+                  <div className="v5-chips">
+                    <span className="v5-chip v5-chip--muted">
+                      {autoScanEnabled ? "Auto-scan on" : "Auto-scan off"}
+                    </span>
+                    <span className="v5-chip v5-chip--muted">
+                      {manualOnlyMode ? "Manual enrich" : "Auto enrich"}
+                    </span>
+                  </div>
+                </div>
+                <div className="v5-stat">
+                  <div className="v5-stat__label">Security</div>
+                  <div className="v5-stat__value" style={{ fontSize: 16 }}>
+                    Local storage
+                  </div>
+                  <div className="v5-chips">
+                    <span className="v5-chip">No shared service</span>
+                    <span className="v5-chip">Keys never sent</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="scanning"
+            className="v5-card"
+            aria-labelledby="scanning-heading"
           >
-            Could not clear the cache. Try again.
-          </span>
-        ) : null}
-      </section>
-      <section
-        aria-labelledby="settings-backup-heading"
-        style={{ marginBottom: 32 }}
-      >
-        <h2
-          id="settings-backup-heading"
-          style={{ fontSize: 18, margin: "0 0 8px" }}
-        >
-          Settings backup
-        </h2>
-        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#444" }}>
-          Export your preferences as JSON to move them between profiles or keep a
-          backup. API keys are excluded unless you choose to include them.
-        </p>
-        <label
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 8,
-            cursor: ready ? "pointer" : "wait",
-            marginBottom: 16,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={includeApiKeysInExport}
-            disabled={!ready}
-            onChange={(event) => setIncludeApiKeysInExport(event.target.checked)}
-            aria-label="Include API keys in export"
-          />
-          <span style={{ fontSize: 14 }}>Include API keys in export</span>
-        </label>
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: 12,
-            alignItems: "center",
-          }}
-        >
-          <button
-            type="button"
-            disabled={!ready || exportState === "exporting"}
-            onClick={handleExportSettings}
-            aria-label="Export settings JSON"
-            style={{
-              padding: "8px 14px",
-              fontFamily: "system-ui, sans-serif",
-              fontSize: 14,
-              cursor: ready && exportState !== "exporting" ? "pointer" : "wait",
-            }}
+            <div className="v5-card__head">
+              <h2 id="scanning-heading" className="v5-card__title">
+                Scanning
+              </h2>
+              <p className="v5-card__desc">
+                Control when VERA5 inspects pages for indicators.
+              </p>
+            </div>
+            <div className="v5-card__body">
+              <ToggleRow
+                label="Automatically scan when the page changes"
+                hint="When off, scan only with Scan page in the popup or the keyboard shortcut."
+                ariaLabel="Automatically scan when the page changes"
+                checked={autoScanEnabled}
+                disabled={!ready}
+                onChange={handleAutoScanToggle}
+              />
+            </div>
+          </section>
+
+          <section
+            id="indicators"
+            className="v5-card"
+            aria-labelledby="indicators-heading"
           >
-            {exportState === "exporting" ? "Exporting…" : "Export settings"}
-          </button>
-          <button
-            type="button"
-            disabled={!ready || importState === "importing"}
-            onClick={handleImportClick}
-            aria-label="Import settings JSON"
-            style={{
-              padding: "8px 14px",
-              fontFamily: "system-ui, sans-serif",
-              fontSize: 14,
-              cursor: ready && importState !== "importing" ? "pointer" : "wait",
-            }}
+            <div className="v5-card__head">
+              <h2 id="indicators-heading" className="v5-card__title">
+                Indicator types
+              </h2>
+              <p className="v5-card__desc">
+                Choose which indicator types Vera5 detects during page scans.
+                Disabled types are omitted from highlights and scan counts.
+              </p>
+            </div>
+            <div className="v5-card__body">
+              <div className="v5-ioc-grid">
+                {IOC_TYPE_SETTINGS_ORDER.map((iocType) => (
+                  <label key={iocType} className="v5-ioc-card">
+                    <input
+                      type="checkbox"
+                      className="v5-ioc-card__input"
+                      checked={iocTypeEnabled[iocType] !== false}
+                      disabled={!ready}
+                      onChange={(event) =>
+                        handleIocTypeToggle(iocType, event.target.checked)
+                      }
+                      aria-label={`Enable ${IOC_TYPE_OPTION_LABELS[iocType]}`}
+                    />
+                    <span className="v5-ioc-card__badge">
+                      {IOC_TYPE_CODES[iocType]}
+                    </span>
+                    <span className="v5-ioc-card__text">
+                      <span className="v5-ioc-card__name">
+                        {IOC_TYPE_SHORT_LABELS[iocType]}
+                      </span>
+                    </span>
+                    <span className="v5-ioc-card__check">
+                      <CheckIcon />
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section
+            className="v5-card"
+            aria-labelledby="private-ipv4-heading"
           >
-            {importState === "importing" ? "Importing…" : "Import settings"}
-          </button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json"
-            aria-hidden="true"
-            tabIndex={-1}
-            style={{ display: "none" }}
-            onChange={handleImportFileChange}
-          />
+            <div className="v5-card__head">
+              <h2
+                id="private-ipv4-heading"
+                className="v5-card__title"
+                style={{ fontSize: 18 }}
+              >
+                Private-space IPv4 addresses
+              </h2>
+              <p className="v5-card__desc">
+                A core control for SOC and lab workflows. When off, RFC1918,
+                loopback, and link-local IPv4 literals are omitted from page scans
+                so internal network addresses are never treated as indicators.
+              </p>
+            </div>
+            <div className="v5-card__body">
+              <label
+                className="v5-row"
+                style={{
+                  borderBottom: "none",
+                  paddingTop: 6,
+                  cursor: ready ? "pointer" : "wait",
+                }}
+              >
+                <span className="v5-row__text">
+                  <span className="v5-row__label" style={{ fontSize: 15 }}>
+                    Detect private-space IPv4 addresses
+                  </span>
+                  <span className="v5-row__hint">
+                    Enable for lab or internal SOC pages that use private ranges.
+                  </span>
+                </span>
+                <Switch
+                  ariaLabel="Include private-space IPv4 addresses"
+                  checked={includePrivateIpv4}
+                  disabled={!ready}
+                  onChange={handleIncludePrivateIpv4Toggle}
+                />
+              </label>
+            </div>
+          </section>
+
+          <section
+            id="sources"
+            className="v5-card"
+            aria-labelledby="sources-heading"
+          >
+            <div className="v5-card__head">
+              <h2 id="sources-heading" className="v5-card__title">
+                Enrichment sources
+              </h2>
+              <p className="v5-card__desc">
+                Choose which threat intelligence sources Vera5 may use when
+                enrichment is available. Disabled sources stay off the hover card
+                and are not queried.
+              </p>
+            </div>
+            <div className="v5-card__body">
+              <ToggleRow
+                label="Manual-only enrichment"
+                hint="When on, threat intelligence loads only when you use the enrich control on a highlight. When off, Vera5 may request enrichment automatically when you open an indicator card."
+                ariaLabel="Manual-only enrichment"
+                checked={manualOnlyMode}
+                disabled={!ready}
+                onChange={handleManualOnlyToggle}
+              />
+              <div className="v5-sources">
+                {API_KEY_SLOTS.map((sourceId) => {
+                  const status = sourceStatus(sourceId);
+                  const keyed = OPTIONS_API_KEY_SLOTS.includes(sourceId);
+                  return (
+                    <div key={sourceId} className="v5-source">
+                      <div className="v5-source__head">
+                        <span className="v5-source__title">
+                          <span className="v5-source__name">
+                            {ENRICHMENT_SOURCE_LABELS[sourceId]}
+                          </span>
+                          <span className={`v5-badge ${status.className}`}>
+                            {status.withDot ? (
+                              <span className="v5-badge__dot" />
+                            ) : null}
+                            {status.label}
+                          </span>
+                        </span>
+                        <span className="v5-source__spacer" />
+                        <Switch
+                          ariaLabel={`Enable ${ENRICHMENT_SOURCE_LABELS[sourceId]}`}
+                          checked={enrichmentSourceEnabled[sourceId] === true}
+                          disabled={!ready}
+                          onChange={(checked) =>
+                            handleSourceToggle(sourceId, checked)
+                          }
+                        />
+                      </div>
+                      <div className="v5-source__body">
+                        <p className="v5-row__hint" style={{ margin: 0 }}>
+                          {ENRICHMENT_SOURCE_DESCRIPTIONS[sourceId]}
+                        </p>
+                        <div className="v5-source__row">
+                          <label style={{ display: "block" }}>
+                            <span
+                              className="v5-field__label"
+                              style={{ marginBottom: 6 }}
+                            >
+                              Cache lifetime (seconds, optional)
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              className="v5-input v5-input--sm"
+                              value={sourceCacheTtlDrafts[sourceId]}
+                              disabled={!ready}
+                              placeholder="Use default"
+                              onChange={(event) =>
+                                setSourceCacheTtlDraftsState((current) => ({
+                                  ...current,
+                                  [sourceId]: event.target.value,
+                                }))
+                              }
+                              onBlur={() => handleSourceCacheTtlBlur(sourceId)}
+                              aria-label={`${ENRICHMENT_SOURCE_LABELS[sourceId]} cache lifetime in seconds`}
+                            />
+                          </label>
+                          {keyed ? (
+                            <button
+                              type="button"
+                              className="v5-btn v5-btn--link"
+                              onClick={() => handleNavClick("api-keys")}
+                            >
+                              Manage API key →
+                            </button>
+                          ) : (
+                            <span
+                              className="v5-status v5-status--muted"
+                              style={{ marginTop: 0, alignSelf: "center" }}
+                            >
+                              No API key required
+                            </span>
+                          )}
+                        </div>
+                        <div className="v5-source__health">
+                          Source health monitoring coming soon.
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section id="cache" className="v5-card" aria-labelledby="cache-heading">
+            <div className="v5-card__head">
+              <h2 id="cache-heading" className="v5-card__title">
+                Enrichment cache
+              </h2>
+              <p className="v5-card__desc">
+                Vera5 stores recent threat intelligence responses locally to reduce
+                API usage. Clearing the cache removes saved responses; your settings
+                and API keys are not affected.
+              </p>
+            </div>
+            <div className="v5-card__body">
+              <div className="v5-field">
+                <span className="v5-field__label">Default cache lifetime</span>
+                <div className="v5-presets">
+                  {CACHE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.seconds}
+                      type="button"
+                      className={`v5-preset${
+                        parsedGlobalTtl === preset.seconds
+                          ? " v5-preset--active"
+                          : ""
+                      }`}
+                      disabled={!ready}
+                      onClick={() => applyGlobalCachePreset(preset.seconds)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number"
+                  min={0}
+                  className="v5-input v5-input--sm"
+                  value={globalCacheTtlSeconds}
+                  disabled={!ready}
+                  onChange={(event) =>
+                    setGlobalCacheTtlSecondsState(event.target.value)
+                  }
+                  onBlur={handleGlobalCacheTtlBlur}
+                  aria-label="Default cache lifetime in seconds"
+                />
+                <span className="v5-status v5-status--muted">
+                  Custom value in seconds. Per-source overrides use this default
+                  when left blank.
+                </span>
+              </div>
+              <div className="v5-actions">
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--danger"
+                  disabled={!ready || clearCacheState === "clearing"}
+                  onClick={handleClearCache}
+                  aria-label="Clear enrichment cache"
+                >
+                  {clearCacheState === "clearing" ? "Clearing…" : "Clear cache"}
+                </button>
+                {clearCacheState === "cleared" ? (
+                  <span className="v5-status v5-status--success" role="status">
+                    <CheckIcon />
+                    Enrichment cache cleared.
+                  </span>
+                ) : null}
+                {clearCacheState === "error" ? (
+                  <span className="v5-status v5-status--error" role="status">
+                    Could not clear the cache. Try again.
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="backup"
+            className="v5-card"
+            aria-labelledby="settings-backup-heading"
+          >
+            <div className="v5-card__head">
+              <h2 id="settings-backup-heading" className="v5-card__title">
+                Settings backup
+              </h2>
+              <p className="v5-card__desc">
+                Export your preferences as JSON to move them between profiles or
+                keep a backup. API keys are excluded unless you choose to include
+                them.
+              </p>
+            </div>
+            <div className="v5-card__body">
+              <ToggleRow
+                label="Include API keys in export"
+                hint="Off by default. Only enable when exporting to a trusted location."
+                ariaLabel="Include API keys in export"
+                checked={includeApiKeysInExport}
+                disabled={!ready}
+                onChange={setIncludeApiKeysInExport}
+              />
+              <div className="v5-actions">
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--primary"
+                  disabled={!ready || exportState === "exporting"}
+                  onClick={handleExportSettings}
+                  aria-label="Export settings JSON"
+                >
+                  {exportState === "exporting" ? "Exporting…" : "Export settings"}
+                </button>
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--primary"
+                  disabled={!ready || importState === "importing"}
+                  onClick={handleImportClick}
+                  aria-label="Import settings JSON"
+                >
+                  {importState === "importing" ? "Importing…" : "Import settings"}
+                </button>
+                <input
+                  ref={importInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={{ display: "none" }}
+                  onChange={handleImportFileChange}
+                />
+              </div>
+              {exportState === "exported" ? (
+                <span className="v5-status v5-status--success" role="status">
+                  <CheckIcon />
+                  Settings exported.
+                </span>
+              ) : null}
+              {exportState === "error" ? (
+                <span className="v5-status v5-status--error" role="status">
+                  Could not export settings. Try again.
+                </span>
+              ) : null}
+              {importState === "imported" ? (
+                <span className="v5-status v5-status--success" role="status">
+                  <CheckIcon />
+                  Settings imported.
+                </span>
+              ) : null}
+              {importState === "error" ? (
+                <span className="v5-status v5-status--error" role="status">
+                  Could not import settings. Check the file and try again.
+                </span>
+              ) : null}
+            </div>
+          </section>
+
+          <section
+            id="api-keys"
+            className="v5-card"
+            aria-labelledby="api-keys-heading"
+          >
+            <div className="v5-card__head">
+              <h2 id="api-keys-heading" className="v5-card__title">
+                API keys
+              </h2>
+              <p className="v5-card__desc">
+                Keys are stored locally in your browser. Vera5 does not operate a
+                shared enrichment service or receive your credentials.
+              </p>
+            </div>
+            <div className="v5-card__body">
+              {OPTIONS_API_KEY_SLOTS.map((slot) => (
+                <ApiKeyField
+                  key={slot}
+                  slot={slot}
+                  label={ENRICHMENT_SOURCE_LABELS[slot]}
+                  ready={ready}
+                  fieldState={fieldStates[slot]}
+                  onDraftChange={handleDraftChange}
+                  onEditingChange={handleEditingChange}
+                  onPersist={handlePersist}
+                  onSaved={handleSaved}
+                />
+              ))}
+            </div>
+          </section>
         </div>
-        {exportState === "exported" ? (
-          <span
-            role="status"
-            style={{ display: "block", fontSize: 12, marginTop: 8, color: "#0d6b0d" }}
-          >
-            Settings exported.
-          </span>
-        ) : null}
-        {exportState === "error" ? (
-          <span
-            role="status"
-            style={{ display: "block", fontSize: 12, marginTop: 8, color: "#b00020" }}
-          >
-            Could not export settings. Try again.
-          </span>
-        ) : null}
-        {importState === "imported" ? (
-          <span
-            role="status"
-            style={{ display: "block", fontSize: 12, marginTop: 8, color: "#0d6b0d" }}
-          >
-            Settings imported.
-          </span>
-        ) : null}
-        {importState === "error" ? (
-          <span
-            role="status"
-            style={{ display: "block", fontSize: 12, marginTop: 8, color: "#b00020" }}
-          >
-            Could not import settings. Check the file and try again.
-          </span>
-        ) : null}
-      </section>
-      <section aria-labelledby="api-keys-heading">
-        <h2 id="api-keys-heading" style={{ fontSize: 18, margin: "0 0 8px" }}>
-          API keys
-        </h2>
-        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#444" }}>
-          Keys are stored locally in your browser. Vera5 does not operate a shared
-          enrichment service or receive your credentials.
-        </p>
-        {OPTIONS_API_KEY_SLOTS.map((slot) => (
-          <ApiKeyField
-            key={slot}
-            slot={slot}
-            label={ENRICHMENT_SOURCE_LABELS[slot]}
-            ready={ready}
-            fieldState={fieldStates[slot]}
-            onDraftChange={handleDraftChange}
-            onEditingChange={handleEditingChange}
-            onPersist={handlePersist}
-            onSaved={handleSaved}
-          />
-        ))}
-      </section>
+      </div>
     </main>
   );
 }

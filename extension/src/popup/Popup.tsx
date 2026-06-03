@@ -1,13 +1,29 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
-import { scanPageMessage } from "../lib/messages";
+import {
+  navigateToIocAnchorMessage,
+  openWorkspaceMessage,
+  scanPageMessage,
+} from "../lib/messages";
+import {
+  getTabScanTrayFilter,
+  saveTabScanTrayFilter,
+} from "../lib/tabScanSnapshotStorage";
 import { requestTabScanSummaryForActiveTab } from "../lib/tabScanSummaryClient";
 import {
   buildTabScanCountSummaryText,
+  buildTrayRowNavigationAriaLabel,
   filterTabScanSummaryEntries,
+  formatTrayRowEnrichmentHint,
   IOC_TYPE_TRAY_LABEL,
   listIocTypesPresentInSummary,
+  loadTrayEntryEnrichmentStatuses,
+  resolveTrayCopyFeedback,
+  resolveTrayExportFeedback,
+  resolveTrayTemplateExportFeedback,
   type IocTypeFilter,
   type TabScanSummary,
+  type TabScanSummaryEntry,
+  type TrayEntryEnrichmentStatus,
 } from "../lib/tabScanSummary";
 import {
   getExtensionEnabled,
@@ -16,18 +32,41 @@ import {
   setHighlightEnabled,
 } from "../lib/storage";
 import { openExtensionSitePermissionsPage } from "../lib/extensionSitePermissions";
+import { VERA5_COLOR } from "../lib/theme";
+import {
+  resolveWorkspaceTrayView,
+  resolveTrayNavigationFeedback,
+} from "../lib/workspaceTrayState";
+
+export type PopupTrayView = "prompt" | "scanning" | "empty" | "results";
+
+export function resolvePopupTrayView(input: {
+  enabled: boolean;
+  scanState: "idle" | "scanning" | "done" | "error";
+  scanSummary: TabScanSummary | null;
+}): PopupTrayView | null {
+  return resolveWorkspaceTrayView(input);
+}
+
+export { resolveTrayNavigationFeedback };
+export {
+  resolveTrayCopyFeedback,
+  resolveTrayExportFeedback,
+  resolveTrayTemplateExportFeedback,
+};
 
 const POPUP_THEME = {
-  surface: "#1e293b",
-  text: "#e2e8f0",
-  muted: "#94a3b8",
-  border: "#475569",
-  accent: "#60a5fa",
-  accentText: "#dbeafe",
-  buttonBg: "#334155",
-  error: "#fca5a5",
-  trayRowBg: "#0f172a",
-  filterActiveBg: "#1d4ed8",
+  surface: VERA5_COLOR.surface,
+  text: VERA5_COLOR.text,
+  muted: VERA5_COLOR.textMuted,
+  border: VERA5_COLOR.border,
+  accent: VERA5_COLOR.accent,
+  accentText: VERA5_COLOR.accentText,
+  buttonBg: VERA5_COLOR.surfaceRaised,
+  error: VERA5_COLOR.dangerText,
+  trayRowBg: VERA5_COLOR.surfaceSunken,
+  filterActiveBg: VERA5_COLOR.accentActiveBg,
+  success: VERA5_COLOR.successText,
 };
 
 const buttonStyle = {
@@ -54,6 +93,39 @@ function filterChipStyle(active: boolean): CSSProperties {
   };
 }
 
+function trayStatusStyle(): CSSProperties {
+  return {
+    fontSize: 12,
+    margin: 0,
+    color: POPUP_THEME.muted,
+    lineHeight: 1.5,
+  };
+}
+
+export function trayEnrichmentHintStyle(
+  badgeText: TrayEntryEnrichmentStatus["badgeText"]
+): CSSProperties {
+  const base: CSSProperties = {
+    flexShrink: 0,
+    fontSize: 10,
+    fontWeight: 600,
+    padding: "1px 6px",
+    borderRadius: 4,
+    backgroundColor: POPUP_THEME.buttonBg,
+    lineHeight: 1.4,
+    pointerEvents: "none",
+    userSelect: "none",
+  };
+
+  if (badgeText === "Live") {
+    return { ...base, color: POPUP_THEME.success };
+  }
+  if (badgeText === "Error") {
+    return { ...base, color: POPUP_THEME.error };
+  }
+  return { ...base, color: POPUP_THEME.muted };
+}
+
 export function Popup() {
   const [enabled, setEnabled] = useState(true);
   const [highlightEnabled, setHighlightEnabledState] = useState(true);
@@ -63,6 +135,13 @@ export function Popup() {
   );
   const [scanSummary, setScanSummary] = useState<TabScanSummary | null>(null);
   const [typeFilter, setTypeFilter] = useState<IocTypeFilter>("all");
+  const [trayFilterReady, setTrayFilterReady] = useState(false);
+  const [trayNavigationMessage, setTrayNavigationMessage] = useState<string | null>(
+    null
+  );
+  const [trayEnrichmentStatuses, setTrayEnrichmentStatuses] = useState<
+    Record<string, TrayEntryEnrichmentStatus>
+  >({});
 
   useEffect(() => {
     void Promise.all([getExtensionEnabled(), getHighlightEnabled()]).then(
@@ -81,10 +160,56 @@ export function Popup() {
   }, []);
 
   useEffect(() => {
+    if (!scanSummary || scanSummary.entries.length === 0) {
+      setTrayEnrichmentStatuses({});
+      return;
+    }
+
+    let cancelled = false;
+    void loadTrayEntryEnrichmentStatuses(scanSummary.entries).then((statuses) => {
+      if (!cancelled) {
+        setTrayEnrichmentStatuses(statuses);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scanSummary]);
+
+  useEffect(() => {
+    if (!scanSummary) {
+      setTrayFilterReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    void getTabScanTrayFilter(scanSummary.tabId).then((storedFilter) => {
+      if (!cancelled) {
+        setTypeFilter(storedFilter);
+        setTrayFilterReady(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [scanSummary]);
+
+  useEffect(() => {
+    if (!scanSummary || !trayFilterReady) {
+      return;
+    }
+    void saveTabScanTrayFilter(scanSummary.tabId, typeFilter);
+  }, [scanSummary, typeFilter, trayFilterReady]);
+
+  useEffect(() => {
     document.body.style.margin = "0";
     document.body.style.backgroundColor = POPUP_THEME.surface;
     document.body.style.color = POPUP_THEME.text;
   }, []);
+
+  const trayView = resolvePopupTrayView({ enabled, scanState, scanSummary });
 
   const filteredEntries = useMemo(() => {
     if (!scanSummary) {
@@ -100,6 +225,9 @@ export function Popup() {
       setScanState("idle");
       setScanSummary(null);
       setTypeFilter("all");
+      setTrayFilterReady(false);
+      setTrayNavigationMessage(null);
+      setTrayEnrichmentStatuses({});
     }
   };
 
@@ -116,6 +244,53 @@ export function Popup() {
     openExtensionSitePermissionsPage();
   };
 
+  const handleOpenSidebar = () => {
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        return;
+      }
+      try {
+        await chrome.tabs.sendMessage(tab.id, openWorkspaceMessage());
+      } catch {
+        // Content script may be unavailable on restricted pages.
+      }
+      window.close();
+    });
+  };
+
+  const handleTrayRowActivate = (entry: TabScanSummaryEntry) => {    void chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(async ([tab]) => {
+        if (!tab?.id) {
+          setTrayNavigationMessage(
+            resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: entry.value })
+          );
+          return;
+        }
+        try {
+          const response = await chrome.tabs.sendMessage(
+            tab.id,
+            navigateToIocAnchorMessage(entry.anchorId)
+          );
+          setTrayNavigationMessage(
+            resolveTrayNavigationFeedback({
+              tabId: tab.id,
+              response,
+              indicatorValue: entry.value,
+            })
+          );
+        } catch {
+          setTrayNavigationMessage(
+            resolveTrayNavigationFeedback({
+              tabId: tab.id,
+              sendFailed: true,
+              indicatorValue: entry.value,
+            })
+          );
+        }
+      });
+  };
+
   const handleScanPage = () => {
     if (!enabled) {
       return;
@@ -123,6 +298,15 @@ export function Popup() {
     setScanState("scanning");
     setScanSummary(null);
     setTypeFilter("all");
+    setTrayFilterReady(false);
+    setTrayNavigationMessage(null);
+    void chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(([tab]) => {
+        if (tab?.id) {
+          void saveTabScanTrayFilter(tab.id, "all");
+        }
+      });
     void chrome.tabs
       .query({ active: true, currentWindow: true })
       .then(async ([tab]) => {
@@ -139,7 +323,7 @@ export function Popup() {
             response.ok === true
           ) {
             const summary = await requestTabScanSummaryForActiveTab();
-            if (summary) {
+            if (summary !== null) {
               setScanSummary(summary);
               setScanState("done");
               return;
@@ -250,12 +434,24 @@ export function Popup() {
       >
         Permissions
       </button>
-      {scanState === "error" ? (
-        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
+      <button
+        type="button"
+        disabled={!ready}
+        onClick={handleOpenSidebar}
+        style={{
+          ...buttonStyle,
+          marginBottom: 8,
+          cursor: ready ? "pointer" : "not-allowed",
+          opacity: ready ? 1 : 0.65,
+        }}
+      >
+        Open sidebar
+      </button>
+      {scanState === "error" ? (        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
           Scan failed. Reload the tab and try again.
         </p>
       ) : null}
-      {scanSummary ? (
+      {trayView ? (
         <section
           aria-label="Detected indicators"
           style={{ marginTop: 14, borderTop: `1px solid ${POPUP_THEME.border}`, paddingTop: 12 }}
@@ -270,86 +466,163 @@ export function Popup() {
           >
             Detected indicators
           </h2>
-          <p style={{ fontSize: 12, margin: "0 0 10px", color: POPUP_THEME.muted }}>
-            {buildTabScanCountSummaryText(scanSummary)}
-          </p>
-          <div
-            role="group"
-            aria-label="Filter by indicator type"
-            style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}
-          >
-            <button
-              type="button"
-              aria-pressed={typeFilter === "all"}
-              onClick={() => setTypeFilter("all")}
-              style={filterChipStyle(typeFilter === "all")}
-            >
-              All ({scanSummary.totalCount})
-            </button>
-            {listIocTypesPresentInSummary(scanSummary).map((type) => (
-              <button
-                key={type}
-                type="button"
-                aria-pressed={typeFilter === type}
-                onClick={() => setTypeFilter(type)}
-                style={filterChipStyle(typeFilter === type)}
+          {trayView === "prompt" ? (
+            <p style={trayStatusStyle()}>
+              Scan this page to list detected indicators.
+            </p>
+          ) : null}
+          {trayView === "scanning" ? (
+            <p style={trayStatusStyle()} aria-live="polite">
+              Scanning page…
+            </p>
+          ) : null}
+          {trayView === "empty" ? (
+            <p style={trayStatusStyle()} aria-live="polite">
+              No indicators detected on this page.
+            </p>
+          ) : null}
+          {trayView === "results" && scanSummary ? (
+            <>
+              <p style={{ fontSize: 12, margin: "0 0 10px", color: POPUP_THEME.muted }}>
+                {buildTabScanCountSummaryText(scanSummary)}
+              </p>
+              <div
+                role="group"
+                aria-label="Filter by indicator type"
+                style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}
               >
-                {IOC_TYPE_TRAY_LABEL[type]} ({scanSummary.countByType[type] ?? 0})
-              </button>
-            ))}
-          </div>
-          <ul
-            style={{
-              listStyle: "none",
-              margin: 0,
-              padding: 0,
-              maxHeight: 220,
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-            }}
-          >
-            {filteredEntries.map((entry) => (
-              <li
-                key={entry.anchorId}
-                style={{
-                  display: "flex",
-                  alignItems: "flex-start",
-                  gap: 8,
-                  padding: "6px 8px",
-                  borderRadius: 6,
-                  border: `1px solid ${POPUP_THEME.border}`,
-                  backgroundColor: POPUP_THEME.trayRowBg,
-                  fontSize: 12,
-                  lineHeight: 1.4,
-                }}
-              >
-                <span
-                  aria-hidden="true"
+                <button
+                  type="button"
+                  aria-pressed={typeFilter === "all"}
+                  onClick={() => setTypeFilter("all")}
+                  style={filterChipStyle(typeFilter === "all")}
+                >
+                  All ({scanSummary.totalCount})
+                </button>
+                {listIocTypesPresentInSummary(scanSummary).map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    aria-pressed={typeFilter === type}
+                    onClick={() => setTypeFilter(type)}
+                    style={filterChipStyle(typeFilter === type)}
+                  >
+                    {IOC_TYPE_TRAY_LABEL[type]} ({scanSummary.countByType[type] ?? 0})
+                  </button>
+                ))}
+              </div>
+              {trayNavigationMessage ? (
+                <p
+                  role="alert"
+                  aria-live="polite"
                   style={{
-                    flexShrink: 0,
-                    padding: "1px 6px",
-                    borderRadius: 4,
-                    backgroundColor: POPUP_THEME.buttonBg,
-                    color: POPUP_THEME.accent,
-                    fontSize: 10,
-                    fontWeight: 700,
+                    fontSize: 12,
+                    margin: "0 0 10px",
+                    color: POPUP_THEME.error,
+                    lineHeight: 1.5,
                   }}
                 >
-                  {IOC_TYPE_TRAY_LABEL[entry.type]}
-                </span>
-                <span
+                  {trayNavigationMessage}
+                </p>
+              ) : null}
+              {filteredEntries.length > 0 ? (
+                <ul
                   style={{
-                    color: POPUP_THEME.text,
-                    wordBreak: "break-all",
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    maxHeight: 220,
+                    overflowY: "auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 6,
                   }}
                 >
-                  {entry.value}
-                </span>
-              </li>
-            ))}
-          </ul>
+                  {filteredEntries.map((entry) => {
+                    const enrichmentStatus = trayEnrichmentStatuses[entry.anchorId];
+
+                    return (
+                    <li
+                      key={entry.anchorId}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={buildTrayRowNavigationAriaLabel(
+                        entry.value,
+                        enrichmentStatus
+                      )}
+                      onClick={() => handleTrayRowActivate(entry)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") {
+                          return;
+                        }
+                        event.preventDefault();
+                        handleTrayRowActivate(entry);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 8,
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        border: `1px solid ${POPUP_THEME.border}`,
+                        backgroundColor: POPUP_THEME.trayRowBg,
+                        fontSize: 12,
+                        lineHeight: 1.4,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          flexShrink: 0,
+                          padding: "1px 6px",
+                          borderRadius: 4,
+                          backgroundColor: POPUP_THEME.buttonBg,
+                          color: POPUP_THEME.accent,
+                          fontSize: 10,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {IOC_TYPE_TRAY_LABEL[entry.type]}
+                      </span>
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 8,
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: POPUP_THEME.text,
+                            wordBreak: "break-all",
+                            flex: 1,
+                          }}
+                        >
+                          {entry.value}
+                        </span>
+                        {enrichmentStatus ? (
+                          <span
+                            aria-hidden="true"
+                            style={trayEnrichmentHintStyle(enrichmentStatus.badgeText)}
+                          >
+                            {formatTrayRowEnrichmentHint(enrichmentStatus)}
+                          </span>
+                        ) : null}
+                      </span>
+                    </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p style={trayStatusStyle()}>
+                  No indicators match this filter.
+                </p>
+              )}
+            </>
+          ) : null}
         </section>
       ) : null}
     </main>

@@ -3,9 +3,11 @@ import {
   isExtensionContextInvalidated,
   isExtensionContextValid,
   isStaleExtensionError,
+  isStorageAccessDeniedError,
   rethrowUnlessStaleExtensionError,
   safeRuntimeSendMessage,
   safeStorageLocalGet,
+  safeStorageSessionGet,
 } from "./extensionContext";
 
 describe("extensionContext", () => {
@@ -24,12 +26,25 @@ describe("extensionContext", () => {
     expect(isStaleExtensionError(new Error("Network request failed"))).toBe(false);
   });
 
+  it("detects storage access denied errors", () => {
+    expect(
+      isStorageAccessDeniedError(
+        new Error("Access to storage is not allowed from this context")
+      )
+    ).toBe(true);
+  });
+
   it("rethrows unrelated errors", () => {
     expect(() =>
       rethrowUnlessStaleExtensionError(new Error("Network request failed"))
     ).toThrow("Network request failed");
     expect(() =>
       rethrowUnlessStaleExtensionError(new Error("Extension context invalidated"))
+    ).not.toThrow();
+    expect(() =>
+      rethrowUnlessStaleExtensionError(
+        new Error("Access to storage is not allowed from this context")
+      )
     ).not.toThrow();
   });
 
@@ -103,6 +118,22 @@ describe("extensionContext", () => {
     });
 
     await expect(safeRuntimeSendMessage({ type: "TEST" })).resolves.toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("swallows storage access denied errors from session storage", async () => {
+    vi.stubGlobal("chrome", {
+      runtime: { id: "test-extension-id" },
+      storage: {
+        session: {
+          get: vi.fn().mockRejectedValue(
+            new Error("Access to storage is not allowed from this context")
+          ),
+        },
+      },
+    });
+
+    await expect(safeStorageSessionGet("tabScanSnapshot:1")).resolves.toEqual({});
     vi.unstubAllGlobals();
   });
 });

@@ -9,7 +9,24 @@ import {
   copyEnrichmentExportTxtToClipboard,
   downloadEnrichmentExportFile,
   type EnrichmentExportFileFormat,
+  type NormalizedEnrichmentRecord,
 } from "../lib/enrichmentExport";
+import {
+  downloadTrayTemplateExportFile,
+  getExportTemplateLabel,
+  isExportTemplateId,
+  listExportTemplateIds,
+} from "../lib/exportTemplates";
+import { getTabScanTrayFilter } from "../lib/tabScanSnapshotStorage";
+import {
+  buildTabScanIocListClipboardText,
+  buildTraySubsetEnrichmentRecords,
+  filterTabScanSummaryEntries,
+  resolveTrayCopyFeedback,
+  resolveTrayTemplateExportFeedback,
+  type IocTypeFilter,
+  type TabScanSummary,
+} from "../lib/tabScanSummary";
 import { safeOpenOptionsPage } from "../lib/extensionContext";
 import {
   buildSourceStatusBadgeClassName,
@@ -42,6 +59,7 @@ import {
   type AxisPoint,
   type HoverCardViewport,
 } from "./hoverCardPosition";
+import { getTabScanSummaryForCurrentTab } from "./tabScanSummaryContent";
 import { formatRawVendorJsonForDisplay } from "../lib/enrichmentRawResponse";
 import {
   createHoverCardRiskReasoningSection,
@@ -107,6 +125,18 @@ export const HOVER_CARD_EXPORT_DROPDOWN_MENU_CLASS =
   "vera5-hover-card-export-dropdown-menu";
 export const HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS =
   "vera5-hover-card-export-dropdown-item";
+export const HOVER_CARD_EXPORT_FOOTER_CLASS = "vera5-hover-card-export-footer";
+export const HOVER_CARD_SCAN_EXPORT_STATUS_CLASS =
+  "vera5-hover-card-scan-export-status";
+export const HOVER_CARD_SCAN_EXPORT_CLASS = "vera5-hover-card-scan-export";
+export const HOVER_CARD_SCAN_EXPORT_TEMPLATE_ROW_CLASS =
+  "vera5-hover-card-scan-export-template-row";
+export const HOVER_CARD_SCAN_EXPORT_TEMPLATE_LABEL_CLASS =
+  "vera5-hover-card-scan-export-template-label";
+export const HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_CLASS =
+  "vera5-hover-card-scan-export-template-select";
+export const HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID =
+  "vera5-hover-card-scan-export-template-select";
 export const HOVER_CARD_SECTION_HEADING_CLASS = "vera5-hover-card-section-heading";
 export const HOVER_CARD_INTEL_SUMMARY_CLASS = "vera5-hover-card-intel-summary";
 
@@ -471,14 +501,14 @@ function createRateLimitRetryHint(retryHint: string, doc: Document): HTMLElement
   return hint;
 }
 
-function createCopyButton(
+function createCopyIndicatorButton(
   value: string,
   doc: Document
 ): HTMLButtonElement {
   const button = doc.createElement("button");
   button.type = "button";
   button.className = HOVER_CARD_COPY_BUTTON_CLASS;
-  button.textContent = "Copy";
+  button.textContent = "Copy Indicator";
   button.setAttribute("aria-label", `Copy indicator ${value}`);
 
   button.addEventListener("click", () => {
@@ -490,7 +520,7 @@ function createCopyButton(
       button.classList.add("vera5-hover-card-copy--copied");
       const docView = doc.defaultView ?? window;
       scheduleCopyFeedbackReset(() => {
-        button.textContent = "Copy";
+        button.textContent = "Copy Indicator";
         button.classList.remove("vera5-hover-card-copy--copied");
       }, docView);
     });
@@ -634,22 +664,353 @@ function buildExportFormatActions(
   }));
 }
 
+function buildScanListCopyDropdownActions(
+  doc: Document,
+  statusEl: HTMLElement
+): readonly ExportDropdownItem[] {
+  const runCopyAll = (): void => {
+    const syncContext = resolveScanListExportContextSync();
+    if (syncContext && syncContext.summary.entries.length > 0) {
+      void copyTextToClipboard(
+        buildTabScanIocListClipboardText(syncContext.summary.entries)
+      ).then((copied) => {
+        setScanExportStatus(
+          statusEl,
+          resolveTrayCopyFeedback({
+            copied,
+            count: syncContext.summary.entries.length,
+            filtered: false,
+          }),
+          copied
+        );
+      });
+      return;
+    }
+
+    void loadScanListExportContext().then((context) => {
+      if (!context || context.summary.entries.length === 0) {
+        setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+        return;
+      }
+      void copyTextToClipboard(
+        buildTabScanIocListClipboardText(context.summary.entries)
+      ).then((copied) => {
+        setScanExportStatus(
+          statusEl,
+          resolveTrayCopyFeedback({
+            copied,
+            count: context.summary.entries.length,
+            filtered: false,
+          }),
+          copied
+        );
+      });
+    });
+  };
+
+  const runCopyFiltered = (): void => {
+    const syncContext = resolveScanListExportContextSync();
+    if (syncContext) {
+      const filteredEntries = filterTabScanSummaryEntries(
+        syncContext.summary.entries,
+        syncContext.filter
+      );
+      if (filteredEntries.length === 0) {
+        setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+        return;
+      }
+      void copyTextToClipboard(
+        buildTabScanIocListClipboardText(filteredEntries)
+      ).then((copied) => {
+        setScanExportStatus(
+          statusEl,
+          resolveTrayCopyFeedback({
+            copied,
+            count: filteredEntries.length,
+            filtered: true,
+          }),
+          copied
+        );
+      });
+      return;
+    }
+
+    void loadScanListExportContext().then((context) => {
+      if (!context) {
+        setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+        return;
+      }
+      const filteredEntries = filterTabScanSummaryEntries(
+        context.summary.entries,
+        context.filter
+      );
+      if (filteredEntries.length === 0) {
+        setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+        return;
+      }
+      void copyTextToClipboard(
+        buildTabScanIocListClipboardText(filteredEntries)
+      ).then((copied) => {
+        setScanExportStatus(
+          statusEl,
+          resolveTrayCopyFeedback({
+            copied,
+            count: filteredEntries.length,
+            filtered: true,
+          }),
+          copied
+        );
+      });
+    });
+  };
+
+  return [
+    {
+      label: "Copy all",
+      action: runCopyAll,
+    },
+    {
+      label: "Copy filtered",
+      action: runCopyFiltered,
+    },
+  ];
+}
+
+function buildCopyDropdownActions(
+  buildRecord: () => ReturnType<typeof buildExportRecordFromPayload>,
+  doc: Document,
+  statusEl: HTMLElement
+): readonly ExportDropdownItem[] {
+  return [
+    ...buildScanListCopyDropdownActions(doc, statusEl),
+    ...buildExportFormatActions(buildRecord, doc, "copy"),
+  ];
+}
+
+export type ScanListExportContext = {
+  summary: TabScanSummary;
+  filter: IocTypeFilter;
+};
+
+function setScanExportStatus(
+  statusEl: HTMLElement,
+  message: string,
+  success: boolean
+): void {
+  statusEl.textContent = message;
+  statusEl.hidden = message.length === 0;
+  statusEl.classList.remove(
+    "vera5-hover-card-scan-export-status--success",
+    "vera5-hover-card-scan-export-status--error"
+  );
+  statusEl.classList.add(
+    success
+      ? "vera5-hover-card-scan-export-status--success"
+      : "vera5-hover-card-scan-export-status--error"
+  );
+}
+
+const SCAN_EXPORT_NO_DATA_MESSAGE =
+  "Scan this page first to export detected indicators.";
+
+const SCAN_EXPORT_PREPARING_MESSAGE = "Preparing export…";
+
+type ScanExportCache = {
+  context: ScanListExportContext | null;
+  records: NormalizedEnrichmentRecord[];
+};
+
+let scanExportCache: ScanExportCache | null = null;
+let scanExportCachePromise: Promise<ScanExportCache> | null = null;
+
+type ScanListExportContextProvider = () => ScanListExportContext | null;
+let scanListExportContextProvider: ScanListExportContextProvider | null = null;
+
+export function setScanListExportContextProvider(
+  provider: ScanListExportContextProvider | null
+): void {
+  scanListExportContextProvider = provider;
+}
+
+function resolveScanListExportContextSync(): ScanListExportContext | null {
+  if (scanListExportContextProvider) {
+    return scanListExportContextProvider();
+  }
+  return scanExportCache?.context ?? null;
+}
+
+async function refreshScanExportCache(): Promise<ScanExportCache> {
+  try {
+    const context = resolveScanListExportContextSync() ?? (await loadScanListExportContext());
+    if (!context) {
+      return { context: null, records: [] };
+    }
+
+    const filteredEntries = filterTabScanSummaryEntries(
+      context.summary.entries,
+      context.filter
+    );
+    if (filteredEntries.length === 0) {
+      return { context, records: [] };
+    }
+
+    const records = await buildTraySubsetEnrichmentRecords(filteredEntries);
+    return { context, records };
+  } catch {
+    return { context: null, records: [] };
+  }
+}
+
+function warmScanExportCache(): void {
+  scanExportCachePromise = refreshScanExportCache().then((cache) => {
+    scanExportCache = cache;
+    return cache;
+  });
+}
+
+function resetScanExportCache(): void {
+  scanExportCache = null;
+  scanExportCachePromise = null;
+}
+
+function createTemplateExportRow(
+  doc: Document,
+  statusEl: HTMLElement
+): HTMLElement {
+  const templateRow = doc.createElement("div");
+  templateRow.className = HOVER_CARD_SCAN_EXPORT_TEMPLATE_ROW_CLASS;
+  templateRow.setAttribute("role", "group");
+  templateRow.setAttribute("aria-label", "Export ticket templates");
+
+  const templateLabel = doc.createElement("label");
+  templateLabel.className = HOVER_CARD_SCAN_EXPORT_TEMPLATE_LABEL_CLASS;
+  templateLabel.htmlFor = HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID;
+  templateLabel.textContent = "Template";
+
+  const templateSelect = doc.createElement("select");
+  templateSelect.id = HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID;
+  templateSelect.className = HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_CLASS;
+  for (const templateId of listExportTemplateIds()) {
+    const option = doc.createElement("option");
+    option.value = templateId;
+    option.textContent = getExportTemplateLabel(templateId);
+    templateSelect.appendChild(option);
+  }
+  templateSelect.value = "analyst-update";
+
+  const exportTemplateButton = doc.createElement("button");
+  exportTemplateButton.type = "button";
+  exportTemplateButton.className = HOVER_CARD_EXPORT_BUTTON_CLASS;
+  exportTemplateButton.textContent = "Export template";
+  exportTemplateButton.setAttribute(
+    "aria-label",
+    "Export filtered indicators using the selected template"
+  );
+
+  exportTemplateButton.addEventListener("click", () => {
+    const selectedTemplate = templateSelect.value;
+    if (!isExportTemplateId(selectedTemplate)) {
+      return;
+    }
+
+    const runTemplateExport = (cache: ScanExportCache): boolean => {
+      if (!cache.context) {
+        setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+        return false;
+      }
+      if (cache.records.length === 0) {
+        setScanExportStatus(statusEl, SCAN_EXPORT_NO_DATA_MESSAGE, false);
+        return false;
+      }
+
+      downloadTrayTemplateExportFile(selectedTemplate, cache.records, doc);
+      setScanExportStatus(
+        statusEl,
+        resolveTrayTemplateExportFeedback({
+          success: true,
+          count: cache.records.length,
+          templateId: selectedTemplate,
+        }),
+        true
+      );
+      return true;
+    };
+
+    if (scanExportCache && scanExportCache.records.length > 0) {
+      runTemplateExport(scanExportCache);
+      warmScanExportCache();
+      return;
+    }
+
+    setScanExportStatus(statusEl, SCAN_EXPORT_PREPARING_MESSAGE, false);
+    void (scanExportCachePromise ?? refreshScanExportCache())
+      .then((cache) => {
+        scanExportCache = cache;
+        if (!runTemplateExport(cache)) {
+          warmScanExportCache();
+          return;
+        }
+        warmScanExportCache();
+      })
+      .catch(() => {
+        setScanExportStatus(
+          statusEl,
+          resolveTrayTemplateExportFeedback({
+            success: false,
+            count: 0,
+            templateId: selectedTemplate,
+          }),
+          false
+        );
+      });
+  });
+
+  templateRow.append(templateLabel, templateSelect, exportTemplateButton);
+  return templateRow;
+}
+
+async function loadScanListExportContext(): Promise<ScanListExportContext | null> {
+  const syncContext = resolveScanListExportContextSync();
+  if (syncContext) {
+    return syncContext;
+  }
+
+  const summary = await getTabScanSummaryForCurrentTab();
+  if (!summary || summary.entries.length === 0) {
+    return null;
+  }
+  const filter = await getTabScanTrayFilter(summary.tabId);
+  return { summary, filter };
+}
+
 function createExportSection(
   payload: HoverCardOverlayPayload,
   doc: Document
 ): HTMLElement {
   ensureExportDropdownDismiss(doc);
+  resetScanExportCache();
+  warmScanExportCache();
 
   const section = doc.createElement("section");
   section.className = HOVER_CARD_EXPORT_SECTION_CLASS;
   section.setAttribute("aria-label", "Export case artifacts");
 
-  const actions = doc.createElement("div");
-  actions.className = HOVER_CARD_EXPORT_ACTIONS_CLASS;
+  const statusEl = doc.createElement("p");
+  statusEl.className = HOVER_CARD_SCAN_EXPORT_STATUS_CLASS;
+  statusEl.hidden = true;
+  statusEl.setAttribute("aria-live", "polite");
+
+  const footer = doc.createElement("div");
+  footer.className = HOVER_CARD_EXPORT_FOOTER_CLASS;
+
+  const indicatorActions = doc.createElement("div");
+  indicatorActions.className = HOVER_CARD_EXPORT_ACTIONS_CLASS;
+  indicatorActions.setAttribute("role", "group");
+  indicatorActions.setAttribute("aria-label", "Export and copy case artifacts");
 
   const buildRecord = () => buildExportRecordFromPayload(payload);
 
-  actions.appendChild(
+  indicatorActions.appendChild(
     createActionDropdown(
       "Export",
       "Export case artifacts as a file",
@@ -657,16 +1018,21 @@ function createExportSection(
       doc
     )
   );
-  actions.appendChild(
+  indicatorActions.appendChild(
     createActionDropdown(
       "Copy",
       "Copy case artifacts to the clipboard",
-      buildExportFormatActions(buildRecord, doc, "copy"),
+      buildCopyDropdownActions(buildRecord, doc, statusEl),
       doc
     )
   );
 
-  section.appendChild(actions);
+  footer.appendChild(indicatorActions);
+  footer.appendChild(createTemplateExportRow(doc, statusEl));
+  footer.appendChild(statusEl);
+
+  section.appendChild(footer);
+
   return section;
 }
 
@@ -727,9 +1093,29 @@ export function ensureHoverCardHost(doc: Document = document): HTMLElement {
   return host;
 }
 
+export type BuildHoverCardPanelOptions = {
+  detailClear?: {
+    onClear: () => void;
+  };
+};
+
+function createDetailClearButton(
+  detailClear: NonNullable<BuildHoverCardPanelOptions["detailClear"]>,
+  doc: Document
+): HTMLButtonElement {
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = "vera5-hover-card-detail-clear";
+  button.textContent = "↻";
+  button.setAttribute("aria-label", "Clear indicator details");
+  button.addEventListener("click", detailClear.onClear);
+  return button;
+}
+
 export function buildHoverCardPanel(
   payload: HoverCardOverlayPayload,
-  doc: Document = document
+  doc: Document = document,
+  options: BuildHoverCardPanelOptions = {}
 ): HTMLElement {
   ensureVera5UiStyles(doc);
 
@@ -820,7 +1206,14 @@ export function buildHoverCardPanel(
   typeRow.className = "vera5-hover-card-type";
   typeRow.textContent = formatTypeLabel(payload.type);
   headerRow.appendChild(typeRow);
-  headerRow.appendChild(createCopyButton(payload.value, doc));
+
+  const headerActions = doc.createElement("div");
+  headerActions.className = "vera5-hover-card-header-actions";
+  headerActions.appendChild(createCopyIndicatorButton(payload.value, doc));
+  if (options.detailClear) {
+    headerActions.appendChild(createDetailClearButton(options.detailClear, doc));
+  }
+  headerRow.appendChild(headerActions);
   panel.appendChild(headerRow);
 
   const valueRow = doc.createElement("p");

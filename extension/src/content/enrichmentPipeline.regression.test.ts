@@ -120,7 +120,12 @@ describe("enrichment pipeline regression", () => {
   it("scan → enrich (single + parallel multi-source) → cache hit → manual refresh → global cooldown", async () => {
     const { root, highlight } = mountHighlightedIpv4();
     const scanResponse = await handleScanPageRequest(root);
-    expect(scanResponse).toEqual({ ok: true, payload: { count: 1 } });
+    expect(scanResponse).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 1 }),
+      })
+    );
 
     const requestMock = vi.mocked(
       enrichmentMessageClient.requestEnrichmentFromServiceWorker

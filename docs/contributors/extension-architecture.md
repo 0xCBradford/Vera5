@@ -8,7 +8,7 @@ Vera5 ships as a Manifest V3 Chromium extension under `extension/`. TypeScript, 
 |---------|------|---------|
 | Service worker | `extension/src/background/` | No DOM. Routes messages, runs enrichment, cache, cooldown. |
 | Content scripts | `extension/src/content/` | Page DOM. Detection, highlights, **production hover overlay** (`hoverCardOverlay.ts`). |
-| Popup | `extension/src/popup/` | Toolbar UI: enable, highlights, scan, IOC tray with type filters and count summary. |
+| Popup | `extension/src/popup/` | Toolbar UI: enable, highlights, scan, IOC tray with type filters, count summary, copy-all/copy-filtered actions, Markdown/JSON subset export, ticket template export, source-attributed non-blocking per-row enrichment hints from stored cache, empty/post-scan states, row navigation to page highlights, and stale-highlight feedback when the page DOM changed. |
 | Options | `extension/src/options/` | Settings page: keys, toggles, cache clear, export/import. |
 | React components | `extension/src/components/` | Hover card and risk score for **unit tests and dev shell only** — not injected into live tabs. |
 
@@ -23,8 +23,8 @@ Analyst-facing behavior on real pages uses the **content-script overlay**, not t
 - `cache.ts` — enrichment response cache
 - `enrichment*.ts`, `abuseipdbConnector.ts`, `otxConnector.ts` — vendor calls and normalization
 - `scoring.ts`, `hoverCardEnrichment.ts` — composite score and card view-model
-- `enrichmentExport.ts` — normalized enrichment records; markdown and JSON export ([export field contract](../export-artifacts.md))
-- `tabScanSnapshot.ts`, `tabScanSummary.ts`, `tabScanSummaryClient.ts` — per-tab scan snapshot storage and summary consumers
+- `enrichmentExport.ts`, `exportTemplates.ts` — normalized enrichment records; markdown and JSON export; tray subset export; pluggable ticket templates
+- `tabScanSnapshot.ts`, `tabScanSummary.ts`, `tabScanSummaryClient.ts` — per-tab scan snapshot storage, summary consumers, and tray subset export record builders
 - `pivots.ts`, `settingsExport.ts`, `vera5UiStyles.ts` — pivots, export, shared styles
 
 ## Message flow (simplified)
@@ -37,7 +37,7 @@ sequenceDiagram
   participant Store as chrome.storage.local
   participant Vendor as Third-party APIs
 
-  Popup->>SW: Scan and settings messages
+  Popup->>Content: Scan and navigate-to-anchor messages
   Popup->>SW: GET_TAB_SCAN_SUMMARY
   Content->>SW: Enrich, scan snapshot, and summary messages
   SW->>Store: Read and write settings and cache

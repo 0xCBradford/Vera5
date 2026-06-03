@@ -1,5 +1,9 @@
 import type { MessageResponse } from "./messages";
-import { buildTabScanSummary } from "./tabScanSummary";
+import {
+  buildTabScanSummary,
+  type IocTypeFilter,
+} from "./tabScanSummary";
+import { IOC_TYPE } from "./iocRegex";
 import {
   isTabScanSnapshotPayload,
   tabScanSnapshotStorageKey,
@@ -7,34 +11,17 @@ import {
   type TabScanSnapshotPayload,
 } from "./tabScanSnapshot";
 
-async function sessionGet(
-  keys: string | string[]
-): Promise<Record<string, unknown>> {
-  if (typeof chrome === "undefined" || !chrome.storage?.session) {
-    return {};
-  }
-  return chrome.storage.session.get(keys);
-}
-
-async function sessionSet(items: Record<string, unknown>): Promise<void> {
-  if (typeof chrome === "undefined" || !chrome.storage?.session) {
-    return;
-  }
-  await chrome.storage.session.set(items);
-}
-
-async function sessionRemove(keys: string | string[]): Promise<void> {
-  if (typeof chrome === "undefined" || !chrome.storage?.session) {
-    return;
-  }
-  await chrome.storage.session.remove(keys);
-}
+import {
+  safeStorageSessionGet,
+  safeStorageSessionRemove,
+  safeStorageSessionSet,
+} from "./extensionContext";
 
 export async function saveTabScanSnapshot(
   tabId: number,
   snapshot: TabScanSnapshot
 ): Promise<void> {
-  await sessionSet({
+  await safeStorageSessionSet({
     [tabScanSnapshotStorageKey(tabId)]: snapshot,
   });
 }
@@ -43,7 +30,7 @@ export async function getTabScanSnapshot(
   tabId: number
 ): Promise<TabScanSnapshot | null> {
   const key = tabScanSnapshotStorageKey(tabId);
-  const result = await sessionGet(key);
+  const result = await safeStorageSessionGet(key);
   const value = result[key];
   if (!isTabScanSnapshotPayload(value)) {
     return null;
@@ -52,7 +39,39 @@ export async function getTabScanSnapshot(
 }
 
 export async function clearTabScanSnapshot(tabId: number): Promise<void> {
-  await sessionRemove(tabScanSnapshotStorageKey(tabId));
+  await safeStorageSessionRemove(tabScanSnapshotStorageKey(tabId));
+}
+
+const IOC_TYPES = new Set<string>(Object.values(IOC_TYPE));
+
+export function tabScanTrayFilterStorageKey(tabId: number): string {
+  return `tabScanTrayFilter:${tabId}`;
+}
+
+function isIocTypeFilter(value: unknown): value is IocTypeFilter {
+  return value === "all" || (typeof value === "string" && IOC_TYPES.has(value));
+}
+
+export async function saveTabScanTrayFilter(
+  tabId: number,
+  filter: IocTypeFilter
+): Promise<void> {
+  await safeStorageSessionSet({
+    [tabScanTrayFilterStorageKey(tabId)]: filter,
+  });
+}
+
+export async function getTabScanTrayFilter(
+  tabId: number
+): Promise<IocTypeFilter> {
+  const key = tabScanTrayFilterStorageKey(tabId);
+  const result = await safeStorageSessionGet(key);
+  const value = result[key];
+  return isIocTypeFilter(value) ? value : "all";
+}
+
+export async function clearTabScanTrayFilter(tabId: number): Promise<void> {
+  await safeStorageSessionRemove(tabScanTrayFilterStorageKey(tabId));
 }
 
 export async function handleTabScanSnapshotMessage(
@@ -68,7 +87,7 @@ export async function handleTabScanSnapshotMessage(
   }
 
   await saveTabScanSnapshot(tabId, { ...snapshot, tabId });
-  return { ok: true };
+  return { ok: true, payload: { tabId } };
 }
 
 export async function handleGetTabScanSummaryMessage(

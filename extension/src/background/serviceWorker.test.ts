@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MESSAGE, scanPageMessage } from "../lib/messages";
+import { MESSAGE, scanPageMessage, toggleWorkspaceMessage } from "../lib/messages";
 
 const extensionRoot = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -36,12 +36,14 @@ describe("scan-page keyboard shortcut manifest", () => {
 
 describe("service worker scan-page command routing", () => {
   let onCommandCallback: ((command: string) => void) | undefined;
+  let onActionClickedCallback: (() => void) | undefined;
   const tabsQuery = vi.fn();
   const tabsSendMessage = vi.fn();
 
   beforeEach(async () => {
     vi.resetModules();
     onCommandCallback = undefined;
+    onActionClickedCallback = undefined;
     tabsQuery.mockReset();
     tabsSendMessage.mockReset();
     tabsQuery.mockResolvedValue([{ id: 42 }]);
@@ -51,6 +53,13 @@ describe("service worker scan-page command routing", () => {
       runtime: {
         onMessage: { addListener: vi.fn() },
         onInstalled: { addListener: vi.fn() },
+      },
+      action: {
+        onClicked: {
+          addListener: (callback: () => void) => {
+            onActionClickedCallback = callback;
+          },
+        },
       },
       commands: {
         onCommand: {
@@ -106,5 +115,17 @@ describe("service worker scan-page command routing", () => {
     onCommandCallback!("scan-page");
     await Promise.resolve();
     expect(tabsSendMessage).not.toHaveBeenCalled();
+  });
+
+  it("toggles the workspace when the toolbar action is clicked", async () => {
+    expect(onActionClickedCallback).toBeDefined();
+    onActionClickedCallback!();
+    await vi.waitFor(() => {
+      expect(tabsSendMessage).toHaveBeenCalledWith(42, toggleWorkspaceMessage());
+    });
+    expect(tabsQuery).toHaveBeenCalledWith({
+      active: true,
+      currentWindow: true,
+    });
   });
 });

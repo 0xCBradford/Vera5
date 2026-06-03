@@ -101,7 +101,7 @@ describe("tabScanSnapshotStorage", () => {
       tab: { id: 99 },
     } as chrome.runtime.MessageSender);
 
-    expect(response).toEqual({ ok: true });
+    expect(response).toEqual({ ok: true, payload: { tabId: 99 } });
     expect(await getTabScanSnapshot(99)).toEqual({ ...payload, tabId: 99 });
   });
 

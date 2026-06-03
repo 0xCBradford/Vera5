@@ -1,7 +1,7 @@
 import type { MessageResponse } from "../lib/messages";
 import { tabScanSnapshotMessage } from "../lib/messages";
 import {
-  rethrowUnlessStaleExtensionError,
+  logUnlessBenignExtensionError,
   runWithExtensionContext,
   safeRuntimeSendMessage,
 } from "../lib/extensionContext";
@@ -9,6 +9,7 @@ import {
   buildTabScanSnapshotEntriesFromMatches,
   buildTabScanSnapshotPayload,
   type TabScanSnapshotEntry,
+  type TabScanSnapshotPayload,
 } from "../lib/tabScanSnapshot";
 import {
   CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED,
@@ -76,14 +77,35 @@ function buildScanSnapshotEntries(
   return buildTabScanSnapshotEntriesFromMatches(matches);
 }
 
+export type ScanPageResultPayload = {
+  count: number;
+  tabId: number | null;
+  snapshot: TabScanSnapshotPayload;
+};
+
 export async function publishTabScanSnapshot(
   entries: ReadonlyArray<TabScanSnapshotEntry>
-): Promise<void> {
+): Promise<{ tabId: number | null; snapshot: TabScanSnapshotPayload }> {
   const snapshot = buildTabScanSnapshotPayload({
     pageUrl: window.location.href,
     entries: [...entries],
   });
-  await safeRuntimeSendMessage(tabScanSnapshotMessage(snapshot));
+  const response = await safeRuntimeSendMessage(tabScanSnapshotMessage(snapshot));
+  if (!response || typeof response !== "object" || !("ok" in response)) {
+    return { tabId: null, snapshot };
+  }
+  if (response.ok !== true) {
+    return { tabId: null, snapshot };
+  }
+  const payload = (response as { payload?: unknown }).payload;
+  const tabId =
+    payload !== null &&
+    typeof payload === "object" &&
+    "tabId" in payload &&
+    typeof (payload as { tabId: unknown }).tabId === "number"
+      ? (payload as { tabId: number }).tabId
+      : null;
+  return { tabId, snapshot };
 }
 
 export async function handleScanPageRequest(
@@ -94,9 +116,14 @@ export async function handleScanPageRequest(
   const highlightEnabled = await getHighlightEnabledForContent();
   const anchorLinks = applyHighlightForScan(matches, root, highlightEnabled);
   const snapshotEntries = buildScanSnapshotEntries(matches, anchorLinks);
-  await publishTabScanSnapshot(snapshotEntries);
+  const { tabId, snapshot } = await publishTabScanSnapshot(snapshotEntries);
   logIocDetectionCount(matches.length);
-  return { ok: true, payload: { count: matches.length } };
+  const payload: ScanPageResultPayload = {
+    count: matches.length,
+    tabId,
+    snapshot,
+  };
+  return { ok: true, payload };
 }
 
 export function setupScanPageListener(): void {
@@ -107,7 +134,7 @@ export function setupScanPageListener(): void {
     void handleScanPageRequest()
       .then(sendResponse)
       .catch((error) => {
-        rethrowUnlessStaleExtensionError(error);
+        logUnlessBenignExtensionError(error);
       });
     return true;
   });

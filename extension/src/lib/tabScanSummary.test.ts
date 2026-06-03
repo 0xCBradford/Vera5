@@ -1,11 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as cache from "./cache";
+import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
 import {
   buildTabScanCountSummaryText,
+  buildTabScanIocListClipboardText,
   buildTabScanSummary,
+  buildTrayRowNavigationAriaLabel,
+  buildTraySubsetEnrichmentRecords,
   countIocsByType,
   filterTabScanSummaryEntries,
+  formatTrayRowEnrichmentHint,
   isTabScanSummary,
   listIocTypesPresentInSummary,
+  loadTrayEntryEnrichmentStatuses,
+  pickLatestTrayEnrichmentStatus,
+  resolveTrayEntryEnrichmentStatus,
   TAB_SCAN_SUMMARY_SCHEMA_VERSION,
 } from "./tabScanSummary";
 import {
@@ -70,5 +79,117 @@ describe("tabScanSummary", () => {
       "3 indicators · 1 CVE · 2 IP"
     );
     expect(listIocTypesPresentInSummary(summary)).toEqual(["cve", "ipv4"]);
+  });
+
+  it("builds newline-separated IOC values for clipboard copy", () => {
+    expect(buildTabScanIocListClipboardText(snapshot.entries)).toBe(
+      "8.8.8.8\n192.0.2.1\nCVE-2021-44228"
+    );
+    expect(buildTabScanIocListClipboardText([])).toBe("");
+  });
+
+  it("builds enrichment export records for tray subset entries", async () => {
+    const readSpy = vi
+      .spyOn(cache, "readCachedEnrichmentSourceResult")
+      .mockResolvedValue(null);
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: () => Promise.resolve({}),
+          set: () => Promise.resolve(),
+        },
+      },
+    });
+
+    const records = await buildTraySubsetEnrichmentRecords([snapshot.entries[0]!]);
+
+    expect(records).toHaveLength(1);
+    expect(records[0]?.ioc).toBe("8.8.8.8");
+    expect(records[0]?.iocType).toBe("ipv4");
+
+    readSpy.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  it("picks the latest stored enrichment status across sources", () => {
+    expect(
+      pickLatestTrayEnrichmentStatus([
+        {
+          fetchedAtMs: 100,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          fromCache: true,
+        },
+        {
+          fetchedAtMs: 200,
+          sourceLabel: "OTX",
+          status: "error",
+        },
+      ])
+    ).toEqual({
+      badgeText: "Error",
+      sourceLabel: "OTX",
+      status: "error",
+    });
+  });
+
+  it("formats source-attributed tray hints and navigation labels", () => {
+    const status = {
+      badgeText: "Cached",
+      sourceLabel: "OTX",
+      status: "ok" as const,
+      fromCache: true,
+    };
+    expect(formatTrayRowEnrichmentHint(status)).toBe("OTX · Cached");
+    expect(buildTrayRowNavigationAriaLabel("8.8.8.8")).toBe(
+      "View 8.8.8.8 on page"
+    );
+    expect(buildTrayRowNavigationAriaLabel("8.8.8.8", status)).toBe(
+      "View 8.8.8.8 on page. OTX · Cached"
+    );
+  });
+
+  it("loads per-row enrichment statuses from stored cache results", async () => {
+    vi.spyOn(cache, "readStoredEnrichmentSourceResult").mockImplementation(
+      async (value, sourceId) => {
+        if (value === "8.8.8.8" && sourceId === "otx") {
+          return {
+            sourceId: "otx",
+            sourceLabel: "OTX",
+            status: ENRICHMENT_SOURCE_STATUS.OK,
+            summary: "2 pulses",
+            fromCache: true,
+            fetchedAt: new Date(1_700_000_000_000).toISOString(),
+          };
+        }
+        return null;
+      }
+    );
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: () => Promise.resolve({}),
+          set: () => Promise.resolve(),
+        },
+      },
+    });
+
+    const summary = buildTabScanSummary(snapshot);
+    await expect(resolveTrayEntryEnrichmentStatus(summary.entries[0]!)).resolves.toEqual({
+      badgeText: "Cached",
+      sourceLabel: "OTX",
+      status: "ok",
+      fromCache: true,
+    });
+    await expect(loadTrayEntryEnrichmentStatuses(summary.entries)).resolves.toEqual({
+      "vera5-hl-1": {
+        badgeText: "Cached",
+        sourceLabel: "OTX",
+        status: "ok",
+        fromCache: true,
+      },
+    });
+
+    vi.unstubAllGlobals();
   });
 });

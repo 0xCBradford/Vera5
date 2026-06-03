@@ -1,4 +1,27 @@
+import {
+  readCachedEnrichmentSourceResult,
+  readStoredEnrichmentSourceResult,
+} from "./cache";
+import {
+  buildNormalizedEnrichmentRecord,
+  type NormalizedEnrichmentRecord,
+  type TraySubsetExportFormat,
+} from "./enrichmentExport";
+import {
+  getExportTemplateLabel,
+  type ExportTemplateId,
+} from "./exportTemplates";
+import {
+  buildHoverCardSourceEntries,
+  formatSourceStatusBadge,
+  type HoverCardSourceEntryStatus,
+} from "./hoverCardEnrichment";
 import { IOC_TYPE, type IocType } from "./iocRegex";
+import {
+  API_KEY_SLOTS,
+  getVera5Settings,
+  listDisabledEnrichmentSources,
+} from "./storage";
 import type { TabScanSnapshot, TabScanSnapshotEntry } from "./tabScanSnapshot";
 
 export const TAB_SCAN_SUMMARY_SCHEMA_VERSION = 1;
@@ -79,6 +102,161 @@ export function buildTabScanCountSummaryText(summary: TabScanSummary): string {
   return parts.join(" · ");
 }
 
+export function buildTabScanIocListClipboardText(
+  entries: ReadonlyArray<TabScanSummaryEntry>
+): string {
+  return entries.map((entry) => entry.value).join("\n");
+}
+
+export type TrayEntryEnrichmentStatus = {
+  badgeText: string;
+  sourceLabel: string;
+  status: HoverCardSourceEntryStatus;
+  fromCache?: boolean;
+};
+
+export type TrayEnrichmentStatusCandidate = {
+  fetchedAtMs: number;
+  sourceLabel: string;
+  status: HoverCardSourceEntryStatus;
+  fromCache?: boolean;
+};
+
+export function pickLatestTrayEnrichmentStatus(
+  candidates: ReadonlyArray<TrayEnrichmentStatusCandidate>
+): TrayEntryEnrichmentStatus | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const latest = candidates.reduce((best, current) =>
+    current.fetchedAtMs > best.fetchedAtMs ? current : best
+  );
+  const fromCache =
+    latest.status === "ok" && latest.fromCache === true ? true : undefined;
+
+  return {
+    badgeText: formatSourceStatusBadge(latest.status, fromCache),
+    sourceLabel: latest.sourceLabel,
+    status: latest.status,
+    ...(fromCache === true ? { fromCache: true } : {}),
+  };
+}
+
+export async function resolveTrayEntryEnrichmentStatus(
+  entry: TabScanSummaryEntry
+): Promise<TrayEntryEnrichmentStatus | null> {
+  const candidates: TrayEnrichmentStatusCandidate[] = [];
+
+  for (const sourceId of API_KEY_SLOTS) {
+    const stored = await readStoredEnrichmentSourceResult(entry.value, sourceId);
+    if (!stored?.fetchedAt) {
+      continue;
+    }
+
+    const fetchedAtMs = Date.parse(stored.fetchedAt);
+    if (!Number.isFinite(fetchedAtMs)) {
+      continue;
+    }
+
+    candidates.push({
+      fetchedAtMs,
+      sourceLabel: stored.sourceLabel,
+      status: stored.status,
+      fromCache: stored.fromCache,
+    });
+  }
+
+  return pickLatestTrayEnrichmentStatus(candidates);
+}
+
+export function formatTrayRowEnrichmentHint(
+  status: TrayEntryEnrichmentStatus
+): string {
+  return `${status.sourceLabel} · ${status.badgeText}`;
+}
+
+export function buildTrayRowNavigationAriaLabel(
+  value: string,
+  enrichmentStatus?: TrayEntryEnrichmentStatus | null
+): string {
+  const base = `View ${value} on page`;
+  if (!enrichmentStatus) {
+    return base;
+  }
+  return `${base}. ${formatTrayRowEnrichmentHint(enrichmentStatus)}`;
+}
+
+export async function loadTrayEntryEnrichmentStatuses(
+  entries: ReadonlyArray<TabScanSummaryEntry>
+): Promise<Record<string, TrayEntryEnrichmentStatus>> {
+  const statuses: Record<string, TrayEntryEnrichmentStatus> = {};
+
+  await Promise.all(
+    entries.map(async (entry) => {
+      const status = await resolveTrayEntryEnrichmentStatus(entry);
+      if (status) {
+        statuses[entry.anchorId] = status;
+      }
+    })
+  );
+
+  return statuses;
+}
+
+export async function buildTraySubsetEnrichmentRecords(
+  entries: ReadonlyArray<TabScanSummaryEntry>
+): Promise<NormalizedEnrichmentRecord[]> {
+  if (entries.length === 0) {
+    return [];
+  }
+
+  const settings = await getVera5Settings();
+  const disabledSources = listDisabledEnrichmentSources(
+    settings.enrichmentSourceEnabled
+  );
+  const exportedAt = new Date().toISOString();
+  const records: NormalizedEnrichmentRecord[] = [];
+
+  for (const entry of entries) {
+    const cachedInputs = [];
+    for (const sourceId of API_KEY_SLOTS) {
+      if (disabledSources.includes(sourceId)) {
+        continue;
+      }
+      const cached = await readCachedEnrichmentSourceResult(entry.value, sourceId);
+      if (!cached) {
+        continue;
+      }
+      cachedInputs.push({
+        sourceId: cached.sourceId,
+        sourceLabel: cached.sourceLabel,
+        status: cached.status,
+        summary: cached.summary,
+        tags: cached.tags,
+        fromCache: cached.fromCache,
+        fetchedAt: cached.fetchedAt,
+        errorCode: cached.errorCode,
+        errorMessage: cached.errorMessage,
+        retryHint: cached.retryHint,
+        rawVendorJson: cached.rawVendorJson,
+      });
+    }
+
+    records.push(
+      buildNormalizedEnrichmentRecord({
+        value: entry.value,
+        iocType: entry.type,
+        sourceResults: buildHoverCardSourceEntries(cachedInputs),
+        disabledSources,
+        exportedAt,
+      })
+    );
+  }
+
+  return records;
+}
+
 export function countIocsByType(
   entries: ReadonlyArray<TabScanSummaryEntry>
 ): Partial<Record<IocType, number>> {
@@ -154,4 +332,46 @@ export function isTabScanSummary(value: unknown): value is TabScanSummary {
     return false;
   }
   return record.entries.every(isTabScanSummaryEntry);
+}
+
+export function resolveTrayCopyFeedback(input: {
+  copied: boolean;
+  count: number;
+  filtered: boolean;
+}): string {
+  if (!input.copied) {
+    return "Could not copy to clipboard.";
+  }
+  const noun = input.count === 1 ? "indicator" : "indicators";
+  if (input.filtered) {
+    return `Copied ${input.count} filtered ${noun} to clipboard.`;
+  }
+  return `Copied ${input.count} ${noun} to clipboard.`;
+}
+
+export function resolveTrayExportFeedback(input: {
+  success: boolean;
+  count: number;
+  format: TraySubsetExportFormat;
+}): string {
+  if (!input.success) {
+    return input.format === "markdown"
+      ? "Could not export Markdown."
+      : "Could not export JSON.";
+  }
+  const noun = input.count === 1 ? "indicator" : "indicators";
+  const formatLabel = input.format === "markdown" ? "Markdown" : "JSON";
+  return `Exported ${input.count} ${noun} as ${formatLabel}.`;
+}
+
+export function resolveTrayTemplateExportFeedback(input: {
+  success: boolean;
+  count: number;
+  templateId: ExportTemplateId;
+}): string {
+  if (!input.success) {
+    return `Could not export ${getExportTemplateLabel(input.templateId)}.`;
+  }
+  const noun = input.count === 1 ? "indicator" : "indicators";
+  return `Exported ${input.count} ${noun} as ${getExportTemplateLabel(input.templateId)}.`;
 }

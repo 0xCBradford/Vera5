@@ -605,6 +605,81 @@ export async function copyEnrichmentExportTxtToClipboard(
   return copyTextToClipboard(buildEnrichmentExportTxt(record));
 }
 
+export const TRAY_SUBSET_EXPORT_MARKDOWN_SEPARATOR = "\n\n---\n\n";
+
+export type TraySubsetExportFormat = "markdown" | "json";
+
+export function buildTraySubsetExportMarkdown(
+  records: readonly NormalizedEnrichmentRecord[]
+): string {
+  return records
+    .map((record) => buildEnrichmentExportMarkdown(record))
+    .join(TRAY_SUBSET_EXPORT_MARKDOWN_SEPARATOR);
+}
+
+export function serializeTraySubsetExportJson(
+  records: readonly NormalizedEnrichmentRecord[],
+  pretty = true
+): string {
+  return JSON.stringify(
+    records.map((record) => buildEnrichmentExportDocument(record)),
+    null,
+    pretty ? 2 : undefined
+  );
+}
+
+export async function copyTraySubsetExportMarkdownToClipboard(
+  records: readonly NormalizedEnrichmentRecord[]
+): Promise<boolean> {
+  if (records.length === 0) {
+    return false;
+  }
+  return copyTextToClipboard(buildTraySubsetExportMarkdown(records));
+}
+
+export async function copyTraySubsetExportJsonToClipboard(
+  records: readonly NormalizedEnrichmentRecord[]
+): Promise<boolean> {
+  if (records.length === 0) {
+    return false;
+  }
+  return copyTextToClipboard(serializeTraySubsetExportJson(records));
+}
+
+export function buildTraySubsetExportFilename(
+  format: TraySubsetExportFormat,
+  count: number,
+  exportedAt: string
+): string {
+  const extension = format === "markdown" ? "md" : "json";
+  const stamp = exportedAt.replace(/[:.]/g, "-");
+  return `vera5-tray-export-${count}-iocs-${stamp}.${extension}`;
+}
+
+export function downloadTraySubsetExportFile(
+  records: readonly NormalizedEnrichmentRecord[],
+  format: TraySubsetExportFormat,
+  doc: Document = document
+): void {
+  if (records.length === 0) {
+    return;
+  }
+
+  const exportedAt = records[0]?.exportedAt ?? new Date().toISOString();
+  const content =
+    format === "markdown"
+      ? buildTraySubsetExportMarkdown(records)
+      : serializeTraySubsetExportJson(records);
+  const mimeType = format === "markdown" ? "text/markdown" : "application/json";
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = doc.createElement("a");
+  anchor.href = url;
+  anchor.download = buildTraySubsetExportFilename(format, records.length, exportedAt);
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export type EnrichmentExportFileFormat = "markdown" | "json" | "txt";
 
 function sanitizeEnrichmentExportFilename(ioc: string): string {

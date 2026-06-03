@@ -5,10 +5,18 @@ export function buildExtensionSitePermissionsUrl(
   return `chrome://settings/content/siteDetails?site=${encodeURIComponent(site)}`;
 }
 
+import { safeRuntimeSendMessage } from "./extensionContext";
+import { openSitePermissionsMessage } from "./messages";
+
 export function openExtensionSitePermissionsPage(
   extensionId: string = chrome.runtime.id
 ): void {
-  void chrome.tabs.create({
-    url: buildExtensionSitePermissionsUrl(extensionId),
-  });
+  const url = buildExtensionSitePermissionsUrl(extensionId);
+
+  if (typeof chrome.tabs?.create === "function") {
+    void chrome.tabs.create({ url });
+    return;
+  }
+
+  void safeRuntimeSendMessage(openSitePermissionsMessage());
 }
