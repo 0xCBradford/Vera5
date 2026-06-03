@@ -6,6 +6,7 @@ import {
   getPivotLinks,
   getPivotRecipes,
   PIVOT_PROVIDER,
+  PIVOT_PROVIDER_ORDER,
   type PivotProvider,
 } from "./pivots";
 
@@ -143,24 +144,24 @@ const PIVOT_GOLDEN_CASES: PivotGoldenCase[] = [
   },
 ];
 
-const ALL_PROVIDERS: PivotProvider[] = [
+const LEGACY_PIVOT_PROVIDERS: PivotProvider[] = [
   PIVOT_PROVIDER.VIRUSTOTAL,
   PIVOT_PROVIDER.OTX,
   PIVOT_PROVIDER.ABUSEIPDB,
   PIVOT_PROVIDER.URLSCAN,
 ];
 
-function expectedProviders(
-  expected: PivotExpectation
-): PivotProvider[] {
-  return ALL_PROVIDERS.filter((provider) => expected[provider] != null);
+function expectedPivotLinkProviders(type: IocType, value: string): PivotProvider[] {
+  return PIVOT_PROVIDER_ORDER.filter(
+    (provider) => buildPivotUrl(provider, type, value) !== null
+  );
 }
 
 describe("pivot link templates", () => {
   describe.each(PIVOT_GOLDEN_CASES)(
     "$type pivot URLs for $value",
     ({ type, value, expected }) => {
-      it.each(ALL_PROVIDERS)("buildPivotUrl for %s", (provider) => {
+      it.each(LEGACY_PIVOT_PROVIDERS)("buildPivotUrl for %s", (provider) => {
         const href = buildPivotUrl(provider, type, value);
         const want = expected[provider] ?? null;
         expect(href).toBe(want);
@@ -169,10 +170,10 @@ describe("pivot link templates", () => {
       it("getPivotLinks includes only supported providers in order", () => {
         const links = getPivotLinks(type, value);
         expect(links.map((link) => link.provider)).toEqual(
-          expectedProviders(expected)
+          expectedPivotLinkProviders(type, value)
         );
         for (const link of links) {
-          expect(link.href).toBe(expected[link.provider]);
+          expect(link.href).toBe(buildPivotUrl(link.provider, type, value));
           expect(link.label.length).toBeGreaterThan(0);
         }
       });
@@ -209,7 +210,12 @@ describe("pivot recipes", () => {
       PIVOT_PROVIDER.ABUSEIPDB,
       PIVOT_PROVIDER.OTX,
       PIVOT_PROVIDER.VIRUSTOTAL,
+      PIVOT_PROVIDER.GREYNOISE,
+      PIVOT_PROVIDER.SHODAN,
       PIVOT_PROVIDER.URLSCAN,
+      PIVOT_PROVIDER.CENSYS,
+      PIVOT_PROVIDER.PULSEDIVE,
+      PIVOT_PROVIDER.THREATFOX,
     ]);
     expect(recipes[0]).toMatchObject({
       sourceLabel: "AbuseIPDB",
@@ -228,6 +234,7 @@ describe("pivot recipes", () => {
     expect(recipes.map((recipe) => recipe.provider)).toEqual([
       PIVOT_PROVIDER.VIRUSTOTAL,
       PIVOT_PROVIDER.OTX,
+      PIVOT_PROVIDER.PULSEDIVE,
     ]);
   });
 

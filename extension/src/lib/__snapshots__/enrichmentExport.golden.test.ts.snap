@@ -13,8 +13,16 @@ exports[`golden: enrichment export JSON snapshots > all enrichment sources disab
   "disabledSources": [
     "abuseipdb",
     "otx",
+    "virustotal",
     "urlscan",
-    "greynoise"
+    "greynoise",
+    "shodan",
+    "google_safe_browsing",
+    "pulsedive",
+    "malwarebazaar",
+    "censys",
+    "threatfox",
+    "urlhaus"
   ],
   "score": {
     "mode": "unavailable",
@@ -24,9 +32,9 @@ exports[`golden: enrichment export JSON snapshots > all enrichment sources disab
   "disagreement": false,
   "pivots": [
     {
-      "provider": "virustotal",
-      "label": "VirusTotal",
-      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/8.8.8.8"
     },
     {
       "provider": "otx",
@@ -34,14 +42,39 @@ exports[`golden: enrichment export JSON snapshots > all enrichment sources disab
       "href": "https://otx.alienvault.com/indicator/ip/8.8.8.8"
     },
     {
-      "provider": "abuseipdb",
-      "label": "AbuseIPDB",
-      "href": "https://www.abuseipdb.com/check/8.8.8.8"
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
     },
     {
       "provider": "urlscan",
-      "label": "URLScan",
+      "label": "URLScan.io",
       "href": "https://urlscan.io/search/#ip:8.8.8.8"
+    },
+    {
+      "provider": "greynoise",
+      "label": "GreyNoise",
+      "href": "https://viz.greynoise.io/ip/8.8.8.8"
+    },
+    {
+      "provider": "shodan",
+      "label": "Shodan",
+      "href": "https://www.shodan.io/host/8.8.8.8"
+    },
+    {
+      "provider": "pulsedive",
+      "label": "Pulsedive",
+      "href": "https://pulsedive.com/explore?q=8.8.8.8"
+    },
+    {
+      "provider": "censys",
+      "label": "Censys",
+      "href": "https://search.censys.io/hosts/8.8.8.8"
+    },
+    {
+      "provider": "threatfox",
+      "label": "ThreatFox",
+      "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
     }
   ]
 }"
@@ -92,9 +125,9 @@ exports[`golden: enrichment export JSON snapshots > disagreement callout 1`] = `
   "disagreementNotice": "Sources disagree: compare per-source details before deciding.",
   "pivots": [
     {
-      "provider": "virustotal",
-      "label": "VirusTotal",
-      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/8.8.8.8"
     },
     {
       "provider": "otx",
@@ -102,14 +135,39 @@ exports[`golden: enrichment export JSON snapshots > disagreement callout 1`] = `
       "href": "https://otx.alienvault.com/indicator/ip/8.8.8.8"
     },
     {
-      "provider": "abuseipdb",
-      "label": "AbuseIPDB",
-      "href": "https://www.abuseipdb.com/check/8.8.8.8"
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
     },
     {
       "provider": "urlscan",
-      "label": "URLScan",
+      "label": "URLScan.io",
       "href": "https://urlscan.io/search/#ip:8.8.8.8"
+    },
+    {
+      "provider": "greynoise",
+      "label": "GreyNoise",
+      "href": "https://viz.greynoise.io/ip/8.8.8.8"
+    },
+    {
+      "provider": "shodan",
+      "label": "Shodan",
+      "href": "https://www.shodan.io/host/8.8.8.8"
+    },
+    {
+      "provider": "pulsedive",
+      "label": "Pulsedive",
+      "href": "https://pulsedive.com/explore?q=8.8.8.8"
+    },
+    {
+      "provider": "censys",
+      "label": "Censys",
+      "href": "https://search.censys.io/hosts/8.8.8.8"
+    },
+    {
+      "provider": "threatfox",
+      "label": "ThreatFox",
+      "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
     }
   ]
 }"
@@ -160,9 +218,9 @@ exports[`golden: enrichment export JSON snapshots > multi-source ready enrichmen
   "disagreement": false,
   "pivots": [
     {
-      "provider": "virustotal",
-      "label": "VirusTotal",
-      "href": "https://www.virustotal.com/gui/ip-address/185.220.101.4"
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/185.220.101.4"
     },
     {
       "provider": "otx",
@@ -170,14 +228,39 @@ exports[`golden: enrichment export JSON snapshots > multi-source ready enrichmen
       "href": "https://otx.alienvault.com/indicator/ip/185.220.101.4"
     },
     {
-      "provider": "abuseipdb",
-      "label": "AbuseIPDB",
-      "href": "https://www.abuseipdb.com/check/185.220.101.4"
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/185.220.101.4"
     },
     {
       "provider": "urlscan",
-      "label": "URLScan",
+      "label": "URLScan.io",
       "href": "https://urlscan.io/search/#ip:185.220.101.4"
+    },
+    {
+      "provider": "greynoise",
+      "label": "GreyNoise",
+      "href": "https://viz.greynoise.io/ip/185.220.101.4"
+    },
+    {
+      "provider": "shodan",
+      "label": "Shodan",
+      "href": "https://www.shodan.io/host/185.220.101.4"
+    },
+    {
+      "provider": "pulsedive",
+      "label": "Pulsedive",
+      "href": "https://pulsedive.com/explore?q=185.220.101.4"
+    },
+    {
+      "provider": "censys",
+      "label": "Censys",
+      "href": "https://search.censys.io/hosts/185.220.101.4"
+    },
+    {
+      "provider": "threatfox",
+      "label": "ThreatFox",
+      "href": "https://threatfox.abuse.ch/browse.php?search=ioc:185.220.101.4"
     }
   ]
 }"
@@ -202,9 +285,9 @@ exports[`golden: enrichment export JSON snapshots > no enrichment results 1`] = 
   "disagreement": false,
   "pivots": [
     {
-      "provider": "virustotal",
-      "label": "VirusTotal",
-      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/8.8.8.8"
     },
     {
       "provider": "otx",
@@ -212,14 +295,39 @@ exports[`golden: enrichment export JSON snapshots > no enrichment results 1`] = 
       "href": "https://otx.alienvault.com/indicator/ip/8.8.8.8"
     },
     {
-      "provider": "abuseipdb",
-      "label": "AbuseIPDB",
-      "href": "https://www.abuseipdb.com/check/8.8.8.8"
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
     },
     {
       "provider": "urlscan",
-      "label": "URLScan",
+      "label": "URLScan.io",
       "href": "https://urlscan.io/search/#ip:8.8.8.8"
+    },
+    {
+      "provider": "greynoise",
+      "label": "GreyNoise",
+      "href": "https://viz.greynoise.io/ip/8.8.8.8"
+    },
+    {
+      "provider": "shodan",
+      "label": "Shodan",
+      "href": "https://www.shodan.io/host/8.8.8.8"
+    },
+    {
+      "provider": "pulsedive",
+      "label": "Pulsedive",
+      "href": "https://pulsedive.com/explore?q=8.8.8.8"
+    },
+    {
+      "provider": "censys",
+      "label": "Censys",
+      "href": "https://search.censys.io/hosts/8.8.8.8"
+    },
+    {
+      "provider": "threatfox",
+      "label": "ThreatFox",
+      "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
     }
   ]
 }"
@@ -259,9 +367,9 @@ exports[`golden: enrichment export JSON snapshots > with analyst notes 1`] = `
   "disagreement": false,
   "pivots": [
     {
-      "provider": "virustotal",
-      "label": "VirusTotal",
-      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/8.8.8.8"
     },
     {
       "provider": "otx",
@@ -269,14 +377,39 @@ exports[`golden: enrichment export JSON snapshots > with analyst notes 1`] = `
       "href": "https://otx.alienvault.com/indicator/ip/8.8.8.8"
     },
     {
-      "provider": "abuseipdb",
-      "label": "AbuseIPDB",
-      "href": "https://www.abuseipdb.com/check/8.8.8.8"
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
     },
     {
       "provider": "urlscan",
-      "label": "URLScan",
+      "label": "URLScan.io",
       "href": "https://urlscan.io/search/#ip:8.8.8.8"
+    },
+    {
+      "provider": "greynoise",
+      "label": "GreyNoise",
+      "href": "https://viz.greynoise.io/ip/8.8.8.8"
+    },
+    {
+      "provider": "shodan",
+      "label": "Shodan",
+      "href": "https://www.shodan.io/host/8.8.8.8"
+    },
+    {
+      "provider": "pulsedive",
+      "label": "Pulsedive",
+      "href": "https://pulsedive.com/explore?q=8.8.8.8"
+    },
+    {
+      "provider": "censys",
+      "label": "Censys",
+      "href": "https://search.censys.io/hosts/8.8.8.8"
+    },
+    {
+      "provider": "threatfox",
+      "label": "ThreatFox",
+      "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
     }
   ],
   "analystNotes": "Review firewall logs."
@@ -297,8 +430,16 @@ Enable at least one enrichment source in settings to compute a local advisory sc
 
 - AbuseIPDB: AbuseIPDB is disabled. Enable it in extension settings to load enrichment.
 - OTX: OTX is disabled. Enable it in extension settings to load enrichment.
+- VirusTotal: VirusTotal is disabled. Enable it in extension settings to load enrichment.
 - URLScan.io: URLScan.io is disabled. Enable it in extension settings to load enrichment.
 - GreyNoise: GreyNoise is disabled. Enable it in extension settings to load enrichment.
+- Shodan: Shodan is disabled. Enable it in extension settings to load enrichment.
+- Google Safe Browsing: Google Safe Browsing is disabled. Enable it in extension settings to load enrichment.
+- Pulsedive: Pulsedive is disabled. Enable it in extension settings to load enrichment.
+- MalwareBazaar: MalwareBazaar is disabled. Enable it in extension settings to load enrichment.
+- Censys: Censys is disabled. Enable it in extension settings to load enrichment.
+- ThreatFox: ThreatFox is disabled. Enable it in extension settings to load enrichment.
+- URLHaus: URLHaus is disabled. Enable it in extension settings to load enrichment.
 "
 `;
 

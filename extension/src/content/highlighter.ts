@@ -272,3 +272,39 @@ export function findHighlightByAnchorId(
     `.${IOC_HIGHLIGHT_CLASS}[data-vera5-anchor-id="${CSS.escape(anchorId)}"]`
   );
 }
+
+export function listIocHighlightsInDocumentOrder(
+  root: ParentNode = document.body
+): HTMLElement[] {
+  return Array.from(
+    root.querySelectorAll<HTMLElement>(`.${IOC_HIGHLIGHT_CLASS}`)
+  ).filter((highlight) => highlight.isConnected);
+}
+
+export function resolveAdjacentIocHighlight(
+  current: HTMLElement | null,
+  direction: "next" | "previous",
+  root: ParentNode = document.body
+): HTMLElement | null {
+  const highlights = listIocHighlightsInDocumentOrder(root);
+  if (highlights.length === 0) {
+    return null;
+  }
+
+  if (!current) {
+    return direction === "next"
+      ? highlights[0]
+      : highlights[highlights.length - 1];
+  }
+
+  const index = highlights.indexOf(current);
+  if (index === -1) {
+    return direction === "next"
+      ? highlights[0]
+      : highlights[highlights.length - 1];
+  }
+
+  const delta = direction === "next" ? 1 : -1;
+  const nextIndex = (index + delta + highlights.length) % highlights.length;
+  return highlights[nextIndex] ?? null;
+}

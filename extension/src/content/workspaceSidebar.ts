@@ -41,8 +41,7 @@ import {
   runBackgroundEnrichment,
 } from "./enrichmentBackgroundFetch";
 import {
-  getEnrichmentSourceEnabledForContent,
-  listDisabledEnrichmentSourceIds,
+  loadWorkspaceEnrichmentSourceContext,
 } from "./enrichmentSourceStorage";
 import {
   buildHoverCardPayloadFromHighlight,
@@ -53,7 +52,12 @@ import {
   setScanListExportContextProvider,
   type HoverCardOverlayPayload,
 } from "./hoverCardOverlay";
-import { handleScanPageRequest } from "./scanPage";
+import {
+  handleScanPageRequest,
+  handleScanSelectionRequest,
+  resolveActiveSelectionRange,
+} from "./scanPage";
+import { handleEnrichSelectionRequest, resolveIocFromActiveSelection } from "./enrichSelection";
 import { getTabScanSummaryForCurrentTab } from "./tabScanSummaryContent";
 import { CONTENT_MESSAGE } from "./constants";
 import {
@@ -80,6 +84,8 @@ type WorkspaceState = {
   enabled: boolean;
   highlightEnabled: boolean;
   scanState: "idle" | "scanning" | "done" | "error";
+  textSelectionAvailable: boolean;
+  selectionEnrichAvailable: boolean;
   scanSummary: TabScanSummary | null;
   typeFilter: IocTypeFilter;
   trayFilterReady: boolean;
@@ -102,6 +108,8 @@ function createInitialWorkspaceState(): WorkspaceState {
     enabled: true,
     highlightEnabled: true,
     scanState: "idle",
+    textSelectionAvailable: false,
+    selectionEnrichAvailable: false,
     scanSummary: null,
     typeFilter: "all",
     trayFilterReady: false,
@@ -544,6 +552,105 @@ async function handleWorkspaceScan(doc: Document): Promise<void> {
   }
 }
 
+async function handleWorkspaceSelectionScan(doc: Document): Promise<void> {
+  if (!workspaceState.enabled) {
+    return;
+  }
+
+  workspaceState.scanState = "scanning";
+  workspaceState.typeFilter = "all";
+  workspaceState.trayFilterReady = false;
+  workspaceState.trayNavigationMessage = null;
+  workspaceState.trayEnrichmentStatuses = {};
+  renderWorkspaceTop(doc);
+
+  try {
+    const response = await handleScanSelectionRequest();
+    if (!response.ok) {
+      workspaceState.scanState = "error";
+      return;
+    }
+
+    const summary =
+      buildSummaryFromScanPayload(response.payload) ??
+      (await requestTabScanSummary());
+    if (!summary) {
+      workspaceState.scanState = "error";
+      return;
+    }
+
+    workspaceState.scanSummary = summary;
+    workspaceState.scanState = "done";
+    workspaceState.typeFilter = "all";
+    workspaceState.trayFilterReady = true;
+    void saveTabScanTrayFilter(summary.tabId, "all").catch((error) => {
+      logUnlessBenignExtensionError(error);
+    });
+
+    void loadTrayEnrichmentStatuses()
+      .then(() => {
+        if (workspaceState.open && workspaceState.scanState === "done") {
+          renderWorkspaceTop(doc);
+        }
+      })
+      .catch((error) => {
+        logUnlessBenignExtensionError(error);
+      });
+  } catch (error) {
+    logUnlessBenignExtensionError(error);
+    workspaceState.scanState = "error";
+  } finally {
+    if (workspaceState.scanState === "scanning") {
+      workspaceState.scanState = "error";
+    }
+    if (workspaceState.open) {
+      renderWorkspaceTop(doc);
+    }
+  }
+}
+
+function syncWorkspaceTextSelectionAvailability(doc: Document): void {
+  const nextAvailable = resolveActiveSelectionRange(doc) !== null;
+  const selectionChanged = nextAvailable !== workspaceState.textSelectionAvailable;
+  if (selectionChanged) {
+    workspaceState.textSelectionAvailable = nextAvailable;
+  }
+
+  void resolveIocFromActiveSelection(doc)
+    .then((resolved) => {
+      const nextEnrichAvailable = resolved !== null;
+      if (
+        nextEnrichAvailable === workspaceState.selectionEnrichAvailable &&
+        !selectionChanged
+      ) {
+        return;
+      }
+      workspaceState.selectionEnrichAvailable = nextEnrichAvailable;
+      if (workspaceState.open) {
+        renderWorkspaceTop(doc);
+      }
+    })
+    .catch((error) => {
+      logUnlessBenignExtensionError(error);
+    });
+
+  if (selectionChanged && workspaceState.open) {
+    renderWorkspaceTop(doc);
+  }
+}
+
+async function handleWorkspaceSelectionEnrich(doc: Document): Promise<void> {
+  if (!workspaceState.enabled) {
+    return;
+  }
+
+  try {
+    await handleEnrichSelectionRequest(doc);
+  } catch (error) {
+    logUnlessBenignExtensionError(error);
+  }
+}
+
 function clearWorkspaceScanResults(doc: Document): void {
   if (workspaceState.scanState === "scanning") {
     return;
@@ -622,11 +729,28 @@ function selectWorkspaceIndicator(
     return false;
   }
 
-  workspaceState.selectedAnchorId = highlight.dataset.vera5AnchorId ?? null;
+  presentWorkspaceEnrichmentForPayload(
+    basePayload,
+    highlight,
+    options,
+    doc,
+    highlight.dataset.vera5AnchorId ?? null
+  );
+  return true;
+}
+
+export function presentWorkspaceEnrichmentForPayload(
+  basePayload: HoverCardOverlayPayload,
+  anchor: HTMLElement,
+  options: HoverCardOpenOptions = {},
+  doc: Document = document,
+  selectedAnchorId: string | null = anchor.dataset.vera5AnchorId ?? null
+): void {
+  workspaceState.selectedAnchorId = selectedAnchorId;
   workspaceState.trayNavigationMessage = null;
 
   const applySelection = (payload: HoverCardOverlayPayload) => {
-    workspaceState.selection = { highlight, payload };
+    workspaceState.selection = { highlight: anchor, payload };
     setWorkspaceSelectionState({
       open: true,
       selectedAnchorId: workspaceState.selectedAnchorId,
@@ -639,22 +763,25 @@ function selectWorkspaceIndicator(
   applySelection(basePayload);
 
   if (isExtensionContextInvalidated()) {
-    return true;
+    return;
   }
 
-  void getEnrichmentSourceEnabledForContent()
-    .then((sources) => {
-      const disabledSources = listDisabledEnrichmentSourceIds(sources);
-      const payload: HoverCardOverlayPayload =
-        disabledSources.length > 0
-          ? { ...basePayload, disabledSources }
-          : basePayload;
+  void loadWorkspaceEnrichmentSourceContext()
+    .then(({ disabledSourceIds, enabledSourceIds, showDisabledSourcesInWorkspace }) => {
+      const payload: HoverCardOverlayPayload = {
+        ...basePayload,
+        ...(disabledSourceIds.length > 0
+          ? { disabledSources: disabledSourceIds }
+          : {}),
+        enabledEnrichmentSourceIds: enabledSourceIds,
+        showDisabledSourcesInWorkspace,
+      };
 
       if (
-        workspaceState.selection?.highlight === highlight &&
-        workspaceState.selectedAnchorId === (highlight.dataset.vera5AnchorId ?? null)
+        workspaceState.selection?.highlight === anchor &&
+        workspaceState.selectedAnchorId === selectedAnchorId
       ) {
-        workspaceState.selection = { highlight, payload };
+        workspaceState.selection = { highlight: anchor, payload };
         renderWorkspaceDetail(payload, doc);
       }
 
@@ -674,8 +801,6 @@ function selectWorkspaceIndicator(
     .catch((error) => {
       logUnlessBenignExtensionError(error);
     });
-
-  return true;
 }
 
 export function activateWorkspaceIndicatorByAnchorId(
@@ -760,6 +885,35 @@ function renderWorkspaceTop(doc: Document): void {
       !workspaceState.ready ||
         !workspaceState.enabled ||
         workspaceState.scanState === "scanning"
+    )
+  );
+  controls.appendChild(
+    createWorkspaceButton(
+      workspaceState.scanState === "scanning" ? "Scanning…" : "Scan selection",
+      doc,
+      () => {
+        void handleWorkspaceSelectionScan(doc).catch((error) => {
+          logUnlessBenignExtensionError(error);
+        });
+      },
+      !workspaceState.ready ||
+        !workspaceState.enabled ||
+        workspaceState.scanState === "scanning" ||
+        !workspaceState.textSelectionAvailable
+    )
+  );
+  controls.appendChild(
+    createWorkspaceButton(
+      "Enrich selection",
+      doc,
+      () => {
+        void handleWorkspaceSelectionEnrich(doc).catch((error) => {
+          logUnlessBenignExtensionError(error);
+        });
+      },
+      !workspaceState.ready ||
+        !workspaceState.enabled ||
+        !workspaceState.selectionEnrichAvailable
     )
   );
   controls.appendChild(
@@ -1043,6 +1197,17 @@ function renderWorkspace(doc: Document): void {
 
 export function openWorkspace(doc: Document = document): void {
   workspaceState.open = true;
+  workspaceState.textSelectionAvailable = resolveActiveSelectionRange(doc) !== null;
+  void resolveIocFromActiveSelection(doc)
+    .then((resolved) => {
+      workspaceState.selectionEnrichAvailable = resolved !== null;
+      if (workspaceState.open) {
+        renderWorkspaceTop(doc);
+      }
+    })
+    .catch((error) => {
+      logUnlessBenignExtensionError(error);
+    });
   setWorkspaceSelectionState({
     open: true,
     selectedAnchorId: workspaceState.selectedAnchorId,
@@ -1087,6 +1252,10 @@ export function toggleWorkspace(doc: Document = document): void {
 export function setupWorkspaceSidebarListener(doc: Document = document): void {
   registerWorkspacePayloadUpdateHandler((payload, updateDoc) => {
     updateWorkspaceDetailPanel(payload, updateDoc);
+  });
+
+  doc.addEventListener("selectionchange", () => {
+    syncWorkspaceTextSelectionAvailability(doc);
   });
 
   if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {

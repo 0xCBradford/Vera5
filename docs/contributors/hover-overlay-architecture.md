@@ -25,7 +25,9 @@ Enrichment actions on the page feed the shared view model; production overlay an
 **Module:** `extension/src/content/hoverCardOverlay.ts`
 
 - Rendered in the page as DOM built by the content script (not React on live tabs).
-- Opened when the analyst clicks a highlight after scan.
+- Opened when the analyst clicks a highlight after scan, or when a highlight has focus and the analyst presses **Enter** or **Space**.
+- Keyboard opens move focus to the first card control (typically **Copy Indicator**); **Escape** closes the card and restores focus to the opening highlight when the card was opened from the keyboard.
+- With a highlight focused, **ArrowDown** / **ArrowUp** move to the next or previous highlight in document order (wraps at the ends). With the page focused after scan, **ArrowDown** focuses the first highlight and **ArrowUp** focuses the last. Triage navigation closes an open hover card without opening the next indicator.
 - Shows type, value, enrichment rows, Live/Cached/Error badges, raw JSON panel, copy, recommended next pivots with source-attributed links, composite risk score, reasoning chain when data allows, and a local **Analyst notes** textarea keyed per indicator (`extension/src/lib/analystNotesSession.ts` with persistence in `extension/src/lib/analystNotesStorage.ts`).
 
 This is the **primary operator surface** documented in [README.md](../../README.md) and [docs/analyst-workflows.md](../analyst-workflows.md).

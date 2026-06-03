@@ -85,6 +85,41 @@ export const HOVER_CARD_HOST_ID = "vera5-hover-card-host";
 
 let lastHoverCardAnchor: Element | null = null;
 let lastHoverCardPayload: HoverCardOverlayPayload | null = null;
+let lastHoverCardFocusReturnTarget: HTMLElement | null = null;
+
+const HOVER_CARD_FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "a[href]",
+  "textarea:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(", ");
+
+export function setHoverCardFocusReturnTarget(target: HTMLElement | null): void {
+  lastHoverCardFocusReturnTarget = target;
+}
+
+export function focusFirstHoverCardControl(panel: HTMLElement): boolean {
+  const focusable = panel.querySelector<HTMLElement>(HOVER_CARD_FOCUSABLE_SELECTOR);
+  if (!focusable) {
+    return false;
+  }
+  focusable.focus();
+  return true;
+}
+
+function restoreHoverCardFocusReturn(doc: Document): void {
+  const returnTarget = lastHoverCardFocusReturnTarget;
+  lastHoverCardFocusReturnTarget = null;
+  if (returnTarget?.isConnected && doc.contains(returnTarget)) {
+    returnTarget.focus();
+  }
+}
+
+export type ShowHoverCardFocusOptions = {
+  moveFocus?: boolean;
+};
 
 export function getLastHoverCardAnchor(): Element | null {
   return lastHoverCardAnchor;
@@ -176,6 +211,8 @@ export type HoverCardOverlayPayload = {
   errorCode?: string;
   retryHint?: string;
   disabledSources?: readonly EnrichmentSourceId[];
+  enabledEnrichmentSourceIds?: readonly EnrichmentSourceId[];
+  showDisabledSourcesInWorkspace?: boolean;
   sourceResults?: readonly HoverCardSourceEntry[];
   analystNotes?: string;
 };
@@ -303,7 +340,10 @@ function createPivotRecipesPanel(
   payload: HoverCardOverlayPayload,
   doc: Document
 ): HTMLElement | null {
-  const recipes = getPivotRecipes(payload.type, payload.value);
+  const recipes = getPivotRecipes(payload.type, payload.value, {
+    enabledSourceIds: payload.enabledEnrichmentSourceIds,
+    showDisabledSources: payload.showDisabledSourcesInWorkspace,
+  });
   if (recipes.length === 0) {
     return null;
   }
@@ -1566,7 +1606,8 @@ export function positionHoverCardPanel(
 export function showHoverCardNearAnchor(
   anchor: Element,
   payload: HoverCardOverlayPayload,
-  doc: Document = document
+  doc: Document = document,
+  options: ShowHoverCardFocusOptions = {}
 ): HTMLElement {
   lastHoverCardAnchor = anchor;
   const host = ensureHoverCardHost(doc);
@@ -1583,6 +1624,59 @@ export function showHoverCardNearAnchor(
   const panel = buildHoverCardPanel(resolvedPayload, doc);
   host.appendChild(panel);
   positionHoverCardPanel(panel, anchor, readViewportSize(doc.defaultView ?? window));
+  if (options.moveFocus) {
+    focusFirstHoverCardControl(panel);
+  }
+  return panel;
+}
+
+export function showHoverCardNearRange(
+  range: Range,
+  payload: HoverCardOverlayPayload,
+  doc: Document = document,
+  options: ShowHoverCardFocusOptions = {}
+): HTMLElement {
+  let anchor: Element = doc.body;
+  let node: Node | null = range.commonAncestorContainer;
+  if (node.nodeType === Node.TEXT_NODE) {
+    node = node.parentElement;
+  }
+  if (node instanceof Element) {
+    anchor = node;
+  }
+  lastHoverCardAnchor = anchor;
+  const host = ensureHoverCardHost(doc);
+  host.replaceChildren();
+  const analystNotes = resolveHoverCardAnalystNote(
+    payload.value,
+    payload.analystNotes
+  );
+  const resolvedPayload = {
+    ...payload,
+    analystNotes: analystNotes.length > 0 ? analystNotes : undefined,
+  };
+  lastHoverCardPayload = resolvedPayload;
+  const panel = buildHoverCardPanel(resolvedPayload, doc);
+  host.appendChild(panel);
+
+  const anchorRect = range.getBoundingClientRect();
+  panel.style.visibility = "hidden";
+  panel.style.display = "block";
+  const measured = panel.getBoundingClientRect();
+  const cardSize = {
+    width: Math.max(measured.width, panel.offsetWidth, 220),
+    height: Math.max(measured.height, panel.offsetHeight, 80),
+  };
+  const position = computeHoverCardPosition(
+    anchorRect,
+    cardSize,
+    readViewportSize(doc.defaultView ?? window)
+  );
+  applyHoverCardFixedPosition(panel, position);
+  panel.style.visibility = "visible";
+  if (options.moveFocus) {
+    focusFirstHoverCardControl(panel);
+  }
   return panel;
 }
 
@@ -1638,4 +1732,5 @@ export function hideHoverCard(doc: Document = document): void {
   host.replaceChildren();
   lastHoverCardAnchor = null;
   lastHoverCardPayload = null;
+  restoreHoverCardFocusReturn(doc);
 }

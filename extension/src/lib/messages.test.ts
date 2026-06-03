@@ -7,12 +7,16 @@ import {
   isGetTabScanSummaryMessage,
   isNavigateToIocAnchorMessage,
   isScanPageMessage,
+  isScanSelectionMessage,
+  isEnrichSelectionMessage,
   isTabScanSnapshotMessage,
   isVera5Message,
   MESSAGE,
   navigateToIocAnchorMessage,
   pingMessage,
   scanPageMessage,
+  scanSelectionMessage,
+  enrichSelectionMessage,
   tabScanSnapshotMessage,
 } from "./messages";
 import { buildTabScanSnapshotPayload } from "./tabScanSnapshot";
@@ -30,6 +34,14 @@ describe("Vera5 message envelopes", () => {
 
   it("builds SCAN_PAGE", () => {
     expect(scanPageMessage()).toEqual({ type: MESSAGE.SCAN_PAGE });
+  });
+
+  it("builds SCAN_SELECTION", () => {
+    expect(scanSelectionMessage()).toEqual({ type: MESSAGE.SCAN_SELECTION });
+  });
+
+  it("builds ENRICH_SELECTION", () => {
+    expect(enrichSelectionMessage()).toEqual({ type: MESSAGE.ENRICH_SELECTION });
   });
 
   it("builds NAVIGATE_TO_IOC_ANCHOR", () => {
@@ -141,6 +153,16 @@ describe("Vera5 message envelopes", () => {
   it("accepts SCAN_PAGE tab envelope", () => {
     expect(isScanPageMessage(scanPageMessage())).toBe(true);
     expect(isScanPageMessage({ type: "NOT_REAL" })).toBe(false);
+  });
+
+  it("accepts SCAN_SELECTION tab envelope", () => {
+    expect(isScanSelectionMessage(scanSelectionMessage())).toBe(true);
+    expect(isScanSelectionMessage({ type: "NOT_REAL" })).toBe(false);
+  });
+
+  it("accepts ENRICH_SELECTION tab envelope", () => {
+    expect(isEnrichSelectionMessage(enrichSelectionMessage())).toBe(true);
+    expect(isEnrichSelectionMessage({ type: "NOT_REAL" })).toBe(false);
   });
 
   it("rejects invalid envelopes", () => {

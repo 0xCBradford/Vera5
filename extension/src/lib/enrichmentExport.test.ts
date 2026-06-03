@@ -7,7 +7,10 @@ import { IOC_TYPE } from "./iocRegex";
 import {
   buildHoverCardSourceEntries,
   ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_ORDER,
 } from "./hoverCardEnrichment";
+
+const ALL_DISABLED_ENRICHMENT_SOURCES = [...ENRICHMENT_SOURCE_ORDER];
 import {
   buildEnrichmentExportAnalystNotesLines,
   buildEnrichmentExportDocument,
@@ -111,12 +114,7 @@ describe("buildNormalizedEnrichmentRecord", () => {
     const record = buildNormalizedEnrichmentRecord({
       value: "8.8.8.8",
       iocType: IOC_TYPE.IPV4,
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: ALL_DISABLED_ENRICHMENT_SOURCES,
       sourceResults: [],
       exportedAt: EXPORTED_AT,
     });
@@ -222,12 +220,7 @@ describe("buildEnrichmentExportRiskScoreLines", () => {
     const record = buildNormalizedEnrichmentRecord({
       value: "8.8.8.8",
       iocType: IOC_TYPE.IPV4,
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: ALL_DISABLED_ENRICHMENT_SOURCES,
       exportedAt: EXPORTED_AT,
     });
 
@@ -251,12 +244,7 @@ describe("buildEnrichmentExportNoScoreLines", () => {
     const record = buildNormalizedEnrichmentRecord({
       value: "8.8.8.8",
       iocType: IOC_TYPE.IPV4,
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: ALL_DISABLED_ENRICHMENT_SOURCES,
       exportedAt: EXPORTED_AT,
     });
 
@@ -531,12 +519,7 @@ describe("buildEnrichmentExportMarkdown", () => {
     const record = buildNormalizedEnrichmentRecord({
       value: "8.8.8.8",
       iocType: IOC_TYPE.IPV4,
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: ALL_DISABLED_ENRICHMENT_SOURCES,
       exportedAt: EXPORTED_AT,
     });
 
@@ -709,12 +692,7 @@ describe("enrichment JSON export", () => {
     const record = buildNormalizedEnrichmentRecord({
       value: "8.8.8.8",
       iocType: IOC_TYPE.IPV4,
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: ALL_DISABLED_ENRICHMENT_SOURCES,
       exportedAt: EXPORTED_AT,
     });
 
@@ -877,12 +855,7 @@ describe("export contract: schemaVersion, score, disagreement, and no-score path
         buildNormalizedEnrichmentRecord({
           value: "8.8.8.8",
           iocType: IOC_TYPE.IPV4,
-          disabledSources: [
-            ENRICHMENT_SOURCE.ABUSEIPDB,
-            ENRICHMENT_SOURCE.OTX,
-            ENRICHMENT_SOURCE.URLSCAN,
-            ENRICHMENT_SOURCE.GREYNOISE,
-          ],
+          disabledSources: ALL_DISABLED_ENRICHMENT_SOURCES,
           exportedAt: EXPORTED_AT,
         }),
       scoreMode: "unavailable" as const,

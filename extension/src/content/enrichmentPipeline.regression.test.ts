@@ -30,13 +30,17 @@ import {
 vi.mock("./enrichmentSourceStorage", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("./enrichmentSourceStorage")>();
+  const sources = actual.createDefaultEnrichmentSourceEnabledMap();
+  sources.abuseipdb = true;
+  sources.otx = true;
   return {
     ...actual,
-    getEnrichmentSourceEnabledForContent: vi.fn(async () => ({
-      abuseipdb: true,
-      otx: true,
-      urlscan: false,
-      greynoise: false,
+    getEnrichmentSourceEnabledForContent: vi.fn(async () => sources),
+    loadWorkspaceEnrichmentSourceContext: vi.fn(async () => ({
+      sources,
+      showDisabledSourcesInWorkspace: true,
+      disabledSourceIds: actual.listDisabledEnrichmentSourceIds(sources, true),
+      enabledSourceIds: actual.listEnabledEnrichmentSourceIds(sources),
     })),
   };
 });

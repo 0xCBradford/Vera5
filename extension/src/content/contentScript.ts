@@ -7,6 +7,7 @@ import {
 import { CONTENT_MESSAGE } from "./constants";
 import { setupBackgroundEnrichmentRouting } from "./enrichmentBackgroundFetch";
 import { setupHoverCardTrigger } from "./hoverCardTrigger";
+import { setupEnrichSelectionListener } from "./enrichSelection";
 import { setupHighlightStorageListener, setupScanPageListener } from "./scanPage";
 import { setupNavigateToIocAnchorListener } from "./iocTrayNavigation";
 import { setupWorkspaceSidebarListener } from "./workspaceSidebar";
@@ -16,6 +17,7 @@ document.documentElement.dataset.vera5Content = "active";
 void safeRuntimeSendMessage({ type: CONTENT_MESSAGE.CONTENT_REGISTER });
 
 setupScanPageListener();
+setupEnrichSelectionListener();
 setupNavigateToIocAnchorListener();
 setupWorkspaceSidebarListener();
 setupHighlightStorageListener();

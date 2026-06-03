@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Splunk search export — suspicious authentication (sample)</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #171d21;
+        --panel: #21262b;
+        --border: #30363d;
+        --text: #e6edf3;
+        --muted: #8b949e;
+        --accent: #65a637;
+        --row-alt: #1c2228;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
+        line-height: 1.45;
+        margin: 0;
+      }
+      header {
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        padding: 0.75rem 1rem;
+      }
+      header h1 {
+        font-size: 1rem;
+        font-weight: 600;
+        margin: 0 0 0.35rem;
+      }
+      .meta,
+      .disclaimer {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .search-bar {
+        background: #0d1117;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        color: var(--accent);
+        font-family: Consolas, "Courier New", monospace;
+        margin-top: 0.65rem;
+        padding: 0.5rem 0.65rem;
+        white-space: pre-wrap;
+      }
+      main {
+        padding: 0.75rem 1rem 2rem;
+      }
+      .stats {
+        color: var(--muted);
+        margin-bottom: 0.75rem;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 0.35rem 0.5rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #262c33;
+        color: var(--muted);
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+      }
+      tbody tr:nth-child(even) {
+        background: var(--row-alt);
+      }
+      code,
+      .raw-event {
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.78rem;
+      }
+      .raw-event {
+        background: #0d1117;
+        border: 1px solid var(--border);
+        margin-top: 1rem;
+        max-height: 12rem;
+        overflow: auto;
+        padding: 0.65rem;
+        white-space: pre-wrap;
+      }
+      .notes {
+        color: var(--muted);
+        margin-top: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Splunk search export — suspicious authentication (sample)</h1>
+      <p class="disclaimer">
+        Documentation-only HTML fixture mimicking a saved Splunk investigation export.
+        Indicator values use public test data (RFC 5737, sample hashes, MITRE CVE
+        IDs)—not live incident intelligence.
+      </p>
+      <div class="search-bar" aria-label="Saved search">
+        index=auth sourcetype=WinEventLog:Security (EventCode=4625 OR EventCode=4624)
+        | stats count by src_ip dest_ip user url file_hash signature_id cve
+        | where count &gt; 3
+      </div>
+    </header>
+
+    <main>
+      <p class="stats">Events 1–32 of 32 · Job sid=sample-export-7f3a · Completed</p>
+
+      <table aria-label="Search results">
+        <thead>
+          <tr>
+            <th>_time</th>
+            <th>src_ip</th>
+            <th>dest_ip</th>
+            <th>user</th>
+            <th>url</th>
+            <th>file_hash</th>
+            <th>signature_id</th>
+            <th>cve</th>
+            <th>count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>2026-06-01 08:14:22</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>svc_backup</td>
+            <td>https://example.com/login</td>
+            <td>d41d8cd98f00b204e9800998ecf8427e</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>14</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:15:01</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>jdoe</td>
+            <td>https://example.com/login?ref=analyst</td>
+            <td>098f6bcd4621d373cade4e832627b4f6</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>9</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:16:44</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>resolver_probe</td>
+            <td>http://192.0.2.1/resource?id=1</td>
+            <td>aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</td>
+            <td>2024897</td>
+            <td>CVE-2021-44228</td>
+            <td>6</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:17:03</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>administrator</td>
+            <td>https://malware.testcategory.com/gate</td>
+            <td>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>11</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:18:19</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>svc_backup</td>
+            <td>https://example.com/login</td>
+            <td>2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>7</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:19:55</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>jdoe</td>
+            <td>https://example.com/login?ref=analyst</td>
+            <td>d41d8cd98f00b204e9800998ecf8427e</td>
+            <td>2024897</td>
+            <td>CVE-2017-0144</td>
+            <td>5</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:21:02</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>guest</td>
+            <td>http://192.0.2.1/resource?id=1</td>
+            <td>098f6bcd4621d373cade4e832627b4f6</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>8</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:22:41</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>svc_backup</td>
+            <td>https://malware.testcategory.com/gate</td>
+            <td>aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>12</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:23:18</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>administrator</td>
+            <td>https://example.com/login</td>
+            <td>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</td>
+            <td>2024897</td>
+            <td>CVE-2021-44228</td>
+            <td>4</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:24:07</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>jdoe</td>
+            <td>https://example.com/login?ref=analyst</td>
+            <td>2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>10</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:25:33</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>guest</td>
+            <td>http://192.0.2.1/resource?id=1</td>
+            <td>d41d8cd98f00b204e9800998ecf8427e</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>6</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:26:49</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>svc_backup</td>
+            <td>https://malware.testcategory.com/gate</td>
+            <td>098f6bcd4621d373cade4e832627b4f6</td>
+            <td>2024897</td>
+            <td>CVE-2017-0144</td>
+            <td>9</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:27:14</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>administrator</td>
+            <td>https://example.com/login</td>
+            <td>aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>13</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:28:02</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>jdoe</td>
+            <td>https://example.com/login?ref=analyst</td>
+            <td>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>7</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:29:21</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>guest</td>
+            <td>http://192.0.2.1/resource?id=1</td>
+            <td>2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117</td>
+            <td>2024897</td>
+            <td>CVE-2021-44228</td>
+            <td>5</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:30:44</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>svc_backup</td>
+            <td>https://malware.testcategory.com/gate</td>
+            <td>d41d8cd98f00b204e9800998ecf8427e</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>11</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:31:09</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>administrator</td>
+            <td>https://example.com/login</td>
+            <td>098f6bcd4621d373cade4e832627b4f6</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>8</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:32:17</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>jdoe</td>
+            <td>https://example.com/login?ref=analyst</td>
+            <td>aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</td>
+            <td>2024897</td>
+            <td>CVE-2017-0144</td>
+            <td>6</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:33:51</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>guest</td>
+            <td>http://192.0.2.1/resource?id=1</td>
+            <td>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>10</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:34:28</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>svc_backup</td>
+            <td>https://malware.testcategory.com/gate</td>
+            <td>2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>9</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:35:03</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>administrator</td>
+            <td>https://example.com/login</td>
+            <td>d41d8cd98f00b204e9800998ecf8427e</td>
+            <td>2024897</td>
+            <td>CVE-2021-44228</td>
+            <td>4</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:36:12</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>jdoe</td>
+            <td>https://example.com/login?ref=analyst</td>
+            <td>098f6bcd4621d373cade4e832627b4f6</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>12</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:37:40</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>guest</td>
+            <td>http://192.0.2.1/resource?id=1</td>
+            <td>aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>7</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:38:05</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>svc_backup</td>
+            <td>https://malware.testcategory.com/gate</td>
+            <td>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</td>
+            <td>2024897</td>
+            <td>CVE-2017-0144</td>
+            <td>5</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:39:22</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>administrator</td>
+            <td>https://example.com/login</td>
+            <td>2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>11</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:40:11</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>jdoe</td>
+            <td>https://example.com/login?ref=analyst</td>
+            <td>d41d8cd98f00b204e9800998ecf8427e</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>8</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:41:33</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>guest</td>
+            <td>http://192.0.2.1/resource?id=1</td>
+            <td>098f6bcd4621d373cade4e832627b4f6</td>
+            <td>2024897</td>
+            <td>CVE-2021-44228</td>
+            <td>6</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:42:58</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>svc_backup</td>
+            <td>https://malware.testcategory.com/gate</td>
+            <td>aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>10</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:43:27</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>administrator</td>
+            <td>https://example.com/login</td>
+            <td>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>9</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:44:16</td>
+            <td>8.8.8.8</td>
+            <td>192.0.2.10</td>
+            <td>jdoe</td>
+            <td>https://example.com/login?ref=analyst</td>
+            <td>2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117</td>
+            <td>2024897</td>
+            <td>CVE-2017-0144</td>
+            <td>7</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:45:02</td>
+            <td>185.220.101.4</td>
+            <td>192.0.2.50</td>
+            <td>guest</td>
+            <td>http://192.0.2.1/resource?id=1</td>
+            <td>d41d8cd98f00b204e9800998ecf8427e</td>
+            <td>2001218</td>
+            <td>CVE-2021-44228</td>
+            <td>13</td>
+          </tr>
+          <tr>
+            <td>2026-06-01 08:46:19</td>
+            <td>192.0.2.1</td>
+            <td>192.0.2.75</td>
+            <td>svc_backup</td>
+            <td>https://example.com/login</td>
+            <td>098f6bcd4621d373cade4e832627b4f6</td>
+            <td>2001218</td>
+            <td>CVE-2017-0144</td>
+            <td>5</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="raw-event" aria-label="Expanded raw event">
+        { "_time": "2026-06-01T08:14:22.000-0400", "src_ip": "185.220.101.4",
+        "dest_ip": "192.0.2.50", "user": "svc_backup", "url":
+        "https://example.com/login", "file_hash":
+        "d41d8cd98f00b204e9800998ecf8427e", "signature_id": "2001218", "cve":
+        "CVE-2021-44228", "host": "WIN10-LAB01", "sourcetype":
+        "WinEventLog:Security" }
+      </div>
+
+      <p class="notes">
+        Export bundle also references splunkd.log, dashboard.png, and forwarder
+        version 1.2.3.4—these are layout and semver noise, not threat indicators.
+      </p>
+
+      <script>
+        const hiddenEndpoint = "http://10.0.0.1/internal/splunk-export";
+      </script>
+      <textarea readonly aria-hidden="true">
+        Private-space literal 10.0.0.1 appears in saved form defaults only.
+      </textarea>
+    </main>
+  </body>
+</html>

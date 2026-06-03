@@ -20,7 +20,7 @@ Vitest discovers tests alongside source (`*.test.ts`, `*.test.tsx`) under `exten
 
 | Area | Example files |
 |------|----------------|
-| Detection | `detector.test.ts`, `iocRegex.test.ts`, `fixtureTuning.test.ts` |
+| Detection | `detector.test.ts`, `iocRegex.test.ts`, `fixtureTuning.test.ts` (includes `examples/sample-alert.html`, `sample-blog.html`, `sample-splunk-export.html`, `sample-security-onion-alert.html`) |
 | Overlay / card | `hoverCardOverlay.test.ts`, `hoverCardEnrichment.test.ts`, `RiskScore.test.tsx` |
 | Enrichment | `enrichmentHandler.test.ts`, `abuseipdbConnector.test.ts`, `otxConnector.test.ts` |
 | Cache / cooldown | `cache.test.ts`, `enrichmentCooldown.test.ts` |
@@ -45,7 +45,7 @@ Automated tests do not replace unpacked Chrome validation:
 
 1. `npm run build` and load `extension/dist/`.
 2. Serve `examples/` over HTTP (`python -m http.server` in `examples/`).
-3. Scan, enrich with test keys, verify overlay score and cache labels.
+3. Scan `sample-alert.html`, `sample-splunk-export.html`, or `sample-security-onion-alert.html`; enrich with test keys, verify overlay score and cache labels. Fixture intent and checklist: [docs/soc-validation-fixtures.md](../soc-validation-fixtures.md).
 
 Use redacted fixtures only in issues and PRs.
 

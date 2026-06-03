@@ -1,26 +1,19 @@
-export const ENRICHMENT_SOURCE = {
-  ABUSEIPDB: "abuseipdb",
-  OTX: "otx",
-  URLSCAN: "urlscan",
-  GREYNOISE: "greynoise",
-} as const;
-
-export type EnrichmentSourceId =
-  (typeof ENRICHMENT_SOURCE)[keyof typeof ENRICHMENT_SOURCE];
-
-export const ENRICHMENT_SOURCE_ORDER: EnrichmentSourceId[] = [
-  ENRICHMENT_SOURCE.ABUSEIPDB,
-  ENRICHMENT_SOURCE.OTX,
-  ENRICHMENT_SOURCE.URLSCAN,
-  ENRICHMENT_SOURCE.GREYNOISE,
-];
-
-export const ENRICHMENT_SOURCE_LABELS: Record<EnrichmentSourceId, string> = {
-  abuseipdb: "AbuseIPDB",
-  otx: "OTX",
-  urlscan: "URLScan.io",
-  greynoise: "GreyNoise",
-};
+export {
+  ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_DESCRIPTIONS,
+  ENRICHMENT_SOURCE_LABELS,
+  ENRICHMENT_SOURCE_ORDER,
+  formatDisabledSourceMessage,
+  formatMissingApiKeySourceMessage,
+  formatUnsupportedIndicatorTypeMessage,
+  type EnrichmentSourceId,
+} from "./enrichmentSourceRegistry";
+import {
+  ENRICHMENT_SOURCE_ORDER,
+  ENRICHMENT_SOURCE_LABELS,
+  formatDisabledSourceMessage,
+  type EnrichmentSourceId,
+} from "./enrichmentSourceRegistry";
 
 export type HoverCardEnrichmentState = "empty" | "loading" | "error" | "ready";
 
@@ -178,10 +171,6 @@ export type DisabledSourcePlaceholder = {
   label: string;
   message: string;
 };
-
-export function formatDisabledSourceMessage(label: string): string {
-  return `${label} is disabled. Enable it in extension settings to load enrichment.`;
-}
 
 export function buildDisabledSourcePlaceholders(
   sourceIds: readonly EnrichmentSourceId[]

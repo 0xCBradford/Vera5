@@ -2,6 +2,7 @@ import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
 import type { EnrichmentSourceStatus } from "./enrichment";
 import {
   ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_ORDER,
   areAllEnrichmentSourcesDisabled,
   type EnrichmentSourceId,
   type HoverCardSourceEntry,
@@ -334,12 +335,12 @@ const PULSE_PLURAL_SUMMARY_RE = /^(\d+)\s+threat\s+pulses$/;
 
 export const DEFAULT_SOURCE_SCORE_WEIGHTS: Readonly<
   Record<EnrichmentSourceId, number>
-> = {
-  [ENRICHMENT_SOURCE.ABUSEIPDB]: 1,
-  [ENRICHMENT_SOURCE.OTX]: 0.85,
-  [ENRICHMENT_SOURCE.URLSCAN]: 1,
-  [ENRICHMENT_SOURCE.GREYNOISE]: 1,
-};
+> = Object.fromEntries(
+  ENRICHMENT_SOURCE_ORDER.map((sourceId) => [
+    sourceId,
+    sourceId === ENRICHMENT_SOURCE.OTX ? 0.85 : 1,
+  ])
+) as Record<EnrichmentSourceId, number>;
 
 export const MIN_REQUIRED_SCORING_SIGNALS = 2;
 

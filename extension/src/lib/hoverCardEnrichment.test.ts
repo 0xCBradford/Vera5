@@ -4,6 +4,7 @@ import {
   buildHoverCardSourceEntries,
   DEFAULT_HOVER_CARD_SUMMARY,
   ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_ORDER,
   formatDisabledSourceMessage,
   formatEnrichmentSourceAttribution,
   buildHoverCardLastUpdatedLine,
@@ -109,12 +110,7 @@ describe("hover card enrichment placeholders", () => {
   });
 
   it("hides risk score when all enrichment sources are disabled", () => {
-    const allDisabled = [
-      ENRICHMENT_SOURCE.ABUSEIPDB,
-      ENRICHMENT_SOURCE.OTX,
-      ENRICHMENT_SOURCE.URLSCAN,
-      ENRICHMENT_SOURCE.GREYNOISE,
-    ];
+    const allDisabled = [...ENRICHMENT_SOURCE_ORDER];
     const staleResults = [
       {
         sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
@@ -434,12 +430,7 @@ describe("hover card display view model", () => {
     const view = resolveHoverCardDisplayView({
       enrichmentState: "ready",
       summary: "84 abuse confidence",
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: [...ENRICHMENT_SOURCE_ORDER],
       sourceResults: [
         {
           sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,

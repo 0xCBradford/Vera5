@@ -10,13 +10,17 @@ import {
   runBackgroundEnrichment,
 } from "./enrichmentBackgroundFetch";
 import {
-  getEnrichmentSourceEnabledForContent,
-  listDisabledEnrichmentSourceIds,
+  loadWorkspaceEnrichmentSourceContext,
 } from "./enrichmentSourceStorage";
-import { IOC_ENRICH_ICON_CLASS, IOC_HIGHLIGHT_CLASS } from "./highlighter";
+import {
+  IOC_ENRICH_ICON_CLASS,
+  IOC_HIGHLIGHT_CLASS,
+  resolveAdjacentIocHighlight,
+} from "./highlighter";
 import {
   hideHoverCard,
   HOVER_CARD_HOST_ID,
+  setHoverCardFocusReturnTarget,
   showHoverCardNearAnchor,
   type HoverCardOverlayPayload,
 } from "./hoverCardOverlay";
@@ -64,6 +68,7 @@ export function buildHoverCardPayloadFromHighlight(
 
 export type HoverCardOpenOptions = {
   enrichmentTrigger?: "manual" | "auto";
+  moveFocusToPanel?: boolean;
 };
 
 function isManualEnrichTarget(target: Element): boolean {
@@ -80,20 +85,33 @@ export function openHoverCardForHighlight(
     return false;
   }
 
+  if (options.moveFocusToPanel) {
+    setHoverCardFocusReturnTarget(highlight);
+  } else {
+    setHoverCardFocusReturnTarget(null);
+  }
+
   if (isExtensionContextInvalidated()) {
-    showHoverCardNearAnchor(highlight, basePayload, doc);
+    showHoverCardNearAnchor(highlight, basePayload, doc, {
+      moveFocus: options.moveFocusToPanel,
+    });
     return true;
   }
 
-  void getEnrichmentSourceEnabledForContent()
-    .then((sources) => {
-      const disabledSources = listDisabledEnrichmentSourceIds(sources);
-      const payload: HoverCardOverlayPayload =
-        disabledSources.length > 0
-          ? { ...basePayload, disabledSources }
-          : basePayload;
+  void loadWorkspaceEnrichmentSourceContext()
+    .then(({ disabledSourceIds, enabledSourceIds, showDisabledSourcesInWorkspace }) => {
+      const payload: HoverCardOverlayPayload = {
+        ...basePayload,
+        ...(disabledSourceIds.length > 0
+          ? { disabledSources: disabledSourceIds }
+          : {}),
+        enabledEnrichmentSourceIds: enabledSourceIds,
+        showDisabledSourcesInWorkspace,
+      };
 
-      showHoverCardNearAnchor(highlight, payload, doc);
+      showHoverCardNearAnchor(highlight, payload, doc, {
+        moveFocus: options.moveFocusToPanel,
+      });
 
       if (options.enrichmentTrigger === "manual") {
         cancelPendingHoverEnrichment();
@@ -139,10 +157,59 @@ function handleDocumentClick(event: MouseEvent, doc: Document): void {
   hideHoverCard(doc);
 }
 
+function isPageLevelTriageOrigin(active: Element | null, doc: Document): boolean {
+  if (!active) {
+    return true;
+  }
+  return active === doc.body || active === doc.documentElement;
+}
+
+function handleHighlightTriageNavigation(event: KeyboardEvent, doc: Document): boolean {
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+    return false;
+  }
+
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest(`#${HOVER_CARD_HOST_ID}`)) {
+    return false;
+  }
+
+  const direction = event.key === "ArrowDown" ? "next" : "previous";
+  const currentHighlight = resolveIocHighlight(target);
+  const origin =
+    currentHighlight ??
+    (isPageLevelTriageOrigin(doc.activeElement, doc) ? null : undefined);
+
+  if (origin === undefined) {
+    return false;
+  }
+
+  const nextHighlight = resolveAdjacentIocHighlight(origin, direction, doc.body);
+  if (!nextHighlight) {
+    return false;
+  }
+
+  event.preventDefault();
+  cancelPendingHoverEnrichment();
+  hideHoverCard(doc);
+  setHoverCardFocusReturnTarget(null);
+  nextHighlight.scrollIntoView({
+    block: "center",
+    inline: "nearest",
+    behavior: "smooth",
+  });
+  nextHighlight.focus();
+  return true;
+}
+
 function handleDocumentKeyDown(event: KeyboardEvent, doc: Document): void {
   if (event.key === "Escape") {
     cancelPendingHoverEnrichment();
     hideHoverCard(doc);
+    return;
+  }
+
+  if (handleHighlightTriageNavigation(event, doc)) {
     return;
   }
 
@@ -166,6 +233,7 @@ function handleDocumentKeyDown(event: KeyboardEvent, doc: Document): void {
       )
         ? "manual"
         : "auto",
+      moveFocusToPanel: true,
     },
     doc
   );

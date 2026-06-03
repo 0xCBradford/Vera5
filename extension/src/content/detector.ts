@@ -7,7 +7,13 @@ import {
   findUrlsInText,
 } from "../lib/iocRegex";
 import type { TextWalkerSkipOptions } from "./textWalker";
-import { collectIocScanTextBlocks } from "./textWalker";
+import {
+  collectIocScanTextBlocksWithProfile,
+  isNodeUnderSkippedSubtree,
+  isTextNodeEligibleForIocScan,
+  resolveTextWalkerSkipOptions,
+  textNodeIntersectsRange,
+} from "./textWalker";
 
 export type DetectedIoc = IocMatch;
 
@@ -18,6 +24,18 @@ export type DetectedIocInTextNode = DetectedIoc & {
 export type IocDetectorScanOptions = {
   ioc?: IocRegexOptions;
   walker?: TextWalkerSkipOptions;
+};
+
+export type IocScanProfile = {
+  textNodesScanned: number;
+  textNodeCap: number;
+  capReached: boolean;
+  durationMs: number;
+};
+
+export type IocScanResult = {
+  matches: DetectedIocInTextNode[];
+  profile: IocScanProfile;
 };
 
 type TextSpan = { start: number; end: number };
@@ -136,12 +154,20 @@ export function scanTextNodesForIocs(
   root: Node = document.body,
   options: IocDetectorScanOptions = {}
 ): DetectedIocInTextNode[] {
+  return scanTextNodesForIocsWithProfile(root, options).matches;
+}
+
+export function scanTextNodesForIocsWithProfile(
+  root: Node = document.body,
+  options: IocDetectorScanOptions = {}
+): IocScanResult {
+  const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
   const iocOptions = options.ioc ?? {};
   const walkerOptions = options.walker ?? {};
-  const blocks = collectIocScanTextBlocks(root, walkerOptions);
+  const collection = collectIocScanTextBlocksWithProfile(root, walkerOptions);
   const detected: DetectedIocInTextNode[] = [];
 
-  for (const block of blocks) {
+  for (const block of collection.blocks) {
     const matches = detectIocsInText(block.text, iocOptions);
     for (const match of matches) {
       detected.push({
@@ -151,5 +177,76 @@ export function scanTextNodesForIocs(
     }
   }
 
-  return detected;
+  const finishedAt = typeof performance !== "undefined" ? performance.now() : 0;
+  return {
+    matches: detected,
+    profile: {
+      textNodesScanned: collection.textNodesScanned,
+      textNodeCap: collection.textNodeCap,
+      capReached: collection.capReached,
+      durationMs: Math.max(0, finishedAt - startedAt),
+    },
+  };
+}
+
+function resolveRangeScanRoot(range: Range, boundary: Node): Node {
+  let scanRoot: Node = range.commonAncestorContainer;
+  if (scanRoot.nodeType === Node.TEXT_NODE) {
+    scanRoot = scanRoot.parentNode ?? boundary;
+  }
+  return scanRoot;
+}
+
+export function scanTextNodesForIocsInRange(
+  range: Range,
+  boundary: Node = document.body,
+  options: IocDetectorScanOptions = {}
+): DetectedIocInTextNode[] {
+  return scanTextNodesForIocsInRangeWithProfile(range, boundary, options).matches;
+}
+
+export function scanTextNodesForIocsInRangeWithProfile(
+  range: Range,
+  boundary: Node = document.body,
+  options: IocDetectorScanOptions = {}
+): IocScanResult {
+  const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
+  const iocOptions = options.ioc ?? {};
+  const walkerOptions = options.walker ?? {};
+  const resolvedWalkerOptions = resolveTextWalkerSkipOptions(walkerOptions);
+  const scanRoot = resolveRangeScanRoot(range, boundary);
+  const collection = collectIocScanTextBlocksWithProfile(scanRoot, walkerOptions);
+  const detected: DetectedIocInTextNode[] = [];
+  let textNodesScanned = 0;
+
+  for (const block of collection.blocks) {
+    if (!textNodeIntersectsRange(block.node, range)) {
+      continue;
+    }
+    if (
+      !isTextNodeEligibleForIocScan(block.node, boundary, resolvedWalkerOptions) ||
+      isNodeUnderSkippedSubtree(block.node, boundary, resolvedWalkerOptions)
+    ) {
+      continue;
+    }
+    textNodesScanned += 1;
+    const matches = detectIocsInText(block.text, iocOptions);
+    for (const match of matches) {
+      detected.push({
+        ...match,
+        textNode: block.node,
+      });
+    }
+  }
+
+  const finishedAt = typeof performance !== "undefined" ? performance.now() : 0;
+  return {
+    matches: detected,
+    profile: {
+      textNodesScanned,
+      textNodeCap: collection.textNodeCap,
+      capReached: false,
+      durationMs: Math.max(0, finishedAt - startedAt),
+    },
+  };
 }

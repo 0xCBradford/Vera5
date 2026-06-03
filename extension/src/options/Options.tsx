@@ -14,7 +14,15 @@ import type {
 } from "../lib/storage";
 import type { IocType } from "../lib/iocRegex";
 import {
-  API_KEY_SLOTS,
+  CENSYS_SECRET_API_KEY_SLOT,
+  ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_DESCRIPTIONS,
+  ENRICHMENT_SOURCE_LABELS,
+  ENRICHMENT_SOURCE_ORDER,
+  OPTIONS_API_KEY_SLOTS,
+  type EnrichmentSourceId,
+} from "../lib/enrichmentSourceRegistry";
+import {
   DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
   getApiKey,
   getAutoScanEnabled,
@@ -24,6 +32,7 @@ import {
   getIncludePrivateIpv4,
   getIocTypeEnabled,
   getManualOnlyMode,
+  getShowDisabledSourcesInWorkspace,
   hasApiKey,
   IOC_TYPE_SETTINGS_ORDER,
   isMaskedApiKeyDisplay,
@@ -37,23 +46,13 @@ import {
   setIncludePrivateIpv4,
   setIocTypeEnabled,
   setManualOnlyMode,
+  setShowDisabledSourcesInWorkspace,
 } from "../lib/storage";
 
-const OPTIONS_API_KEY_SLOTS: ApiKeySlot[] = ["abuseipdb", "otx"];
-
-const ENRICHMENT_SOURCE_LABELS: Record<ApiKeySlot, string> = {
-  abuseipdb: "AbuseIPDB",
-  otx: "OTX",
-  urlscan: "URLScan.io",
-  greynoise: "GreyNoise",
-};
-
-const ENRICHMENT_SOURCE_DESCRIPTIONS: Record<ApiKeySlot, string> = {
-  abuseipdb: "IP reputation and abuse confidence scoring.",
-  otx: "AlienVault Open Threat Exchange pulses.",
-  urlscan: "URL and domain scan intelligence.",
-  greynoise: "Internet background-noise context.",
-};
+const API_KEY_FIELD_SLOTS: ApiKeySlot[] = [
+  ...OPTIONS_API_KEY_SLOTS,
+  CENSYS_SECRET_API_KEY_SLOT,
+];
 
 const IOC_TYPE_OPTION_LABELS: Record<IocType, string> = {
   ipv4: "IPv4 addresses",
@@ -131,25 +130,25 @@ function createDefaultIocTypeEnabledState(): IocTypeEnabledRecord {
 
 function createDefaultSourceEnabledState(): EnrichmentSourceEnabledRecord {
   return Object.fromEntries(
-    API_KEY_SLOTS.map((sourceId) => [sourceId, false])
+    ENRICHMENT_SOURCE_ORDER.map((sourceId) => [sourceId, false])
   ) as EnrichmentSourceEnabledRecord;
 }
 
-function createDefaultSourceCacheTtlDrafts(): Record<ApiKeySlot, string> {
+function createDefaultSourceCacheTtlDrafts(): Record<EnrichmentSourceId, string> {
   return Object.fromEntries(
-    API_KEY_SLOTS.map((sourceId) => [sourceId, ""])
-  ) as Record<ApiKeySlot, string>;
+    ENRICHMENT_SOURCE_ORDER.map((sourceId) => [sourceId, ""])
+  ) as Record<EnrichmentSourceId, string>;
 }
 
 function formatSourceCacheTtlDrafts(
   overrides: EnrichmentSourceCacheTtlRecord
-): Record<ApiKeySlot, string> {
+): Record<EnrichmentSourceId, string> {
   return Object.fromEntries(
-    API_KEY_SLOTS.map((sourceId) => [
+    ENRICHMENT_SOURCE_ORDER.map((sourceId) => [
       sourceId,
       overrides[sourceId] !== undefined ? String(overrides[sourceId]) : "",
     ])
-  ) as Record<ApiKeySlot, string>;
+  ) as Record<EnrichmentSourceId, string>;
 }
 
 function scrollToSection(id: string): void {
@@ -299,6 +298,26 @@ function ApiKeyField({
     "idle"
   );
   const [revealed, setRevealed] = useState(false);
+  const latestDraftRef = useRef(fieldState.draft);
+  const latestEditingRef = useRef(fieldState.editing);
+  const latestConfiguredRef = useRef(fieldState.configured);
+
+  latestDraftRef.current = fieldState.draft;
+  latestEditingRef.current = fieldState.editing;
+  latestConfiguredRef.current = fieldState.configured;
+
+  useEffect(() => {
+    return () => {
+      const trimmed = latestDraftRef.current.trim();
+      if (!trimmed || isMaskedApiKeyDisplay(trimmed)) {
+        return;
+      }
+      if (latestConfiguredRef.current && !latestEditingRef.current) {
+        return;
+      }
+      void onPersist(slot, trimmed);
+    };
+  }, [slot, onPersist]);
 
   const displayValue = fieldState.editing
     ? fieldState.draft
@@ -314,23 +333,33 @@ function ApiKeyField({
       onEditingChange(slot, true);
       onDraftChange(slot, "");
       setSaveState("idle");
+      return;
+    }
+    if (!fieldState.editing) {
+      onEditingChange(slot, true);
     }
   };
 
-  const handleBlur = () => {
+  const handleBlur = (event: React.FocusEvent<HTMLInputElement>) => {
     if (!ready) {
       return;
     }
 
-    const trimmed = fieldState.draft.trim();
-
-    if (fieldState.editing && !trimmed) {
-      onEditingChange(slot, false);
-      onDraftChange(slot, "");
+    if (fieldState.configured && !fieldState.editing) {
       return;
     }
 
-    if (!fieldState.editing || !trimmed || isMaskedApiKeyDisplay(trimmed)) {
+    const trimmed = event.currentTarget.value.trim();
+
+    if (!trimmed) {
+      if (fieldState.editing) {
+        onEditingChange(slot, false);
+        onDraftChange(slot, "");
+      }
+      return;
+    }
+
+    if (isMaskedApiKeyDisplay(trimmed)) {
       return;
     }
 
@@ -343,6 +372,13 @@ function ApiKeyField({
       .catch(() => {
         setSaveState("error");
       });
+  };
+
+  const handleChange = (value: string) => {
+    onDraftChange(slot, value);
+    if (!fieldState.editing && value.trim().length > 0) {
+      onEditingChange(slot, true);
+    }
   };
 
   return (
@@ -381,7 +417,7 @@ function ApiKeyField({
               : "Paste your API key"
           }
           onFocus={handleFocus}
-          onChange={(event) => onDraftChange(slot, event.target.value)}
+          onChange={(event) => handleChange(event.target.value)}
           onBlur={handleBlur}
           aria-label={`${label} API key`}
         />
@@ -424,6 +460,12 @@ function createEmptyFieldState(): ApiKeyFieldState {
   };
 }
 
+function createEmptyApiKeyFieldStates(): Record<ApiKeySlot, ApiKeyFieldState> {
+  return Object.fromEntries(
+    API_KEY_FIELD_SLOTS.map((slot) => [slot, createEmptyFieldState()])
+  ) as Record<ApiKeySlot, ApiKeyFieldState>;
+}
+
 export function Options() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
@@ -436,11 +478,13 @@ export function Options() {
   const [iocTypeEnabled, setIocTypeEnabledState] =
     useState<IocTypeEnabledRecord>(createDefaultIocTypeEnabledState());
   const [includePrivateIpv4, setIncludePrivateIpv4State] = useState(false);
+  const [showDisabledSourcesInWorkspace, setShowDisabledSourcesInWorkspaceState] =
+    useState(false);
   const [globalCacheTtlSeconds, setGlobalCacheTtlSecondsState] = useState(
     String(DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS)
   );
   const [sourceCacheTtlDrafts, setSourceCacheTtlDraftsState] = useState<
-    Record<ApiKeySlot, string>
+    Record<EnrichmentSourceId, string>
   >(createDefaultSourceCacheTtlDrafts());
   const [includeApiKeysInExport, setIncludeApiKeysInExport] = useState(false);
   const [clearCacheState, setClearCacheState] = useState<
@@ -452,12 +496,9 @@ export function Options() {
   const [importState, setImportState] = useState<
     "idle" | "importing" | "imported" | "error"
   >("idle");
-  const [fieldStates, setFieldStates] = useState<
-    Record<(typeof OPTIONS_API_KEY_SLOTS)[number], ApiKeyFieldState>
-  >({
-    abuseipdb: createEmptyFieldState(),
-    otx: createEmptyFieldState(),
-  });
+  const [fieldStates, setFieldStates] = useState<Record<ApiKeySlot, ApiKeyFieldState>>(
+    createEmptyApiKeyFieldStates()
+  );
 
   useEffect(() => {
     setReady(false);
@@ -467,9 +508,10 @@ export function Options() {
       getEnrichmentSourceEnabled(),
       getIocTypeEnabled(),
       getIncludePrivateIpv4(),
+      getShowDisabledSourcesInWorkspace(),
       getEnrichmentCacheTtlSecondsFromSettings(),
       getEnrichmentSourceCacheTtlSeconds(),
-      ...OPTIONS_API_KEY_SLOTS.map(async (slot) => {
+      ...API_KEY_FIELD_SLOTS.map(async (slot) => {
         const configured = await hasApiKey(slot);
         if (!configured) {
           return [slot, createEmptyFieldState()] as const;
@@ -494,6 +536,7 @@ export function Options() {
           sourceEnabledValue,
           iocTypeEnabledValue,
           includePrivateIpv4Value,
+          showDisabledSourcesValue,
           globalCacheTtlValue,
           sourceCacheTtlValue,
           ...entries
@@ -503,6 +546,7 @@ export function Options() {
           setEnrichmentSourceEnabledState(sourceEnabledValue);
           setIocTypeEnabledState(iocTypeEnabledValue);
           setIncludePrivateIpv4State(includePrivateIpv4Value);
+          setShowDisabledSourcesInWorkspaceState(showDisabledSourcesValue);
           setGlobalCacheTtlSecondsState(String(globalCacheTtlValue));
           setSourceCacheTtlDraftsState(
             formatSourceCacheTtlDrafts(sourceCacheTtlValue)
@@ -562,7 +606,7 @@ export function Options() {
     void setManualOnlyMode(checked);
   };
 
-  const handleSourceToggle = (sourceId: ApiKeySlot, checked: boolean) => {
+  const handleSourceToggle = (sourceId: EnrichmentSourceId, checked: boolean) => {
     setEnrichmentSourceEnabledState((current) => ({
       ...current,
       [sourceId]: checked,
@@ -583,6 +627,11 @@ export function Options() {
     void setIncludePrivateIpv4(checked);
   };
 
+  const handleShowDisabledSourcesToggle = (checked: boolean) => {
+    setShowDisabledSourcesInWorkspaceState(checked);
+    void setShowDisabledSourcesInWorkspace(checked);
+  };
+
   const handleGlobalCacheTtlBlur = () => {
     const parsed = readStoredCacheTtlSeconds(
       globalCacheTtlSeconds,
@@ -597,7 +646,7 @@ export function Options() {
     void setEnrichmentCacheTtlSeconds(seconds);
   };
 
-  const handleSourceCacheTtlBlur = (sourceId: ApiKeySlot) => {
+  const handleSourceCacheTtlBlur = (sourceId: EnrichmentSourceId) => {
     const raw = sourceCacheTtlDrafts[sourceId].trim();
     if (raw === "") {
       setSourceCacheTtlDraftsState((current) => ({
@@ -714,24 +763,37 @@ export function Options() {
   const enabledIocTypes = IOC_TYPE_SETTINGS_ORDER.filter(
     (iocType) => iocTypeEnabled[iocType] !== false
   );
-  const enabledSources = API_KEY_SLOTS.filter(
+  const enabledSources = ENRICHMENT_SOURCE_ORDER.filter(
     (sourceId) => enrichmentSourceEnabled[sourceId] === true
   );
   const parsedGlobalTtl = Number(globalCacheTtlSeconds);
 
+  const sourceHasConfiguredKeys = (sourceId: EnrichmentSourceId): boolean => {
+    if (!OPTIONS_API_KEY_SLOTS.includes(sourceId)) {
+      return true;
+    }
+    if (sourceId === ENRICHMENT_SOURCE.CENSYS) {
+      return (
+        fieldStates[ENRICHMENT_SOURCE.CENSYS]?.configured === true &&
+        fieldStates[CENSYS_SECRET_API_KEY_SLOT]?.configured === true
+      );
+    }
+    return fieldStates[sourceId]?.configured === true;
+  };
+
   const sourceStatus = (
-    sourceId: ApiKeySlot
+    sourceId: EnrichmentSourceId
   ): { className: string; label: string; withDot: boolean } => {
     const enabled = enrichmentSourceEnabled[sourceId] === true;
     if (!enabled) {
       return { className: "v5-badge--off", label: "Disabled", withDot: false };
     }
     const keyed = OPTIONS_API_KEY_SLOTS.includes(sourceId);
-    if (keyed && !fieldStates[sourceId]?.configured) {
+    if (keyed && !sourceHasConfiguredKeys(sourceId)) {
       return { className: "v5-badge--warn", label: "No API key", withDot: true };
     }
     if (keyed) {
-      return { className: "v5-badge--on", label: "Connected", withDot: true };
+      return { className: "v5-badge--on", label: "Saved", withDot: true };
     }
     return { className: "v5-badge--on", label: "Enabled", withDot: true };
   };
@@ -830,7 +892,7 @@ export function Options() {
                   <div className="v5-stat__label">Enrichment sources</div>
                   <div className="v5-stat__value">
                     {enabledSources.length}
-                    <small> / {API_KEY_SLOTS.length} enabled</small>
+                    <small> / {ENRICHMENT_SOURCE_ORDER.length} enabled</small>
                   </div>
                   <div className="v5-chips">
                     {enabledSources.length > 0 ? (
@@ -1011,8 +1073,16 @@ export function Options() {
                 disabled={!ready}
                 onChange={handleManualOnlyToggle}
               />
+              <ToggleRow
+                label="Show disabled sources in workspace"
+                hint="When off, disabled enrichment sources are hidden from workspace Sources and Recommended pivots."
+                ariaLabel="Show disabled sources in workspace"
+                checked={showDisabledSourcesInWorkspace}
+                disabled={!ready}
+                onChange={handleShowDisabledSourcesToggle}
+              />
               <div className="v5-sources">
-                {API_KEY_SLOTS.map((sourceId) => {
+                {ENRICHMENT_SOURCE_ORDER.map((sourceId) => {
                   const status = sourceStatus(sourceId);
                   const keyed = OPTIONS_API_KEY_SLOTS.includes(sourceId);
                   return (
@@ -1275,6 +1345,16 @@ export function Options() {
                   onSaved={handleSaved}
                 />
               ))}
+              <ApiKeyField
+                slot={CENSYS_SECRET_API_KEY_SLOT}
+                label="Censys API secret"
+                ready={ready}
+                fieldState={fieldStates[CENSYS_SECRET_API_KEY_SLOT]}
+                onDraftChange={handleDraftChange}
+                onEditingChange={handleEditingChange}
+                onPersist={handlePersist}
+                onSaved={handleSaved}
+              />
             </div>
           </section>
         </div>

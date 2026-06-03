@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   navigateToIocAnchorMessage,
   openWorkspaceMessage,
+  enrichSelectionMessage,
   scanPageMessage,
+  scanSelectionMessage,
 } from "../lib/messages";
 import {
   getTabScanTrayFilter,
@@ -146,6 +148,9 @@ export function Popup() {
   const [trayEnrichmentStatuses, setTrayEnrichmentStatuses] = useState<
     Record<string, TrayEntryEnrichmentStatus>
   >({});
+  const [selectionEnrichMessage, setSelectionEnrichMessage] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     void Promise.all([getExtensionEnabled(), getHighlightEnabled()]).then(
@@ -340,6 +345,90 @@ export function Popup() {
       });
   };
 
+  const handleScanSelection = () => {
+    if (!enabled) {
+      return;
+    }
+    setSelectionEnrichMessage(null);
+    setScanState("scanning");
+    setScanSummary(null);
+    setTypeFilter("all");
+    setTrayFilterReady(false);
+    setTrayNavigationMessage(null);
+    void chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(([tab]) => {
+        if (tab?.id) {
+          void saveTabScanTrayFilter(tab.id, "all");
+        }
+      });
+    void chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(async ([tab]) => {
+        if (!tab?.id) {
+          setScanState("error");
+          return;
+        }
+        try {
+          const response = await chrome.tabs.sendMessage(tab.id, scanSelectionMessage());
+          if (
+            response &&
+            typeof response === "object" &&
+            "ok" in response &&
+            response.ok === true
+          ) {
+            const summary = await requestTabScanSummaryForActiveTab();
+            if (summary !== null) {
+              setScanSummary(summary);
+              setScanState("done");
+              return;
+            }
+          }
+          setScanState("error");
+        } catch {
+          setScanState("error");
+        }
+      });
+  };
+
+  const handleEnrichSelection = () => {
+    if (!enabled) {
+      return;
+    }
+    setSelectionEnrichMessage(null);
+    void chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(async ([tab]) => {
+        if (!tab?.id) {
+          setSelectionEnrichMessage("Could not reach this page. Reload the tab and try again.");
+          return;
+        }
+        try {
+          const response = await chrome.tabs.sendMessage(tab.id, enrichSelectionMessage());
+          if (
+            response &&
+            typeof response === "object" &&
+            "ok" in response &&
+            response.ok === true
+          ) {
+            return;
+          }
+          const errorMessage =
+            response &&
+            typeof response === "object" &&
+            "error" in response &&
+            typeof response.error === "string"
+              ? response.error
+              : "Enrichment failed. Reload the tab and try again.";
+          setSelectionEnrichMessage(errorMessage);
+        } catch {
+          setSelectionEnrichMessage(
+            "Could not reach this page. Reload the tab and try again."
+          );
+        }
+      });
+  };
+
   return (
     <main
       style={{
@@ -415,6 +504,32 @@ export function Popup() {
       </button>
       <button
         type="button"
+        disabled={!ready || !enabled || scanState === "scanning"}
+        onClick={handleScanSelection}
+        style={{
+          ...buttonStyle,
+          marginBottom: 8,
+          cursor: !ready || !enabled ? "not-allowed" : "pointer",
+          opacity: !ready || !enabled ? 0.65 : 1,
+        }}
+      >
+        {scanState === "scanning" ? "Scanning…" : "Scan selection"}
+      </button>
+      <button
+        type="button"
+        disabled={!ready || !enabled}
+        onClick={handleEnrichSelection}
+        style={{
+          ...buttonStyle,
+          marginBottom: 8,
+          cursor: !ready || !enabled ? "not-allowed" : "pointer",
+          opacity: !ready || !enabled ? 0.65 : 1,
+        }}
+      >
+        Enrich selection
+      </button>
+      <button
+        type="button"
         disabled={!ready}
         onClick={handleOpenSettings}
         style={{
@@ -453,6 +568,11 @@ export function Popup() {
       </button>
       {scanState === "error" ? (        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
           Scan failed. Reload the tab and try again.
+        </p>
+      ) : null}
+      {selectionEnrichMessage ? (
+        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
+          {selectionEnrichMessage}
         </p>
       ) : null}
       {trayView ? (

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
-import { ENRICHMENT_SOURCE } from "./hoverCardEnrichment";
+import { ENRICHMENT_SOURCE, ENRICHMENT_SOURCE_ORDER } from "./hoverCardEnrichment";
 import {
   buildHoverCardRiskReasoningChain,
   buildHoverCardRiskScoreView,
@@ -405,12 +405,7 @@ describe("createHoverCardRiskReasoningSection", () => {
 });
 
 describe("resolveHoverCardRiskScorePresentation", () => {
-  const allDisabled = [
-    ENRICHMENT_SOURCE.ABUSEIPDB,
-    ENRICHMENT_SOURCE.OTX,
-    ENRICHMENT_SOURCE.URLSCAN,
-    ENRICHMENT_SOURCE.GREYNOISE,
-  ];
+  const allDisabled = [...ENRICHMENT_SOURCE_ORDER];
   const okAbuse = {
     sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
     label: "AbuseIPDB",

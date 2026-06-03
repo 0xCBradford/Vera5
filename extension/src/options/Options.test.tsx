@@ -189,6 +189,40 @@ describe("Options API key inputs", () => {
     expect(otxInput?.getAttribute("autocomplete")).toBe("off");
   });
 
+  it("persists a newly entered API key on blur", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const abuseInput = mounted.container.querySelector(
+      'input[aria-label="AbuseIPDB API key"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      abuseInput.focus();
+    });
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(abuseInput, "fresh-abuse-key");
+      abuseInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      abuseInput.blur();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      abuseipdb: "fresh-abuse-key",
+    });
+    expect(mounted.container.textContent).toContain("Saved locally.");
+  });
+
   it("loads stored keys as masked previews only", async () => {
     store[STORAGE_KEY_API_KEYS] = {
       abuseipdb: "abuse-secret",

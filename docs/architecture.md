@@ -56,7 +56,7 @@ The initial Vera5 release detects and enriches **only** the indicator types belo
 
 Analyst-facing limits for cache TTL are listed in [README.md](../README.md). Limit exposure with per-type toggles, per-source toggles, manual-only enrichment, and choosing when to scan sensitive pages.
 
-**Fixtures:** Public sample values for manual and automated tests live in [`examples/sample-iocs.txt`](../examples/sample-iocs.txt). Static HTML pages [`examples/sample-alert.html`](../examples/sample-alert.html) and [`examples/sample-blog.html`](../examples/sample-blog.html) embed those values plus decoy strings for manual scan checks.
+**Fixtures:** Public sample values for manual and automated tests live in [`examples/sample-iocs.txt`](../examples/sample-iocs.txt). Static HTML pages [`examples/sample-alert.html`](../examples/sample-alert.html) and [`examples/sample-blog.html`](../examples/sample-blog.html) embed those values plus decoy strings for manual scan checks. SOC dashboard-style pages [`examples/sample-splunk-export.html`](../examples/sample-splunk-export.html) and [`examples/sample-security-onion-alert.html`](../examples/sample-security-onion-alert.html) support repeatable validation on dense tables and alert grids—see [soc-validation-fixtures.md](soc-validation-fixtures.md).
 
 ## Page scan and mutation rescan
 
@@ -84,7 +84,8 @@ The detector applies conservative matching in `extension/src/lib/iocRegex.ts`, D
 | Pattern or context | Affected types | Suppression | Example decoy |
 |--------------------|----------------|-------------|---------------|
 | Semver or `version` immediately before a dotted quad | IPv4 | Reject match when prefix looks like a product version | `version 1.2.3.4` |
-| Filename-style token with common file-extension TLD | Domain | Denylist TLD (`png`, `js`, `css`, `html`, `json`, etc.) | `chart.png`, `report.csv` |
+| `from` … `to` upgrade range with single-digit semver-like quad | IPv4 | Reject when dotted quad is four single-digit octets in a `from X to Y` range | `from 1.2.3.4 to 2.0.0` |
+| Filename-style token with common file-extension TLD | Domain | Denylist TLD (`png`, `js`, `css`, `html`, `json`, `log`, etc.) | `chart.png`, `report.csv`, `splunkd.log` |
 | Local part of an email (text after `@` without whitespace before domain) | Domain | Skip when inside email local-part context | `analyst@example.com` (domain in address not scanned as standalone host) |
 | Hex string inside a longer hex run | MD5, SHA1, SHA256 | Longest-match first; boundary requires non-hex neighbors | 64-char SHA256 not split into two MD5s |
 | All-identical hex digits | MD5, SHA1, SHA256 | Reject trivial digests | `00000000000000000000000000000000` |
@@ -128,7 +129,7 @@ Configurable walker flags can set `skipScript`, `skipStyle`, or `skipTextarea` t
 
 ### Manual validation
 
-Use **Scan page** in the popup (or the `scan-page` keyboard shortcut) on the sample HTML files and compare counts to dev-console output (`detection count` only in development builds). Record unexpected highlights on these pages before changing regex rules so tuning stays tied to reproducible fixtures.
+Use **Scan page** in the popup (or the `scan-page` keyboard shortcut) on the sample HTML files and compare counts to dev-console output (`detection count` only in development builds). Record unexpected highlights on these pages before changing regex rules so tuning stays tied to reproducible fixtures. SOC dashboard fixtures and a repeatable checklist are documented in [soc-validation-fixtures.md](soc-validation-fixtures.md).
 
 ## MVP enrichment connectors (frozen)
 

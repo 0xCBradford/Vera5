@@ -5,7 +5,9 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it } from "vitest";
-import { ENRICHMENT_SOURCE } from "../lib/hoverCardEnrichment";
+import { ENRICHMENT_SOURCE, ENRICHMENT_SOURCE_ORDER } from "../lib/hoverCardEnrichment";
+
+const ALL_DISABLED_ENRICHMENT_SOURCES = [...ENRICHMENT_SOURCE_ORDER];
 import { COMPOSITE_SCORE_DISAGREEMENT_NOTICE } from "../lib/scoring";
 import { RiskScore } from "./RiskScore";
 
@@ -37,12 +39,7 @@ describe("RiskScore", () => {
 
   it("shows explicit unavailable state when all enrichment sources are disabled", () => {
     mounted = renderRiskScore({
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: ALL_DISABLED_ENRICHMENT_SOURCES,
       sourceResults: [
         {
           sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,

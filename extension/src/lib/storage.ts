@@ -1,5 +1,11 @@
 import type { EnrichmentSourceId } from "./hoverCardEnrichment";
 import type { IocType } from "./iocRegex";
+import {
+  API_KEY_STORAGE_SLOTS,
+  ENRICHMENT_SOURCE_ORDER,
+  isApiKeyStorageSlot,
+  type ApiKeyStorageSlot,
+} from "./enrichmentSourceRegistry";
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -18,6 +24,8 @@ export const STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS =
   "enrichmentCacheTtlSeconds";
 export const STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS =
   "enrichmentSourceCacheTtlSeconds";
+export const STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE =
+  "showDisabledSourcesInWorkspace";
 
 export const STORAGE_KEYS = {
   EXTENSION_ENABLED: STORAGE_KEY_EXTENSION_ENABLED,
@@ -32,9 +40,11 @@ export const STORAGE_KEYS = {
   ENRICHMENT_CACHE_TTL_SECONDS: STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
   ENRICHMENT_SOURCE_CACHE_TTL_SECONDS:
     STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
+  SHOW_DISABLED_SOURCES_IN_WORKSPACE:
+    STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE,
 } as const;
 
-export type ApiKeySlot = EnrichmentSourceId;
+export type ApiKeySlot = ApiKeyStorageSlot;
 
 export type ApiKeysRecord = Partial<Record<ApiKeySlot, string>>;
 
@@ -60,6 +70,7 @@ export type Vera5Settings = {
   iocTypeEnabled: IocTypeEnabledRecord;
   enrichmentCacheTtlSeconds: number;
   enrichmentSourceCacheTtlSeconds: EnrichmentSourceCacheTtlRecord;
+  showDisabledSourcesInWorkspace: boolean;
 };
 
 export type Vera5StorageRaw = {
@@ -74,6 +85,7 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_IOC_TYPE_ENABLED]?: unknown;
   [STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS]?: unknown;
   [STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS]?: unknown;
+  [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]?: unknown;
 };
 
 export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
@@ -87,6 +99,7 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_IOC_TYPE_ENABLED,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
+  STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE,
 ];
 
 export const VERA5_SETTINGS_READ_KEYS: readonly string[] = [
@@ -94,12 +107,7 @@ export const VERA5_SETTINGS_READ_KEYS: readonly string[] = [
   STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
 ];
 
-export const API_KEY_SLOTS: readonly ApiKeySlot[] = [
-  "abuseipdb",
-  "otx",
-  "urlscan",
-  "greynoise",
-];
+export const API_KEY_SLOTS: readonly ApiKeySlot[] = API_KEY_STORAGE_SLOTS;
 
 export const IOC_TYPE_SETTINGS_ORDER: readonly IocType[] = [
   "ipv4",
@@ -120,7 +128,7 @@ export function isApiKeysRecord(value: unknown): value is ApiKeysRecord {
 
   return Object.entries(value).every(
     ([key, entry]) =>
-      API_KEY_SLOTS.includes(key as ApiKeySlot) && typeof entry === "string"
+      isApiKeyStorageSlot(key) && typeof entry === "string"
   );
 }
 
@@ -133,7 +141,7 @@ export function isEnrichmentSourceEnabledRecord(
 
   return Object.entries(value).every(
     ([key, entry]) =>
-      API_KEY_SLOTS.includes(key as EnrichmentSourceId) &&
+      ENRICHMENT_SOURCE_ORDER.includes(key as EnrichmentSourceId) &&
       typeof entry === "boolean"
   );
 }
@@ -147,7 +155,7 @@ export function isEnrichmentSourceCacheTtlRecord(
 
   return Object.entries(value).every(
     ([key, entry]) =>
-      API_KEY_SLOTS.includes(key as ApiKeySlot) &&
+      ENRICHMENT_SOURCE_ORDER.includes(key as EnrichmentSourceId) &&
       typeof entry === "number" &&
       Number.isFinite(entry) &&
       entry >= 0
@@ -172,7 +180,7 @@ export function createDefaultApiKeysRecord(): ApiKeysRecord {
 
 export function createDefaultEnrichmentSourceEnabledRecord(): EnrichmentSourceEnabledRecord {
   const record: EnrichmentSourceEnabledRecord = {};
-  for (const sourceId of API_KEY_SLOTS) {
+  for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
     record[sourceId] = false;
   }
   return record;
@@ -204,6 +212,7 @@ export function createDefaultVera5Settings(): Vera5Settings {
     enrichmentCacheTtlSeconds: DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
     enrichmentSourceCacheTtlSeconds:
       createDefaultEnrichmentSourceCacheTtlRecord(),
+    showDisabledSourcesInWorkspace: false,
   };
 }
 
@@ -216,8 +225,8 @@ export function normalizeEnrichmentSourceCacheTtlRecord(
 
   const record: EnrichmentSourceCacheTtlRecord = {};
   for (const [key, ttl] of Object.entries(value)) {
-    if (API_KEY_SLOTS.includes(key as ApiKeySlot)) {
-      record[key as ApiKeySlot] = Math.floor(ttl as number);
+    if (ENRICHMENT_SOURCE_ORDER.includes(key as EnrichmentSourceId)) {
+      record[key as EnrichmentSourceId] = Math.floor(ttl as number);
     }
   }
   return record;
@@ -277,7 +286,7 @@ export function normalizeEnrichmentSourceEnabledRecord(
   }
 
   const normalized: EnrichmentSourceEnabledRecord = { ...defaults };
-  for (const sourceId of API_KEY_SLOTS) {
+  for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
     const entry = value[sourceId];
     if (typeof entry === "boolean") {
       normalized[sourceId] = entry;
@@ -343,6 +352,10 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
     enrichmentSourceCacheTtlSeconds: normalizeEnrichmentSourceCacheTtlRecord(
       raw[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS]
     ),
+    showDisabledSourcesInWorkspace: readStoredBoolean(
+      raw[STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE],
+      defaults.showDisabledSourcesInWorkspace
+    ),
   };
 }
 
@@ -375,6 +388,8 @@ export function vera5SettingsToStoragePayload(
       settings.enrichmentCacheTtlSeconds,
     [STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS]:
       settings.enrichmentSourceCacheTtlSeconds,
+    [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]:
+      settings.showDisabledSourcesInWorkspace,
   };
 }
 
@@ -557,8 +572,21 @@ export async function getEnrichmentSourceCacheTtlSeconds(): Promise<EnrichmentSo
 
 export function listDisabledEnrichmentSources(
   sources: EnrichmentSourceEnabledRecord
-): ApiKeySlot[] {
-  return API_KEY_SLOTS.filter((sourceId) => sources[sourceId] !== true);
+): EnrichmentSourceId[] {
+  return ENRICHMENT_SOURCE_ORDER.filter((sourceId) => sources[sourceId] !== true);
+}
+
+export async function getShowDisabledSourcesInWorkspace(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.showDisabledSourcesInWorkspace;
+}
+
+export async function setShowDisabledSourcesInWorkspace(
+  enabled: boolean
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]: enabled,
+  });
 }
 
 export function maskApiKeyForDisplay(key: string): string {

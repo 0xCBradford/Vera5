@@ -101,6 +101,8 @@ describe("Popup IOC tray", () => {
       );
     });
     expect(mounted?.container.textContent).toContain("Scan page");
+    expect(mounted?.container.textContent).toContain("Scan selection");
+    expect(mounted?.container.textContent).toContain("Enrich selection");
     expect(mounted?.container.textContent).toContain("Settings");
   });
 

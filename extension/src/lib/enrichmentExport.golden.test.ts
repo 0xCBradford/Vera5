@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildHoverCardSourceEntries,
-  ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_ORDER,
 } from "./hoverCardEnrichment";
 import {
   buildEnrichmentExportMarkdown,
@@ -70,12 +70,7 @@ function sourcesDisabledRecord() {
   return buildNormalizedEnrichmentRecord({
     value: "8.8.8.8",
     iocType: IOC_TYPE.IPV4,
-    disabledSources: [
-      ENRICHMENT_SOURCE.ABUSEIPDB,
-      ENRICHMENT_SOURCE.OTX,
-      ENRICHMENT_SOURCE.URLSCAN,
-      ENRICHMENT_SOURCE.GREYNOISE,
-    ],
+    disabledSources: [...ENRICHMENT_SOURCE_ORDER],
     exportedAt: EXPORTED_AT,
   });
 }

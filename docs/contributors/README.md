@@ -25,6 +25,7 @@ Guides for developers working on the Vera5 browser extension. These documents de
 ## Related public docs
 
 - [docs/architecture.md](../architecture.md) — frozen MVP IOC and connector scope
+- [docs/soc-validation-fixtures.md](../soc-validation-fixtures.md) — SOC HTML fixtures and repeatable validation checklist
 - [docs/export-artifacts.md](../export-artifacts.md) — case artifact export field contract
 - [docs/api-integrations.md](../api-integrations.md) — vendor quotas (user-oriented)
 - [CONTRIBUTING.md](../../CONTRIBUTING.md) — PR workflow and quality gate

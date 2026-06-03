@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Security Onion alert — SSH outbound (sample)</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f6f8;
+        --panel: #ffffff;
+        --border: #d0d7de;
+        --text: #1f2328;
+        --muted: #656d76;
+        --critical: #cf222e;
+        --high: #bc4c00;
+        --accent: #0550ae;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        margin: 0;
+      }
+      header {
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        padding: 1rem 1.25rem;
+      }
+      header h1 {
+        font-size: 1.15rem;
+        margin: 0 0 0.35rem;
+      }
+      .disclaimer,
+      .meta {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .badge {
+        background: #ffebe9;
+        border: 1px solid #ff818266;
+        border-radius: 999px;
+        color: var(--critical);
+        display: inline-block;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-top: 0.5rem;
+        padding: 0.15rem 0.55rem;
+      }
+      main {
+        margin: 0 auto;
+        max-width: 58rem;
+        padding: 1rem 1.25rem 2rem;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 1rem;
+        padding: 1rem;
+      }
+      section h2 {
+        font-size: 0.95rem;
+        margin: 0 0 0.75rem;
+      }
+      dl.grid {
+        display: grid;
+        gap: 0.65rem 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+        margin: 0;
+      }
+      dl.grid div {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 0.55rem 0.65rem;
+      }
+      dt {
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        margin: 0 0 0.2rem;
+        text-transform: uppercase;
+      }
+      dd {
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.82rem;
+        margin: 0;
+        word-break: break-all;
+      }
+      pre.log {
+        background: #f6f8fa;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.78rem;
+        margin: 0;
+        overflow: auto;
+        padding: 0.75rem;
+        white-space: pre-wrap;
+      }
+      .notes {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Security Onion alert — SSH outbound to suspicious host</h1>
+      <p class="disclaimer">
+        Documentation-only HTML fixture mimicking a Security Onion alert detail view.
+        Indicator values use public test data (RFC 5737, sample hashes, MITRE CVE
+        IDs)—not live incident intelligence.
+      </p>
+      <p class="meta">Alert ID SO-20260601-0142 · Sensor grid-proxy-01 · Zeek + Suricata</p>
+      <span class="badge">Critical</span>
+    </header>
+
+    <main>
+      <section aria-labelledby="summary-heading">
+        <h2 id="summary-heading">Alert summary</h2>
+        <p>
+          Host <strong>WIN10-LAB01</strong> initiated SSH to external address
+          <strong>185.220.101.4</strong>. Passive DNS for
+          <strong>malware.testcategory.com</strong> appeared in the same window.
+          Related download URL
+          <a href="https://example.com/login">https://example.com/login</a> was
+          observed in HTTP logs. File hash
+          <code>d41d8cd98f00b204e9800998ecf8427e</code> matched a dormant YARA
+          ruleset. Adjacent assets reference <strong>CVE-2021-44228</strong> as a
+          probable initial-access vector.
+        </p>
+      </section>
+
+      <section aria-labelledby="fields-heading">
+        <h2 id="fields-heading">Indicator fields</h2>
+        <dl class="grid">
+          <div>
+            <dt>Source IP</dt>
+            <dd>192.0.2.1</dd>
+          </div>
+          <div>
+            <dt>Destination IP</dt>
+            <dd>185.220.101.4</dd>
+          </div>
+          <div>
+            <dt>Resolver seen</dt>
+            <dd>8.8.8.8</dd>
+          </div>
+          <div>
+            <dt>Domain</dt>
+            <dd>malware.testcategory.com</dd>
+          </div>
+          <div>
+            <dt>URL</dt>
+            <dd>https://example.com/login?ref=analyst</dd>
+          </div>
+          <div>
+            <dt>HTTP mirror</dt>
+            <dd>http://192.0.2.1/resource?id=1</dd>
+          </div>
+          <div>
+            <dt>MD5</dt>
+            <dd>098f6bcd4621d373cade4e832627b4f6</dd>
+          </div>
+          <div>
+            <dt>SHA1</dt>
+            <dd>aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</dd>
+          </div>
+          <div>
+            <dt>SHA256</dt>
+            <dd>2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117</dd>
+          </div>
+          <div>
+            <dt>CVE</dt>
+            <dd>CVE-2017-0144</dd>
+          </div>
+          <div>
+            <dt>Community CVE</dt>
+            <dd>CVE-2021-44228</dd>
+          </div>
+          <div>
+            <dt>Secondary hash</dt>
+            <dd>e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section aria-labelledby="zeek-heading">
+        <h2 id="zeek-heading">Zeek conn.log excerpt</h2>
+        <pre class="log">#fields ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service
+1609459200.123456	CXk9j2	192.0.2.1	52413	185.220.101.4	22	tcp	ssh
+1609459201.654321	BYm3k8	192.0.2.1	52414	8.8.8.8	53	udp	dns
+1609459202.987654	AZp4m1	192.0.2.1	52415	192.0.2.50	443	tcp	ssl
+# http.log note: GET https://example.com/login?ref=analyst host=malware.testcategory.com
+# files.log md5=d41d8cd98f00b204e9800998ecf8427e sha1=aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</pre>
+      </section>
+
+      <section aria-labelledby="suricata-heading">
+        <h2 id="suricata-heading">Suricata alert</h2>
+        <p>
+          Signature <strong>ET POLICY SSH connection attempt outbound</strong> —
+          src <code>192.0.2.1</code> → dst <code>185.220.101.4</code> port 22.
+          Related file hash
+          <code>2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117</code>
+          tagged in parallel sandbox run referencing CVE-2017-0144.
+        </p>
+      </section>
+
+      <section aria-labelledby="notes-heading">
+        <h2 id="notes-heading">Analyst notes</h2>
+        <p class="notes">
+          Grid maintenance upgraded the sensor package from 1.2.3.4 to 2.0.0.
+          Exported artifacts include alert-screenshot.png and zeek-export.csv for
+          the ticket—these filenames are operational noise, not indicators.
+        </p>
+      </section>
+
+      <script>
+        const analystDraft = "http://10.0.0.1/so/search?alert=SO-20260601-0142";
+      </script>
+      <textarea readonly aria-hidden="true">
+        Private-space literal 10.0.0.1 sometimes appears in form defaults only.
+      </textarea>
+    </main>
+  </body>
+</html>

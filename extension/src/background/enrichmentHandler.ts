@@ -7,6 +7,7 @@ import {
   invalidateEnrichmentCacheForIoc,
   readCachedEnrichmentSourceResult,
 } from "../lib/cache";
+import { enrichWithConnectorShell } from "../lib/enrichmentConnectorShell";
 import { enrichWithOtx } from "../lib/otxConnector";
 import {
   formatGlobalEnrichmentCooldownMessage,
@@ -29,6 +30,10 @@ import {
   ENRICHMENT_SOURCE_LABELS,
 } from "../lib/hoverCardEnrichment";
 import type { EnrichmentSourceId } from "../lib/hoverCardEnrichment";
+import {
+  ENRICHMENT_SOURCE_DEFINITIONS,
+  isEnrichmentSourceId,
+} from "../lib/enrichmentSourceRegistry";
 import type { EnrichIocMessage, MessageResponse } from "../lib/messages";
 import { isEnrichIocMessage } from "../lib/messages";
 import {
@@ -49,17 +54,6 @@ function createGlobalCooldownSourceResult(
   });
 }
 
-function isSupportedEnrichmentSource(
-  sourceId: string
-): sourceId is EnrichmentSourceId {
-  return (
-    sourceId === ENRICHMENT_SOURCE.ABUSEIPDB ||
-    sourceId === ENRICHMENT_SOURCE.OTX ||
-    sourceId === ENRICHMENT_SOURCE.URLSCAN ||
-    sourceId === ENRICHMENT_SOURCE.GREYNOISE
-  );
-}
-
 async function fetchLiveSource(
   sourceId: EnrichmentSourceId,
   ioc: EnrichmentIoc
@@ -72,11 +66,15 @@ async function fetchLiveSource(
     return enrichWithOtx(ioc);
   }
 
-  return createErrorSourceResult({
-    sourceId,
-    errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
-    errorMessage: "Live connector is not available for this source yet.",
-  });
+  if (ENRICHMENT_SOURCE_DEFINITIONS[sourceId].liveConnector) {
+    return createErrorSourceResult({
+      sourceId,
+      errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
+      errorMessage: `${ENRICHMENT_SOURCE_LABELS[sourceId]} request failed.`,
+    });
+  }
+
+  return enrichWithConnectorShell(sourceId, ioc);
 }
 
 async function enrichLiveSource(
@@ -104,14 +102,22 @@ async function enrichLiveSource(
     }
   }
 
-  const result = await fetchLiveSource(sourceId, ioc);
-  if (isRateLimitedError(result.errorCode)) {
-    recordGlobalEnrichmentCooldown(
-      parseRetryAfterSecondsFromHint(result.retryHint)
-    );
+  try {
+    const result = await fetchLiveSource(sourceId, ioc);
+    if (isRateLimitedError(result.errorCode)) {
+      recordGlobalEnrichmentCooldown(
+        parseRetryAfterSecondsFromHint(result.retryHint)
+      );
+    }
+    await cacheEnrichmentSourceResult(ioc.value, sourceId, result);
+    return result;
+  } catch {
+    return createErrorSourceResult({
+      sourceId,
+      errorCode: ENRICHMENT_ERROR_CODE.NETWORK,
+      errorMessage: `${ENRICHMENT_SOURCE_LABELS[sourceId]} request failed.`,
+    });
   }
-  await cacheEnrichmentSourceResult(ioc.value, sourceId, result);
-  return result;
 }
 
 function settleEnrichmentOutcome(
@@ -170,7 +176,7 @@ async function enrichRequestedSource(
     });
   }
 
-  if (!isSupportedEnrichmentSource(sourceId)) {
+  if (!isEnrichmentSourceId(sourceId)) {
     return createErrorSourceResult({
       sourceId: ABUSEIPDB_SOURCE_ID,
       errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
@@ -205,7 +211,7 @@ async function enrichFromMessage(
   }
 
   if (!bypassCache && isGlobalEnrichmentCooldownActive()) {
-    if (message.sourceId && isSupportedEnrichmentSource(message.sourceId)) {
+    if (message.sourceId && isEnrichmentSourceId(message.sourceId)) {
       const source = createGlobalCooldownSourceResult(message.sourceId);
       return { source, sources: [source] };
     }

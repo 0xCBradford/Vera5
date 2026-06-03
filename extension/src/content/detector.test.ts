@@ -7,6 +7,7 @@ import {
   dedupeOverlappingMatches,
   detectIocsInText,
   scanTextNodesForIocs,
+  scanTextNodesForIocsWithProfile,
 } from "./detector";
 
 function hasMatch(
@@ -211,6 +212,22 @@ describe("scanTextNodesForIocs", () => {
     const capped = scanTextNodesForIocs(root, { walker: { maxTextNodes: 4 } });
     expect(capped.length).toBeLessThanOrEqual(uncapped.length);
     expect(capped.length).toBeGreaterThan(0);
+  });
+
+  it("returns scan profile with cap metadata", () => {
+    const paragraphs = Array.from(
+      { length: 10 },
+      (_, index) => `<p>Row ${index} 8.8.8.8</p>`
+    ).join("");
+    const root = mountPage(paragraphs);
+    const result = scanTextNodesForIocsWithProfile(root, {
+      walker: { maxTextNodes: 3 },
+    });
+    expect(result.profile.textNodesScanned).toBe(3);
+    expect(result.profile.textNodeCap).toBe(3);
+    expect(result.profile.capReached).toBe(true);
+    expect(result.profile.durationMs).toBeGreaterThanOrEqual(0);
+    expect(result.matches.length).toBeGreaterThan(0);
   });
 
   it("honors includePrivateIpv4 through page scan options", () => {

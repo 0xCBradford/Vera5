@@ -13,6 +13,8 @@ export const MESSAGE = {
   PING: "PING",
   CONTENT_REGISTER: "CONTENT_REGISTER",
   SCAN_PAGE: "SCAN_PAGE",
+  SCAN_SELECTION: "SCAN_SELECTION",
+  ENRICH_SELECTION: "ENRICH_SELECTION",
   NAVIGATE_TO_IOC_ANCHOR: "NAVIGATE_TO_IOC_ANCHOR",
   TOGGLE_WORKSPACE: "TOGGLE_WORKSPACE",
   OPEN_WORKSPACE: "OPEN_WORKSPACE",
@@ -30,6 +32,8 @@ export type ContentRegisterMessage = {
   type: typeof MESSAGE.CONTENT_REGISTER;
 };
 export type ScanPageMessage = { type: typeof MESSAGE.SCAN_PAGE };
+export type ScanSelectionMessage = { type: typeof MESSAGE.SCAN_SELECTION };
+export type EnrichSelectionMessage = { type: typeof MESSAGE.ENRICH_SELECTION };
 export type NavigateToIocAnchorMessage = {
   type: typeof MESSAGE.NAVIGATE_TO_IOC_ANCHOR;
   anchorId: string;
@@ -79,6 +83,14 @@ export function contentRegisterMessage(): ContentRegisterMessage {
 
 export function scanPageMessage(): ScanPageMessage {
   return { type: MESSAGE.SCAN_PAGE };
+}
+
+export function scanSelectionMessage(): ScanSelectionMessage {
+  return { type: MESSAGE.SCAN_SELECTION };
+}
+
+export function enrichSelectionMessage(): EnrichSelectionMessage {
+  return { type: MESSAGE.ENRICH_SELECTION };
 }
 
 export function navigateToIocAnchorMessage(
@@ -221,6 +233,24 @@ export function isScanPageMessage(raw: unknown): raw is ScanPageMessage {
     typeof raw === "object" &&
     "type" in raw &&
     (raw as { type: unknown }).type === MESSAGE.SCAN_PAGE
+  );
+}
+
+export function isScanSelectionMessage(raw: unknown): raw is ScanSelectionMessage {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.SCAN_SELECTION
+  );
+}
+
+export function isEnrichSelectionMessage(raw: unknown): raw is EnrichSelectionMessage {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.ENRICH_SELECTION
   );
 }
 

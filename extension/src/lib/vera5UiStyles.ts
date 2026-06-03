@@ -603,6 +603,10 @@ export function buildVera5UiStylesCss(): string {
   white-space: inherit;
   cursor: pointer;
 }
+.vera5-ioc-highlight:focus-visible {
+  outline: 2px solid var(--vera5-highlight-accent);
+  outline-offset: 2px;
+}
 .vera5-ioc-badge {
   display: inline;
   font-size: 0.65em;

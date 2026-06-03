@@ -64,6 +64,7 @@ const FILE_EXTENSION_TLDS = new Set([
   "js",
   "json",
   "jsx",
+  "log",
   "map",
   "md",
   "pdf",
@@ -139,6 +140,32 @@ function isVersionLikePrefix(text: string, start: number): boolean {
 
 function isVersionLikeSuffix(text: string, end: number): boolean {
   return /^[-_][a-z0-9]/i.test(text.slice(end, end + 6));
+}
+
+function isSingleDigitDottedQuad(value: string): boolean {
+  const parts = value.split(".");
+  return (
+    parts.length === 4 &&
+    parts.every((part) => part.length === 1 && /^\d$/.test(part))
+  );
+}
+
+function isSemverUpgradeRangeContext(
+  text: string,
+  start: number,
+  end: number,
+  value: string
+): boolean {
+  if (!isSingleDigitDottedQuad(value)) {
+    return false;
+  }
+  const after = text.slice(end, Math.min(text.length, end + 24));
+  if (!/^\s+to\s+\d+(?:\.\d+){0,3}\b/.test(after)) {
+    return false;
+  }
+  const windowStart = Math.max(0, start - 20);
+  const prefix = text.slice(windowStart, start).toLowerCase();
+  return /\bfrom\s+$/.test(prefix);
 }
 
 function isEmailLocalPartContext(text: string, start: number): boolean {
@@ -355,6 +382,9 @@ export function findIpv4InText(
         return false;
       }
       if (isVersionLikeSuffix(text, end)) {
+        return false;
+      }
+      if (isSemverUpgradeRangeContext(text, start, end, value)) {
         return false;
       }
       return true;

@@ -120,6 +120,26 @@ describe("iocRegex false-positive controls", () => {
     expect(findIpv4InText("release build 192.168.0.1 candidate")).toHaveLength(0);
   });
 
+  it("skips semver upgrade ranges with single-digit dotted quads", () => {
+    expect(
+      findIpv4InText("Grid maintenance upgraded the sensor package from 1.2.3.4 to 2.0.0.")
+    ).toHaveLength(0);
+  });
+
+  it("skips log filenames matched as domains on dashboard exports", () => {
+    expect(
+      findDomainsInText("Export bundle also references splunkd.log, dashboard.png")
+    ).toHaveLength(0);
+  });
+
+  it("still detects real IPv4 after from when not a semver upgrade range", () => {
+    const values = valuesOfType(
+      findIpv4InText("Traffic from 192.0.2.1 reached the sensor."),
+      IOC_TYPE.IPV4
+    );
+    expect(values).toContain("192.0.2.1");
+  });
+
   it("skips file-extension domain TLDs", () => {
     expect(findDomainsInText("Save chart.png locally")).toHaveLength(0);
   });

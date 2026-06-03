@@ -168,40 +168,101 @@ export function resolveMaxTextNodesPerScan(
   return Math.floor(limit);
 }
 
-export function collectTextNodes(
+export type TextNodeCollectionProfile = {
+  textNodesScanned: number;
+  textNodeCap: number;
+  capReached: boolean;
+};
+
+export type TextNodeCollectionResult = TextNodeCollectionProfile & {
+  nodes: Text[];
+};
+
+export function collectTextNodesWithProfile(
   root: Node,
   options: TextWalkerSkipOptions = {}
-): Text[] {
+): TextNodeCollectionResult {
   const resolved = resolveTextWalkerSkipOptions(options);
   const maxTextNodes = resolveMaxTextNodesPerScan(options);
   const ownerDocument = root.ownerDocument ?? document;
   const walker = ownerDocument.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const nodes: Text[] = [];
+  let capReached = false;
 
   let current = walker.nextNode();
   while (current) {
     if (isTextNodeEligibleForIocScan(current as Text, root, resolved)) {
       nodes.push(current as Text);
       if (nodes.length >= maxTextNodes) {
+        let next = walker.nextNode();
+        while (next) {
+          if (isTextNodeEligibleForIocScan(next as Text, root, resolved)) {
+            capReached = true;
+            break;
+          }
+          next = walker.nextNode();
+        }
         break;
       }
     }
     current = walker.nextNode();
   }
 
-  return nodes;
+  return {
+    nodes,
+    textNodesScanned: nodes.length,
+    textNodeCap: maxTextNodes,
+    capReached,
+  };
+}
+
+export function collectTextNodes(
+  root: Node,
+  options: TextWalkerSkipOptions = {}
+): Text[] {
+  return collectTextNodesWithProfile(root, options).nodes;
+}
+
+export function textNodeIntersectsRange(textNode: Text, range: Range): boolean {
+  if (!textNode.isConnected) {
+    return false;
+  }
+  const ownerDocument = textNode.ownerDocument ?? document;
+  const nodeRange = ownerDocument.createRange();
+  try {
+    nodeRange.selectNodeContents(textNode);
+  } catch {
+    return false;
+  }
+  return (
+    range.compareBoundaryPoints(Range.END_TO_START, nodeRange) < 0 &&
+    range.compareBoundaryPoints(Range.START_TO_END, nodeRange) > 0
+  );
 }
 
 export function collectIocScanTextBlocks(
   root: Node,
   options: TextWalkerSkipOptions = {}
 ): IocScanTextBlock[] {
-  const nodes = collectTextNodes(root, options);
+  return collectIocScanTextBlocksWithProfile(root, options).blocks;
+}
+
+export function collectIocScanTextBlocksWithProfile(
+  root: Node,
+  options: TextWalkerSkipOptions = {}
+): TextNodeCollectionProfile & { blocks: IocScanTextBlock[] } {
+  const collection = collectTextNodesWithProfile(root, options);
   let blockStart = 0;
-  return nodes.map((node) => {
+  const blocks = collection.nodes.map((node) => {
     const text = node.textContent ?? "";
     const block: IocScanTextBlock = { node, text, blockStart };
     blockStart += text.length;
     return block;
   });
+  return {
+    blocks,
+    textNodesScanned: collection.textNodesScanned,
+    textNodeCap: collection.textNodeCap,
+    capReached: collection.capReached,
+  };
 }

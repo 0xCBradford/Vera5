@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ENRICHMENT_SOURCE_ORDER } from "./enrichmentSourceRegistry";
 import {
   API_KEY_SLOTS,
   createDefaultVera5Settings,
@@ -47,6 +48,7 @@ import {
   STORAGE_KEY_IOC_TYPE_ENABLED,
   STORAGE_KEY_SCHEMA_VERSION,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
+  STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE,
   STORAGE_KEYS,
   VERA5_SETTINGS_READ_KEYS,
   VERA5_SETTINGS_STORAGE_KEYS,
@@ -144,21 +146,13 @@ describe("enrichment source enabled storage", () => {
 
   it("defaults all sources to disabled", async () => {
     const sources = await getEnrichmentSourceEnabled();
-    expect(sources).toEqual({
-      abuseipdb: false,
-      otx: false,
-      urlscan: false,
-      greynoise: false,
-    });
+    expect(sources).toEqual(createDefaultVera5Settings().enrichmentSourceEnabled);
   });
 
   it("persists a single source toggle", async () => {
     await setEnrichmentSourceEnabled("abuseipdb", true);
-    expect(store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]).toEqual({
+    expect(store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]).toMatchObject({
       abuseipdb: true,
-      otx: false,
-      urlscan: false,
-      greynoise: false,
     });
     await expect(getEnrichmentSourceEnabled()).resolves.toMatchObject({
       abuseipdb: true,
@@ -184,14 +178,17 @@ describe("enrichment source enabled storage", () => {
   });
 
   it("lists disabled sources for connector gating", () => {
-    expect(
-      listDisabledEnrichmentSources({
-        abuseipdb: true,
-        otx: false,
-        urlscan: false,
-        greynoise: true,
-      })
-    ).toEqual(["otx", "urlscan"]);
+    const disabled = listDisabledEnrichmentSources({
+      ...createDefaultVera5Settings().enrichmentSourceEnabled,
+      abuseipdb: true,
+      otx: false,
+      urlscan: false,
+      greynoise: true,
+    });
+    expect(disabled).toContain("otx");
+    expect(disabled).toContain("urlscan");
+    expect(disabled).not.toContain("abuseipdb");
+    expect(disabled).not.toContain("greynoise");
   });
 });
 
@@ -266,12 +263,10 @@ describe("Vera5 settings schema", () => {
     );
   });
 
-  it("covers MVP enrichment connectors for API key slots", () => {
+  it("covers enrichment API key storage slots", () => {
     expect(API_KEY_SLOTS).toEqual([
-      "abuseipdb",
-      "otx",
-      "urlscan",
-      "greynoise",
+      ...ENRICHMENT_SOURCE_ORDER,
+      "censys_secret",
     ]);
   });
 
@@ -303,7 +298,8 @@ describe("Vera5 settings schema", () => {
     );
     expect(isEnrichmentSourceEnabledRecord({})).toBe(true);
     expect(isEnrichmentSourceEnabledRecord({ abuseipdb: "yes" })).toBe(false);
-    expect(isEnrichmentSourceEnabledRecord({ virustotal: true })).toBe(false);
+    expect(isEnrichmentSourceEnabledRecord({ virustotal: true })).toBe(true);
+    expect(isEnrichmentSourceEnabledRecord({ unknown_source: true })).toBe(false);
   });
 
   it("validates IOC type enabled records", () => {
@@ -340,12 +336,10 @@ describe("migrate-safe defaults", () => {
     );
     expect(defaults.enrichmentSourceCacheTtlSeconds).toEqual({});
     expect(defaults.apiKeys).toEqual({});
-    expect(defaults.enrichmentSourceEnabled).toEqual({
-      abuseipdb: false,
-      otx: false,
-      urlscan: false,
-      greynoise: false,
-    });
+    expect(defaults.enrichmentSourceEnabled).toEqual(
+      createDefaultVera5Settings().enrichmentSourceEnabled
+    );
+    expect(defaults.showDisabledSourcesInWorkspace).toBe(false);
     expect(defaults.iocTypeEnabled).toEqual({
       ipv4: true,
       domain: true,
@@ -401,12 +395,9 @@ describe("migrate-safe defaults", () => {
         [STORAGE_KEY_MANUAL_ONLY_MODE]: true,
         [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: false,
         [STORAGE_KEY_API_KEYS]: {},
-        [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
-          abuseipdb: false,
-          otx: false,
-          urlscan: false,
-          greynoise: false,
-        },
+        [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]:
+          createDefaultVera5Settings().enrichmentSourceEnabled,
+        [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]: false,
         [STORAGE_KEY_IOC_TYPE_ENABLED]: {
           ipv4: true,
           domain: true,
@@ -544,7 +535,7 @@ describe("settings round-trip", () => {
     expect(settings.highlightEnabled).toBe(false);
     expect(settings.autoScanEnabled).toBe(true);
     expect(settings.manualOnlyMode).toBe(false);
-    expect(settings.enrichmentSourceEnabled).toEqual({
+    expect(settings.enrichmentSourceEnabled).toMatchObject({
       abuseipdb: true,
       otx: true,
       urlscan: false,

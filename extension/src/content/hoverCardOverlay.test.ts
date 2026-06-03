@@ -10,6 +10,7 @@ import {
 import {
   buildHoverCardSourceEntries,
   ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_ORDER,
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_LOADING_SUMMARY,
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
@@ -67,6 +68,7 @@ import {
   HOVER_CARD_EXPORT_SECTION_CLASS,
   HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID,
   buildExportRecordFromPayload,
+  focusFirstHoverCardControl,
   showHoverCardNearAnchor,
   updateHoverCardAnalystNoteIfOpen,
 } from "./hoverCardOverlay";
@@ -187,7 +189,7 @@ describe("pivot recipes panel content", () => {
     expect(readPivotRecipePanelRows(panel).map((row) => row.sourceLabel)).toEqual(
       getPivotRecipes(IOC_TYPE.URL, value).map((recipe) => recipe.sourceLabel)
     );
-    expect(readPivotRecipePanelRows(panel)[0]?.sourceLabel).toBe("URLScan");
+    expect(readPivotRecipePanelRows(panel)[0]?.sourceLabel).toBe("URLScan.io");
   });
 
   it("does not inject enrichment summaries into pivot guidance rows", () => {
@@ -501,12 +503,7 @@ describe("overlay risk score presentation", () => {
       type: IOC_TYPE.IPV4,
       enrichmentState: "ready",
       summary: "74 abuse confidence",
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: [...ENRICHMENT_SOURCE_ORDER],
       sourceResults: buildHoverCardSourceEntries([
         {
           sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
@@ -1066,12 +1063,7 @@ describe("hover card overlay", () => {
       type: IOC_TYPE.IPV4,
       enrichmentState: "ready",
       summary: "74 abuse confidence",
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: [...ENRICHMENT_SOURCE_ORDER],
       sourceResults: buildHoverCardSourceEntries([
         {
           sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
@@ -2329,5 +2321,59 @@ describe("hover card overlay", () => {
 
     expect(document.activeElement).toBe(notesInput);
     expect(notesInput!.value).toBe("a");
+  });
+});
+
+describe("hover card keyboard focus", () => {
+  afterEach(() => {
+    hideHoverCard(document);
+    document.body.replaceChildren();
+  });
+
+  it("focusFirstHoverCardControl focuses the copy indicator button", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    document.body.appendChild(panel);
+
+    const copyButton = panel.querySelector<HTMLElement>(
+      `.${HOVER_CARD_COPY_BUTTON_CLASS}`
+    );
+    expect(copyButton).not.toBeNull();
+
+    const focused = focusFirstHoverCardControl(panel);
+    expect(focused).toBe(true);
+    expect(document.activeElement).toBe(copyButton);
+  });
+
+  it("showHoverCardNearAnchor moves focus when moveFocus is set", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 50,
+        left: 50,
+        width: 40,
+        height: 16,
+        right: 90,
+        bottom: 66,
+        x: 50,
+        y: 50,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(
+      anchor,
+      { value: "8.8.8.8", type: IOC_TYPE.IPV4 },
+      document,
+      { moveFocus: true }
+    );
+
+    const copyButton = panel.querySelector<HTMLElement>(
+      `.${HOVER_CARD_COPY_BUTTON_CLASS}`
+    );
+    expect(document.activeElement).toBe(copyButton);
   });
 });

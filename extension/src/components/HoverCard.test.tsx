@@ -14,6 +14,7 @@ import {
 import type { HoverCardEnrichmentState } from "../lib/hoverCardEnrichment";
 import {
   ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_ORDER,
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_ERROR_SUMMARY,
   HOVER_CARD_LOADING_SUMMARY,
@@ -121,12 +122,7 @@ describe("HoverCard", () => {
     mounted = renderHoverCard({
       value: "8.8.8.8",
       type: IOC_TYPE.IPV4,
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: [...ENRICHMENT_SOURCE_ORDER],
       sourceResults: [
         {
           sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
@@ -519,12 +515,7 @@ describe("HoverCard enrichment states", () => {
       ...baseProps,
       enrichmentState: "ready",
       summary: "74 abuse confidence",
-      disabledSources: [
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_SOURCE.OTX,
-        ENRICHMENT_SOURCE.URLSCAN,
-        ENRICHMENT_SOURCE.GREYNOISE,
-      ],
+      disabledSources: [...ENRICHMENT_SOURCE_ORDER],
       sourceResults: [
         {
           sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,

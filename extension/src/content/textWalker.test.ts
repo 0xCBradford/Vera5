@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   collectIocScanTextBlocks,
   collectTextNodes,
+  collectTextNodesWithProfile,
   DEFAULT_MAX_TEXT_NODES_PER_SCAN,
   getScannableAttributeValues,
   isMatchWhollyInsideTextNode,
@@ -136,6 +137,25 @@ describe("textWalker scan limits", () => {
     const root = mount(paragraphs);
     const blocks = collectIocScanTextBlocks(root, { maxTextNodes: 2 });
     expect(blocks).toHaveLength(2);
+  });
+
+  it("reports when more eligible text nodes remain after the cap", () => {
+    const paragraphs = Array.from(
+      { length: 8 },
+      (_, index) => `<p>Block ${index}</p>`
+    ).join("");
+    const root = mount(paragraphs);
+    const capped = collectTextNodesWithProfile(root, { maxTextNodes: 2 });
+    expect(capped.textNodesScanned).toBe(2);
+    expect(capped.textNodeCap).toBe(2);
+    expect(capped.capReached).toBe(true);
+  });
+
+  it("does not report capReached when all eligible nodes fit", () => {
+    const root = mount("<p>One</p><p>Two</p>");
+    const result = collectTextNodesWithProfile(root, { maxTextNodes: 10 });
+    expect(result.textNodesScanned).toBe(2);
+    expect(result.capReached).toBe(false);
   });
 });
 

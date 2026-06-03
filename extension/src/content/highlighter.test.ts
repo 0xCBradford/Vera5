@@ -12,6 +12,8 @@ import {
   IOC_HIGHLIGHT_BADGE_CLASS,
   IOC_HIGHLIGHT_CLASS,
   IOC_HIGHLIGHT_STYLE_ID,
+  listIocHighlightsInDocumentOrder,
+  resolveAdjacentIocHighlight,
 } from "./highlighter";
 
 describe("ioc highlighter", () => {
@@ -120,5 +122,34 @@ describe("ioc highlighter", () => {
       root: document.body,
     });
     expect(document.querySelectorAll(`.${IOC_HIGHLIGHT_CLASS}`).length).toBe(1);
+  });
+
+  it("lists highlights in document order and resolves adjacent triage targets", () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "IPs 8.8.8.8 and 192.0.2.1 here.";
+    document.body.appendChild(paragraph);
+
+    highlightDetectedIocs(scanTextNodesForIocs(document.body), {
+      root: document.body,
+    });
+
+    const highlights = listIocHighlightsInDocumentOrder(document.body);
+    expect(highlights).toHaveLength(2);
+
+    expect(resolveAdjacentIocHighlight(null, "next", document.body)).toBe(
+      highlights[0]
+    );
+    expect(resolveAdjacentIocHighlight(null, "previous", document.body)).toBe(
+      highlights[1]
+    );
+    expect(resolveAdjacentIocHighlight(highlights[0], "next", document.body)).toBe(
+      highlights[1]
+    );
+    expect(
+      resolveAdjacentIocHighlight(highlights[1], "next", document.body)
+    ).toBe(highlights[0]);
+    expect(
+      resolveAdjacentIocHighlight(highlights[0], "previous", document.body)
+    ).toBe(highlights[1]);
   });
 });

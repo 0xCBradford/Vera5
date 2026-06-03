@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ENRICHMENT_SOURCE_ORDER } from "../lib/enrichmentSourceRegistry";
 import {
   createDefaultEnrichmentSourceEnabledMap,
   listDisabledEnrichmentSourceIds,
@@ -6,13 +7,12 @@ import {
 } from "./enrichmentSourceStorage";
 
 describe("enrichment source storage", () => {
-  it("defaults all MVP sources to disabled", () => {
-    expect(createDefaultEnrichmentSourceEnabledMap()).toEqual({
-      abuseipdb: false,
-      otx: false,
-      urlscan: false,
-      greynoise: false,
-    });
+  it("defaults all enrichment sources to disabled", () => {
+    expect(createDefaultEnrichmentSourceEnabledMap()).toEqual(
+      Object.fromEntries(
+        ENRICHMENT_SOURCE_ORDER.map((sourceId) => [sourceId, false])
+      )
+    );
   });
 
   it("merges stored source flags with defaults", () => {
@@ -22,20 +22,34 @@ describe("enrichment source storage", () => {
         otx: false,
       })
     ).toEqual({
+      ...createDefaultEnrichmentSourceEnabledMap(),
       abuseipdb: true,
       otx: false,
-      urlscan: false,
-      greynoise: false,
     });
   });
 
   it("lists disabled sources for the hover card", () => {
-    const disabled = listDisabledEnrichmentSourceIds({
-      abuseipdb: true,
-      otx: false,
-      urlscan: false,
-      greynoise: true,
-    });
-    expect(disabled).toEqual(["otx", "urlscan"]);
+    const disabled = listDisabledEnrichmentSourceIds(
+      {
+        ...createDefaultEnrichmentSourceEnabledMap(),
+        abuseipdb: true,
+        otx: false,
+        urlscan: false,
+        greynoise: true,
+      },
+      true
+    );
+    expect(disabled).toContain("otx");
+    expect(disabled).toContain("urlscan");
+    expect(disabled).not.toContain("abuseipdb");
+    expect(disabled).not.toContain("greynoise");
+  });
+
+  it("hides disabled sources when workspace preference is off", () => {
+    const disabled = listDisabledEnrichmentSourceIds(
+      createDefaultEnrichmentSourceEnabledMap(),
+      false
+    );
+    expect(disabled).toEqual([]);
   });
 });

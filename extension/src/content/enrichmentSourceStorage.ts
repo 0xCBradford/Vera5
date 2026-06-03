@@ -1,29 +1,22 @@
 import type { EnrichmentSourceId } from "../lib/hoverCardEnrichment";
+import {
+  ENRICHMENT_SOURCE_ORDER,
+  isEnrichmentSourceId,
+} from "../lib/enrichmentSourceRegistry";
 import { safeStorageLocalGet } from "../lib/extensionContext";
 
 export const CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED =
   "enrichmentSourceEnabled";
 
-export const MVP_ENRICHMENT_SOURCE_IDS = [
-  "abuseipdb",
-  "otx",
-  "urlscan",
-  "greynoise",
-] as const satisfies readonly EnrichmentSourceId[];
+export const CONTENT_STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE =
+  "showDisabledSourcesInWorkspace";
 
-export type MvpEnrichmentSourceId = (typeof MVP_ENRICHMENT_SOURCE_IDS)[number];
-
-export type EnrichmentSourceEnabledMap = Record<MvpEnrichmentSourceId, boolean>;
-
-const MVP_ENRICHMENT_SOURCE_ID_SET = new Set<string>(MVP_ENRICHMENT_SOURCE_IDS);
+export type EnrichmentSourceEnabledMap = Record<EnrichmentSourceId, boolean>;
 
 export function createDefaultEnrichmentSourceEnabledMap(): EnrichmentSourceEnabledMap {
-  return {
-    abuseipdb: false,
-    otx: false,
-    urlscan: false,
-    greynoise: false,
-  };
+  return Object.fromEntries(
+    ENRICHMENT_SOURCE_ORDER.map((sourceId) => [sourceId, false])
+  ) as EnrichmentSourceEnabledMap;
 }
 
 export function normalizeEnrichmentSourceEnabledMap(
@@ -34,7 +27,7 @@ export function normalizeEnrichmentSourceEnabledMap(
     return normalized;
   }
 
-  for (const sourceId of MVP_ENRICHMENT_SOURCE_IDS) {
+  for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
     const entry = (value as Record<string, unknown>)[sourceId];
     if (typeof entry === "boolean") {
       normalized[sourceId] = entry;
@@ -53,14 +46,55 @@ export async function getEnrichmentSourceEnabledForContent(): Promise<Enrichment
   );
 }
 
+export async function getShowDisabledSourcesInWorkspaceForContent(): Promise<boolean> {
+  const result = await safeStorageLocalGet(
+    CONTENT_STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE
+  );
+  return result[CONTENT_STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE] === true;
+}
+
 export function listDisabledEnrichmentSourceIds(
+  sources: EnrichmentSourceEnabledMap,
+  showDisabledSourcesInWorkspace = true
+): EnrichmentSourceId[] {
+  const disabled = ENRICHMENT_SOURCE_ORDER.filter(
+    (sourceId) => !sources[sourceId]
+  );
+  if (showDisabledSourcesInWorkspace) {
+    return disabled;
+  }
+  return [];
+}
+
+export function listEnabledEnrichmentSourceIds(
   sources: EnrichmentSourceEnabledMap
 ): EnrichmentSourceId[] {
-  return MVP_ENRICHMENT_SOURCE_IDS.filter((sourceId) => !sources[sourceId]);
+  return ENRICHMENT_SOURCE_ORDER.filter((sourceId) => sources[sourceId]);
 }
 
 export function isKnownEnrichmentSourceId(
   value: string
-): value is MvpEnrichmentSourceId {
-  return MVP_ENRICHMENT_SOURCE_ID_SET.has(value);
+): value is EnrichmentSourceId {
+  return isEnrichmentSourceId(value);
+}
+
+export async function loadWorkspaceEnrichmentSourceContext(): Promise<{
+  sources: EnrichmentSourceEnabledMap;
+  showDisabledSourcesInWorkspace: boolean;
+  disabledSourceIds: EnrichmentSourceId[];
+  enabledSourceIds: EnrichmentSourceId[];
+}> {
+  const [sources, showDisabledSourcesInWorkspace] = await Promise.all([
+    getEnrichmentSourceEnabledForContent(),
+    getShowDisabledSourcesInWorkspaceForContent(),
+  ]);
+  return {
+    sources,
+    showDisabledSourcesInWorkspace,
+    disabledSourceIds: listDisabledEnrichmentSourceIds(
+      sources,
+      showDisabledSourcesInWorkspace
+    ),
+    enabledSourceIds: listEnabledEnrichmentSourceIds(sources),
+  };
 }
