@@ -47,7 +47,7 @@ sequenceDiagram
 
 ## IOC-only requests
 
-`sanitizeEnrichmentIoc` and `iocRequestBoundaries.ts` enforce that outbound payloads contain indicator values required by the vendor API, not full page HTML. Security regression: `verify:security` and `iocRequestBoundaries.test.ts`.
+`sanitizeEnrichmentIoc`, `enrichmentFetch`, and `DECLARED_ENRICHMENT_API_HOSTS` in `iocRequestBoundaries.ts` enforce IOC-only vendor payloads and block live HTTP calls to hosts outside the declared connector APIs. Security regression: `verify:security` and `iocRequestBoundaries.test.ts`.
 
 ## Normalization
 

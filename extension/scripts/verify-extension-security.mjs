@@ -13,16 +13,37 @@ const publicManifestPath = path.join(
   "manifest.json"
 );
 const srcDir = path.join(extensionRoot, "src");
-
-const LIVE_ENRICHMENT_FETCH_HOSTS = new Set([
-  "api.abuseipdb.com",
-  "otx.alienvault.com",
-]);
+const iocRequestBoundariesPath = path.join(
+  srcDir,
+  "lib",
+  "iocRequestBoundaries.ts"
+);
 
 const FETCH_ALLOWED_SOURCE_BASENAMES = new Set([
   "abuseipdbConnector.ts",
   "otxConnector.ts",
 ]);
+
+const FETCH_GUARD_SOURCE_BASENAMES = new Set([
+  "iocRequestBoundaries.ts",
+]);
+
+function readDeclaredEnrichmentApiHosts() {
+  const source = fs.readFileSync(iocRequestBoundariesPath, "utf8");
+  const match = source.match(
+    /export const DECLARED_ENRICHMENT_API_HOSTS[^=]*=\s*\[([\s\S]*?)\]\s*as const/
+  );
+  if (!match) {
+    fail(
+      "could not parse DECLARED_ENRICHMENT_API_HOSTS from iocRequestBoundaries.ts"
+    );
+  }
+  const hosts = [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1]);
+  if (hosts.length === 0) {
+    fail("DECLARED_ENRICHMENT_API_HOSTS is empty in iocRequestBoundaries.ts");
+  }
+  return new Set(hosts);
+}
 
 function fail(message) {
   console.error(`verify-extension-security: ${message}`);
@@ -125,6 +146,8 @@ function checkShippedExtensionPages(manifest, distRoot) {
 }
 
 function checkLiveFetchLimitedToConnectors() {
+  const declaredHosts = readDeclaredEnrichmentApiHosts();
+
   for (const filePath of walkFiles(srcDir, [".ts", ".tsx"])) {
     if (filePath.endsWith(".test.ts") || filePath.endsWith(".test.tsx")) {
       continue;
@@ -133,7 +156,10 @@ function checkLiveFetchLimitedToConnectors() {
     if (!/\bfetch\s*\(/.test(source)) {
       continue;
     }
-    if (!FETCH_ALLOWED_SOURCE_BASENAMES.has(path.basename(filePath))) {
+    if (
+      !FETCH_ALLOWED_SOURCE_BASENAMES.has(path.basename(filePath)) &&
+      !FETCH_GUARD_SOURCE_BASENAMES.has(path.basename(filePath))
+    ) {
       fail(`${filePath} uses fetch() outside approved connector modules`);
     }
   }
@@ -141,6 +167,12 @@ function checkLiveFetchLimitedToConnectors() {
   for (const basename of FETCH_ALLOWED_SOURCE_BASENAMES) {
     const filePath = path.join(srcDir, "lib", basename);
     const source = fs.readFileSync(filePath, "utf8");
+    if (!source.includes("enrichmentFetch")) {
+      fail(`${basename} must import enrichmentFetch for outbound domain blocking`);
+    }
+    if (!/deps\.fetch\s*\?\?\s*enrichmentFetch/.test(source)) {
+      fail(`${basename} must default to deps.fetch ?? enrichmentFetch`);
+    }
     const literalUrls = [
       ...source.matchAll(/https:\/\/[^\s"'`<>]+/g),
     ].map((match) => match[0]);
@@ -151,7 +183,7 @@ function checkLiveFetchLimitedToConnectors() {
       } catch {
         continue;
       }
-      if (!LIVE_ENRICHMENT_FETCH_HOSTS.has(hostname)) {
+      if (!declaredHosts.has(hostname)) {
         fail(`${basename} declares unexpected HTTPS origin: ${urlText}`);
       }
     }
@@ -211,5 +243,5 @@ for (const filePath of walkFiles(distDir, [".js"])) {
 }
 
 console.log(
-  "verify-extension-security: OK (extension pages CSP, no remote assets, live fetch origins limited to connectors, no eval/new Function, no API key logging, enrichment GET without body)"
+  "verify-extension-security: OK (extension pages CSP, no remote assets, live fetch blocked outside declared API hosts, no eval/new Function, no API key logging, enrichment GET without body)"
 );

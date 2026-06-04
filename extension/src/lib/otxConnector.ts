@@ -17,6 +17,7 @@ import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import {
   assertEnrichmentFetchHasNoBody,
   sanitizeEnrichmentIoc,
+  enrichmentFetch,
 } from "./iocRequestBoundaries";
 import { formatRedactedVendorJson } from "./enrichmentRawResponse";
 import {
@@ -269,7 +270,7 @@ export async function enrichWithOtx(
   deps: OtxConnectorDeps = {}
 ): Promise<EnrichmentSourceResult> {
   const resolveApiKey = deps.getApiKey ?? (() => getApiKey(OTX_SOURCE_ID));
-  const fetchImpl = deps.fetch ?? fetch;
+  const fetchImpl = deps.fetch ?? enrichmentFetch;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_OTX_REQUEST_TIMEOUT_MS;
   const fetchedAt = new Date().toISOString();
 

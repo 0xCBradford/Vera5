@@ -1,11 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { ABUSEIPDB_CHECK_API_URL } from "./abuseipdbConnector";
 import { IOC_TYPE } from "./iocRegex";
 import { enrichIocMessage, isEnrichIocMessage } from "./messages";
+import { OTX_INDICATORS_API_BASE } from "./otxConnector";
 import {
+  assertDeclaredEnrichmentApiUrl,
   assertEnrichmentFetchHasNoBody,
+  DECLARED_ENRICHMENT_API_HOSTS,
   ENRICH_IOC_MESSAGE_KEYS,
+  EnrichmentOutboundBlockedError,
+  enrichmentFetch,
   extractExactIocValue,
   hasOnlyEnrichIocMessageKeys,
+  isDeclaredEnrichmentApiHostname,
   MAX_ENRICHMENT_IOC_VALUE_LENGTH,
   sanitizeEnrichmentIoc,
 } from "./iocRequestBoundaries";
@@ -64,6 +71,40 @@ describe("enrichment IOC request boundaries", () => {
         body: JSON.stringify({ page: "html" }),
       })
     ).toBe(false);
+  });
+
+  it("declares live connector API hosts explicitly", () => {
+    expect(DECLARED_ENRICHMENT_API_HOSTS).toContain(
+      new URL(ABUSEIPDB_CHECK_API_URL).hostname
+    );
+    expect(DECLARED_ENRICHMENT_API_HOSTS).toContain(
+      new URL(OTX_INDICATORS_API_BASE).hostname
+    );
+  });
+
+  it("blocks enrichment fetch to undeclared HTTPS hosts", () => {
+    expect(isDeclaredEnrichmentApiHostname("api.abuseipdb.com")).toBe(true);
+    expect(isDeclaredEnrichmentApiHostname("OTX.alienvault.com")).toBe(true);
+    expect(isDeclaredEnrichmentApiHostname("evil.example")).toBe(false);
+
+    expect(() =>
+      assertDeclaredEnrichmentApiUrl("https://api.abuseipdb.com/api/v2/check")
+    ).not.toThrow();
+    expect(() =>
+      assertDeclaredEnrichmentApiUrl("http://api.abuseipdb.com/api/v2/check")
+    ).toThrow(EnrichmentOutboundBlockedError);
+    expect(() =>
+      assertDeclaredEnrichmentApiUrl("https://collector.evil.example/log")
+    ).toThrow(EnrichmentOutboundBlockedError);
+  });
+
+  it("enrichmentFetch rejects undeclared hosts before calling fetch", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    expect(() =>
+      enrichmentFetch("https://unexpected.example/api")
+    ).toThrow(EnrichmentOutboundBlockedError);
+    expect(fetchSpy).not.toHaveBeenCalled();
+    fetchSpy.mockRestore();
   });
 });
 

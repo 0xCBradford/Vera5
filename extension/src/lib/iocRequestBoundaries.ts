@@ -93,3 +93,68 @@ export function assertEnrichmentFetchHasNoBody(init?: RequestInit): boolean {
   }
   return false;
 }
+
+export const DECLARED_ENRICHMENT_API_HOSTS = [
+  "api.abuseipdb.com",
+  "otx.alienvault.com",
+] as const;
+
+export type DeclaredEnrichmentApiHost =
+  (typeof DECLARED_ENRICHMENT_API_HOSTS)[number];
+
+const DECLARED_ENRICHMENT_API_HOST_SET = new Set<string>(
+  DECLARED_ENRICHMENT_API_HOSTS
+);
+
+export class EnrichmentOutboundBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EnrichmentOutboundBlockedError";
+  }
+}
+
+export function isDeclaredEnrichmentApiHostname(hostname: string): boolean {
+  return DECLARED_ENRICHMENT_API_HOST_SET.has(hostname.toLowerCase());
+}
+
+export function assertDeclaredEnrichmentApiUrl(url: string | URL): void {
+  let parsed: URL;
+  try {
+    parsed = typeof url === "string" ? new URL(url) : url;
+  } catch {
+    throw new EnrichmentOutboundBlockedError("Enrichment fetch URL is invalid.");
+  }
+  if (parsed.protocol !== "https:") {
+    throw new EnrichmentOutboundBlockedError(
+      `Enrichment fetch requires HTTPS; blocked ${parsed.protocol}//${parsed.hostname}`
+    );
+  }
+  if (!isDeclaredEnrichmentApiHostname(parsed.hostname)) {
+    throw new EnrichmentOutboundBlockedError(
+      `Enrichment fetch blocked for undeclared host: ${parsed.hostname}`
+    );
+  }
+}
+
+function resolveFetchUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.href;
+  }
+  return input.url;
+}
+
+export function enrichmentFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  assertDeclaredEnrichmentApiUrl(resolveFetchUrl(input));
+  if (!assertEnrichmentFetchHasNoBody(init)) {
+    throw new EnrichmentOutboundBlockedError(
+      "Enrichment fetch blocked: request body is not allowed."
+    );
+  }
+  return fetch(input, init);
+}

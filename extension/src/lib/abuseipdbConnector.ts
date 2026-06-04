@@ -17,6 +17,7 @@ import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import {
   assertEnrichmentFetchHasNoBody,
   sanitizeEnrichmentIoc,
+  enrichmentFetch,
 } from "./iocRequestBoundaries";
 import { formatRedactedVendorJson } from "./enrichmentRawResponse";
 import { mapAbuseIpdbFieldsToUnifiedPresentation } from "./enrichmentVendorNormalize";
@@ -231,7 +232,7 @@ export async function enrichWithAbuseIpdb(
   deps: AbuseIpdbConnectorDeps = {}
 ): Promise<EnrichmentSourceResult> {
   const resolveApiKey = deps.getApiKey ?? (() => getApiKey(ABUSEIPDB_SOURCE_ID));
-  const fetchImpl = deps.fetch ?? fetch;
+  const fetchImpl = deps.fetch ?? enrichmentFetch;
   const timeoutMs = deps.timeoutMs ?? DEFAULT_ABUSEIPDB_REQUEST_TIMEOUT_MS;
   const fetchedAt = new Date().toISOString();
 

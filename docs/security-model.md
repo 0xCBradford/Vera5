@@ -251,7 +251,7 @@ Vera5 does not add `unsafe-eval`, `unsafe-inline`, or remote `https://` entries 
 | `chrome://settings/…` | `chrome.tabs.create` | Site-permissions helper | Internal browser UI |
 | Page under scan (`http(s)://*/*`) | Content scripts (`host_permissions`) | DOM read for IOC detection only | No upload to Vera5 infrastructure |
 
-Live `fetch()` calls exist only in [`abuseipdbConnector.ts`](../extension/src/lib/abuseipdbConnector.ts) and [`otxConnector.ts`](../extension/src/lib/otxConnector.ts). Connectors use GET without a request body; indicator values are passed in the URL or query string per vendor API requirements.
+Live `fetch()` calls exist only in [`abuseipdbConnector.ts`](../extension/src/lib/abuseipdbConnector.ts) and [`otxConnector.ts`](../extension/src/lib/otxConnector.ts). Connectors default to `enrichmentFetch` in [`iocRequestBoundaries.ts`](../extension/src/lib/iocRequestBoundaries.ts), which throws before any network I/O when the target host is not listed in `DECLARED_ENRICHMENT_API_HOSTS` or when the request uses a non-HTTPS URL or includes a body. Connectors use GET without a request body; indicator values are passed in the URL or query string per vendor API requirements.
 
 There is no `importScripts()` or dynamic `import()` from network URLs in production bundles.
 
@@ -262,7 +262,7 @@ There is no `importScripts()` or dynamic `import()` from network URLs in product
 | `eval()` / `new Function()` | Not used in `extension/src/` or production bundles under `extension/dist/`. |
 | Remote scripts in extension pages | Popup and options HTML reference only relative `/assets/…` paths. |
 | Manifest CSP override | No custom CSP with `unsafe-eval`, `unsafe-inline`, or remote `script-src`. |
-| Live fetch allowlist | Only connector modules may call `fetch()`; declared HTTPS hosts are `api.abuseipdb.com` and `otx.alienvault.com`. |
+| Live fetch allowlist | Only connector modules may call `fetch()`; declared HTTPS hosts are `api.abuseipdb.com` and `otx.alienvault.com`. Runtime `enrichmentFetch` blocks undeclared hosts before network I/O. |
 | Remote code at runtime | No dynamic import or `importScripts()` from `https://` URLs in `dist/`. |
 
 After each production build:
