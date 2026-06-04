@@ -74,7 +74,7 @@ export function buildHoverCardPayloadFromHighlight(
 }
 
 export type HoverCardOpenOptions = {
-  enrichmentTrigger?: "manual" | "auto";
+  enrichmentTrigger?: "manual" | "auto" | "none";
   moveFocusToPanel?: boolean;
 };
 
@@ -125,7 +125,7 @@ export function openHoverCardForHighlight(
         void runBackgroundEnrichment(payload, doc, { bypassCache: true }).catch(
           rethrowUnlessStaleExtensionError
         );
-      } else {
+      } else if (options.enrichmentTrigger !== "none") {
         void attemptAutoEnrichmentFetch(payload).catch(
           rethrowUnlessStaleExtensionError
         );

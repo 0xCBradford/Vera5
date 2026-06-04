@@ -72,6 +72,7 @@ import {
   type WhyDetectedView,
 } from "../lib/hoverCardEnrichment";
 import { getPivotRecipes } from "../lib/pivots";
+import { getCachedAnalystModeDisplayContext } from "./analystModeStorage";
 import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
 import { ENRICHMENT_SOURCE_LABELS } from "../lib/enrichmentSourceRegistry";
 import { buildPreQueryDisclosureMessage, cancelPreQueryDisclosure, resolvePreQueryDisclosure } from "../lib/enrichmentPolicy";
@@ -371,9 +372,11 @@ function createPivotRecipesPanel(
   payload: HoverCardOverlayPayload,
   doc: Document
 ): HTMLElement | null {
+  const displayContext = getCachedAnalystModeDisplayContext();
   const recipes = getPivotRecipes(payload.type, payload.value, {
     enabledSourceIds: payload.enabledEnrichmentSourceIds,
     showDisabledSources: payload.showDisabledSourcesInWorkspace,
+    emphasisProviders: displayContext.pivotEmphasisProviders,
   });
   if (recipes.length === 0) {
     return null;
@@ -1073,6 +1076,10 @@ function resolveScanListExportContextSync(): ScanListExportContext | null {
   return scanExportCache?.context ?? null;
 }
 
+export function getScanListExportContext(): ScanListExportContext | null {
+  return resolveScanListExportContextSync();
+}
+
 async function refreshScanExportCache(): Promise<ScanExportCache> {
   try {
     const context = resolveScanListExportContextSync() ?? (await loadScanListExportContext());
@@ -1287,7 +1294,7 @@ function createTemplateExportRow(
     option.textContent = getExportTemplateLabel(templateId);
     templateSelect.appendChild(option);
   }
-  templateSelect.value = "analyst-update";
+  templateSelect.value = getCachedAnalystModeDisplayContext().defaultExportTemplateId;
 
   const exportTemplateButton = doc.createElement("button");
   exportTemplateButton.type = "button";
@@ -1397,7 +1404,7 @@ function createTemplateExportRow(
   return templateRow;
 }
 
-async function loadScanListExportContext(): Promise<ScanListExportContext | null> {
+export async function loadScanListExportContext(): Promise<ScanListExportContext | null> {
   const syncContext = resolveScanListExportContextSync();
   if (syncContext) {
     return syncContext;
@@ -1409,6 +1416,25 @@ async function loadScanListExportContext(): Promise<ScanListExportContext | null
   }
   const filter = await getTabScanTrayFilter(summary.tabId);
   return { summary, filter };
+}
+
+export async function getFilteredTrayEnrichmentRecords(): Promise<
+  readonly NormalizedEnrichmentRecord[]
+> {
+  const context = await loadScanListExportContext();
+  if (!context) {
+    return [];
+  }
+
+  const filteredEntries = filterTabScanSummaryEntries(
+    context.summary.entries,
+    context.filter
+  );
+  if (filteredEntries.length === 0) {
+    return [];
+  }
+
+  return buildTraySubsetEnrichmentRecords(filteredEntries);
 }
 
 function createExportSection(
@@ -1630,7 +1656,10 @@ export function buildHoverCardPanel(
 ): HTMLElement {
   ensureVera5UiStyles(doc);
 
-  const pivotRecipes = getPivotRecipes(payload.type, payload.value);
+  const displayContext = getCachedAnalystModeDisplayContext();
+  const pivotRecipes = getPivotRecipes(payload.type, payload.value, {
+    emphasisProviders: displayContext.pivotEmphasisProviders,
+  });
   const sourceResults = payload.sourceResults ?? [];
   const view = resolveHoverCardDisplayView({
     enrichmentState: payload.enrichmentState,

@@ -42,12 +42,19 @@ import { normalizeIocNoteKey } from "../lib/analystNotesStorage";
 import { resolveWorkspaceTrayView } from "../lib/workspaceTrayState";
 import { HOVER_CARD_ANALYST_NOTES_INPUT_ID } from "../lib/hoverCardEnrichment";
 import { ensureVera5UiStyles } from "../lib/vera5UiStyles";
+import {
+  buildTrayEnrichQueueWarningMessage,
+  estimateTrayEnrichQueueImpact,
+} from "../lib/trayEnrichQueueWarning";
 import { attemptAutoEnrichmentFetch } from "./enrichmentAutoFetch";
 import {
   cancelPendingHoverEnrichment,
+  DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
+  resolvePageEnrichmentTrustGate,
   runBackgroundEnrichment,
 } from "./enrichmentBackgroundFetch";
 import {
+  getEnrichmentSourceEnabledForContent,
   loadWorkspaceEnrichmentSourceContext,
 } from "./enrichmentSourceStorage";
 import {
@@ -68,6 +75,13 @@ import {
 } from "./scanPage";
 import { handleEnrichSelectionRequest, resolveIocFromActiveSelection } from "./enrichSelection";
 import { getTabScanSummaryForCurrentTab } from "./tabScanSummaryContent";
+import {
+  cancelTrayEnrichQueue,
+  getTrayEnrichQueueSnapshot,
+  isTrayEnrichQueueRunning,
+  resetTrayEnrichQueueForTests,
+  runSequentialTrayEnrichQueue,
+} from "./trayEnrichQueue";
 import { CONTENT_MESSAGE } from "./constants";
 import {
   clearWorkspaceSelectionState,
@@ -85,6 +99,9 @@ export const VERA5_WEBSITE_URL = "https://www.vera5.io/";
 const WORKSPACE_EMPTY_SCAN_MESSAGE =
   "Run a scan to detect indicators on this page.";
 const WORKSPACE_EMPTY_DETAIL_MESSAGE = "Select an indicator to view details.";
+const TRAY_ENRICH_QUEUE_WARNING_HEADING = "Confirm bulk enrich";
+const TRAY_ENRICH_QUEUE_WARNING_CONTINUE_LABEL = "Start enrich queue";
+const TRAY_ENRICH_QUEUE_WARNING_CANCEL_LABEL = "Cancel";
 
 type WorkspaceState = {
   open: boolean;
@@ -100,6 +117,7 @@ type WorkspaceState = {
   trayFilterReady: boolean;
   trayNavigationMessage: string | null;
   trayEnrichmentStatuses: Record<string, TrayEntryEnrichmentStatus>;
+  trayMultiSelectAnchorIds: Record<string, true>;
   selectedAnchorId: string | null;
   selection: {
     highlight: HTMLElement;
@@ -124,6 +142,7 @@ function createInitialWorkspaceState(): WorkspaceState {
     trayFilterReady: false,
     trayNavigationMessage: null,
     trayEnrichmentStatuses: {},
+    trayMultiSelectAnchorIds: {},
     selectedAnchorId: null,
     selection: null,
   };
@@ -671,6 +690,8 @@ function clearWorkspaceScanResults(doc: Document): void {
   workspaceState.trayFilterReady = false;
   workspaceState.trayNavigationMessage = null;
   workspaceState.trayEnrichmentStatuses = {};
+  workspaceState.trayMultiSelectAnchorIds = {};
+  cancelTrayEnrichQueue();
 
   if (workspaceState.selection) {
     cancelPendingHoverEnrichment();
@@ -801,7 +822,7 @@ export function presentWorkspaceEnrichmentForPayload(
             logUnlessBenignExtensionError(error);
           }
         );
-      } else {
+      } else if (options.enrichmentTrigger !== "none") {
         void attemptAutoEnrichmentFetch(payload).catch((error) => {
           logUnlessBenignExtensionError(error);
         });
@@ -828,6 +849,196 @@ export function activateWorkspaceIndicatorByAnchorId(
 
   highlight.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
   return selectWorkspaceIndicator(highlight, { enrichmentTrigger: "auto" }, doc);
+}
+
+function setTrayMultiSelectAnchor(anchorId: string, selected: boolean): void {
+  if (selected) {
+    workspaceState.trayMultiSelectAnchorIds[anchorId] = true;
+  } else {
+    delete workspaceState.trayMultiSelectAnchorIds[anchorId];
+  }
+}
+
+function resolveSelectedTrayAnchorIdsForEnrich(): string[] {
+  const summary = workspaceState.scanSummary;
+  if (!summary) {
+    return [];
+  }
+
+  const filteredEntries = filterTabScanSummaryEntries(
+    summary.entries,
+    workspaceState.typeFilter
+  );
+  return filteredEntries
+    .map((entry) => entry.anchorId)
+    .filter((anchorId) => workspaceState.trayMultiSelectAnchorIds[anchorId]);
+}
+
+async function enrichTrayIndicatorSequentially(
+  anchorId: string,
+  doc: Document
+): Promise<void> {
+  const highlight = doc.querySelector<HTMLElement>(
+    `[data-vera5-anchor-id="${CSS.escape(anchorId)}"]`
+  );
+  if (!highlight) {
+    workspaceState.trayNavigationMessage =
+      "This indicator is no longer on the page. Scan again to refresh the list.";
+    renderWorkspaceTop(doc);
+    return;
+  }
+
+  const basePayload = buildHoverCardPayloadFromHighlight(highlight);
+  if (!basePayload) {
+    return;
+  }
+
+  highlight.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+
+  const { disabledSourceIds, enabledSourceIds, showDisabledSourcesInWorkspace } =
+    await loadWorkspaceEnrichmentSourceContext();
+  const payload: HoverCardOverlayPayload = {
+    ...basePayload,
+    ...(disabledSourceIds.length > 0 ? { disabledSources: disabledSourceIds } : {}),
+    enabledEnrichmentSourceIds: enabledSourceIds,
+    showDisabledSourcesInWorkspace,
+  };
+
+  presentWorkspaceEnrichmentForPayload(
+    basePayload,
+    highlight,
+    { enrichmentTrigger: "none" },
+    doc,
+    anchorId
+  );
+  cancelPendingHoverEnrichment();
+  const outcome = await runBackgroundEnrichment(payload, doc, { bypassCache: true });
+  if (outcome === "cancelled") {
+    cancelTrayEnrichQueue();
+  }
+}
+
+function confirmTrayEnrichQueueWarning(
+  message: string,
+  doc: Document
+): Promise<boolean> {
+  ensureVera5UiStyles(doc);
+
+  return new Promise((resolve) => {
+    const backdrop = doc.createElement("div");
+    backdrop.className = "vera5-tray-enrich-queue-warning-backdrop";
+
+    const panel = doc.createElement("div");
+    panel.className = "vera5-tray-enrich-queue-warning-panel";
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.setAttribute("aria-label", TRAY_ENRICH_QUEUE_WARNING_HEADING);
+
+    const heading = doc.createElement("h3");
+    heading.className = "vera5-tray-enrich-queue-warning-heading";
+    heading.textContent = TRAY_ENRICH_QUEUE_WARNING_HEADING;
+
+    const body = doc.createElement("p");
+    body.className = "vera5-tray-enrich-queue-warning-message";
+    body.setAttribute("role", "note");
+    body.textContent = message;
+
+    const actions = doc.createElement("div");
+    actions.className = "vera5-tray-enrich-queue-warning-actions";
+
+    const finish = (confirmed: boolean) => {
+      backdrop.remove();
+      resolve(confirmed);
+    };
+
+    const continueButton = createWorkspaceButton(
+      TRAY_ENRICH_QUEUE_WARNING_CONTINUE_LABEL,
+      doc,
+      () => {
+        finish(true);
+      }
+    );
+    const cancelButton = createWorkspaceButton(
+      TRAY_ENRICH_QUEUE_WARNING_CANCEL_LABEL,
+      doc,
+      () => {
+        finish(false);
+      }
+    );
+
+    actions.append(continueButton, cancelButton);
+    panel.append(heading, body, actions);
+    backdrop.appendChild(panel);
+
+    backdrop.addEventListener("click", (event) => {
+      if (event.target === backdrop) {
+        finish(false);
+      }
+    });
+
+    doc.body.appendChild(backdrop);
+    continueButton.focus();
+  });
+}
+
+async function startTrayEnrichQueue(
+  anchorIds: readonly string[],
+  doc: Document
+): Promise<void> {
+  if (isTrayEnrichQueueRunning() || anchorIds.length === 0) {
+    return;
+  }
+
+  const summary = workspaceState.scanSummary;
+  if (!summary) {
+    return;
+  }
+
+  const pageGate = await resolvePageEnrichmentTrustGate(doc);
+  if (!pageGate.allowed) {
+    workspaceState.trayNavigationMessage = DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE;
+    renderWorkspaceTop(doc);
+    return;
+  }
+
+  const filteredEntries = filterTabScanSummaryEntries(
+    summary.entries,
+    workspaceState.typeFilter
+  );
+  const enabledSources = await getEnrichmentSourceEnabledForContent();
+  const impact = estimateTrayEnrichQueueImpact(
+    filteredEntries,
+    anchorIds,
+    enabledSources
+  );
+  const confirmed = await confirmTrayEnrichQueueWarning(
+    buildTrayEnrichQueueWarningMessage(impact),
+    doc
+  );
+  if (!confirmed) {
+    return;
+  }
+
+  workspaceState.trayNavigationMessage = null;
+
+  try {
+    await runSequentialTrayEnrichQueue(
+      anchorIds,
+      (anchorId) => enrichTrayIndicatorSequentially(anchorId, doc),
+      () => {
+        if (workspaceState.open) {
+          renderWorkspaceTop(doc);
+        }
+      }
+    );
+  } catch (error) {
+    logUnlessBenignExtensionError(error);
+  } finally {
+    await loadTrayEnrichmentStatuses();
+    if (workspaceState.open) {
+      renderWorkspaceTop(doc);
+    }
+  }
 }
 
 function renderWorkspaceTop(doc: Document): void {
@@ -859,6 +1070,8 @@ function renderWorkspaceTop(doc: Document): void {
           workspaceState.trayFilterReady = false;
           workspaceState.trayNavigationMessage = null;
           workspaceState.trayEnrichmentStatuses = {};
+          workspaceState.trayMultiSelectAnchorIds = {};
+          cancelTrayEnrichQueue();
           workspaceState.selection = null;
           workspaceState.selectedAnchorId = null;
           renderWorkspaceEmptyDetail(doc);
@@ -1055,6 +1268,51 @@ function renderWorkspaceTop(doc: Document): void {
   }
   top.appendChild(filterRow);
 
+  const selectedTrayAnchorIds = resolveSelectedTrayAnchorIdsForEnrich();
+  const queueRunning = isTrayEnrichQueueRunning();
+  const queueSnapshot = getTrayEnrichQueueSnapshot();
+
+  const bulkRow = doc.createElement("div");
+  bulkRow.className = "vera5-workspace-tray-bulk-row";
+  bulkRow.appendChild(
+    createWorkspaceButton(
+      `Enrich selected (${selectedTrayAnchorIds.length})`,
+      doc,
+      () => {
+        void startTrayEnrichQueue(selectedTrayAnchorIds, doc).catch((error) => {
+          logUnlessBenignExtensionError(error);
+        });
+      },
+      !workspaceState.ready ||
+        !workspaceState.enabled ||
+        selectedTrayAnchorIds.length === 0 ||
+        queueRunning
+    )
+  );
+  if (queueRunning) {
+    bulkRow.appendChild(
+      createWorkspaceButton(
+        "Cancel enrich queue",
+        doc,
+        () => {
+          cancelTrayEnrichQueue();
+          cancelPendingHoverEnrichment();
+          renderWorkspaceTop(doc);
+        },
+        false
+      )
+    );
+  }
+  top.appendChild(bulkRow);
+
+  if (queueRunning && queueSnapshot) {
+    const queueStatus = doc.createElement("p");
+    queueStatus.className = "vera5-workspace-tray-queue-status";
+    queueStatus.setAttribute("aria-live", "polite");
+    queueStatus.textContent = `Enriching ${queueSnapshot.currentIndex} of ${queueSnapshot.totalCount}…`;
+    top.appendChild(queueStatus);
+  }
+
   if (workspaceState.trayNavigationMessage) {
     const navMessage = doc.createElement("p");
     navMessage.className = "vera5-workspace-error";
@@ -1106,6 +1364,27 @@ function renderWorkspaceTop(doc: Document): void {
       "aria-selected",
       workspaceState.selectedAnchorId === entry.anchorId ? "true" : "false"
     );
+    row.classList.toggle(
+      "vera5-workspace-tray-row--bulk-selected",
+      Boolean(workspaceState.trayMultiSelectAnchorIds[entry.anchorId])
+    );
+
+    const selectCheckbox = doc.createElement("input");
+    selectCheckbox.type = "checkbox";
+    selectCheckbox.className = "vera5-workspace-tray-select";
+    selectCheckbox.checked = Boolean(workspaceState.trayMultiSelectAnchorIds[entry.anchorId]);
+    selectCheckbox.disabled = queueRunning;
+    selectCheckbox.setAttribute(
+      "aria-label",
+      `Select ${entry.value} for bulk enrich`
+    );
+    selectCheckbox.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
+    selectCheckbox.addEventListener("change", () => {
+      setTrayMultiSelectAnchor(entry.anchorId, selectCheckbox.checked);
+      renderWorkspaceTop(doc);
+    });
 
     const activate = () => {
       activateWorkspaceIndicatorByAnchorId(entry.anchorId, doc);
@@ -1144,7 +1423,7 @@ function renderWorkspaceTop(doc: Document): void {
 
     const mainRow = doc.createElement("div");
     mainRow.className = "vera5-workspace-tray-row-main";
-    mainRow.append(typeBadge, valueContainer);
+    mainRow.append(selectCheckbox, typeBadge, valueContainer);
 
     if (enrichmentStatus) {
       const hint = doc.createElement("span");
@@ -1369,6 +1648,8 @@ export function setupWorkspaceSidebarListener(doc: Document = document): void {
 }
 
 export function resetWorkspaceSidebarForTests(): void {
+  cancelTrayEnrichQueue();
+  resetTrayEnrichQueueForTests();
   workspaceState = createInitialWorkspaceState();
   clearWorkspaceSelectionState();
   setWorkspaceSelectionState({ open: false, selectedAnchorId: null, payloadValue: null });

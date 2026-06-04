@@ -40,6 +40,15 @@ vi.mock("./domainPolicyStorage", async (importOriginal) => {
   };
 });
 
+vi.mock("./internalAssetPolicyStorage", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("./internalAssetPolicyStorage")>();
+  return {
+    ...actual,
+    isOutboundEnrichmentAllowedForIndicator: vi.fn(async () => true),
+  };
+});
+
 vi.mock("./enrichmentSourceStorage", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("./enrichmentSourceStorage")>();

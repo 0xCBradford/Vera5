@@ -9,6 +9,7 @@ import {
   beginPreQueryDisclosureWait,
   resolvePreQueryDisclosure,
   shouldApplyDomainPolicyEnrichGate,
+  shouldApplyInternalAssetEnrichGate,
   shouldShowPreQueryNotices,
 } from "./enrichmentPolicy";
 
@@ -35,6 +36,11 @@ describe("enrichment policy", () => {
     expect(shouldApplyDomainPolicyEnrichGate(true)).toBe(true);
     expect(shouldApplyDomainPolicyEnrichGate(false)).toBe(false);
   });
+
+  it("applies internal asset lists to enrichment only when the enrich gate is enabled", () => {
+    expect(shouldApplyInternalAssetEnrichGate(true)).toBe(true);
+    expect(shouldApplyInternalAssetEnrichGate(false)).toBe(false);
+  });
 });
 
 describe("pre-query disclosure message", () => {
@@ -56,6 +62,18 @@ describe("pre-query disclosure message", () => {
       "AbuseIPDB, OTX, and GreyNoise"
     );
     expect(formatPreQueryVendorList([])).toBe("your enabled vendors");
+  });
+
+  it("builds a multi-vendor disclosure with indicator type and value", () => {
+    expect(
+      buildPreQueryDisclosureMessage({
+        sourceLabels: ["AbuseIPDB", "OTX"],
+        typeLabel: "domain name",
+        value: "example.com",
+      })
+    ).toBe(
+      "Vera5 will query AbuseIPDB and OTX with this domain name: example.com"
+    );
   });
 });
 

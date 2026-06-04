@@ -6,6 +6,10 @@ import {
   DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
   getApiKey,
   getAutoScanEnabled,
+  getDomainAllowlist,
+  getDomainDenylist,
+  getDomainPolicyEnrichGateEnabled,
+  getDomainPolicyMode,
   getEnrichmentSourceEnabled,
   getManualOnlyMode,
   getPreQueryNoticePreferenceConfigured,
@@ -16,6 +20,10 @@ import {
   getVera5Settings,
   listDisabledEnrichmentSources,
   setAutoScanEnabled,
+  setDomainAllowlist,
+  setDomainDenylist,
+  setDomainPolicyEnrichGateEnabled,
+  setDomainPolicyMode,
   setEnrichmentSourceEnabled,
   setEnrichmentCacheTtlSeconds,
   setIncludePrivateIpv4,
@@ -58,10 +66,18 @@ import {
   STORAGE_KEY_DOMAIN_ALLOWLIST,
   STORAGE_KEY_DOMAIN_DENYLIST,
   STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
+  STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES,
+  STORAGE_KEY_INTERNAL_ASSET_DOMAINS,
+  STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED,
+  STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS,
+  STORAGE_KEY_ANALYST_MODE_PRESET_ID,
+  STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
+  STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
   STORAGE_KEYS,
   VERA5_SETTINGS_READ_KEYS,
   VERA5_SETTINGS_STORAGE_KEYS,
 } from "./storage";
+import { DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES } from "./domainPolicy";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
   vi.stubGlobal("chrome", {
@@ -138,6 +154,77 @@ describe("auto scan storage", () => {
     await setAutoScanEnabled(true);
     expect(store[STORAGE_KEY_AUTO_SCAN_ENABLED]).toBe(true);
     await expect(getAutoScanEnabled()).resolves.toBe(true);
+  });
+});
+
+describe("domain policy storage", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults to allow-by-default with default webmail denylist and enrich gate on", async () => {
+    await expect(getDomainPolicyMode()).resolves.toBe("allow_by_default");
+    await expect(getDomainAllowlist()).resolves.toEqual([]);
+    await expect(getDomainDenylist()).resolves.toEqual([
+      ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
+    ]);
+    await expect(getDomainPolicyEnrichGateEnabled()).resolves.toBe(true);
+  });
+
+  it("backfills default webmail denylist when migrating from schema version 1", async () => {
+    store[STORAGE_KEY_SCHEMA_VERSION] = 1;
+    store[STORAGE_KEY_EXTENSION_ENABLED] = true;
+    store[STORAGE_KEY_HIGHLIGHT_ENABLED] = true;
+    store[STORAGE_KEY_AUTO_SCAN_ENABLED] = false;
+    store[STORAGE_KEY_MANUAL_ONLY_MODE] = true;
+    store[STORAGE_KEY_INCLUDE_PRIVATE_IPV4] = false;
+    store[STORAGE_KEY_API_KEYS] = {};
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED] =
+      createDefaultVera5Settings().enrichmentSourceEnabled;
+    store[STORAGE_KEY_IOC_TYPE_ENABLED] = createDefaultVera5Settings().iocTypeEnabled;
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
+      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    store[STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE] = false;
+    store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES] = true;
+    store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED] = false;
+    store[STORAGE_KEY_DOMAIN_POLICY_MODE] = "allow_by_default";
+    store[STORAGE_KEY_DOMAIN_ALLOWLIST] = [];
+    store[STORAGE_KEY_DOMAIN_DENYLIST] = [];
+    store[STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED] = true;
+
+    const settings = await getVera5Settings();
+
+    expect(settings.settingsSchemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(store[STORAGE_KEY_DOMAIN_DENYLIST]).toEqual([
+      ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
+    ]);
+  });
+
+  it("persists allowlist and denylist entries with normalization", async () => {
+    await setDomainDenylist([" Mail.* ", "mail.*", "HR.Example.COM"]);
+    await setDomainAllowlist([" SOC.Example.com "]);
+
+    expect(store[STORAGE_KEY_DOMAIN_DENYLIST]).toEqual(["mail.*", "hr.example.com"]);
+    expect(store[STORAGE_KEY_DOMAIN_ALLOWLIST]).toEqual(["soc.example.com"]);
+    await expect(getDomainDenylist()).resolves.toEqual(["mail.*", "hr.example.com"]);
+    await expect(getDomainAllowlist()).resolves.toEqual(["soc.example.com"]);
+  });
+
+  it("persists policy mode and enrich gate toggles", async () => {
+    await setDomainPolicyMode("deny_by_default");
+    await setDomainPolicyEnrichGateEnabled(false);
+
+    expect(store[STORAGE_KEY_DOMAIN_POLICY_MODE]).toBe("deny_by_default");
+    expect(store[STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]).toBe(false);
+    await expect(getDomainPolicyMode()).resolves.toBe("deny_by_default");
+    await expect(getDomainPolicyEnrichGateEnabled()).resolves.toBe(false);
   });
 });
 
@@ -344,8 +431,17 @@ describe("migrate-safe defaults", () => {
     expect(defaults.preQueryNoticePreferenceConfigured).toBe(false);
     expect(defaults.domainPolicyMode).toBe("allow_by_default");
     expect(defaults.domainAllowlist).toEqual([]);
-    expect(defaults.domainDenylist).toEqual([]);
+    expect(defaults.domainDenylist).toEqual([
+      ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
+    ]);
     expect(defaults.domainPolicyEnrichGateEnabled).toBe(true);
+    expect(defaults.internalAssetEnrichGateEnabled).toBe(true);
+    expect(defaults.internalAssetDomains).toEqual([]);
+    expect(defaults.internalAssetCidrRanges).toEqual([]);
+    expect(defaults.internalAssetVendorLabels).toEqual([]);
+    expect(defaults.analystModePresetId).toBe("");
+    expect(defaults.defaultExportTemplateId).toBe("analyst-update");
+    expect(defaults.pivotEmphasisProviders).toEqual([]);
     expect(defaults.enrichmentCacheTtlSeconds).toBe(
       DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS
     );
@@ -399,6 +495,17 @@ describe("migrate-safe defaults", () => {
     expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
   });
 
+  it("backfills default webmail denylist when upgrading from schema version 1", () => {
+    const migrated = migrateVera5StorageRaw({
+      [STORAGE_KEY_SCHEMA_VERSION]: 1,
+      [STORAGE_KEY_DOMAIN_DENYLIST]: [],
+    });
+    expect(migrated[STORAGE_KEY_DOMAIN_DENYLIST]).toEqual([
+      ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
+    ]);
+    expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+  });
+
   it("detects when storage migration is required", () => {
     expect(needsStorageMigration({})).toBe(true);
     expect(
@@ -417,8 +524,17 @@ describe("migrate-safe defaults", () => {
         [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]: false,
         [STORAGE_KEY_DOMAIN_POLICY_MODE]: "allow_by_default",
         [STORAGE_KEY_DOMAIN_ALLOWLIST]: [],
-        [STORAGE_KEY_DOMAIN_DENYLIST]: [],
+        [STORAGE_KEY_DOMAIN_DENYLIST]: [
+          ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
+        ],
         [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]: true,
+        [STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED]: true,
+        [STORAGE_KEY_INTERNAL_ASSET_DOMAINS]: [],
+        [STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES]: [],
+        [STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS]: [],
+        [STORAGE_KEY_ANALYST_MODE_PRESET_ID]: "",
+        [STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]: "analyst-update",
+        [STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS]: [],
         [STORAGE_KEY_IOC_TYPE_ENABLED]: {
           ipv4: true,
           domain: true,

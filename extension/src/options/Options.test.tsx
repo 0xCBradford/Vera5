@@ -10,8 +10,15 @@ import { STORAGE_KEY_API_KEYS } from "../lib/storage";
 import {
   STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
   STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
+  STORAGE_KEY_DOMAIN_ALLOWLIST,
+  STORAGE_KEY_DOMAIN_DENYLIST,
+  STORAGE_KEY_DOMAIN_POLICY_MODE,
+  STORAGE_KEY_ANALYST_MODE_PRESET_ID,
+  STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
+  STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
 } from "../lib/storage";
 import { IOC_TYPE_SETTINGS_ORDER } from "../lib/storage";
+import { DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES } from "../lib/domainPolicy";
 import { Options } from "./Options";
 
 const IOC_TYPE_OPTION_LABELS: Record<
@@ -461,5 +468,208 @@ describe("Options pre-query notice preference", () => {
     ) as HTMLInputElement;
     expect(toggle).not.toBeNull();
     expect(toggle.checked).toBe(true);
+  });
+});
+
+describe("Options domain policy controls", () => {
+  let store: Record<string, unknown>;
+  let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+  beforeEach(() => {
+    store = {
+      [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]: true,
+      [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: true,
+    };
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    vi.unstubAllGlobals();
+  });
+
+  it("renders domain policy list editors and mode controls", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector('input[aria-label="Denylist entry pattern"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('input[aria-label="Allowlist entry pattern"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="Apply domain policy to live enrichment"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('input[name="domainPolicyMode"]')
+    ).not.toBeNull();
+    expect(mounted.container.textContent).toContain("Allow by default");
+    expect(mounted.container.textContent).toContain("Deny by default");
+    expect(mounted.container.textContent).toContain("Default-safe presets");
+    expect(mounted.container.textContent).toContain("Sensitive sites denylist");
+  });
+
+  it("persists denylist entries when added from the Options UI", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const input = mounted.container.querySelector(
+      'input[aria-label="Denylist entry pattern"]'
+    ) as HTMLInputElement;
+    const addButton = mounted.container.querySelector(
+      'button[aria-label="Add domain to denylist"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(input, " legacy.example.com ");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      addButton.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_DOMAIN_DENYLIST]).toEqual([
+      ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
+      "legacy.example.com",
+    ]);
+    expect(mounted.container.textContent).toContain("legacy.example.com");
+  });
+
+  it("persists deny-by-default mode when selected", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const denyRadio = Array.from(
+      mounted.container.querySelectorAll('input[name="domainPolicyMode"]')
+    ).find(
+      (input) =>
+        (input as HTMLInputElement).checked === false &&
+        input.parentElement?.textContent?.includes("Deny by default")
+    ) as HTMLInputElement | undefined;
+
+    expect(denyRadio).not.toBeUndefined();
+
+    await act(async () => {
+      denyRadio?.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_DOMAIN_POLICY_MODE]).toBe("deny_by_default");
+  });
+
+  it("removes allowlist entries when Remove is clicked", async () => {
+    store[STORAGE_KEY_DOMAIN_ALLOWLIST] = ["soc.example.com", "lab.example.com"];
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const removeButton = mounted.container.querySelector(
+      'button[aria-label="Remove soc.example.com from Allowlist"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      removeButton.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_DOMAIN_ALLOWLIST]).toEqual(["lab.example.com"]);
+  });
+
+  it("merges the sensitive sites denylist preset into storage", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const applyButton = mounted.container.querySelector(
+      'button[aria-label="Apply Sensitive sites denylist preset"]'
+    ) as HTMLButtonElement;
+
+    expect(applyButton).not.toBeNull();
+
+    await act(async () => {
+      applyButton.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_DOMAIN_POLICY_MODE]).toBe("allow_by_default");
+    expect(store[STORAGE_KEY_DOMAIN_DENYLIST]).toEqual(
+      expect.arrayContaining(["mail.*", "mail.google.com", "*.bank"])
+    );
+    expect(mounted.container.textContent).toContain("mail.*");
+  });
+
+  it("applies the SOC analyst workflow preset to storage", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const applyButton = mounted.container.querySelector(
+      'button[aria-label="Apply SOC triage preset"]'
+    ) as HTMLButtonElement;
+
+    expect(applyButton).not.toBeNull();
+
+    await act(async () => {
+      applyButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_ANALYST_MODE_PRESET_ID]).toBe("soc");
+    expect(store[STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]).toBe("jira-comment");
+    expect(store[STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS]).toEqual(
+      expect.arrayContaining(["abuseipdb", "greynoise", "otx"])
+    );
   });
 });

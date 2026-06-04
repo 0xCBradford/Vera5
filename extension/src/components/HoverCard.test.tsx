@@ -233,8 +233,18 @@ describe("HoverCard", () => {
   });
 
   it("confirms before opening a live URL from the hover card", async () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const confirm = vi.fn(() => true);
+    const open = vi.fn(() => null);
+    Object.defineProperty(window, "confirm", {
+      configurable: true,
+      writable: true,
+      value: confirm,
+    });
+    Object.defineProperty(window, "open", {
+      configurable: true,
+      writable: true,
+      value: open,
+    });
 
     mounted = renderHoverCard({
       value: "https://example.com/evil",
@@ -256,9 +266,6 @@ describe("HoverCard", () => {
       "_blank",
       "noopener,noreferrer"
     );
-
-    confirm.mockRestore();
-    open.mockRestore();
   });
 });
 

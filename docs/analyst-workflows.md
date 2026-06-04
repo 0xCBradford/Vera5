@@ -23,6 +23,8 @@ The keyboard shortcut runs the same scan as **Scan page** but does not update th
 2. Save API keys for **AbuseIPDB** and/or **OTX** if you need live enrichment.
 3. Enable only the sources you intend to use under **Enrichment sources**.
 4. Leave **Manual-only enrichment** on (default) when working sensitive cases or when you want tight control over API usage. Turn it off only when you are comfortable with automatic fetches each time you open a hover card.
+5. Domain policy ships **allow by default** with a **default sensitive webmail denylist** (see [security-model.md](security-model.md#default-sensitive-webmail-denylist)). SOC and vendor sites stay open; common webmail hosts are blocked for auto-scan and live enrich unless you remove those denylist rows. Apply the **Sensitive sites denylist** preset for banking, health, and HR patterns, or add entries manually. The domain enrich gate (default on) blocks live vendor calls on denylisted hosts before pre-query disclosure.
+6. Optional: under **Trust & consent**, apply an **Analyst workflow preset** (**SOC triage**, **CTI research**, or **DFIR investigation**) to set default enrichment toggles, the default export template, and recommended pivot ordering for your role.
 
 URLScan.io and GreyNoise toggles store preferences and provide pivot links; they do not perform live API enrichment in the current release.
 

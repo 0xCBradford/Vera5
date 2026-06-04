@@ -72,9 +72,74 @@ Vera5 can gate **auto-scan** and **live enrichment** on the hostname of the page
 | Mode | Behavior |
 |------|----------|
 | Allow by default (current product default) | Auto-scan and enrichment run on all hosts **except** those on the denylist. |
-| Deny by default | Auto-scan and enrichment run **only** on hosts in the allowlist. |
+| Deny by default (optional posture) | Auto-scan and enrichment run **only** on hosts in the allowlist. |
 
-Lists are empty until you add entries (Options UI for list management is not shipped in the current release; values can be set via extension storage or a future settings import).
+Lists are managed in **Vera5 Settings** under **Trust & consent**, or via settings export/import.
+
+### Product default policy
+
+Fresh installs and normalized settings use **allow by default** (`domainPolicyMode`: `allow_by_default`). The **denylist ships with sensitive webmail patterns by default** so common webmail hosts are blocked for auto-scan and live enrichment without manual setup. The allowlist starts empty. Upgrades from earlier profiles with an empty denylist receive the same webmail defaults during storage migration.
+
+| Control | Default | What it means for sensitive sites |
+|---------|---------|-----------------------------------|
+| Domain policy mode | Allow by default | SOC and vendor sites stay open unless denylisted |
+| Denylist | Sensitive webmail patterns | Blocks `mail.*`, `webmail.*`, and common provider webmail hosts (see below) |
+| Allowlist | Empty | Not used until you switch to deny-by-default |
+| Domain enrich gate | On | Denylisted hosts skip vendor calls before pre-query disclosure |
+| Manual-only enrichment | On | Live fetch still requires an explicit enrich action on allowed hosts |
+| Auto-scan | Off | DOM-driven rescans stay off until you enable auto-scan |
+| Pre-query notices | On until first-run choice | Inline disclosure precedes vendor calls when enrichment is allowed |
+
+**Deny by default** is an alternate mode you can set when your operating policy requires an allowlist-first model (for example only internal SOC exports and approved CTI consoles). Switching modes does not auto-fill the allowlist; you maintain list entries to match the mode you choose.
+
+#### Default sensitive webmail denylist
+
+Under the allow-by-default product posture, Vera5 **requires** default protection on common webmail origins. Fresh installs and qualifying upgrades include these denylist entries:
+
+| Pattern | Covers |
+|---------|--------|
+| `mail.*` | Corporate and provider webmail subdomains |
+| `webmail.*` | Alternate webmail prefixes |
+| `outlook.office.com`, `outlook.live.com` | Microsoft webmail |
+| `mail.google.com` | Gmail web |
+| `mail.yahoo.com` | Yahoo Mail web |
+
+Analysts can remove or extend denylist rows in **Trust & consent**. Banking, health, and HR patterns are **not** in the default denylist; use the **Sensitive sites denylist** preset or add entries manually.
+
+#### Mapping sensitive-domain guidance to the default
+
+The pattern tables below are written for the **shipped default**:
+
+| Posture | Where to apply suggested patterns | Typical outcome |
+|---------|-----------------------------------|-----------------|
+| **Allow by default** (product default) | Add sensitive patterns to the **denylist** | SOC and vendor sites stay open; webmail, banking, health, and HR hosts you list are blocked for auto-scan and live enrich |
+| **Deny by default** (optional) | Build an **allowlist** of approved investigation hosts first; avoid allowlisting sensitive categories unless policy requires it | Only listed origins scan or enrich; everything else is blocked |
+
+Under allow by default, start with denylist entries such as `mail.*`, `webmail.*`, and exact hosts for banking, patient portals, and HR SaaS tenants your organization uses. Under deny by default, invert the workflow: allowlist SOC destinations explicitly, then audit whether any sensitive host truly belongs on the allowlist.
+
+Other trust controls stack on top of domain policy: manual-only enrichment and pre-query disclosure remain the first lines of defense on allowed hosts; denylist entries add hostname-level blocks before disclosure or vendor calls.
+
+## Internal asset lists
+
+Separate from page-hostname domain policy, Vera5 supports **indicator-level** internal asset lists. When the internal asset enrich gate is enabled (default), live enrichment is blocked before pre-query disclosure when the **indicator value** matches a configured list—even on otherwise allowed SOC pages.
+
+| List | Applies to | Example |
+|------|------------|---------|
+| Internal domains | Domain and URL indicators | `intranet.corp.example`, `*.internal` |
+| Internal IPv4 CIDR ranges | IPv4 indicators | `10.0.0.0/8`, `192.168.0.0/16` |
+| Vendor and SaaS labels | Domain and URL indicators (hostname match) | Label `Corporate VPN`, pattern `vpn.corp.example` |
+
+Lists start empty. Hash and CVE indicators are not matched by these lists in the current release. Manage lists under **Trust & consent** in Vera5 Settings, or via settings export/import. Matching logic lives in `extension/src/lib/internalAssetPolicy.ts`; the content-script gate runs in `enrichmentBackgroundFetch.ts` via `internalAssetPolicyStorage.ts`.
+
+### Shipped default-safe presets
+
+Vera5 documents **allow by default** as the chosen product posture (not deny-by-default). To reduce accidental scan or enrich on sensitive origins without blocking SOC tooling by default, the extension ships one mergeable preset in **Trust & consent**:
+
+| Preset | Recommended mode | What it adds |
+|--------|------------------|--------------|
+| **Sensitive sites denylist** | Allow by default | Merges banking (`*.bank`), patient-portal (`*.mychart.org`), and workforce SaaS patterns (`hr.*`, `people.*`, `*.workday.com`, `*.successfactors.com`, `*.ultipro.com`) into your **denylist** in addition to the default webmail entries |
+
+Applying a preset **merges** entries; it does not remove custom allowlist or denylist rows. It sets domain policy mode to the preset’s recommended mode (allow by default for the shipped preset). See [analyst-workflows.md](analyst-workflows.md) for workflow context.
 
 ### Pattern syntax
 
@@ -90,7 +155,7 @@ Use prefix patterns for common webmail layouts (`mail.*`, `webmail.*`). Use suff
 
 ### Suggested sensitive-domain patterns
 
-The tables below are **starting points** for your denylist when using allow-by-default, or for review before allowlisting when using deny-by-default. Adjust for your organization’s DNS and SaaS tenants. Vera5 does not ship a mandatory blocklist in the current release.
+The tables below are **starting points** aligned with the **allow-by-default product default**: add them to your **denylist**, apply the **Sensitive sites denylist** preset in Options, or build an allowlist if you use deny-by-default (see [Product default policy](#product-default-policy)). Adjust for your organization’s DNS and SaaS tenants.
 
 #### Webmail and personal email
 
@@ -125,7 +190,7 @@ Patient charts, lab results, and telehealth sessions may contain PHI-adjacent in
 | `*.mychart.org` | Common MyChart-style patient portal naming (validate against your providers) |
 | Suffix patterns for health zones | Internal clinical or research zones (for example `*.clinical.corp.example`) when you operate split DNS |
 
-Treat health-related origins like high-sensitivity workflow: add them to the denylist, or use deny-by-default and allowlist only approved SOC destinations.
+Treat health-related origins like high-sensitivity workflow: under the product default, add them to the **denylist**; if you use deny-by-default, allowlist only approved SOC destinations and omit patient-portal hosts unless policy explicitly requires them.
 
 #### Internal HR and workforce systems
 
@@ -153,14 +218,54 @@ Any new permission or host pattern requires an update to this document, [SECURIT
 
 ## Executable code and content security policy
 
+Extension pages are HTML documents loaded as `chrome-extension://…` origins (toolbar popup and options). They must not load remote scripts or weaken Chromium’s Manifest V3 CSP.
+
+### Extension pages inventory
+
+| Page | Manifest key | Built artifact | CSP |
+|------|--------------|----------------|-----|
+| Options | `options_page`: `options.html` | `extension/dist/options.html` | Default MV3 (`script-src 'self'`; no manifest override) |
+| Toolbar popup | `action.default_popup`: `popup.html` | `extension/dist/popup.html` | Default MV3 (same as options) |
+
+Both pages load only packaged `/assets/…` JavaScript and CSS. There are no inline `<script>` blocks, no CSP `<meta>` tags, and no `https://` script or stylesheet URLs in built HTML.
+
+The Vite dev shell (`extension/index.html`) is for local development only and is not copied to `dist/` or referenced from the manifest.
+
+### Manifest CSP
+
+[`extension/public/manifest.json`](../extension/public/manifest.json) does **not** set `content_security_policy`. Chromium applies the default Manifest V3 extension-pages policy:
+
+- `script-src 'self' 'wasm-unsafe-eval'`
+- `object-src 'self'`
+
+Vera5 does not add `unsafe-eval`, `unsafe-inline`, or remote `https://` entries to `script-src`.
+
+### Remote origins matrix
+
+| Origin / pattern | Mechanism | Purpose | Sends IOC to Vera5? |
+|------------------|-----------|---------|---------------------|
+| `https://api.abuseipdb.com/…` | `fetch()` GET (connector) | AbuseIPDB enrichment when enabled and keyed | No — BYOK to vendor |
+| `https://otx.alienvault.com/…` | `fetch()` GET (connector) | OTX enrichment when enabled and keyed | No — BYOK to vendor |
+| `https://…` pivot URLs | `chrome.tabs.create` / user navigation | Analyst opens vendor search pages from pivot actions | No live API call from extension |
+| `https://www.vera5.io/` | `chrome.tabs.create` | Product website link from workspace sidebar | No enrichment |
+| `chrome://settings/…` | `chrome.tabs.create` | Site-permissions helper | Internal browser UI |
+| Page under scan (`http(s)://*/*`) | Content scripts (`host_permissions`) | DOM read for IOC detection only | No upload to Vera5 infrastructure |
+
+Live `fetch()` calls exist only in [`abuseipdbConnector.ts`](../extension/src/lib/abuseipdbConnector.ts) and [`otxConnector.ts`](../extension/src/lib/otxConnector.ts). Connectors use GET without a request body; indicator values are passed in the URL or query string per vendor API requirements.
+
+There is no `importScripts()` or dynamic `import()` from network URLs in production bundles.
+
+### Automated regression checks
+
 | Check | Status |
 |-------|--------|
 | `eval()` / `new Function()` | Not used in `extension/src/` or production bundles under `extension/dist/`. |
-| Remote scripts | Popup, options, background, and content bundles load only packaged assets (`chrome-extension://…` / relative `/assets/…` paths). No `https://` script or stylesheet URLs in built HTML. |
-| Manifest CSP override | [`extension/public/manifest.json`](../extension/public/manifest.json) does not set a custom `content_security_policy` with `unsafe-eval` or `unsafe-inline`. Extension pages use Chromium’s default Manifest V3 CSP (`script-src 'self'`, WASM and local extension origins only). |
-| Remote code at runtime | No `importScripts()` or dynamic `import()` from network URLs in shipped bundles. Future connector HTTP calls will fetch JSON API responses, not executable script. |
+| Remote scripts in extension pages | Popup and options HTML reference only relative `/assets/…` paths. |
+| Manifest CSP override | No custom CSP with `unsafe-eval`, `unsafe-inline`, or remote `script-src`. |
+| Live fetch allowlist | Only connector modules may call `fetch()`; declared HTTPS hosts are `api.abuseipdb.com` and `otx.alienvault.com`. |
+| Remote code at runtime | No dynamic import or `importScripts()` from `https://` URLs in `dist/`. |
 
-Automated checks run after each production build:
+After each production build:
 
 ```bash
 cd extension

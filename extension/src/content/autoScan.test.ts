@@ -71,6 +71,16 @@ describe("auto scan", () => {
     expect(isMutationRescanActive()).toBe(false);
   });
 
+  it("does not start mutation rescan when the current domain matches the default webmail denylist", async () => {
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "mail.google.com" },
+    });
+    store[CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED] = true;
+    await syncAutoScanWithStorage();
+    expect(isMutationRescanActive()).toBe(false);
+  });
+
   it("does not start mutation rescan when the current domain is denylisted", async () => {
     store[CONTENT_STORAGE_KEY_AUTO_SCAN_ENABLED] = true;
     store[STORAGE_KEY_DOMAIN_DENYLIST] = ["soc.example.com"];

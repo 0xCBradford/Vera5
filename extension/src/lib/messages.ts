@@ -23,6 +23,7 @@ export const MESSAGE = {
   ENRICH_IOC: "ENRICH_IOC",
   OPEN_OPTIONS_PAGE: "OPEN_OPTIONS_PAGE",
   OPEN_SITE_PERMISSIONS: "OPEN_SITE_PERMISSIONS",
+  TOGGLE_COMMAND_PALETTE: "TOGGLE_COMMAND_PALETTE",
 } as const;
 
 export type MessageType = (typeof MESSAGE)[keyof typeof MESSAGE];
@@ -59,6 +60,9 @@ export type OpenOptionsPageMessage = { type: typeof MESSAGE.OPEN_OPTIONS_PAGE };
 export type OpenSitePermissionsMessage = {
   type: typeof MESSAGE.OPEN_SITE_PERMISSIONS;
 };
+export type ToggleCommandPaletteMessage = {
+  type: typeof MESSAGE.TOGGLE_COMMAND_PALETTE;
+};
 
 export type Vera5Message =
   | PingMessage
@@ -67,7 +71,8 @@ export type Vera5Message =
   | GetTabScanSummaryMessage
   | EnrichIocMessage
   | OpenOptionsPageMessage
-  | OpenSitePermissionsMessage;
+  | OpenSitePermissionsMessage
+  | ToggleCommandPaletteMessage;
 
 export type MessageResponse =
   | { ok: true; payload?: unknown }
@@ -132,6 +137,10 @@ export function openOptionsPageMessage(): OpenOptionsPageMessage {
 
 export function openSitePermissionsMessage(): OpenSitePermissionsMessage {
   return { type: MESSAGE.OPEN_SITE_PERMISSIONS };
+}
+
+export function toggleCommandPaletteMessage(): ToggleCommandPaletteMessage {
+  return { type: MESSAGE.TOGGLE_COMMAND_PALETTE };
 }
 
 export function getTabScanSummaryMessage(
@@ -288,6 +297,7 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
     type === MESSAGE.CONTENT_REGISTER ||
     type === MESSAGE.ENRICH_IOC ||
     type === MESSAGE.OPEN_OPTIONS_PAGE ||
-    type === MESSAGE.OPEN_SITE_PERMISSIONS
+    type === MESSAGE.OPEN_SITE_PERMISSIONS ||
+    type === MESSAGE.TOGGLE_COMMAND_PALETTE
   );
 }

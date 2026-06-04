@@ -5,8 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enrichSelectionMessage } from "../lib/messages";
 import { CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED } from "./enrichmentSourceStorage";
 import { CONTENT_STORAGE_KEY_MANUAL_ONLY_MODE } from "./manualOnlyStorage";
+import {
+  STORAGE_KEY_DOMAIN_DENYLIST,
+  STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
+} from "./domainPolicyStorage";
 import { CONTENT_MESSAGE } from "./constants";
 import * as enrichmentBackgroundFetch from "./enrichmentBackgroundFetch";
+import { DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE } from "./enrichmentBackgroundFetch";
 import {
   clearIocHighlights,
   highlightDetectedIocs,
@@ -21,7 +26,9 @@ import {
   setupEnrichSelectionListener,
 } from "./enrichSelection";
 
-function stubChromeForEnrichSelectionTests(): void {
+function stubChromeForEnrichSelectionTests(
+  store: Record<string, unknown> = {}
+): void {
   vi.stubGlobal("chrome", {
     storage: {
       local: {
@@ -29,16 +36,21 @@ function stubChromeForEnrichSelectionTests(): void {
           const keyList = Array.isArray(keys) ? keys : [keys];
           const result: Record<string, unknown> = {};
           for (const key of keyList) {
+            if (key in store) {
+              result[key] = store[key];
+            }
             if (key === CONTENT_STORAGE_KEY_MANUAL_ONLY_MODE) {
-              result[key] = true;
+              result[key] = store[key] ?? true;
             }
             if (key === CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED) {
-              result[key] = {
-                abuseipdb: true,
-                otx: false,
-                urlscan: false,
-                greynoise: false,
-              };
+              result[key] =
+                store[key] ??
+                ({
+                  abuseipdb: true,
+                  otx: false,
+                  urlscan: false,
+                  greynoise: false,
+                } as const);
             }
           }
           return Promise.resolve(result);
@@ -85,9 +97,15 @@ describe("resolveIocMatchFromSelectionText", () => {
 
 describe("handleEnrichSelectionRequest", () => {
   beforeEach(() => {
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "soc.example.com" },
+    });
     stubChromeForEnrichSelectionTests();
     document.body.replaceChildren();
-    vi.spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment").mockResolvedValue();
+    vi.spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment").mockResolvedValue(
+      "completed"
+    );
   });
 
   afterEach(() => {
@@ -161,6 +179,39 @@ describe("handleEnrichSelectionRequest", () => {
       ok: true,
       payload: { value: "8.8.8.8", type: "ipv4" },
     });
+  });
+
+  it("blocks context-menu enrich on denylisted hosts before vendor calls", async () => {
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "mail.example.com" },
+    });
+    stubChromeForEnrichSelectionTests({
+      [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]: true,
+      [STORAGE_KEY_DOMAIN_DENYLIST]: ["mail.example.com"],
+    });
+
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 192.0.2.1 today.";
+    document.body.replaceChildren(paragraph);
+
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    const response = await handleEnrichSelectionRequest();
+    expect(response).toEqual({
+      ok: true,
+      payload: { value: "192.0.2.1", type: "ipv4" },
+    });
+    expect(
+      document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
+    ).not.toBeNull();
+    expect(document.body.textContent).toContain(
+      DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE
+    );
+    expect(enrichmentBackgroundFetch.runBackgroundEnrichment).not.toHaveBeenCalled();
   });
 });
 

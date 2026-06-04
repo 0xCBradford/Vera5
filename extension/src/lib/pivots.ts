@@ -50,6 +50,7 @@ export const PIVOT_PROVIDER_ORDER: PivotProvider[] = ENRICHMENT_SOURCE_ORDER.fil
 export type PivotFilterOptions = {
   enabledSourceIds?: readonly EnrichmentSourceId[];
   showDisabledSources?: boolean;
+  emphasisProviders?: readonly PivotProvider[];
 };
 
 function shouldIncludePivotProvider(
@@ -94,6 +95,28 @@ export function getPivotLinks(
     });
   }
   return links;
+}
+
+export function orderPivotRecipesByEmphasis<T extends { provider: PivotProvider }>(
+  recipes: readonly T[],
+  emphasisProviders: readonly PivotProvider[] | undefined
+): T[] {
+  if (!emphasisProviders || emphasisProviders.length === 0) {
+    return [...recipes];
+  }
+
+  const rank = new Map(
+    emphasisProviders.map((provider, index) => [provider, index])
+  );
+
+  return [...recipes].sort((left, right) => {
+    const leftRank = rank.get(left.provider) ?? Number.MAX_SAFE_INTEGER;
+    const rightRank = rank.get(right.provider) ?? Number.MAX_SAFE_INTEGER;
+    if (leftRank !== rightRank) {
+      return leftRank - rightRank;
+    }
+    return 0;
+  });
 }
 
 const FILE_HASH_PIVOT_RECIPE_RULES: readonly PivotRecipeRule[] = [
@@ -259,5 +282,5 @@ export function getPivotRecipes(
     });
   }
 
-  return recipes;
+  return orderPivotRecipesByEmphasis(recipes, options?.emphasisProviders);
 }

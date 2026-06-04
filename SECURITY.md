@@ -76,9 +76,12 @@ Runtime component layout: [docs/local-mode.md](docs/local-mode.md). Enrichment m
 
 - **Manual-only enrichment** (default on): Threat-intelligence fetch runs only when you use the enrich control, not automatically when a hover card opens.
 - **Per-source enable flags**: Disabled sources are not queried and are omitted from automatic enrichment paths.
+- **Pre-query disclosure** (default on until you choose in Settings): When live enrichment is allowed, the overlay shows an inline notice naming enabled vendors and the indicator value before any HTTPS vendor call. **Send query** proceeds; **Cancel** aborts; **Don't show this notice again** turns off future notices (same as the **Trust & consent** toggle).
+- **Domain policy** (default allow-by-default with sensitive webmail denylist): Hostname allow/deny lists gate auto-scan and live enrichment. Denylisted origins skip mutation rescans and block vendor calls before pre-query disclosure when the domain enrich gate is on (default). Manage under **Trust & consent** in Vera5 Settings.
+- **Internal asset lists** (enrich gate on by default): Indicator-level domain, IPv4 CIDR, and labeled vendor/SaaS patterns can block live enrichment for matching IOC values even on otherwise allowed pages—before pre-query disclosure runs.
 - **Supported IOC types (current release)**: Options exposes per-type detection toggles (IPv4, domain, URL, MD5, SHA1, SHA256, CVE). Disabled types are omitted from page scans; defaults enable all MVP types.
 - **Private-space IPv4**: Omitted from detection by default (RFC1918, loopback, link-local). Options includes a checkbox to include them when needed for lab or internal pages.
-- **Auto-scan off by default**: Page rescans on DOM changes run only when you enable auto-scan; otherwise you scan explicitly from the popup or keyboard shortcut.
+- **Auto-scan off by default**: Page rescans on DOM changes run only when you enable auto-scan; when enabled, rescans respect the same domain policy as live enrichment.
 
 ### What Vera5 never sends to its own infrastructure
 
@@ -182,6 +185,69 @@ Vera5 is not designed to collect usage analytics, crash telemetry, or browsing h
 
 The extension is intended to work without a Vera5-hosted backend. An optional **localhost / self-hosted** backend may be used in future releases to keep keys off the extension surface; that mode remains under your control and is not required for the extension-only MVP.
 
+## Trust and query checklist
+
+Use this checklist to confirm consent and hostname controls before live threat-intelligence queries leave the browser. Detailed pattern guidance and permission rationale: [docs/security-model.md](docs/security-model.md) (domain policy, internal asset lists, sensitive-site presets).
+
+### Outbound query gate order (live enrichment)
+
+When you trigger live enrichment (AbuseIPDB and/or OTX when enabled), the extension evaluates gates in this order:
+
+| Step | Gate | When blocked |
+|------|------|--------------|
+| 1 | Enabled live sources for the IOC type | Overlay shows a settings guidance message; no vendor call. |
+| 2 | Domain policy enrich gate (default **on**) | Overlay shows that queries are blocked for this site by domain policy; no vendor call and no pre-query disclosure. |
+| 3 | Internal asset enrich gate (default **on**) | Overlay shows that the indicator matches a configured internal asset list; no vendor call and no pre-query disclosure. |
+| 4 | Pre-query disclosure (default **on** until first Settings choice) | Inline notice names enabled vendors and the indicator value; **Cancel** aborts without a vendor call. |
+| 5 | Service worker fetch | HTTPS request with the indicator value and your API key directly to the vendor you enabled. |
+
+Only the **indicator value** (plus API fields each vendor requires) is transmitted. Full page HTML is not sent.
+
+### Pre-query disclosure — verify
+
+| Check | Expected shipped behavior |
+|-------|---------------------------|
+| First visit to Settings | **Pre-query notices** card prompts you to enable or disable inline notices before vendor calls. |
+| Notices enabled | Opening live enrich on an allowed host shows an inline notice listing enabled live vendors and the indicator value before fetch. |
+| **Send query** | Proceeds to the service worker fetch when prior gates pass. |
+| **Cancel** | Aborts; overlay returns without sending the indicator to vendors. |
+| **Don't show this notice again** | Persists off for future enrichments (same as disabling pre-query notices under **Trust & consent**). |
+| Notices disabled | Live enrich skips the inline notice when other gates pass. |
+| No live sources enabled for the IOC type | Disclosure does not run; enrichment stops at the disabled-sources message. |
+
+Disclosure applies only to **live** connector fetches (AbuseIPDB and OTX today). Static pivot links open vendor URLs in your browser separately when you click them.
+
+### Domain policy — verify
+
+| Check | Expected shipped behavior |
+|-------|---------------------------|
+| Default mode | **Allow by default** — scan and enrich on all hosts except denylisted entries. |
+| Default denylist | Sensitive webmail patterns (`mail.*`, `webmail.*`, `outlook.office.com`, `outlook.live.com`, `mail.google.com`, `mail.yahoo.com`) block auto-scan and live enrich without manual setup. |
+| Deny-by-default mode (optional) | Auto-scan and live enrich run **only** on allowlisted hosts. |
+| Domain enrich gate (default **on**) | Denylisted or non-allowlisted hosts (per mode) block vendor calls **before** pre-query disclosure. |
+| Domain enrich gate off | Hostname lists do not block live enrich (auto-scan still follows lists when enabled). |
+| Auto-scan enabled | Mutation rescans run only on hosts allowed by domain policy; denylisted origins do not schedule rescans. |
+| **Sensitive sites denylist** preset | Merges banking, health, and HR hostname patterns into the denylist under allow-by-default mode. |
+
+Manage mode, lists, enrich gate, and presets under **Trust & consent** in Vera5 Settings.
+
+### Internal asset lists — verify
+
+| Check | Expected shipped behavior |
+|-------|---------------------------|
+| Lists empty (default) | No indicator-level blocks. |
+| Domain, IPv4 CIDR, or labeled vendor/SaaS entries configured | Matching IOC values block live enrich before pre-query disclosure, even on otherwise allowed SOC pages. |
+| Internal asset enrich gate off | Lists are ignored for live enrich blocking. |
+
+### Analyst quick review before sensitive browsing
+
+- [ ] Confirm **Manual-only enrichment** matches your workflow (default on).
+- [ ] Review **Trust & consent**: pre-query notices, domain mode, allow/deny lists, domain enrich gate, internal asset lists.
+- [ ] Apply the **Sensitive sites denylist** preset or add org-specific denylist entries for webmail, banking, health, or HR hosts you use.
+- [ ] Enable only live sources (AbuseIPDB / OTX) and keys you are authorized to use.
+- [ ] On a denylisted host, confirm scan/rescan and live enrich stay blocked without vendor calls.
+- [ ] On an allowed host with notices on, confirm the inline disclosure appears before the first vendor fetch.
+
 ## Reporting a vulnerability
 
 If you believe you have found a security issue in Vera5:
@@ -194,6 +260,6 @@ We aim to acknowledge reports in a reasonable timeframe and coordinate fixes bef
 
 ## Related documents
 
-- [docs/security-model.md](docs/security-model.md) — manifest permissions and host access
+- [docs/security-model.md](docs/security-model.md) — manifest permissions, host access, domain policy, internal asset lists, and sensitive-domain guidance
 - [docs/architecture.md](docs/architecture.md) — IOC types, connector order, data boundaries
 - [README.md](README.md) — install, development, and capability summary

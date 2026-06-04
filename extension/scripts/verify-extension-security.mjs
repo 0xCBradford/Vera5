@@ -14,6 +14,16 @@ const publicManifestPath = path.join(
 );
 const srcDir = path.join(extensionRoot, "src");
 
+const LIVE_ENRICHMENT_FETCH_HOSTS = new Set([
+  "api.abuseipdb.com",
+  "otx.alienvault.com",
+]);
+
+const FETCH_ALLOWED_SOURCE_BASENAMES = new Set([
+  "abuseipdbConnector.ts",
+  "otxConnector.ts",
+]);
+
 function fail(message) {
   console.error(`verify-extension-security: ${message}`);
   process.exit(1);
@@ -73,15 +83,79 @@ function checkManifestCsp(manifestPath) {
       fail(`manifest CSP includes ${token}: ${csp}`);
     }
   }
+  if (/script-src[^;]*https?:/i.test(csp)) {
+    fail(`manifest CSP script-src includes a remote origin: ${csp}`);
+  }
 }
 
-if (!fs.existsSync(distDir)) {
-  fail("dist/ missing — run npm run build first");
+function checkExtensionPageHtml(htmlPath) {
+  const html = fs.readFileSync(htmlPath, "utf8");
+  const refs = [...html.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)].map(
+    (match) => match[1]
+  );
+  for (const ref of refs) {
+    if (/^https?:\/\//i.test(ref)) {
+      fail(`${htmlPath} references remote asset: ${ref}`);
+    }
+  }
+  if (/<script(?![^>]*\bsrc=)[^>]*>/.test(html)) {
+    fail(`${htmlPath} contains inline <script> without src`);
+  }
+  if (/<meta[^>]+http-equiv=["']Content-Security-Policy["']/i.test(html)) {
+    fail(`${htmlPath} sets a document CSP meta tag (use manifest default CSP)`);
+  }
 }
 
-checkManifestCsp(publicManifestPath);
-if (fs.existsSync(path.join(distDir, "manifest.json"))) {
-  checkManifestCsp(path.join(distDir, "manifest.json"));
+function checkShippedExtensionPages(manifest, distRoot) {
+  const pages = [];
+  if (manifest.options_page) {
+    pages.push(manifest.options_page);
+  }
+  if (manifest.action?.default_popup) {
+    pages.push(manifest.action.default_popup);
+  }
+
+  for (const page of pages) {
+    const htmlPath = path.join(distRoot, page);
+    if (!fs.existsSync(htmlPath)) {
+      fail(`extension page missing from dist: ${page}`);
+    }
+    checkExtensionPageHtml(htmlPath);
+  }
+}
+
+function checkLiveFetchLimitedToConnectors() {
+  for (const filePath of walkFiles(srcDir, [".ts", ".tsx"])) {
+    if (filePath.endsWith(".test.ts") || filePath.endsWith(".test.tsx")) {
+      continue;
+    }
+    const source = fs.readFileSync(filePath, "utf8");
+    if (!/\bfetch\s*\(/.test(source)) {
+      continue;
+    }
+    if (!FETCH_ALLOWED_SOURCE_BASENAMES.has(path.basename(filePath))) {
+      fail(`${filePath} uses fetch() outside approved connector modules`);
+    }
+  }
+
+  for (const basename of FETCH_ALLOWED_SOURCE_BASENAMES) {
+    const filePath = path.join(srcDir, "lib", basename);
+    const source = fs.readFileSync(filePath, "utf8");
+    const literalUrls = [
+      ...source.matchAll(/https:\/\/[^\s"'`<>]+/g),
+    ].map((match) => match[0]);
+    for (const urlText of literalUrls) {
+      let hostname;
+      try {
+        hostname = new URL(urlText).hostname;
+      } catch {
+        continue;
+      }
+      if (!LIVE_ENRICHMENT_FETCH_HOSTS.has(hostname)) {
+        fail(`${basename} declares unexpected HTTPS origin: ${urlText}`);
+      }
+    }
+  }
 }
 
 function checkConnectorFetchUsesGetWithoutBody(filePath, source) {
@@ -99,6 +173,24 @@ function checkConnectorFetchUsesGetWithoutBody(filePath, source) {
     fail(`${filePath} must use GET for vendor enrichment requests`);
   }
 }
+
+if (!fs.existsSync(distDir)) {
+  fail("dist/ missing — run npm run build first");
+}
+
+const publicManifest = JSON.parse(fs.readFileSync(publicManifestPath, "utf8"));
+checkManifestCsp(publicManifestPath);
+checkShippedExtensionPages(publicManifest, distDir);
+
+if (fs.existsSync(path.join(distDir, "manifest.json"))) {
+  const distManifest = JSON.parse(
+    fs.readFileSync(path.join(distDir, "manifest.json"), "utf8")
+  );
+  checkManifestCsp(path.join(distDir, "manifest.json"));
+  checkShippedExtensionPages(distManifest, distDir);
+}
+
+checkLiveFetchLimitedToConnectors();
 
 for (const filePath of walkFiles(srcDir, [".ts", ".tsx", ".js"])) {
   const source = fs.readFileSync(filePath, "utf8");
@@ -118,21 +210,6 @@ for (const filePath of walkFiles(distDir, [".js"])) {
   }
 }
 
-for (const filePath of walkFiles(distDir, [".html"])) {
-  const html = fs.readFileSync(filePath, "utf8");
-  const refs = [...html.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)].map(
-    (match) => match[1]
-  );
-  for (const ref of refs) {
-    if (/^https?:\/\//i.test(ref)) {
-      fail(`${filePath} references remote asset: ${ref}`);
-    }
-  }
-  if (/<script(?![^>]*\bsrc=)[^>]*>/.test(html)) {
-    fail(`${filePath} contains inline <script> without src`);
-  }
-}
-
 console.log(
-  "verify-extension-security: OK (no eval/new Function, no remote scripts, no API key logging, enrichment GET without body, CSP not weakened)"
+  "verify-extension-security: OK (extension pages CSP, no remote assets, live fetch origins limited to connectors, no eval/new Function, no API key logging, enrichment GET without body)"
 );

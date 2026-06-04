@@ -37,7 +37,7 @@ cd extension
 npm run verify:security
 ```
 
-Runs after `npm run build` via `postbuild`. Checks production bundles for unsafe patterns (no `eval`, no remote script URLs). See [docs/security-model.md](../security-model.md).
+Runs after `npm run build` via `postbuild`. Checks extension-page CSP posture (no remote assets in popup/options HTML, no weakened manifest CSP), live fetch limited to connector hosts, no `eval`, and no API key logging. See [docs/security-model.md](../security-model.md).
 
 ## Manual browser checks
 
@@ -51,7 +51,9 @@ Use redacted fixtures only in issues and PRs.
 
 ## CI
 
-GitHub Actions workflows under `.github/workflows/` run lint, tests, and secret scanning on pull requests. Live vendor APIs are not called in CI.
+GitHub Actions workflows under `.github/workflows/` run lint, tests, production dependency audit (`npm run audit:prod`), a non-blocking full `npm audit` report for devDependencies, and secret scanning on pull requests. Live vendor APIs are not called in CI.
+
+Production dependencies (`react`, `react-dom`) and `vitest` use exact versions in `extension/package.json`; bump them together with `package-lock.json` when addressing advisories.
 
 ## Related
 

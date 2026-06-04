@@ -4,8 +4,10 @@ import {
   setupAnalystNotesStorageListener,
   syncAnalystNotesWithStorage,
 } from "./analystNotesContent";
+import { setupAnalystModeStorageListener } from "./analystModeStorage";
 import { CONTENT_MESSAGE } from "./constants";
 import { setupBackgroundEnrichmentRouting } from "./enrichmentBackgroundFetch";
+import { setupCommandPaletteListener } from "./commandPalette";
 import { setupHoverCardTrigger } from "./hoverCardTrigger";
 import { setupEnrichSelectionListener } from "./enrichSelection";
 import { setupHighlightStorageListener, setupScanPageListener } from "./scanPage";
@@ -24,6 +26,8 @@ setupHighlightStorageListener();
 setupAutoScanStorageListener();
 void runWithExtensionContextAsync(syncAutoScanWithStorage);
 setupAnalystNotesStorageListener();
+setupAnalystModeStorageListener();
 void runWithExtensionContextAsync(syncAnalystNotesWithStorage);
 setupBackgroundEnrichmentRouting();
+setupCommandPaletteListener();
 setupHoverCardTrigger();

@@ -226,8 +226,18 @@ describe("match provenance exposure", () => {
   });
 
   it("shows Open live URL for URL indicators and confirms before opening", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
-    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const confirm = vi.fn(() => true);
+    const open = vi.fn(() => null);
+    Object.defineProperty(window, "confirm", {
+      configurable: true,
+      writable: true,
+      value: confirm,
+    });
+    Object.defineProperty(window, "open", {
+      configurable: true,
+      writable: true,
+      value: open,
+    });
 
     const panel = buildHoverCardPanel({
       value: "https://example.com/evil",
@@ -246,14 +256,21 @@ describe("match provenance exposure", () => {
       "_blank",
       "noopener,noreferrer"
     );
-
-    confirm.mockRestore();
-    open.mockRestore();
   });
 
   it("does not open a live URL when the confirmation is cancelled", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
-    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const confirm = vi.fn(() => false);
+    const open = vi.fn(() => null);
+    Object.defineProperty(window, "confirm", {
+      configurable: true,
+      writable: true,
+      value: confirm,
+    });
+    Object.defineProperty(window, "open", {
+      configurable: true,
+      writable: true,
+      value: open,
+    });
 
     const panel = buildHoverCardPanel({
       value: "https://example.com/evil",
@@ -267,9 +284,6 @@ describe("match provenance exposure", () => {
 
     expect(confirm).toHaveBeenCalledTimes(1);
     expect(open).not.toHaveBeenCalled();
-
-    confirm.mockRestore();
-    open.mockRestore();
   });
 });
 
@@ -2540,5 +2554,32 @@ describe("pre-query disclosure section", () => {
     expect(panel.textContent).toContain("Send query");
     expect(panel.textContent).toContain("Cancel");
     expect(panel.textContent).toContain("Don't show this notice again");
+  });
+
+  it("renders multi-vendor disclosure copy when multiple sources are listed", () => {
+    const panel = buildHoverCardPanel({
+      value: "example.com",
+      type: IOC_TYPE.DOMAIN,
+      enrichmentState: "empty",
+      preQueryDisclosure: {
+        sourceIds: ["abuseipdb", "otx"],
+      },
+    });
+
+    expect(panel.textContent).toContain(
+      "Vera5 will query AbuseIPDB and OTX with this Domain: example.com"
+    );
+    expect(panel.querySelector(".vera5-pre-query-disclosure")).not.toBeNull();
+  });
+
+  it("omits disclosure when preQueryDisclosure is not set", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "empty",
+    });
+
+    expect(panel.querySelector(".vera5-pre-query-disclosure")).toBeNull();
+    expect(panel.textContent).not.toContain("Vera5 will query");
   });
 });

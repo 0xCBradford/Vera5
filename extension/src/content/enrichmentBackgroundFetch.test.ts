@@ -7,6 +7,7 @@ import {
   cancelPendingHoverEnrichment,
   DEFAULT_HOVER_ENRICHMENT_DEBOUNCE_MS,
   DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
+  INTERNAL_ASSET_ENRICHMENT_BLOCKED_MESSAGE,
   resolvePreQueryDisclosure,
   runBackgroundEnrichment,
   scheduleDebouncedBackgroundEnrichment,
@@ -14,7 +15,13 @@ import {
 import {
   STORAGE_KEY_DOMAIN_DENYLIST,
   STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
+  STORAGE_KEY_DOMAIN_POLICY_MODE,
+  STORAGE_KEY_DOMAIN_ALLOWLIST,
 } from "./domainPolicyStorage";
+import {
+  STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES,
+  STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED,
+} from "./internalAssetPolicyStorage";
 import * as enrichmentMessageClient from "./enrichmentMessageClient";
 import {
   HOVER_CARD_PANEL_CLASS,
@@ -645,6 +652,86 @@ describe("pre-query disclosure before live enrich", () => {
       enrichmentSourceStorage.setShowPreQueryNoticesForContent
     ).toHaveBeenCalledWith(false);
   });
+
+  it("skips disclosure and fetches immediately when pre-query notices are disabled", async () => {
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      false
+    );
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    vi.mocked(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).mockResolvedValue({
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "18 abuse confidence",
+        },
+      ],
+      primary: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "18 abuse confidence",
+      },
+    });
+
+    await runBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).toHaveBeenCalledTimes(1);
+    const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(panel?.querySelector(".vera5-pre-query-disclosure")).toBeNull();
+    expect(panel?.textContent).not.toContain("Vera5 will query");
+  });
+
+  it("shows multi-vendor disclosure copy when multiple live sources are enabled", async () => {
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockResolvedValue(
+      {
+        abuseipdb: true,
+        otx: true,
+        urlscan: false,
+        greynoise: false,
+      }
+    );
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      true
+    );
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const enrichmentPromise = runBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    await waitForPreQueryDisclosurePending();
+
+    const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(panel?.textContent).toContain(
+      "Vera5 will query AbuseIPDB and OTX with this IPv4 address: 8.8.8.8"
+    );
+    expect(panel?.querySelector(".vera5-pre-query-disclosure")).not.toBeNull();
+
+    resolvePreQueryDisclosure({ proceed: false, rememberDismiss: false });
+    await enrichmentPromise;
+  });
 });
 
 describe("domain policy enrich gate", () => {
@@ -719,6 +806,34 @@ describe("domain policy enrich gate", () => {
     expect(panel?.textContent).toContain(DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE);
   });
 
+  it("blocks outbound enrichment outside the allowlist in deny-by-default mode", async () => {
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "vendor.example.com" },
+    });
+    store[STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED] = true;
+    store[STORAGE_KEY_DOMAIN_POLICY_MODE] = "deny_by_default";
+    store[STORAGE_KEY_DOMAIN_ALLOWLIST] = ["soc.example.com"];
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await runBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).not.toHaveBeenCalled();
+    const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(panel?.textContent).toContain(DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE);
+  });
+
   it("allows outbound enrichment when the enrich gate is disabled", async () => {
     store[STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED] = false;
     store[STORAGE_KEY_DOMAIN_DENYLIST] = ["mail.example.com"];
@@ -751,6 +866,121 @@ describe("domain policy enrich gate", () => {
 
     await runBackgroundEnrichment({
       value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("internal asset enrich gate", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "soc.example.com" },
+    });
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    cancelPendingHoverEnrichment();
+    document.body.replaceChildren();
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockResolvedValue({
+      abuseipdb: true,
+      otx: false,
+      urlscan: false,
+      greynoise: false,
+    });
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      false
+    );
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockReset();
+    vi.mocked(enrichmentSourceStorage.setShowPreQueryNoticesForContent).mockResolvedValue(
+      undefined
+    );
+  });
+
+  it("blocks outbound enrichment when the indicator matches an internal CIDR", async () => {
+    store[STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED] = true;
+    store[STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES] = ["10.0.0.0/8"];
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "10.1.2.3",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await runBackgroundEnrichment({
+      value: "10.1.2.3",
+      type: IOC_TYPE.IPV4,
+    });
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).not.toHaveBeenCalled();
+    const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(panel?.textContent).toContain(
+      INTERNAL_ASSET_ENRICHMENT_BLOCKED_MESSAGE
+    );
+  });
+
+  it("allows outbound enrichment when the internal asset enrich gate is disabled", async () => {
+    store[STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED] = false;
+    store[STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES] = ["10.0.0.0/8"];
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "10.1.2.3",
+      type: IOC_TYPE.IPV4,
+    });
+
+    vi.mocked(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).mockResolvedValue({
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "18 abuse confidence",
+        },
+      ],
+      primary: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "18 abuse confidence",
+      },
+    });
+
+    await runBackgroundEnrichment({
+      value: "10.1.2.3",
       type: IOC_TYPE.IPV4,
     });
 

@@ -10,6 +10,7 @@ import type {
   ApiKeySlot,
   EnrichmentSourceCacheTtlRecord,
   EnrichmentSourceEnabledRecord,
+  InternalAssetVendorLabelEntry,
   IocTypeEnabledRecord,
 } from "../lib/storage";
 import type { IocType } from "../lib/iocRegex";
@@ -24,12 +25,22 @@ import {
 } from "../lib/enrichmentSourceRegistry";
 import {
   DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
+  applyAnalystModePreset,
+  getAnalystModePresetId,
   getApiKey,
   getAutoScanEnabled,
+  getDomainAllowlist,
+  getDomainDenylist,
+  getDomainPolicyEnrichGateEnabled,
+  getDomainPolicyMode,
   getEnrichmentCacheTtlSecondsFromSettings,
   getEnrichmentSourceCacheTtlSeconds,
   getEnrichmentSourceEnabled,
   getIncludePrivateIpv4,
+  getInternalAssetCidrRanges,
+  getInternalAssetDomains,
+  getInternalAssetEnrichGateEnabled,
+  getInternalAssetVendorLabels,
   getIocTypeEnabled,
   getManualOnlyMode,
   getPreQueryNoticePreferenceConfigured,
@@ -42,15 +53,37 @@ import {
   readStoredCacheTtlSeconds,
   setApiKey,
   setAutoScanEnabled,
+  setDomainAllowlist,
+  setDomainDenylist,
+  setDomainPolicyEnrichGateEnabled,
+  setDomainPolicyMode,
   setEnrichmentCacheTtlSeconds,
   setEnrichmentSourceCacheTtlSeconds,
   setEnrichmentSourceEnabled,
   setIncludePrivateIpv4,
+  setInternalAssetCidrRanges,
+  setInternalAssetDomains,
+  setInternalAssetEnrichGateEnabled,
+  setInternalAssetVendorLabels,
   setIocTypeEnabled,
   setManualOnlyMode,
   setPreQueryNoticePreference,
   setShowDisabledSourcesInWorkspace,
 } from "../lib/storage";
+import {
+  DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT,
+  DOMAIN_POLICY_MODE_DENY_BY_DEFAULT,
+  DOMAIN_POLICY_PRESETS,
+  applyDomainPolicyPresetToLists,
+  getDomainPolicyPresetById,
+  normalizeDomainPolicyEntry,
+  type DomainPolicyMode,
+} from "../lib/domainPolicy";
+import {
+  ANALYST_MODE_PRESETS,
+  type AnalystModePresetId,
+} from "../lib/analystModePresets";
+import { normalizeInternalAssetCidrRange } from "../lib/internalAssetPolicy";
 
 const API_KEY_FIELD_SLOTS: ApiKeySlot[] = [
   ...OPTIONS_API_KEY_SLOTS,
@@ -267,6 +300,188 @@ function ToggleRow({
         onChange={onChange}
       />
     </label>
+  );
+}
+
+type DomainPolicyListEditorProps = {
+  label: string;
+  hint: string;
+  inputAriaLabel: string;
+  addButtonAriaLabel: string;
+  entries: readonly string[];
+  draft: string;
+  disabled: boolean;
+  onDraftChange: (value: string) => void;
+  onAdd: () => void;
+  onRemove: (entry: string) => void;
+};
+
+function DomainPolicyListEditor({
+  label,
+  hint,
+  inputAriaLabel,
+  addButtonAriaLabel,
+  entries,
+  draft,
+  disabled,
+  onDraftChange,
+  onAdd,
+  onRemove,
+}: DomainPolicyListEditorProps) {
+  return (
+    <div className="v5-field">
+      <span className="v5-field__label">{label}</span>
+      <span
+        className="v5-status v5-status--muted"
+        style={{ display: "block", marginBottom: 8 }}
+      >
+        {hint}
+      </span>
+      <form
+        className="v5-actions"
+        style={{ marginBottom: 8 }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onAdd();
+        }}
+      >
+        <input
+          type="text"
+          className="v5-input v5-input--sm"
+          value={draft}
+          disabled={disabled}
+          onChange={(event) => onDraftChange(event.target.value)}
+          aria-label={inputAriaLabel}
+          placeholder="mail.* or hr.company.com"
+        />
+        <button
+          type="submit"
+          className="v5-btn v5-btn--primary"
+          disabled={disabled}
+          aria-label={addButtonAriaLabel}
+        >
+          Add
+        </button>
+      </form>
+      {entries.length === 0 ? (
+        <span className="v5-status v5-status--muted">No entries yet.</span>
+      ) : (
+        <ul className="v5-domain-list" aria-label={`${label} entries`}>
+          {entries.map((entry) => (
+            <li key={entry} className="v5-domain-list__item">
+              <code>{entry}</code>
+              <button
+                type="button"
+                className="v5-btn v5-btn--link"
+                disabled={disabled}
+                onClick={() => onRemove(entry)}
+                aria-label={`Remove ${entry} from ${label}`}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+type InternalAssetVendorLabelListEditorProps = {
+  label: string;
+  hint: string;
+  entries: InternalAssetVendorLabelEntry[];
+  labelDraft: string;
+  patternDraft: string;
+  disabled: boolean;
+  onLabelDraftChange: (value: string) => void;
+  onPatternDraftChange: (value: string) => void;
+  onAdd: () => void;
+  onRemove: (entry: InternalAssetVendorLabelEntry) => void;
+};
+
+function InternalAssetVendorLabelListEditor({
+  label,
+  hint,
+  entries,
+  labelDraft,
+  patternDraft,
+  disabled,
+  onLabelDraftChange,
+  onPatternDraftChange,
+  onAdd,
+  onRemove,
+}: InternalAssetVendorLabelListEditorProps) {
+  return (
+    <div className="v5-field">
+      <span className="v5-field__label">{label}</span>
+      <span
+        className="v5-status v5-status--muted"
+        style={{ display: "block", marginBottom: 8 }}
+      >
+        {hint}
+      </span>
+      <form
+        className="v5-actions"
+        style={{ marginBottom: 8 }}
+        onSubmit={(event) => {
+          event.preventDefault();
+          onAdd();
+        }}
+      >
+        <input
+          type="text"
+          className="v5-input v5-input--sm"
+          value={labelDraft}
+          disabled={disabled}
+          onChange={(event) => onLabelDraftChange(event.target.value)}
+          aria-label="Vendor or SaaS label"
+          placeholder="Corporate VPN"
+        />
+        <input
+          type="text"
+          className="v5-input v5-input--sm"
+          value={patternDraft}
+          disabled={disabled}
+          onChange={(event) => onPatternDraftChange(event.target.value)}
+          aria-label="Vendor hostname pattern"
+          placeholder="*.okta.com or vpn.corp.example"
+        />
+        <button
+          type="submit"
+          className="v5-btn v5-btn--primary"
+          disabled={disabled}
+          aria-label="Add vendor or SaaS label"
+        >
+          Add
+        </button>
+      </form>
+      {entries.length === 0 ? (
+        <span className="v5-status v5-status--muted">No entries yet.</span>
+      ) : (
+        <ul className="v5-domain-list" aria-label={`${label} entries`}>
+          {entries.map((entry) => (
+            <li
+              key={`${entry.label}::${entry.pattern}`}
+              className="v5-domain-list__item"
+            >
+              <code>
+                {entry.label} ({entry.pattern})
+              </code>
+              <button
+                type="button"
+                className="v5-btn v5-btn--link"
+                disabled={disabled}
+                onClick={() => onRemove(entry)}
+                aria-label={`Remove ${entry.label} from ${label}`}
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -487,6 +702,33 @@ export function Options() {
   const [showPreQueryNotices, setShowPreQueryNoticesState] = useState(true);
   const [preQueryNoticePreferenceConfigured, setPreQueryNoticePreferenceConfiguredState] =
     useState(false);
+  const [domainPolicyMode, setDomainPolicyModeState] = useState<DomainPolicyMode>(
+    DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT
+  );
+  const [domainAllowlist, setDomainAllowlistState] = useState<string[]>([]);
+  const [domainDenylist, setDomainDenylistState] = useState<string[]>([]);
+  const [domainPolicyEnrichGateEnabled, setDomainPolicyEnrichGateEnabledState] =
+    useState(true);
+  const [internalAssetEnrichGateEnabled, setInternalAssetEnrichGateEnabledState] =
+    useState(true);
+  const [internalAssetDomains, setInternalAssetDomainsState] = useState<string[]>(
+    []
+  );
+  const [internalAssetCidrRanges, setInternalAssetCidrRangesState] = useState<
+    string[]
+  >([]);
+  const [internalAssetVendorLabels, setInternalAssetVendorLabelsState] = useState<
+    InternalAssetVendorLabelEntry[]
+  >([]);
+  const [internalAssetDomainDraft, setInternalAssetDomainDraft] = useState("");
+  const [internalAssetCidrDraft, setInternalAssetCidrDraft] = useState("");
+  const [internalAssetVendorLabelDraft, setInternalAssetVendorLabelDraft] =
+    useState("");
+  const [internalAssetVendorPatternDraft, setInternalAssetVendorPatternDraft] =
+    useState("");
+  const [analystModePresetId, setAnalystModePresetIdState] = useState("");
+  const [allowlistDraft, setAllowlistDraft] = useState("");
+  const [denylistDraft, setDenylistDraft] = useState("");
   const [globalCacheTtlSeconds, setGlobalCacheTtlSecondsState] = useState(
     String(DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS)
   );
@@ -518,6 +760,15 @@ export function Options() {
       getShowDisabledSourcesInWorkspace(),
       getShowPreQueryNotices(),
       getPreQueryNoticePreferenceConfigured(),
+      getDomainPolicyMode(),
+      getDomainAllowlist(),
+      getDomainDenylist(),
+      getDomainPolicyEnrichGateEnabled(),
+      getInternalAssetEnrichGateEnabled(),
+      getInternalAssetDomains(),
+      getInternalAssetCidrRanges(),
+      getInternalAssetVendorLabels(),
+      getAnalystModePresetId(),
       getEnrichmentCacheTtlSecondsFromSettings(),
       getEnrichmentSourceCacheTtlSeconds(),
       ...API_KEY_FIELD_SLOTS.map(async (slot) => {
@@ -548,6 +799,15 @@ export function Options() {
           showDisabledSourcesValue,
           showPreQueryNoticesValue,
           preQueryNoticePreferenceConfiguredValue,
+          domainPolicyModeValue,
+          domainAllowlistValue,
+          domainDenylistValue,
+          domainPolicyEnrichGateEnabledValue,
+          internalAssetEnrichGateEnabledValue,
+          internalAssetDomainsValue,
+          internalAssetCidrRangesValue,
+          internalAssetVendorLabelsValue,
+          analystModePresetIdValue,
           globalCacheTtlValue,
           sourceCacheTtlValue,
           ...entries
@@ -562,6 +822,15 @@ export function Options() {
           setPreQueryNoticePreferenceConfiguredState(
             preQueryNoticePreferenceConfiguredValue
           );
+          setDomainPolicyModeState(domainPolicyModeValue);
+          setDomainAllowlistState(domainAllowlistValue);
+          setDomainDenylistState(domainDenylistValue);
+          setDomainPolicyEnrichGateEnabledState(domainPolicyEnrichGateEnabledValue);
+          setInternalAssetEnrichGateEnabledState(internalAssetEnrichGateEnabledValue);
+          setInternalAssetDomainsState(internalAssetDomainsValue);
+          setInternalAssetCidrRangesState(internalAssetCidrRangesValue);
+          setInternalAssetVendorLabelsState(internalAssetVendorLabelsValue);
+          setAnalystModePresetIdState(analystModePresetIdValue);
           setGlobalCacheTtlSecondsState(String(globalCacheTtlValue));
           setSourceCacheTtlDraftsState(
             formatSourceCacheTtlDrafts(sourceCacheTtlValue)
@@ -651,6 +920,153 @@ export function Options() {
     setShowPreQueryNoticesState(checked);
     setPreQueryNoticePreferenceConfiguredState(true);
     void setPreQueryNoticePreference(checked);
+  };
+
+  const handleDomainPolicyModeChange = (mode: DomainPolicyMode) => {
+    setDomainPolicyModeState(mode);
+    void setDomainPolicyMode(mode);
+  };
+
+  const handleDomainPolicyEnrichGateToggle = (checked: boolean) => {
+    setDomainPolicyEnrichGateEnabledState(checked);
+    void setDomainPolicyEnrichGateEnabled(checked);
+  };
+
+  const handleInternalAssetEnrichGateToggle = (checked: boolean) => {
+    setInternalAssetEnrichGateEnabledState(checked);
+    void setInternalAssetEnrichGateEnabled(checked);
+  };
+
+  const handleAddInternalAssetDomain = () => {
+    const normalized = normalizeDomainPolicyEntry(internalAssetDomainDraft);
+    if (!normalized || internalAssetDomains.includes(normalized)) {
+      setInternalAssetDomainDraft("");
+      return;
+    }
+    const next = [...internalAssetDomains, normalized];
+    setInternalAssetDomainsState(next);
+    setInternalAssetDomainDraft("");
+    void setInternalAssetDomains(next);
+  };
+
+  const handleRemoveInternalAssetDomain = (entry: string) => {
+    const next = internalAssetDomains.filter((item) => item !== entry);
+    setInternalAssetDomainsState(next);
+    void setInternalAssetDomains(next);
+  };
+
+  const handleAddInternalAssetCidr = () => {
+    const normalized = normalizeInternalAssetCidrRange(internalAssetCidrDraft);
+    if (!normalized || internalAssetCidrRanges.includes(normalized)) {
+      setInternalAssetCidrDraft("");
+      return;
+    }
+    const next = [...internalAssetCidrRanges, normalized];
+    setInternalAssetCidrRangesState(next);
+    setInternalAssetCidrDraft("");
+    void setInternalAssetCidrRanges(next);
+  };
+
+  const handleRemoveInternalAssetCidr = (entry: string) => {
+    const next = internalAssetCidrRanges.filter((item) => item !== entry);
+    setInternalAssetCidrRangesState(next);
+    void setInternalAssetCidrRanges(next);
+  };
+
+  const handleAddInternalAssetVendorLabel = () => {
+    const label = internalAssetVendorLabelDraft.trim();
+    const pattern = normalizeDomainPolicyEntry(internalAssetVendorPatternDraft);
+    if (!label || !pattern) {
+      setInternalAssetVendorLabelDraft("");
+      setInternalAssetVendorPatternDraft("");
+      return;
+    }
+    if (
+      internalAssetVendorLabels.some(
+        (entry) => entry.label === label && entry.pattern === pattern
+      )
+    ) {
+      setInternalAssetVendorLabelDraft("");
+      setInternalAssetVendorPatternDraft("");
+      return;
+    }
+    const next = [...internalAssetVendorLabels, { label, pattern }];
+    setInternalAssetVendorLabelsState(next);
+    setInternalAssetVendorLabelDraft("");
+    setInternalAssetVendorPatternDraft("");
+    void setInternalAssetVendorLabels(next);
+  };
+
+  const handleRemoveInternalAssetVendorLabel = (
+    entry: InternalAssetVendorLabelEntry
+  ) => {
+    const next = internalAssetVendorLabels.filter(
+      (item) => !(item.label === entry.label && item.pattern === entry.pattern)
+    );
+    setInternalAssetVendorLabelsState(next);
+    void setInternalAssetVendorLabels(next);
+  };
+
+  const handleApplyAnalystModePreset = (presetId: AnalystModePresetId) => {
+    void applyAnalystModePreset(presetId).then(() => {
+      setSettingsReloadToken((token) => token + 1);
+    });
+  };
+
+  const handleAddAllowlistEntry = () => {
+    const normalized = normalizeDomainPolicyEntry(allowlistDraft);
+    if (!normalized || domainAllowlist.includes(normalized)) {
+      setAllowlistDraft("");
+      return;
+    }
+    const next = [...domainAllowlist, normalized];
+    setDomainAllowlistState(next);
+    setAllowlistDraft("");
+    void setDomainAllowlist(next);
+  };
+
+  const handleRemoveAllowlistEntry = (entry: string) => {
+    const next = domainAllowlist.filter((item) => item !== entry);
+    setDomainAllowlistState(next);
+    void setDomainAllowlist(next);
+  };
+
+  const handleAddDenylistEntry = () => {
+    const normalized = normalizeDomainPolicyEntry(denylistDraft);
+    if (!normalized || domainDenylist.includes(normalized)) {
+      setDenylistDraft("");
+      return;
+    }
+    const next = [...domainDenylist, normalized];
+    setDomainDenylistState(next);
+    setDenylistDraft("");
+    void setDomainDenylist(next);
+  };
+
+  const handleRemoveDenylistEntry = (entry: string) => {
+    const next = domainDenylist.filter((item) => item !== entry);
+    setDomainDenylistState(next);
+    void setDomainDenylist(next);
+  };
+
+  const handleApplyDomainPolicyPreset = (presetId: string) => {
+    const preset = getDomainPolicyPresetById(presetId);
+    if (!preset) {
+      return;
+    }
+
+    const applied = applyDomainPolicyPresetToLists({
+      mode: domainPolicyMode,
+      allowlist: domainAllowlist,
+      denylist: domainDenylist,
+      preset,
+    });
+    setDomainPolicyModeState(applied.mode);
+    setDomainAllowlistState(applied.allowlist);
+    setDomainDenylistState(applied.denylist);
+    void setDomainPolicyMode(applied.mode);
+    void setDomainAllowlist(applied.allowlist);
+    void setDomainDenylist(applied.denylist);
   };
 
   const handlePreQueryNoticeFirstRunChoice = (showNotices: boolean) => {
@@ -1258,6 +1674,234 @@ export function Options() {
                 disabled={!ready}
                 onChange={handleShowPreQueryNoticesToggle}
               />
+              <fieldset className="v5-field" disabled={!ready}>
+                <legend className="v5-field__label">Domain policy mode</legend>
+                <span
+                  className="v5-status v5-status--muted"
+                  style={{ display: "block", marginBottom: 8 }}
+                >
+                  Controls auto-scan and live enrichment on the current tab
+                  hostname. Pattern syntax supports exact hosts, prefix wildcards
+                  such as <code>mail.*</code>, and suffix wildcards such as{" "}
+                  <code>*.corp.example</code>.
+                </span>
+                <div className="v5-domain-mode">
+                  <label className="v5-domain-mode__option">
+                    <input
+                      type="radio"
+                      name="domainPolicyMode"
+                      checked={
+                        domainPolicyMode === DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT
+                      }
+                      onChange={() =>
+                        handleDomainPolicyModeChange(
+                          DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT
+                        )
+                      }
+                    />
+                    <span className="v5-row__text">
+                      <span className="v5-row__label">Allow by default</span>
+                      <span className="v5-row__hint">
+                        Scan and enrich on all hosts except those on the denylist.
+                      </span>
+                    </span>
+                  </label>
+                  <label className="v5-domain-mode__option">
+                    <input
+                      type="radio"
+                      name="domainPolicyMode"
+                      checked={
+                        domainPolicyMode === DOMAIN_POLICY_MODE_DENY_BY_DEFAULT
+                      }
+                      onChange={() =>
+                        handleDomainPolicyModeChange(
+                          DOMAIN_POLICY_MODE_DENY_BY_DEFAULT
+                        )
+                      }
+                    />
+                    <span className="v5-row__text">
+                      <span className="v5-row__label">Deny by default</span>
+                      <span className="v5-row__hint">
+                        Scan and enrich only on hosts in the allowlist.
+                      </span>
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
+              <ToggleRow
+                label="Apply domain policy to live enrichment"
+                hint="When on, denylisted hosts (or hosts outside the allowlist in deny-by-default mode) block vendor calls before pre-query disclosure."
+                ariaLabel="Apply domain policy to live enrichment"
+                checked={domainPolicyEnrichGateEnabled}
+                disabled={!ready}
+                onChange={handleDomainPolicyEnrichGateToggle}
+              />
+              <div className="v5-field">
+                <span className="v5-field__label">Default-safe presets</span>
+                <span
+                  className="v5-status v5-status--muted"
+                  style={{ display: "block", marginBottom: 8 }}
+                >
+                  Vera5 ships <strong>allow by default</strong> as the product
+                  default with a built-in sensitive webmail denylist. Presets
+                  merge additional patterns into your lists without removing
+                  entries you added manually.
+                </span>
+                <div className="v5-presets">
+                  {DOMAIN_POLICY_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className="v5-preset"
+                      disabled={!ready}
+                      aria-label={`Apply ${preset.label} preset`}
+                      onClick={() => handleApplyDomainPolicyPreset(preset.id)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                {DOMAIN_POLICY_PRESETS.map((preset) => (
+                  <p
+                    key={`${preset.id}-description`}
+                    className="v5-row__hint"
+                    style={{ marginTop: 8, marginBottom: 0 }}
+                  >
+                    {preset.label}: {preset.description} Sets policy mode to{" "}
+                    {preset.recommendedMode === DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT
+                      ? "allow by default"
+                      : "deny by default"}
+                    .
+                  </p>
+                ))}
+              </div>
+              <DomainPolicyListEditor
+                label="Denylist"
+                hint={
+                  domainPolicyMode === DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT
+                    ? "Hosts that must not auto-scan or receive live enrichment. Default installs include sensitive webmail patterns; add banking, health, or HR entries here or via a preset."
+                    : "Optional extra blocks even when a host is allowlisted."
+                }
+                inputAriaLabel="Denylist entry pattern"
+                addButtonAriaLabel="Add domain to denylist"
+                entries={domainDenylist}
+                draft={denylistDraft}
+                disabled={!ready}
+                onDraftChange={setDenylistDraft}
+                onAdd={handleAddDenylistEntry}
+                onRemove={handleRemoveDenylistEntry}
+              />
+              <DomainPolicyListEditor
+                label="Allowlist"
+                hint={
+                  domainPolicyMode === DOMAIN_POLICY_MODE_DENY_BY_DEFAULT
+                    ? "Only these hosts may auto-scan or receive live enrichment."
+                    : "Ignored while allow-by-default is selected; entries are kept for export and for switching to deny-by-default."
+                }
+                inputAriaLabel="Allowlist entry pattern"
+                addButtonAriaLabel="Add domain to allowlist"
+                entries={domainAllowlist}
+                draft={allowlistDraft}
+                disabled={!ready}
+                onDraftChange={setAllowlistDraft}
+                onAdd={handleAddAllowlistEntry}
+                onRemove={handleRemoveAllowlistEntry}
+              />
+              <div className="v5-field">
+                <span className="v5-field__label">Internal asset lists</span>
+                <span
+                  className="v5-status v5-status--muted"
+                  style={{ display: "block", marginBottom: 8 }}
+                >
+                  Block live enrichment when an indicator matches your known
+                  internal domains, IPv4 CIDR ranges, or labeled vendor/SaaS
+                  hostname patterns. Lists apply to the indicator value, not
+                  the page hostname.
+                </span>
+              </div>
+              <ToggleRow
+                label="Block external enrich for internal asset matches"
+                hint="When on, matching indicators skip vendor calls before pre-query disclosure."
+                ariaLabel="Block external enrich for internal asset matches"
+                checked={internalAssetEnrichGateEnabled}
+                disabled={!ready}
+                onChange={handleInternalAssetEnrichGateToggle}
+              />
+              <DomainPolicyListEditor
+                label="Internal domains"
+                hint="Exact hosts or wildcard patterns for domain and URL indicators."
+                inputAriaLabel="Internal domain pattern"
+                addButtonAriaLabel="Add internal domain"
+                entries={internalAssetDomains}
+                draft={internalAssetDomainDraft}
+                disabled={!ready}
+                onDraftChange={setInternalAssetDomainDraft}
+                onAdd={handleAddInternalAssetDomain}
+                onRemove={handleRemoveInternalAssetDomain}
+              />
+              <DomainPolicyListEditor
+                label="Internal IPv4 CIDR ranges"
+                hint="IPv4 addresses in these ranges block enrichment for matching IPv4 indicators (for example 10.0.0.0/8)."
+                inputAriaLabel="Internal IPv4 CIDR range"
+                addButtonAriaLabel="Add internal CIDR range"
+                entries={internalAssetCidrRanges}
+                draft={internalAssetCidrDraft}
+                disabled={!ready}
+                onDraftChange={setInternalAssetCidrDraft}
+                onAdd={handleAddInternalAssetCidr}
+                onRemove={handleRemoveInternalAssetCidr}
+              />
+              <InternalAssetVendorLabelListEditor
+                label="Vendor and SaaS labels"
+                hint="Named patterns for corporate SaaS or VPN hosts on domain and URL indicators."
+                entries={internalAssetVendorLabels}
+                labelDraft={internalAssetVendorLabelDraft}
+                patternDraft={internalAssetVendorPatternDraft}
+                disabled={!ready}
+                onLabelDraftChange={setInternalAssetVendorLabelDraft}
+                onPatternDraftChange={setInternalAssetVendorPatternDraft}
+                onAdd={handleAddInternalAssetVendorLabel}
+                onRemove={handleRemoveInternalAssetVendorLabel}
+              />
+              <div className="v5-field">
+                <span className="v5-field__label">Analyst workflow presets</span>
+                <span
+                  className="v5-status v5-status--muted"
+                  style={{ display: "block", marginBottom: 8 }}
+                >
+                  Apply SOC, CTI, or DFIR defaults for enrichment toggles, the
+                  default export template, and recommended pivot ordering.
+                </span>
+                <div className="v5-presets">
+                  {ANALYST_MODE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className={`v5-preset${
+                        analystModePresetId === preset.id
+                          ? " v5-preset--active"
+                          : ""
+                      }`}
+                      disabled={!ready}
+                      aria-label={`Apply ${preset.label} preset`}
+                      aria-pressed={analystModePresetId === preset.id}
+                      onClick={() => handleApplyAnalystModePreset(preset.id)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                {ANALYST_MODE_PRESETS.map((preset) => (
+                  <p
+                    key={`${preset.id}-description`}
+                    className="v5-row__hint"
+                    style={{ marginTop: 8, marginBottom: 0 }}
+                  >
+                    {preset.label}: {preset.description} Default export template:{" "}
+                    {preset.defaultExportTemplateId.replace(/-/g, " ")}.
+                  </p>
+                ))}
+              </div>
             </div>
           </section>
 

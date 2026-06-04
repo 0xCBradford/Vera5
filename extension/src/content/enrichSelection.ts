@@ -9,6 +9,9 @@ import { detectIocsInText } from "./detector";
 import { attemptAutoEnrichmentFetch } from "./enrichmentAutoFetch";
 import {
   cancelPendingHoverEnrichment,
+  presentEnrichmentTrustGateBlocked,
+  resolveIndicatorEnrichmentTrustGate,
+  resolvePageEnrichmentTrustGate,
   runBackgroundEnrichment,
 } from "./enrichmentBackgroundFetch";
 import {
@@ -178,6 +181,59 @@ export async function resolveIocFromActiveSelection(
   };
 }
 
+function buildPayloadFromResolvedSelection(resolved: {
+  value: string;
+  type: IocType;
+  ruleId?: IocMatch["ruleId"];
+  sourceTextHint?: string;
+  highlight: HTMLElement | null;
+}): HoverCardOverlayPayload {
+  if (resolved.highlight) {
+    const payload = buildHoverCardPayloadFromHighlight(resolved.highlight);
+    if (payload) {
+      return payload;
+    }
+  }
+
+  return {
+    value: resolved.value,
+    type: resolved.type,
+    ruleId: resolved.ruleId,
+    sourceTextHint: resolved.sourceTextHint,
+    enrichmentState: "empty",
+  };
+}
+
+async function presentSelectionTrustGateBlocked(
+  resolved: {
+    value: string;
+    type: IocType;
+    ruleId?: IocMatch["ruleId"];
+    sourceTextHint?: string;
+    highlight: HTMLElement | null;
+    range: Range | null;
+  },
+  block: {
+    errorCode: string;
+    errorMessage: string;
+  },
+  doc: Document = document
+): Promise<boolean> {
+  const opened = await openEnrichmentForResolvedSelection(resolved, doc, {
+    enrichmentTrigger: "none",
+  });
+  if (!opened) {
+    return false;
+  }
+
+  presentEnrichmentTrustGateBlocked(
+    buildPayloadFromResolvedSelection(resolved),
+    block,
+    doc
+  );
+  return true;
+}
+
 function resolveSelectionAnchorElement(range: Range, doc: Document): HTMLElement {
   let node: Node | null = range.commonAncestorContainer;
   if (node.nodeType === Node.TEXT_NODE) {
@@ -276,6 +332,43 @@ export async function handleEnrichSelectionRequest(
   const resolved = await resolveIocFromActiveSelection(doc);
   if (!resolved) {
     return { ok: false, error: "No indicator found in selection." };
+  }
+
+  const pageGate = await resolvePageEnrichmentTrustGate(doc);
+  if (!pageGate.allowed) {
+    const opened = await presentSelectionTrustGateBlocked(resolved, pageGate, doc);
+    if (!opened) {
+      return { ok: false, error: "No indicator found in selection." };
+    }
+    return {
+      ok: true,
+      payload: {
+        value: resolved.value,
+        type: resolved.type,
+      },
+    };
+  }
+
+  const indicatorGate = await resolveIndicatorEnrichmentTrustGate(
+    resolved.value,
+    resolved.type
+  );
+  if (!indicatorGate.allowed) {
+    const opened = await presentSelectionTrustGateBlocked(
+      resolved,
+      indicatorGate,
+      doc
+    );
+    if (!opened) {
+      return { ok: false, error: "No indicator found in selection." };
+    }
+    return {
+      ok: true,
+      payload: {
+        value: resolved.value,
+        type: resolved.type,
+      },
+    };
   }
 
   const opened = await openEnrichmentForResolvedSelection(resolved, doc, {

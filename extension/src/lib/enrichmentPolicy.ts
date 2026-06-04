@@ -18,6 +18,12 @@ export function shouldApplyDomainPolicyEnrichGate(
   return enrichGateEnabled;
 }
 
+export function shouldApplyInternalAssetEnrichGate(
+  enrichGateEnabled: boolean
+): boolean {
+  return enrichGateEnabled;
+}
+
 export type PreQueryDisclosureDecision = {
   proceed: boolean;
   rememberDismiss: boolean;

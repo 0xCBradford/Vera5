@@ -43,11 +43,20 @@ export function normalizeDomainPolicyMode(value: unknown): DomainPolicyMode {
   return DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT;
 }
 
+export const DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES = [
+  "mail.*",
+  "webmail.*",
+  "outlook.office.com",
+  "outlook.live.com",
+  "mail.google.com",
+  "mail.yahoo.com",
+] as const;
+
 export function createDefaultDomainPolicy(): DomainPolicy {
   return {
     mode: DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT,
     allowlist: [],
-    denylist: [],
+    denylist: [...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES],
   };
 }
 
@@ -119,4 +128,73 @@ export function isAutoScanAllowedForHostname(
   policy: DomainPolicy
 ): boolean {
   return isHostnameAllowedByDomainPolicy(hostname, policy);
+}
+
+export const DOMAIN_POLICY_PRESET_SENSITIVE_SITES_DENYLIST_ID =
+  "sensitive_sites_denylist";
+
+export type DomainPolicyPreset = {
+  id: string;
+  label: string;
+  description: string;
+  recommendedMode: DomainPolicyMode;
+  denylistEntries: readonly string[];
+  allowlistEntries: readonly string[];
+};
+
+export const DOMAIN_POLICY_PRESET_SENSITIVE_SITES_DENYLIST: DomainPolicyPreset =
+  {
+    id: DOMAIN_POLICY_PRESET_SENSITIVE_SITES_DENYLIST_ID,
+    label: "Sensitive sites denylist",
+    description:
+      "Webmail, patient-portal, and workforce SaaS patterns for allow-by-default policy.",
+    recommendedMode: DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT,
+    denylistEntries: [
+      ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
+      "*.mychart.org",
+      "*.bank",
+      "hr.*",
+      "people.*",
+      "*.workday.com",
+      "*.successfactors.com",
+      "*.ultipro.com",
+    ],
+    allowlistEntries: [],
+  };
+
+export const DOMAIN_POLICY_PRESETS: readonly DomainPolicyPreset[] = [
+  DOMAIN_POLICY_PRESET_SENSITIVE_SITES_DENYLIST,
+];
+
+export function getDomainPolicyPresetById(
+  id: string
+): DomainPolicyPreset | undefined {
+  return DOMAIN_POLICY_PRESETS.find((preset) => preset.id === id);
+}
+
+export function mergeDomainPolicyLists(
+  existing: readonly string[],
+  additions: readonly string[]
+): string[] {
+  return normalizeDomainPolicyList([...existing, ...additions]);
+}
+
+export function applyDomainPolicyPresetToLists(input: {
+  mode: DomainPolicyMode;
+  allowlist: readonly string[];
+  denylist: readonly string[];
+  preset: DomainPolicyPreset;
+}): {
+  mode: DomainPolicyMode;
+  allowlist: string[];
+  denylist: string[];
+} {
+  return {
+    mode: input.preset.recommendedMode,
+    allowlist: mergeDomainPolicyLists(
+      input.allowlist,
+      input.preset.allowlistEntries
+    ),
+    denylist: mergeDomainPolicyLists(input.denylist, input.preset.denylistEntries),
+  };
 }

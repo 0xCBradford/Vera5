@@ -1132,3 +1132,53 @@ body {
 .v5-sidebar__footer .v5-lock__icon {
   color: #15803d;
 }
+
+.v5-domain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.v5-domain-list__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--v5-border);
+  border-radius: var(--v5-radius-md);
+  background: #ffffff;
+}
+
+.v5-domain-list__item code {
+  font-size: 13px;
+  color: #0f172a;
+  word-break: break-all;
+}
+
+.v5-domain-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.v5-domain-mode__option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--v5-border);
+  cursor: pointer;
+}
+
+.v5-domain-mode__option:last-child {
+  border-bottom: none;
+}
+
+.v5-domain-mode__option input {
+  margin-top: 3px;
+}

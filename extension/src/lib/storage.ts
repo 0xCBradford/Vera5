@@ -1,11 +1,28 @@
-import type { EnrichmentSourceId } from "./hoverCardEnrichment";
+import {
+  applyAnalystModePresetToSettings,
+  getAnalystModePresetById,
+  normalizeAnalystModePresetId,
+  normalizeDefaultExportTemplateId,
+  normalizePivotEmphasisProviders,
+  type AnalystModePresetId,
+} from "./analystModePresets";
+import type { ExportTemplateId } from "./exportTemplates";
+import type { EnrichmentSourceId } from "./enrichmentSourceRegistry";
+import type { PivotProvider } from "./pivots";
 import {
   createDefaultDomainPolicy,
+  DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
   normalizeDomainPolicyList,
   normalizeDomainPolicyMode,
   type DomainPolicy,
   type DomainPolicyMode,
 } from "./domainPolicy";
+import {
+  normalizeInternalAssetCidrList,
+  normalizeInternalAssetVendorLabels,
+  type InternalAssetPolicy,
+  type InternalAssetVendorLabelEntry,
+} from "./internalAssetPolicy";
 import type { IocType } from "./iocRegex";
 import {
   API_KEY_STORAGE_SLOTS,
@@ -14,7 +31,7 @@ import {
   type ApiKeyStorageSlot,
 } from "./enrichmentSourceRegistry";
 
-export const SETTINGS_SCHEMA_VERSION = 1;
+export const SETTINGS_SCHEMA_VERSION = 2;
 
 export const DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS = 3600;
 
@@ -41,8 +58,17 @@ export const STORAGE_KEY_DOMAIN_ALLOWLIST = "domainAllowlist";
 export const STORAGE_KEY_DOMAIN_DENYLIST = "domainDenylist";
 export const STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED =
   "domainPolicyEnrichGateEnabled";
+export const STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED =
+  "internalAssetEnrichGateEnabled";
+export const STORAGE_KEY_INTERNAL_ASSET_DOMAINS = "internalAssetDomains";
+export const STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES = "internalAssetCidrRanges";
+export const STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS = "internalAssetVendorLabels";
+export const STORAGE_KEY_ANALYST_MODE_PRESET_ID = "analystModePresetId";
+export const STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID = "defaultExportTemplateId";
+export const STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS = "pivotEmphasisProviders";
 
 export type { DomainPolicy, DomainPolicyMode };
+export type { InternalAssetPolicy, InternalAssetVendorLabelEntry };
 
 export const STORAGE_KEYS = {
   EXTENSION_ENABLED: STORAGE_KEY_EXTENSION_ENABLED,
@@ -67,6 +93,14 @@ export const STORAGE_KEYS = {
   DOMAIN_DENYLIST: STORAGE_KEY_DOMAIN_DENYLIST,
   DOMAIN_POLICY_ENRICH_GATE_ENABLED:
     STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
+  INTERNAL_ASSET_ENRICH_GATE_ENABLED:
+    STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED,
+  INTERNAL_ASSET_DOMAINS: STORAGE_KEY_INTERNAL_ASSET_DOMAINS,
+  INTERNAL_ASSET_CIDR_RANGES: STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES,
+  INTERNAL_ASSET_VENDOR_LABELS: STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS,
+  ANALYST_MODE_PRESET_ID: STORAGE_KEY_ANALYST_MODE_PRESET_ID,
+  DEFAULT_EXPORT_TEMPLATE_ID: STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
+  PIVOT_EMPHASIS_PROVIDERS: STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
 } as const;
 
 export type ApiKeySlot = ApiKeyStorageSlot;
@@ -102,6 +136,13 @@ export type Vera5Settings = {
   domainAllowlist: string[];
   domainDenylist: string[];
   domainPolicyEnrichGateEnabled: boolean;
+  internalAssetEnrichGateEnabled: boolean;
+  internalAssetDomains: string[];
+  internalAssetCidrRanges: string[];
+  internalAssetVendorLabels: InternalAssetVendorLabelEntry[];
+  analystModePresetId: string;
+  defaultExportTemplateId: ExportTemplateId;
+  pivotEmphasisProviders: PivotProvider[];
 };
 
 export type Vera5StorageRaw = {
@@ -123,6 +164,13 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_DOMAIN_ALLOWLIST]?: unknown;
   [STORAGE_KEY_DOMAIN_DENYLIST]?: unknown;
   [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]?: unknown;
+  [STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED]?: unknown;
+  [STORAGE_KEY_INTERNAL_ASSET_DOMAINS]?: unknown;
+  [STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES]?: unknown;
+  [STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS]?: unknown;
+  [STORAGE_KEY_ANALYST_MODE_PRESET_ID]?: unknown;
+  [STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]?: unknown;
+  [STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS]?: unknown;
 };
 
 export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
@@ -143,6 +191,13 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_DOMAIN_ALLOWLIST,
   STORAGE_KEY_DOMAIN_DENYLIST,
   STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED,
+  STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED,
+  STORAGE_KEY_INTERNAL_ASSET_DOMAINS,
+  STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES,
+  STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS,
+  STORAGE_KEY_ANALYST_MODE_PRESET_ID,
+  STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
+  STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
 ];
 
 export const VERA5_SETTINGS_READ_KEYS: readonly string[] = [
@@ -260,8 +315,15 @@ export function createDefaultVera5Settings(): Vera5Settings {
     preQueryNoticePreferenceConfigured: false,
     domainPolicyMode: createDefaultDomainPolicy().mode,
     domainAllowlist: [],
-    domainDenylist: [],
+    domainDenylist: [...createDefaultDomainPolicy().denylist],
     domainPolicyEnrichGateEnabled: true,
+    internalAssetEnrichGateEnabled: true,
+    internalAssetDomains: [],
+    internalAssetCidrRanges: [],
+    internalAssetVendorLabels: [],
+    analystModePresetId: "",
+    defaultExportTemplateId: "analyst-update",
+    pivotEmphasisProviders: [],
   };
 }
 
@@ -419,22 +481,65 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
     domainAllowlist: normalizeDomainPolicyList(
       raw[STORAGE_KEY_DOMAIN_ALLOWLIST]
     ),
-    domainDenylist: normalizeDomainPolicyList(raw[STORAGE_KEY_DOMAIN_DENYLIST]),
+    domainDenylist:
+      raw[STORAGE_KEY_DOMAIN_DENYLIST] === undefined
+        ? [...defaults.domainDenylist]
+        : normalizeDomainPolicyList(raw[STORAGE_KEY_DOMAIN_DENYLIST]),
     domainPolicyEnrichGateEnabled: readStoredBoolean(
       raw[STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED],
       defaults.domainPolicyEnrichGateEnabled
+    ),
+    internalAssetEnrichGateEnabled: readStoredBoolean(
+      raw[STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED],
+      defaults.internalAssetEnrichGateEnabled
+    ),
+    internalAssetDomains: normalizeDomainPolicyList(
+      raw[STORAGE_KEY_INTERNAL_ASSET_DOMAINS]
+    ),
+    internalAssetCidrRanges: normalizeInternalAssetCidrList(
+      raw[STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES]
+    ),
+    internalAssetVendorLabels: normalizeInternalAssetVendorLabels(
+      raw[STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS]
+    ),
+    analystModePresetId: normalizeAnalystModePresetId(
+      raw[STORAGE_KEY_ANALYST_MODE_PRESET_ID]
+    ),
+    defaultExportTemplateId: normalizeDefaultExportTemplateId(
+      raw[STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]
+    ),
+    pivotEmphasisProviders: normalizePivotEmphasisProviders(
+      raw[STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS]
     ),
   };
 }
 
 export function migrateVera5StorageRaw(raw: Vera5StorageRaw): Vera5StorageRaw {
   const version = readStoredSchemaVersion(raw[STORAGE_KEY_SCHEMA_VERSION], 0);
-  if (version >= SETTINGS_SCHEMA_VERSION) {
-    return raw;
+  const migrated: Vera5StorageRaw = { ...raw };
+
+  if (version < 2) {
+    const denylist = migrated[STORAGE_KEY_DOMAIN_DENYLIST];
+    if (
+      denylist === undefined ||
+      (Array.isArray(denylist) && denylist.length === 0)
+    ) {
+      migrated[STORAGE_KEY_DOMAIN_DENYLIST] = [
+        ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
+      ];
+    }
+    migrated[STORAGE_KEY_SCHEMA_VERSION] = 2;
+  }
+
+  if (
+    readStoredSchemaVersion(migrated[STORAGE_KEY_SCHEMA_VERSION], 0) >=
+    SETTINGS_SCHEMA_VERSION
+  ) {
+    return migrated;
   }
 
   return {
-    ...raw,
+    ...migrated,
     [STORAGE_KEY_SCHEMA_VERSION]: SETTINGS_SCHEMA_VERSION,
   };
 }
@@ -466,6 +571,15 @@ export function vera5SettingsToStoragePayload(
     [STORAGE_KEY_DOMAIN_DENYLIST]: settings.domainDenylist,
     [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]:
       settings.domainPolicyEnrichGateEnabled,
+    [STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED]:
+      settings.internalAssetEnrichGateEnabled,
+    [STORAGE_KEY_INTERNAL_ASSET_DOMAINS]: settings.internalAssetDomains,
+    [STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES]: settings.internalAssetCidrRanges,
+    [STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS]:
+      settings.internalAssetVendorLabels,
+    [STORAGE_KEY_ANALYST_MODE_PRESET_ID]: settings.analystModePresetId,
+    [STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]: settings.defaultExportTemplateId,
+    [STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS]: settings.pivotEmphasisProviders,
   };
 }
 
@@ -686,6 +800,143 @@ export async function setPreQueryNoticePreference(
 
 export async function setShowPreQueryNotices(enabled: boolean): Promise<void> {
   await setPreQueryNoticePreference(enabled);
+}
+
+export async function getDomainPolicyMode(): Promise<DomainPolicyMode> {
+  const settings = await getVera5Settings();
+  return settings.domainPolicyMode;
+}
+
+export async function setDomainPolicyMode(mode: DomainPolicyMode): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_DOMAIN_POLICY_MODE]: normalizeDomainPolicyMode(mode),
+  });
+}
+
+export async function getDomainAllowlist(): Promise<string[]> {
+  const settings = await getVera5Settings();
+  return [...settings.domainAllowlist];
+}
+
+export async function setDomainAllowlist(entries: string[]): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_DOMAIN_ALLOWLIST]: normalizeDomainPolicyList(entries),
+  });
+}
+
+export async function getDomainDenylist(): Promise<string[]> {
+  const settings = await getVera5Settings();
+  return [...settings.domainDenylist];
+}
+
+export async function setDomainDenylist(entries: string[]): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_DOMAIN_DENYLIST]: normalizeDomainPolicyList(entries),
+  });
+}
+
+export async function getDomainPolicyEnrichGateEnabled(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.domainPolicyEnrichGateEnabled;
+}
+
+export async function setDomainPolicyEnrichGateEnabled(
+  enabled: boolean
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]: enabled,
+  });
+}
+
+export async function getInternalAssetEnrichGateEnabled(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.internalAssetEnrichGateEnabled;
+}
+
+export async function setInternalAssetEnrichGateEnabled(
+  enabled: boolean
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_INTERNAL_ASSET_ENRICH_GATE_ENABLED]: enabled,
+  });
+}
+
+export async function getInternalAssetDomains(): Promise<string[]> {
+  const settings = await getVera5Settings();
+  return [...settings.internalAssetDomains];
+}
+
+export async function setInternalAssetDomains(entries: string[]): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_INTERNAL_ASSET_DOMAINS]: normalizeDomainPolicyList(entries),
+  });
+}
+
+export async function getInternalAssetCidrRanges(): Promise<string[]> {
+  const settings = await getVera5Settings();
+  return [...settings.internalAssetCidrRanges];
+}
+
+export async function setInternalAssetCidrRanges(
+  entries: string[]
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_INTERNAL_ASSET_CIDR_RANGES]:
+      normalizeInternalAssetCidrList(entries),
+  });
+}
+
+export async function getInternalAssetVendorLabels(): Promise<
+  InternalAssetVendorLabelEntry[]
+> {
+  const settings = await getVera5Settings();
+  return settings.internalAssetVendorLabels.map((entry) => ({ ...entry }));
+}
+
+export async function setInternalAssetVendorLabels(
+  entries: InternalAssetVendorLabelEntry[]
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS]:
+      normalizeInternalAssetVendorLabels(entries),
+  });
+}
+
+export async function getAnalystModePresetId(): Promise<string> {
+  const settings = await getVera5Settings();
+  return settings.analystModePresetId;
+}
+
+export async function getDefaultExportTemplateId(): Promise<ExportTemplateId> {
+  const settings = await getVera5Settings();
+  return settings.defaultExportTemplateId;
+}
+
+export async function setDefaultExportTemplateId(
+  templateId: ExportTemplateId
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]:
+      normalizeDefaultExportTemplateId(templateId),
+  });
+}
+
+export async function getPivotEmphasisProviders(): Promise<PivotProvider[]> {
+  const settings = await getVera5Settings();
+  return [...settings.pivotEmphasisProviders];
+}
+
+export async function applyAnalystModePreset(
+  presetId: AnalystModePresetId
+): Promise<void> {
+  const preset = getAnalystModePresetById(presetId);
+  if (!preset) {
+    return;
+  }
+
+  const settings = await getVera5Settings();
+  const next = applyAnalystModePresetToSettings(settings, preset);
+  await chrome.storage.local.set(vera5SettingsToStoragePayload(next));
 }
 
 export function maskApiKeyForDisplay(key: string): string {

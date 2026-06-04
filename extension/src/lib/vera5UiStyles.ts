@@ -1125,6 +1125,62 @@ html.vera5-workspace-open {
   align-items: flex-start;
   gap: 8px;
 }
+.vera5-workspace-tray-row--bulk-selected {
+  border-color: color-mix(in srgb, #38bdf8 45%, #475569);
+}
+.vera5-workspace-tray-select {
+  flex-shrink: 0;
+  margin-top: 2px;
+  cursor: pointer;
+}
+.vera5-workspace-tray-bulk-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.vera5-workspace-tray-queue-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+.vera5-tray-enrich-queue-warning-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.72);
+}
+.vera5-tray-enrich-queue-warning-panel {
+  width: min(420px, 100%);
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #475569;
+  background: #1e293b;
+  color: #e2e8f0;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.45);
+}
+.vera5-tray-enrich-queue-warning-heading {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.vera5-tray-enrich-queue-warning-message {
+  margin: 0 0 12px;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cbd5e1;
+}
+.vera5-tray-enrich-queue-warning-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .vera5-workspace-tray-row[aria-selected="true"] {
   border-color: #60a5fa;
   background: color-mix(in srgb, #60a5fa 12%, #0f172a);
@@ -1202,6 +1258,113 @@ html.vera5-workspace-open {
   --vera5-button-bg: #334155;
   --vera5-copy-success-bg: #14532d;
   --vera5-shadow: none;
+}
+.vera5-command-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 16px 16px;
+  background: rgba(15, 23, 42, 0.45);
+}
+.vera5-command-palette-panel {
+  box-sizing: border-box;
+  width: min(560px, 100%);
+  max-height: min(70vh, 520px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1px solid #c5d4e8;
+  background: #f8fafc;
+  color: #1a1a1a;
+  font-family: system-ui, sans-serif;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+.vera5-command-palette-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #c5d4e8;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1a1a1a;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+.vera5-command-palette-input:focus-visible {
+  outline: 2px solid #1a5fb4;
+  outline-offset: 1px;
+}
+.vera5-command-palette-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: auto;
+  max-height: min(48vh, 360px);
+}
+.vera5-command-palette-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.vera5-command-palette-item:hover,
+.vera5-command-palette-item--selected {
+  border-color: #c5d4e8;
+  background: #eef4fb;
+}
+.vera5-command-palette-item-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a3f6b;
+}
+.vera5-command-palette-item-description {
+  font-size: 12px;
+  color: #4a5568;
+}
+.vera5-command-palette-empty,
+.vera5-command-palette-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+@media (prefers-color-scheme: dark) {
+  .vera5-command-palette-panel {
+    border-color: #475569;
+    background: #0f172a;
+    color: #e2e8f0;
+    box-shadow: none;
+  }
+  .vera5-command-palette-input {
+    border-color: #475569;
+    background: #1e293b;
+    color: #e2e8f0;
+  }
+  .vera5-command-palette-item:hover,
+  .vera5-command-palette-item--selected {
+    border-color: #475569;
+    background: #1e293b;
+  }
+  .vera5-command-palette-item-label {
+    color: #dbeafe;
+  }
+  .vera5-command-palette-item-description,
+  .vera5-command-palette-empty,
+  .vera5-command-palette-hint {
+    color: #94a3b8;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   html.vera5-workspace-open {

@@ -24,6 +24,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Dependency audit (production)
+        run: npm run audit:prod
+
+      - name: Dependency audit (devDependency report)
+        run: npm audit
+        continue-on-error: true
+
       - name: Lint
         run: npm run lint
 

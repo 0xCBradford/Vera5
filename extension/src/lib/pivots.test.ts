@@ -238,6 +238,22 @@ describe("pivot recipes", () => {
     ]);
   });
 
+  it("orders pivot recipes by configured emphasis providers first", () => {
+    const recipes = getPivotRecipes(IOC_TYPE.IPV4, "8.8.8.8", {
+      emphasisProviders: [
+        PIVOT_PROVIDER.URLSCAN,
+        PIVOT_PROVIDER.OTX,
+        PIVOT_PROVIDER.ABUSEIPDB,
+      ],
+    });
+
+    expect(recipes.slice(0, 3).map((recipe) => recipe.provider)).toEqual([
+      PIVOT_PROVIDER.URLSCAN,
+      PIVOT_PROVIDER.OTX,
+      PIVOT_PROVIDER.ABUSEIPDB,
+    ]);
+  });
+
   it("prioritizes URLScan first for URL indicators", () => {
     const recipes = getPivotRecipes(IOC_TYPE.URL, "https://example.com/login");
 

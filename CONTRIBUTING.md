@@ -45,6 +45,31 @@ Or from the repository root on Windows:
 .\scripts\check.ps1
 ```
 
+### Dependency audit (CI)
+
+Pull request CI runs `npm audit` with a two-tier policy:
+
+| Scope | Command | CI result |
+|-------|---------|-----------|
+| Production dependencies (React runtime shipped in `dist/`) | `npm run audit:prod` (`npm audit --omit=dev`) | **Fails** the workflow when moderate or higher vulnerabilities are reported |
+| All dependencies, including devDependencies | `npm audit` | **Warns** only — output is logged; the step does not fail the workflow |
+
+Before opening a PR, run the blocking production audit locally:
+
+```bash
+cd extension
+npm run audit:prod
+```
+
+Review the full tree separately when upgrading dev tooling:
+
+```bash
+cd extension
+npm audit
+```
+
+Production dependencies (`react`, `react-dom`) and security-sensitive dev tools (`vitest`) use **exact versions** in `extension/package.json` (no `^` range) so CI and local installs resolve the same release.
+
 ### Optional git pre-commit hook
 
 After `git init`, enable the repository hook template:

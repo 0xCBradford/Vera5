@@ -21,6 +21,7 @@ export const ENRICHMENT_ERROR_CODE = {
   NETWORK: "network_error",
   DISABLED: "disabled",
   DOMAIN_POLICY: "domain_policy",
+  INTERNAL_ASSET: "internal_asset",
   VENDOR: "vendor_error",
 } as const;
 

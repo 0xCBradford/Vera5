@@ -6,6 +6,7 @@ import {
   shouldShowPreQueryNotices,
 } from "../lib/enrichmentPolicy";
 import { isExtensionContextInvalidated } from "../lib/extensionContext";
+import type { IocType } from "../lib/iocRegex";
 import { listEnabledLiveEnrichmentSourceIds } from "../lib/enrichmentSourceSelection";
 import type { EnrichmentSourceId } from "../lib/enrichmentSourceRegistry";
 import { resolveMultiSourceEnrichmentView } from "../lib/hoverCardEnrichment";
@@ -19,6 +20,7 @@ import {
   setShowPreQueryNoticesForContent,
 } from "./enrichmentSourceStorage";
 import { isEnrichmentAllowedForCurrentPage } from "./domainPolicyStorage";
+import { isOutboundEnrichmentAllowedForIndicator } from "./internalAssetPolicyStorage";
 import {
   getLastHoverCardAnchor,
   getLastHoverCardPayload,
@@ -33,6 +35,24 @@ export const DEFAULT_HOVER_ENRICHMENT_DEBOUNCE_MS = 400;
 export const DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE =
   "Threat intelligence queries are blocked for this site by domain policy.";
 
+export const INTERNAL_ASSET_ENRICHMENT_BLOCKED_MESSAGE =
+  "Threat intelligence queries are blocked for this indicator because it matches a configured internal asset list.";
+
+export type EnrichmentTrustGateBlock = {
+  errorCode: string;
+  errorMessage: string;
+};
+
+export type EnrichmentTrustGateResult =
+  | { allowed: true }
+  | ({ allowed: false } & EnrichmentTrustGateBlock);
+
+export type RunBackgroundEnrichmentResult =
+  | "completed"
+  | "blocked"
+  | "cancelled"
+  | "skipped";
+
 let hoverEnrichmentTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function cancelPendingHoverEnrichment(): void {
@@ -41,6 +61,52 @@ export function cancelPendingHoverEnrichment(): void {
     hoverEnrichmentTimer = null;
   }
   cancelPreQueryDisclosure();
+}
+
+export async function resolvePageEnrichmentTrustGate(
+  doc: Document = document
+): Promise<EnrichmentTrustGateResult> {
+  const enrichAllowed = await isEnrichmentAllowedForCurrentPage(doc);
+  if (!enrichAllowed) {
+    return {
+      allowed: false,
+      errorCode: ENRICHMENT_ERROR_CODE.DOMAIN_POLICY,
+      errorMessage: DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
+    };
+  }
+  return { allowed: true };
+}
+
+export async function resolveIndicatorEnrichmentTrustGate(
+  value: string,
+  type: IocType
+): Promise<EnrichmentTrustGateResult> {
+  const indicatorAllowed = await isOutboundEnrichmentAllowedForIndicator(value, type);
+  if (!indicatorAllowed) {
+    return {
+      allowed: false,
+      errorCode: ENRICHMENT_ERROR_CODE.INTERNAL_ASSET,
+      errorMessage: INTERNAL_ASSET_ENRICHMENT_BLOCKED_MESSAGE,
+    };
+  }
+  return { allowed: true };
+}
+
+export function presentEnrichmentTrustGateBlocked(
+  payload: HoverCardOverlayPayload,
+  block: EnrichmentTrustGateBlock,
+  doc: Document = document
+): void {
+  applyIndicatorDetailPayload(
+    {
+      ...payload,
+      enrichmentState: "error",
+      errorCode: block.errorCode,
+      errorMessage: block.errorMessage,
+      preQueryDisclosure: undefined,
+    },
+    doc
+  );
 }
 
 export function scheduleDebouncedBackgroundEnrichment(
@@ -181,13 +247,13 @@ export async function runBackgroundEnrichment(
   payload: HoverCardOverlayPayload,
   doc: Document = document,
   options: BackgroundEnrichmentOptions = {}
-): Promise<void> {
+): Promise<RunBackgroundEnrichmentResult> {
   if (isExtensionContextInvalidated()) {
-    return;
+    return "skipped";
   }
 
   if (!hasIndicatorDetailTarget(payload, doc)) {
-    return;
+    return "skipped";
   }
 
   const enabledSources = await getEnrichmentSourceEnabledForContent();
@@ -206,22 +272,22 @@ export async function runBackgroundEnrichment(
       },
       doc
     );
-    return;
+    return "blocked";
   }
 
-  const enrichAllowed = await isEnrichmentAllowedForCurrentPage(doc);
-  if (!enrichAllowed) {
-    applyIndicatorDetailPayload(
-      {
-        ...payload,
-        enrichmentState: "error",
-        errorCode: ENRICHMENT_ERROR_CODE.DOMAIN_POLICY,
-        errorMessage: DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
-        preQueryDisclosure: undefined,
-      },
-      doc
-    );
-    return;
+  const pageGate = await resolvePageEnrichmentTrustGate(doc);
+  if (!pageGate.allowed) {
+    presentEnrichmentTrustGateBlocked(payload, pageGate, doc);
+    return "blocked";
+  }
+
+  const indicatorGate = await resolveIndicatorEnrichmentTrustGate(
+    payload.value,
+    payload.type
+  );
+  if (!indicatorGate.allowed) {
+    presentEnrichmentTrustGateBlocked(payload, indicatorGate, doc);
+    return "blocked";
   }
 
   const proceed = await confirmPreQueryDisclosureIfRequired(
@@ -238,14 +304,15 @@ export async function runBackgroundEnrichment(
       },
       doc
     );
-    return;
+    return "cancelled";
   }
 
   if (!hasIndicatorDetailTarget(payload, doc)) {
-    return;
+    return "skipped";
   }
 
   await executeBackgroundEnrichmentFetch(payload, doc, options);
+  return "completed";
 }
 
 export function setupBackgroundEnrichmentRouting(): void {
