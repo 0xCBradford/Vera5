@@ -4,11 +4,41 @@
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { IOC_RULE_ID } from "../lib/iocRegex";
+import { IOC_RULE_ID, IOC_TYPE } from "../lib/iocRegex";
+import { createInvestigationSession } from "../lib/investigationSession";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import * as tabScanSummary from "../lib/tabScanSummary";
+import { MESSAGE } from "../lib/messages";
 import { Popup } from "./Popup";
+
+const sampleActiveSession = createInvestigationSession({
+  id: "vera5-inv-popup-test",
+  title: "Phishing Investigation",
+  pageUrl: "https://example.com/alert",
+  createdAt: 100,
+  updatedAt: 200,
+  totalIocCount: 23,
+  iocCountByType: {
+    [IOC_TYPE.DOMAIN]: 8,
+    [IOC_TYPE.IPV4]: 4,
+    [IOC_TYPE.MD5]: 1,
+    [IOC_TYPE.SHA256]: 1,
+    [IOC_TYPE.URL]: 9,
+  },
+});
+
+const sampleRecentSession = createInvestigationSession({
+  id: "vera5-inv-popup-recent",
+  title: "Older case",
+  pageUrl: "https://example.com/old",
+  createdAt: 50,
+  updatedAt: 150,
+  totalIocCount: 2,
+  iocCountByType: {
+    [IOC_TYPE.URL]: 2,
+  },
+});
 
 const sampleSummary = buildTabScanSummary({
   ...buildTabScanSnapshotPayload({
@@ -52,6 +82,8 @@ const emptySummary = buildTabScanSummary({
 function stubChrome(options: {
   initialSummary?: ReturnType<typeof buildTabScanSummary> | null;
   postScanSummary?: ReturnType<typeof buildTabScanSummary> | null;
+  activeSession?: ReturnType<typeof createInvestigationSession> | null;
+  recentSessions?: ReturnType<typeof createInvestigationSession>[];
   navigateResponse?: unknown;
   navigateSendFailed?: boolean;
 }): void {
@@ -64,10 +96,24 @@ function stubChrome(options: {
     },
     runtime: {
       id: "test-extension-id",
-      sendMessage: vi.fn(async () => ({
-        ok: true,
-        payload: { summary: options.initialSummary ?? null },
-      })),
+      sendMessage: vi.fn(async (message: { type?: string }) => {
+        if (message?.type === MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION) {
+          return {
+            ok: true,
+            payload: { session: options.activeSession ?? null },
+          };
+        }
+        if (message?.type === MESSAGE.LIST_INVESTIGATION_SESSIONS) {
+          return {
+            ok: true,
+            payload: { sessions: options.recentSessions ?? [] },
+          };
+        }
+        return {
+          ok: true,
+          payload: { summary: options.initialSummary ?? null },
+        };
+      }),
       openOptionsPage: vi.fn(),
     },
     tabs: {
@@ -124,6 +170,69 @@ describe("Popup IOC tray", () => {
     expect(mounted?.container.textContent).toContain("Scan selection");
     expect(mounted?.container.textContent).toContain("Enrich selection");
     expect(mounted?.container.textContent).toContain("Settings");
+  });
+
+  it("shows investigation session empty state when no session is active", async () => {
+    stubChrome({
+      initialSummary: null,
+      activeSession: null,
+      recentSessions: [sampleRecentSession!],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "No active investigation session"
+      );
+    });
+    expect(mounted?.container.textContent).toContain("Scan this page");
+    expect(mounted?.container.textContent).not.toMatch(/Investigation session[\s\S]*0 indicators/);
+    expect(mounted?.container.textContent).toContain("Recent sessions");
+    expect(mounted?.container.textContent).toContain("Older case");
+  });
+
+  it("shows investigation session title, IOC count, and per-type breakdown", async () => {
+    stubChrome({
+      initialSummary: null,
+      activeSession: sampleActiveSession,
+      recentSessions: [sampleActiveSession, sampleRecentSession!],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      const titleInput = mounted?.container.querySelector(
+        'input[aria-label="Session title"]'
+      ) as HTMLInputElement | null;
+      expect(titleInput?.value).toBe("Phishing Investigation");
+    });
+    expect(mounted?.container.textContent).toContain("23 indicators");
+    expect(mounted?.container.textContent).toContain(
+      "8 domains · 4 IPs · 2 hashes · 9 URLs"
+    );
+  });
+
+  it("shows recent sessions with reopen, rename, archive, and delete actions", async () => {
+    stubChrome({
+      initialSummary: null,
+      activeSession: sampleActiveSession,
+      recentSessions: [sampleActiveSession, sampleRecentSession!],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Recent sessions");
+    });
+    expect(mounted?.container.textContent).toContain("Older case");
+    expect(mounted?.container.textContent).toContain("Active");
+    expect(
+      mounted?.container.querySelector('button[aria-label="Reopen"]') ??
+        Array.from(mounted!.container.querySelectorAll("button")).find((button) =>
+          button.textContent === "Reopen"
+        )
+    ).toBeTruthy();
+    expect(mounted?.container.textContent).toContain("Rename");
+    expect(mounted?.container.textContent).toContain("Archive");
+    expect(mounted?.container.textContent).toContain("Delete");
   });
 
   it("lists detected IOCs with count summary and type filters", async () => {

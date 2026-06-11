@@ -15,6 +15,12 @@ import {
   isEnrichmentConnector,
   isEnrichmentSourceResult,
 } from "./enrichment";
+import {
+  TEST_FIXTURE_CONFIGURED_API_KEY,
+  TEST_FIXTURE_GENERIC_API_KEY,
+  TEST_FIXTURE_INVALID_API_KEY,
+  TEST_FIXTURE_OTX_API_KEY,
+} from "./fixtureSecrets";
 import { getApiKey, setApiKey, STORAGE_KEY_API_KEYS } from "./storage";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
@@ -124,12 +130,12 @@ describe("OTX connector enrich", () => {
   it("loads the API key from storage and sends only the indicator value", async () => {
     const store: Record<string, unknown> = {};
     stubChromeStorage(store);
-    await setApiKey("otx", "test-otx-key");
+    await setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
 
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       expect(init?.headers).toMatchObject({
         Accept: "application/json",
-        "X-OTX-API-KEY": "test-otx-key",
+        "X-OTX-API-KEY": TEST_FIXTURE_OTX_API_KEY,
       });
       return new Response(
         JSON.stringify({
@@ -152,7 +158,7 @@ describe("OTX connector enrich", () => {
     const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(requestUrl).toBe(`${OTX_INDICATORS_API_BASE}/IPv4/8.8.8.8`);
-    expect(requestUrl).not.toContain("test-otx-key");
+    expect(requestUrl).not.toContain(TEST_FIXTURE_OTX_API_KEY);
     expect(inspectOtxVendorRequest(requestUrl, requestInit)).toEqual({
       indicatorPath: "IPv4/8.8.8.8",
       hasRequestBody: false,
@@ -165,9 +171,9 @@ describe("OTX connector enrich", () => {
       tags: ["malware", "scanner"],
     });
     expect(result.rawVendorJson).toContain("pulse_info");
-    expect(result.rawVendorJson).not.toContain("test-otx-key");
+    expect(result.rawVendorJson).not.toContain(TEST_FIXTURE_OTX_API_KEY);
     expect(isEnrichmentSourceResult(result)).toBe(true);
-    await expect(getApiKey("otx")).resolves.toBe("test-otx-key");
+    await expect(getApiKey("otx")).resolves.toBe(TEST_FIXTURE_OTX_API_KEY);
   });
 
   it("enriches domain indicators", async () => {
@@ -178,7 +184,7 @@ describe("OTX connector enrich", () => {
     );
     const result = await enrichWithOtx(
       { value: "example.com", type: "domain" },
-      { getApiKey: async () => "test-key", fetch: fetchMock as typeof fetch }
+      { getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY, fetch: fetchMock as typeof fetch }
     );
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
@@ -195,7 +201,7 @@ describe("OTX connector enrich", () => {
     const fetchMock = vi.fn();
     const result = await enrichWithOtx(
       { value: "8.8.8.8 malicious traffic on page", type: "ipv4" },
-      { getApiKey: async () => "test-key", fetch: fetchMock as typeof fetch }
+      { getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY, fetch: fetchMock as typeof fetch }
     );
     expect(result).toMatchObject({
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
@@ -209,7 +215,7 @@ describe("OTX connector enrich", () => {
     const result = await enrichWithOtx(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "bad-key",
+        getApiKey: async () => TEST_FIXTURE_INVALID_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -225,7 +231,7 @@ describe("OTX connector enrich", () => {
     const result = await enrichWithOtx(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -248,7 +254,7 @@ describe("OTX connector enrich", () => {
     const result = await enrichWithOtx(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -264,7 +270,7 @@ describe("OTX connector enrich", () => {
     const result = await enrichWithOtx(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -281,7 +287,7 @@ describe("OTX connector enrich", () => {
     const result = await enrichWithOtx(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -297,7 +303,7 @@ describe("OTX connector enrich", () => {
     const result = await enrichWithOtx(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -310,7 +316,7 @@ describe("OTX connector enrich", () => {
 
   it("exposes an EnrichmentConnector with healthCheck", async () => {
     const connector = createOtxConnector({
-      getApiKey: async () => "configured-key",
+      getApiKey: async () => TEST_FIXTURE_CONFIGURED_API_KEY,
     });
     expect(isEnrichmentConnector(connector)).toBe(true);
     expect(connector.name).toBe("otx");

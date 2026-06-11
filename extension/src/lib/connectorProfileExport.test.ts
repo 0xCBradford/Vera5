@@ -26,6 +26,10 @@ import {
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
 } from "./hoverCardEnrichment";
+import {
+  TEST_FIXTURE_SECONDARY_API_KEY,
+  TEST_FIXTURE_STORED_API_KEY,
+} from "./fixtureSecrets";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
   vi.stubGlobal("chrome", {
@@ -58,7 +62,10 @@ describe("connector profile export", () => {
   it("includes IOC types, rate-limit metadata, and privacy warnings without keys", () => {
     const settings = {
       ...createDefaultVera5Settings(),
-      apiKeys: { abuseipdb: "secret-key", otx: "other-secret" },
+      apiKeys: {
+        abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+        otx: TEST_FIXTURE_SECONDARY_API_KEY,
+      },
       iocTypeEnabled: { ipv4: true, domain: false },
       manualOnlyMode: false,
     };
@@ -85,7 +92,7 @@ describe("connector profile export", () => {
     expect(document.privacyWarnings.riskScoreDisclaimer).toBe(
       HOVER_CARD_RISK_SCORE_DISCLAIMER
     );
-    expect(json).not.toContain("secret-key");
+    expect(json).not.toContain(TEST_FIXTURE_STORED_API_KEY);
     expect(parsed.apiKeys).toBeUndefined();
     expect(parsed).not.toHaveProperty("apiKeys");
   });
@@ -109,7 +116,7 @@ describe("connector profile export", () => {
     const current = {
       ...createDefaultVera5Settings(),
       manualOnlyMode: true,
-      apiKeys: { abuseipdb: "stored-secret" },
+      apiKeys: { abuseipdb: TEST_FIXTURE_STORED_API_KEY },
     };
     const importedPreferences = {
       ...buildConnectorProfileDocument(createDefaultVera5Settings()).preferences,
@@ -121,7 +128,7 @@ describe("connector profile export", () => {
 
     expect(merged.manualOnlyMode).toBe(false);
     expect(merged.iocTypeEnabled.sha256).toBe(false);
-    expect(merged.apiKeys.abuseipdb).toBe("stored-secret");
+    expect(merged.apiKeys.abuseipdb).toBe(TEST_FIXTURE_STORED_API_KEY);
   });
 });
 
@@ -138,7 +145,7 @@ describe("connector profile storage integration", () => {
   });
 
   it("exports connector profile JSON without keys", async () => {
-    await setApiKey("abuseipdb", "stored-secret");
+    await setApiKey("abuseipdb", TEST_FIXTURE_STORED_API_KEY);
     await setIocTypeEnabled("domain", false);
 
     const json = await exportConnectorProfileJson();
@@ -147,11 +154,11 @@ describe("connector profile storage integration", () => {
     };
 
     expect(parsed.preferences.iocTypeEnabled.domain).toBe(false);
-    expect(json).not.toContain("stored-secret");
+    expect(json).not.toContain(TEST_FIXTURE_STORED_API_KEY);
   });
 
   it("imports connector profile without overwriting stored API keys", async () => {
-    await setApiKey("abuseipdb", "stored-secret");
+    await setApiKey("abuseipdb", TEST_FIXTURE_STORED_API_KEY);
     store[STORAGE_KEY_MANUAL_ONLY_MODE] = true;
 
     const exportJson = await exportConnectorProfileJson();
@@ -170,7 +177,7 @@ describe("connector profile storage integration", () => {
 
     expect(store[STORAGE_KEY_MANUAL_ONLY_MODE]).toBe(false);
     expect(store[STORAGE_KEY_API_KEYS]).toEqual({
-      abuseipdb: "stored-secret",
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
     });
   });
 

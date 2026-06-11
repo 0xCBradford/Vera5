@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  formatSafeExtensionErrorMessage,
   isExtensionContextInvalidated,
   isExtensionContextValid,
   isStaleExtensionError,
   isStorageAccessDeniedError,
+  logUnlessBenignExtensionError,
   rethrowUnlessStaleExtensionError,
   safeRuntimeSendMessage,
   safeStorageLocalGet,
@@ -135,5 +137,30 @@ describe("extensionContext", () => {
 
     await expect(safeStorageSessionGet("tabScanSnapshot:1")).resolves.toEqual({});
     vi.unstubAllGlobals();
+  });
+
+  it("redacts error messages before logging", () => {
+    const longMessage = `${"x".repeat(200)} sensitive tail`;
+    expect(formatSafeExtensionErrorMessage(new Error(longMessage))).toMatch(
+      /^Error: x{160}…$/
+    );
+    expect(formatSafeExtensionErrorMessage({ ioc: "8.8.8.8" })).toBe(
+      "Vera5 extension error"
+    );
+  });
+
+  it("logs only redacted strings for unexpected errors", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    logUnlessBenignExtensionError(new Error("Network request failed"));
+    expect(errorSpy).toHaveBeenCalledWith("Error: Network request failed");
+    expect(errorSpy).not.toHaveBeenCalledWith(expect.any(Error));
+    errorSpy.mockRestore();
+  });
+
+  it("does not log benign extension lifecycle errors", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    logUnlessBenignExtensionError(new Error("Extension context invalidated"));
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
   });
 });

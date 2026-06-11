@@ -16,6 +16,7 @@ import {
   safeStorageSessionRemove,
   safeStorageSessionSet,
 } from "./extensionContext";
+import { syncActiveInvestigationSessionFromScan } from "./investigationSessionStorage";
 
 export async function saveTabScanSnapshot(
   tabId: number,
@@ -87,6 +88,10 @@ export async function handleTabScanSnapshotMessage(
   }
 
   await saveTabScanSnapshot(tabId, { ...snapshot, tabId });
+  await syncActiveInvestigationSessionFromScan({
+    pageUrl: snapshot.pageUrl,
+    entries: snapshot.entries,
+  });
   return { ok: true, payload: { tabId } };
 }
 

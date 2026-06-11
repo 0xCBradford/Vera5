@@ -12,6 +12,10 @@ import {
   STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
 } from "../lib/storage";
 import { clearGlobalEnrichmentCooldown } from "../lib/enrichmentCooldown";
+import {
+  TEST_FIXTURE_GENERIC_API_KEY,
+  TEST_FIXTURE_OTX_API_KEY,
+} from "../lib/fixtureSecrets";
 import { handleEnrichIocMessage } from "./enrichmentHandler";
 
 vi.mock("../lib/storage", async (importOriginal) => {
@@ -77,7 +81,7 @@ describe("enrichment handler with mocked fetch", () => {
     store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
       DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     stubChromeStorage(store);
-    await storage.setApiKey("abuseipdb", "test-key");
+    await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
   });
 
   afterEach(() => {
@@ -216,7 +220,7 @@ describe("enrichment handler with mocked fetch", () => {
       abuseipdb: true,
       otx: true,
     });
-    await storage.setApiKey("otx", "test-otx-key");
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
     store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 60;
     store[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS] = { otx: 300 };
     store[STORAGE_KEY_ENRICHMENT_CACHE] = {
@@ -320,7 +324,7 @@ describe("enrichment handler with mocked fetch", () => {
       abuseipdb: true,
       otx: true,
     });
-    await storage.setApiKey("otx", "test-otx-key");
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
     store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 3600;
     store[STORAGE_KEY_ENRICHMENT_CACHE] = {
       "8.8.8.8|abuseipdb": {
@@ -397,7 +401,7 @@ describe("enrichment handler with mocked fetch", () => {
       abuseipdb: false,
       otx: true,
     });
-    await storage.setApiKey("otx", "test-otx-key");
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
 
     vi.stubGlobal(
       "fetch",
@@ -476,7 +480,7 @@ describe("enrichment handler with mocked fetch", () => {
       abuseipdb: true,
       otx: true,
     });
-    await storage.setApiKey("otx", "test-otx-key");
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
 
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes("abuseipdb.com")) {
@@ -628,7 +632,7 @@ describe("enrichment handler with mocked fetch", () => {
     vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
       otx: true,
     });
-    await storage.setApiKey("otx", "test-otx-key");
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
 
     vi.stubGlobal(
       "fetch",
@@ -709,8 +713,8 @@ describe("enrichment pipeline regression (service worker)", () => {
     store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
       DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     stubChromeStorage(store);
-    await storage.setApiKey("abuseipdb", "test-key");
-    await storage.setApiKey("otx", "test-otx-key");
+    await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
     clearGlobalEnrichmentCooldown();
   });
 
@@ -831,7 +835,7 @@ describe("IOC-only vendor request security regression", () => {
     store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
       DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     stubChromeStorage(store);
-    await storage.setApiKey("abuseipdb", "test-key");
+    await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
     clearGlobalEnrichmentCooldown();
   });
 
@@ -903,7 +907,7 @@ describe("disabled source and partial success regression", () => {
       abuseipdb: false,
       otx: true,
     });
-    await storage.setApiKey("otx", "test-otx-key");
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
@@ -933,7 +937,7 @@ describe("disabled source and partial success regression", () => {
       abuseipdb: true,
       otx: false,
     });
-    await storage.setApiKey("abuseipdb", "test-key");
+    await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
     const fetchMock = vi.fn(async () =>
       Response.json(successPayload(), { status: 200 })
     );
@@ -960,8 +964,8 @@ describe("disabled source and partial success regression", () => {
       abuseipdb: true,
       otx: true,
     });
-    await storage.setApiKey("abuseipdb", "test-key");
-    await storage.setApiKey("otx", "test-otx-key");
+    await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
 
     const fetchMock = vi.fn(async (url: string) => {
       if (url.includes("abuseipdb.com")) {

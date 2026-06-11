@@ -65,9 +65,34 @@ export function isBenignExtensionError(error: unknown): boolean {
   return isStaleExtensionError(error) || isStorageAccessDeniedError(error);
 }
 
+const MAX_SAFE_ERROR_LOG_LENGTH = 160;
+
+export function formatSafeExtensionErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const name = error.name.trim() || "Error";
+    let message = error.message.trim();
+    if (message.length > MAX_SAFE_ERROR_LOG_LENGTH) {
+      message = `${message.slice(0, MAX_SAFE_ERROR_LOG_LENGTH)}…`;
+    }
+    return message.length > 0 ? `${name}: ${message}` : name;
+  }
+
+  if (typeof error === "string") {
+    const trimmed = error.trim();
+    if (trimmed.length === 0) {
+      return "Vera5 extension error";
+    }
+    return trimmed.length > MAX_SAFE_ERROR_LOG_LENGTH
+      ? `${trimmed.slice(0, MAX_SAFE_ERROR_LOG_LENGTH)}…`
+      : trimmed;
+  }
+
+  return "Vera5 extension error";
+}
+
 export function logUnlessBenignExtensionError(error: unknown): void {
   if (!isBenignExtensionError(error)) {
-    console.error(error);
+    console.error(formatSafeExtensionErrorMessage(error));
   }
 }
 

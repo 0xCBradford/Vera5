@@ -19,6 +19,12 @@ import {
 } from "../lib/storage";
 import { IOC_TYPE_SETTINGS_ORDER } from "../lib/storage";
 import { DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES } from "../lib/domainPolicy";
+import {
+  TEST_FIXTURE_ABUSEIPDB_API_KEY,
+  TEST_FIXTURE_OTX_API_KEY,
+  TEST_FIXTURE_STORED_API_KEY,
+} from "../lib/fixtureSecrets";
+import { maskApiKeyForDisplay } from "../lib/storage";
 import { Options } from "./Options";
 
 const IOC_TYPE_OPTION_LABELS: Record<
@@ -236,8 +242,8 @@ describe("Options API key inputs", () => {
 
   it("loads stored keys as masked previews only", async () => {
     store[STORAGE_KEY_API_KEYS] = {
-      abuseipdb: "abuse-secret",
-      otx: "otx-secret",
+      abuseipdb: TEST_FIXTURE_ABUSEIPDB_API_KEY,
+      otx: TEST_FIXTURE_OTX_API_KEY,
     };
 
     mounted = renderOptions();
@@ -252,10 +258,10 @@ describe("Options API key inputs", () => {
       'input[aria-label="OTX API key"]'
     ) as HTMLInputElement;
 
-    expect(abuseInput.value).toBe("••••••••cret");
+    expect(abuseInput.value).toBe(maskApiKeyForDisplay(TEST_FIXTURE_ABUSEIPDB_API_KEY));
     expect(abuseInput.value).not.toContain("abuse");
-    expect(otxInput.value).toBe("••••••••cret");
-    expect(otxInput.value).not.toBe("otx-secret");
+    expect(otxInput.value).toBe(maskApiKeyForDisplay(TEST_FIXTURE_OTX_API_KEY));
+    expect(otxInput.value).not.toBe(TEST_FIXTURE_OTX_API_KEY);
     expect(mounted.container.textContent).toContain(
       "Only the last four characters are shown"
     );
@@ -320,7 +326,7 @@ describe("Options API key inputs", () => {
 
   it("exports settings without API keys by default", async () => {
     store[STORAGE_KEY_API_KEYS] = {
-      abuseipdb: "stored-secret",
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
     };
 
     const createObjectURL = vi.fn(() => "blob:test");
@@ -351,7 +357,7 @@ describe("Options API key inputs", () => {
     expect(createObjectURL).toHaveBeenCalled();
     const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
     const exportedJson = await blob.text();
-    expect(exportedJson).not.toContain("stored-secret");
+    expect(exportedJson).not.toContain(TEST_FIXTURE_STORED_API_KEY);
     expect(exportedJson).not.toContain('"apiKeys"');
     expect(mounted.container.textContent).toContain("Settings exported.");
 

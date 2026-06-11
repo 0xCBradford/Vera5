@@ -15,6 +15,13 @@ import {
   isEnrichmentConnector,
   isEnrichmentSourceResult,
 } from "./enrichment";
+import {
+  TEST_FIXTURE_ABUSEIPDB_API_KEY,
+  TEST_FIXTURE_CONFIGURED_API_KEY,
+  TEST_FIXTURE_GENERIC_API_KEY,
+  TEST_FIXTURE_INVALID_API_KEY,
+  TEST_FIXTURE_STORED_ABUSEIPDB_API_KEY,
+} from "./fixtureSecrets";
 import { getApiKey, setApiKey, STORAGE_KEY_API_KEYS } from "./storage";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
@@ -116,12 +123,12 @@ describe("AbuseIPDB connector enrich", () => {
   it("loads the API key from storage and sends only the IPv4 value", async () => {
     const store: Record<string, unknown> = {};
     stubChromeStorage(store);
-    await setApiKey("abuseipdb", "test-abuse-key");
+    await setApiKey("abuseipdb", TEST_FIXTURE_ABUSEIPDB_API_KEY);
 
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
       expect(init?.headers).toMatchObject({
         Accept: "application/json",
-        Key: "test-abuse-key",
+        Key: TEST_FIXTURE_ABUSEIPDB_API_KEY,
       });
       return new Response(
         JSON.stringify({
@@ -146,7 +153,7 @@ describe("AbuseIPDB connector enrich", () => {
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
     expect(requestUrl.origin + requestUrl.pathname).toBe(ABUSEIPDB_CHECK_API_URL);
     expect(requestUrl.searchParams.get("ipAddress")).toBe("8.8.8.8");
-    expect(requestUrl.search).not.toContain("test-abuse-key");
+    expect(requestUrl.search).not.toContain(TEST_FIXTURE_ABUSEIPDB_API_KEY);
     expect(inspectAbuseIpdbVendorRequest(requestUrl.toString(), requestInit)).toEqual({
       ipAddress: "8.8.8.8",
       hasRequestBody: false,
@@ -159,16 +166,16 @@ describe("AbuseIPDB connector enrich", () => {
       tags: ["US", "Fixed Line ISP"],
     });
     expect(result.rawVendorJson).toContain("12");
-    expect(result.rawVendorJson).not.toContain("test-abuse-key");
+    expect(result.rawVendorJson).not.toContain(TEST_FIXTURE_ABUSEIPDB_API_KEY);
     expect(isEnrichmentSourceResult(result)).toBe(true);
-    await expect(getApiKey("abuseipdb")).resolves.toBe("test-abuse-key");
+    await expect(getApiKey("abuseipdb")).resolves.toBe(TEST_FIXTURE_ABUSEIPDB_API_KEY);
   });
 
   it("skips non-IPv4 indicator types", async () => {
     const fetchMock = vi.fn();
     const result = await enrichWithAbuseIpdb(
       { value: "example.com", type: "domain" },
-      { getApiKey: async () => "test-key", fetch: fetchMock as typeof fetch }
+      { getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY, fetch: fetchMock as typeof fetch }
     );
     expect(result).toMatchObject({
       status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
@@ -181,7 +188,7 @@ describe("AbuseIPDB connector enrich", () => {
     const fetchMock = vi.fn();
     const result = await enrichWithAbuseIpdb(
       { value: "8.8.8.8 malicious traffic on page", type: "ipv4" },
-      { getApiKey: async () => "test-key", fetch: fetchMock as typeof fetch }
+      { getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY, fetch: fetchMock as typeof fetch }
     );
     expect(result).toMatchObject({
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
@@ -195,7 +202,7 @@ describe("AbuseIPDB connector enrich", () => {
     const result = await enrichWithAbuseIpdb(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "bad-key",
+        getApiKey: async () => TEST_FIXTURE_INVALID_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -210,7 +217,7 @@ describe("AbuseIPDB connector enrich", () => {
     const result = await enrichWithAbuseIpdb(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -237,7 +244,7 @@ describe("AbuseIPDB connector enrich", () => {
     const result = await enrichWithAbuseIpdb(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -256,7 +263,7 @@ describe("AbuseIPDB connector enrich", () => {
     const result = await enrichWithAbuseIpdb(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -271,7 +278,7 @@ describe("AbuseIPDB connector enrich", () => {
     const result = await enrichWithAbuseIpdb(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "bad-key",
+        getApiKey: async () => TEST_FIXTURE_INVALID_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -287,7 +294,7 @@ describe("AbuseIPDB connector enrich", () => {
     const result = await enrichWithAbuseIpdb(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -305,7 +312,7 @@ describe("AbuseIPDB connector enrich", () => {
     const result = await enrichWithAbuseIpdb(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -323,7 +330,7 @@ describe("AbuseIPDB connector enrich", () => {
     const result = await enrichWithAbuseIpdb(
       { value: "8.8.8.8", type: "ipv4" },
       {
-        getApiKey: async () => "test-key",
+        getApiKey: async () => TEST_FIXTURE_GENERIC_API_KEY,
         fetch: fetchMock as typeof fetch,
       }
     );
@@ -336,7 +343,7 @@ describe("AbuseIPDB connector enrich", () => {
 
   it("exposes an EnrichmentConnector with healthCheck", async () => {
     const connector = createAbuseIpdbConnector({
-      getApiKey: async () => "configured-key",
+      getApiKey: async () => TEST_FIXTURE_CONFIGURED_API_KEY,
     });
     expect(isEnrichmentConnector(connector)).toBe(true);
     expect(connector.name).toBe("abuseipdb");
@@ -355,9 +362,9 @@ describe("AbuseIPDB connector storage integration", () => {
 
   it("reads the configured key slot from chrome.storage.local", async () => {
     const store: Record<string, unknown> = {
-      [STORAGE_KEY_API_KEYS]: { abuseipdb: "stored-abuse-key" },
+      [STORAGE_KEY_API_KEYS]: { abuseipdb: TEST_FIXTURE_STORED_ABUSEIPDB_API_KEY },
     };
     stubChromeStorage(store);
-    await expect(getApiKey("abuseipdb")).resolves.toBe("stored-abuse-key");
+    await expect(getApiKey("abuseipdb")).resolves.toBe(TEST_FIXTURE_STORED_ABUSEIPDB_API_KEY);
   });
 });

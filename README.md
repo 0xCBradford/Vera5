@@ -14,7 +14,7 @@ On `http://` and `https://` tabs, day-to-day triage runs through the **content-s
 | **Toolbar popup** | Extension action popup | Extension on/off, scan and selection actions, **Open sidebar**, **Settings**, **Permissions**, and—after scan—the **Detected indicators** tray for the active tab. |
 | **Page workspace sidebar** | Content script panel on the active page | Docked tray with scan, selection, enrich, and IOC list controls; row checkboxes for bulk enrich; selecting an indicator opens the same overlay model. Collapsible **Why detected?** per row. |
 | **Settings (options) page** | Dedicated options tab | Masked API keys, per-source enable toggles, indicator-type toggles, private-space IPv4 detection, cache lifetime fields, manual-only mode, auto-scan, **Trust & consent** (pre-query notices, domain allow/deny lists and presets, internal asset lists, analyst workflow presets), **Clear cache**, settings export/import. |
-| **React hover card** | Unit tests only | **Not injected into page tabs.** Shared scoring logic with the on-page overlay; tests also render per-source contribution chips the production overlay omits. |
+| **React hover card** | Unit tests only | **Not injected into page tabs.** Shared scoring logic with the on-page overlay. |
 
 Keyboard shortcuts: **Ctrl+Shift+Y** / **Cmd+Shift+Y** triggers **Scan page**; **Ctrl+Shift+K** / **Cmd+Shift+K** opens the **command palette**. After **Scan page** (shortcut or palette), reopen the popup to refresh the **Detected indicators** tray for that tab.
 
@@ -36,12 +36,12 @@ See [Local mode — what runs where](docs/local-mode.md) for browser runtime and
 | **Detection provenance** | Each match stores a rule id and source text hint from the scan. **Why detected?** on the overlay and IOC tray explains the indicator type, detection reason, surrounding context, and any overlapping matches dropped during dedupe. |
 | **Defang and refang** | Detects common defanged forms in visible text (`hxxp`/`hxxps`, bracket dots such as `[.]`, bracket scheme separators). Match values are refanged for enrichment, pivots, and default copy; highlights still cover the original on-page text. When forms differ, use **Copy defanged** or **Copy refanged** on the overlay header. |
 | **Composite risk score** | When enrichment returns per-source results, a **Risk score** section shows a locally computed advisory band (**Unknown**–**Critical**, with **/100** when a blended composite is available), a **How this score was computed** panel (ordered per-source lines from normalized summaries, or an explicit empty state when blending is not possible), and a **Sources disagree** note when source bands diverge materially. Requires at least two parseable OK enrichment results for a blended **/100** label; otherwise expect **Unknown risk**, an insufficient-data notice, and an empty reasoning chain. If every enrichment source is disabled, the section shows **Risk score unavailable** with settings guidance. Footer disclaimers may appear when scoring applies. |
-| **Live enrichment** | **AbuseIPDB** (IPv4) and **OTX** (IPv4, domain, URL, MD5, SHA1, SHA256, CVE) when enabled with a saved API key. Enabled live sources are queried in parallel from the service worker; partial success keeps working sources visible while failures stay per source. Only the indicator value is sent to vendors. Pre-query disclosure (when enabled), domain policy, and internal asset lists gate outbound calls before the service worker fetch runs. |
+| **Live enrichment** | **AbuseIPDB** (IPv4) and **OTX** (IPv4, domain, URL, MD5, SHA1, SHA256, CVE) when enabled with a saved API key. Enabled live sources are queried in parallel from the service worker; partial success keeps working sources visible while failures stay per source. Only the indicator value is sent to vendors. Live HTTPS calls are limited to declared connector API hosts (`api.abuseipdb.com`, `otx.alienvault.com`); a runtime allowlist blocks undeclared outbound fetch before network I/O. Pre-query disclosure (when enabled), domain policy, and internal asset lists gate outbound calls before the service worker fetch runs. |
 | **Pre-query disclosure** | When pre-query notices are on (default until you choose on first visit to Settings), the overlay shows an inline notice naming enabled vendors and the indicator value before any live fetch. **Send query** proceeds; **Cancel** aborts. **Don't show this notice again** turns off later notices (same as the **Trust & consent** toggle). Applies to manual enrich, context-menu enrich, and each step of a bulk enrich queue. |
 | **Domain policy** | **Trust & consent** sets allow-by-default or deny-by-default hostname rules for auto-scan and live enrichment. Fresh installs include a default sensitive webmail denylist. Denylisted hosts skip mutation rescans and block vendor calls before disclosure when the domain enrich gate is on (default). Bulk enrich on a denylisted tab shows a tray message and does not start the queue. Merge the **Sensitive sites denylist** preset for banking, health, and HR patterns. Pattern syntax supports exact hosts, prefix wildcards (`mail.*`), and suffix wildcards (`*.corp.example`). |
 | **Internal asset lists** | Optional indicator-level lists—internal domains, IPv4 CIDR ranges, and labeled vendor/SaaS hostname patterns—block live enrichment for matching IOC values even on otherwise allowed pages. Configure under **Trust & consent**; empty lists impose no block. |
 | **Analyst workflow presets** | **SOC triage**, **CTI research**, and **DFIR investigation** presets apply role-specific defaults: enrichment toggles, default export template, and recommended pivot ordering. |
-| **Registered connector shells** | Twelve sources appear in settings and the overlay registry (AbuseIPDB, OTX, VirusTotal, URLScan.io, GreyNoise, Shodan, Google Safe Browsing, Pulsedive, MalwareBazaar, Censys, ThreatFox, URLhaus). Only **AbuseIPDB** and **OTX** call vendor APIs for live enrichment; other enabled sources return source-attributed skipped or not-implemented overlay rows and never send your keys to those vendors. Pivot links still appear where the registry defines them for the IOC type. |
+| **Registered connector shells** | Twelve sources appear in settings and the overlay registry (AbuseIPDB, OTX, VirusTotal, URLScan.io, GreyNoise, Shodan, Google Safe Browsing, Pulsedive, MalwareBazaar, Censys, ThreatFox, URLhaus). Only **AbuseIPDB** and **OTX** perform live HTTPS enrichment. Other enabled sources may show missing-key, unsupported-type, or not-implemented status rows; pivot links still appear where the registry defines them for the IOC type. Saved API keys for non-live sources stay in local storage and are not sent to those vendors. |
 | **Enrichment cache** | Successful responses are stored locally per indicator and per source; error and skipped outcomes from live enrichment are stored too so the popup tray can show the last known status without re-fetching. Default time-to-live is about one hour; adjust the global seconds value on the options page, with optional per-source overrides. Repeat enrichment reuses cache until expiry. **Clear cache** removes stored responses without changing keys or toggles. |
 | **Manual refresh** | **›** on a highlight forces a live fetch for that indicator, bypassing cache and removing cached entries for that indicator first. Manual refresh also bypasses the global rate-limit cooldown gate (vendors may still return HTTP 429). |
 | **Enrichment errors** | Missing API key shows **Open settings** on the overlay; HTTP 429 shows per-source backoff and retry hints and starts a global cooldown that blocks further automatic enrichment until the window passes; invalid keys, timeouts, and other vendor errors include source attribution. Domain policy and internal asset gates show explicit block messages without sending the indicator to vendors. |
@@ -52,14 +52,14 @@ See [Local mode — what runs where](docs/local-mode.md) for browser runtime and
 | **Auto-scan** | Optional rescan after DOM changes (debounced). Off by default. Respects domain policy on the current tab hostname—denylisted origins do not schedule mutation rescans. |
 | **Background worker** | Message routing, scan and command-palette commands, selection context menu, tab scan-summary storage for the popup tray, enrichment cache, global rate-limit cooldown, and parallel live-connector fetches (AbuseIPDB and OTX). |
 | **IOC detection** | Visible text nodes on demand; skips `script`, `style`, `textarea`, and metadata subtrees; does not scan attributes. Types: IPv4, domain, URL, MD5, SHA1, SHA256, CVE—with false-positive guards (including export-metadata and version-range decoys on SOC-style pages) and overlap deduplication. Disable individual types under **Indicator types** in settings. Private-space IPv4 (RFC1918, loopback, link-local) is omitted by default; enable **Include private-space IPv4 addresses** when needed. Stops after 2,500 text nodes per scan. |
-| **Build** | `npm run build` emits `dist/`, then runs `verify:dist` and `verify:security`. `npm run check` runs lint and unit tests. |
+| **Build** | `npm run build` emits `dist/`, then runs `verify:dist` and `verify:security` (extension-page CSP, outbound fetch allowlist, no `eval`, production logging hygiene, redacted test fixtures, empty credential placeholders in root `.env.example`). `npm run check` runs lint and unit tests. `npm run audit:prod` checks production dependencies (same blocking policy as CI). |
 
 ## Configuration flow
 
 1. Build and load the extension (see below).
 2. Open **Vera5 Settings**.
-3. Enter API keys for the live sources you use (**AbuseIPDB** and/or **OTX**). Optional keys for other registered sources are stored locally; those sources do not fetch live data.
-4. Enable sources under **Enrichment sources**. Expect live responses only from AbuseIPDB and OTX; other enabled sources show shell status rows and pivot links where supported.
+3. Enter API keys in **Vera5 Settings** for **AbuseIPDB** and/or **OTX** when you want live enrichment. The extension does not read API keys from a `.env` file.
+4. Enable sources under **Enrichment sources**. Expect live HTTPS responses only from AbuseIPDB and OTX; other enabled sources show registry shell status rows and pivot links where supported.
 5. Under **Trust & consent**, set pre-query notices, domain policy mode and allow/deny lists (or apply a preset), internal asset lists if needed, and an analyst workflow preset when useful.
 6. Under **Scanning**, choose which **Indicator types** to detect and whether to **Include private-space IPv4 addresses**.
 7. Under **Enrichment cache**, set the default cache lifetime (seconds) and optional per-source overrides.
@@ -96,7 +96,7 @@ Risk score: High risk (59/100)
 
 ### Source Summary
 
-- AbuseIPDB (Cached): 74 abuse confidence — Last updated: (local cache timestamp)
+- AbuseIPDB (Cached): 74 abuse confidence — Last updated: 2026-06-01T14:30:00.000Z
 - OTX (Live): 3 threat pulses
 ```
 
@@ -172,11 +172,11 @@ Other templates (**TheHive case note**, **Obsidian note** with front matter, **M
 | `docs/analyst-workflows.md` | Cache, refresh, keyboard triage, and quota-aware triage. |
 | `docs/soc-validation-fixtures.md` | Splunk-export and Security Onion-style sample pages for repeatable detection checks. |
 | `docs/export-artifacts.md` | Markdown and JSON case export contract. |
-| `docs/security-model.md` | Permissions and host access. |
+| `docs/security-model.md` | Permissions, host access, CSP, outbound boundaries, hardening checklist, and hostile-page DOM guidance. |
 | `docs/local-mode.md` | Extension-only deployment. |
 | `docs/contributors/` | Contributor architecture, connectors, cache, scoring, and testing. |
 | `examples/` | Sample HTML (including SOC dashboard exports) and IOC strings for manual checks. |
-| `.github/workflows/` | Lint, tests, and secret scan on pull requests. |
+| `.github/workflows/` | Lint, tests, production dependency audit, and Gitleaks secret scan on pull requests and pushes to `main`. |
 | [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), [LICENSE](LICENSE) | Security, contribution, license. |
 
 ## Code layout
@@ -247,13 +247,24 @@ python -m http.server 8080
 - Manual-only enrichment is on by default.
 - Pre-query disclosure runs before the first vendor call when notices are enabled; domain policy and internal asset lists can block enrichment without sending indicator values. Bulk enrich and context-menu enrich use the same gates.
 - No maintainer telemetry, crash reporting, or Vera5-operated network endpoints by default.
-- Scans and detection run locally. Enrichment sends only the selected indicator value. Composite risk labels and reasoning chains are computed locally from vendor summaries. Raw JSON panels redact sensitive key fields before display. **Open live URL** uses your browser only after you confirm; Vera5 does not fetch or proxy that navigation.
+- Scans and detection run locally. Enrichment sends only the selected indicator value to declared vendor API hosts you enable. Composite risk labels and reasoning chains are computed locally from vendor summaries. Raw JSON panels redact sensitive key fields before display. Production bundles omit sensitive `console` output. **Open live URL** uses your browser only after you confirm; Vera5 does not fetch or proxy that navigation.
 
 [SECURITY.md](SECURITY.md), [docs/local-mode.md](docs/local-mode.md).
 
 ## Security
 
-`npm run verify:security` (runs on `build`) checks bundled scripts for unsafe patterns. See [docs/security-model.md](docs/security-model.md). Do not commit API keys or `.env` files.
+Security posture is local-first: your keys stay in browser storage, enrichment uses bring-your-own API credentials, and there is no Vera5-operated enrichment relay.
+
+| Control | What it does |
+|---------|----------------|
+| **`npm run verify:security`** | Runs after every production build. Checks extension-page CSP and packaged assets, blocks live `fetch()` outside declared connector modules and API hosts, rejects `eval` / remote dynamic import, scans production bundles for sensitive logging, enforces redacted test fixture placeholders, and verifies root `.env.example` credential variables are empty. |
+| **`npm run audit:prod`** | Fails on moderate-or-higher vulnerabilities in production dependencies (React runtime shipped in `dist/`). CI uses the same blocking policy; full `npm audit` warns only on devDependencies. |
+| **Gitleaks** | Repository secret scan on pull requests and pushes to `main` (`.github/gitleaks.toml`). Run locally from the repo root: `gitleaks detect --source . --config .github/gitleaks.toml`. |
+| **Outbound allowlist** | Live enrichment HTTPS calls go only to configured vendor connector endpoints; undeclared hosts are blocked before network I/O. |
+| **Trust gates** | Domain policy, internal asset lists, manual-only enrichment (default), and pre-query disclosure limit accidental vendor queries on sensitive pages. |
+| **Hostile-page DOM** | Detection reads visible text nodes only (not attributes or script/style subtrees). Overlay UI uses `textContent` for untrusted strings; see [Malicious page DOM confusion](docs/security-model.md#malicious-page-dom-confusion). |
+
+Security hardening checklist and operator browser confirmation steps: [docs/security-model.md](docs/security-model.md#security-hardening-review-checklist). Vulnerability reporting: [SECURITY.md](SECURITY.md). Do not commit API keys or `.env` files. Root `.env.example` documents optional repo-side tooling variables with empty credential placeholders; configure extension API keys under **Vera5 Settings**.
 
 ## Development
 
@@ -268,9 +279,10 @@ From `extension/` after `npm install`:
 | `npm run test:smoke` | Background message-handler tests |
 | `npm run typecheck` | TypeScript |
 | `npm run verify:dist` | Manifest path checks |
-| `npm run verify:security` | Bundle security checks |
+| `npm run verify:security` | Bundle security checks (CSP, fetch allowlist, logging, fixtures, `.env.example`) |
+| `npm run audit:prod` | Production dependency audit (blocking policy) |
 
-From the repository root: `.\scripts\check.ps1`, `.\scripts\dev.ps1` (Windows).
+From the repository root: `.\scripts\check.ps1` (lint + unit tests in `extension/`), `.\scripts\dev.ps1` (Windows).
 
 [CONTRIBUTING.md](CONTRIBUTING.md). Contributor architecture and module guides: [docs/contributors/README.md](docs/contributors/README.md).
 

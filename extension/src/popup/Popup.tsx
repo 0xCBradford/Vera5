@@ -43,6 +43,26 @@ import {
   setHighlightEnabled,
 } from "../lib/storage";
 import { openExtensionSitePermissionsPage } from "../lib/extensionSitePermissions";
+import {
+  DEFAULT_INVESTIGATION_SESSION_TITLE,
+  buildInvestigationSessionIocCountText,
+  buildInvestigationSessionTypeBreakdownText,
+  buildInvestigationSessionActivitySummaryText,
+  INVESTIGATION_SESSION_EMPTY_STATE_TEXT,
+  normalizeInvestigationSessionTitle,
+  type InvestigationSession,
+} from "../lib/investigationSession";
+import {
+  requestActiveInvestigationSession,
+  requestArchiveInvestigationSession,
+  requestCreateInvestigationSession,
+  requestDeleteInvestigationSession,
+  requestRecentInvestigationSessions,
+  requestRenameInvestigationSession,
+  requestReopenInvestigationSession,
+  requestUpdateInvestigationSessionTitle,
+  resolveActiveTabPageUrl,
+} from "../lib/investigationSessionClient";
 import { VERA5_COLOR } from "../lib/theme";
 import {
   resolveWorkspaceTrayView,
@@ -251,6 +271,19 @@ export function trayEnrichmentHintStyle(
   return { ...base, color: POPUP_THEME.muted };
 }
 
+function sessionActionButtonStyle(): CSSProperties {
+  return {
+    padding: "4px 8px",
+    borderRadius: 6,
+    border: `1px solid ${POPUP_THEME.border}`,
+    backgroundColor: POPUP_THEME.buttonBg,
+    color: POPUP_THEME.accentText,
+    fontSize: 11,
+    fontWeight: 600,
+    cursor: "pointer",
+  };
+}
+
 export function Popup() {
   const [enabled, setEnabled] = useState(true);
   const [highlightEnabled, setHighlightEnabledState] = useState(true);
@@ -270,6 +303,30 @@ export function Popup() {
   const [selectionEnrichMessage, setSelectionEnrichMessage] = useState<string | null>(
     null
   );
+  const [sessionTitle, setSessionTitle] = useState(DEFAULT_INVESTIGATION_SESSION_TITLE);
+  const [sessionTitleReady, setSessionTitleReady] = useState(false);
+  const [activeSession, setActiveSession] = useState<InvestigationSession | null>(null);
+  const [recentSessions, setRecentSessions] = useState<InvestigationSession[]>([]);
+  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+
+  const applyActiveInvestigationSession = (session: InvestigationSession | null) => {
+    setActiveSession(session);
+    if (session) {
+      setSessionTitle(session.title);
+      return;
+    }
+    setSessionTitle(DEFAULT_INVESTIGATION_SESSION_TITLE);
+  };
+
+  const refreshInvestigationSessionState = async () => {
+    const [session, sessions] = await Promise.all([
+      requestActiveInvestigationSession(),
+      requestRecentInvestigationSessions(),
+    ]);
+    applyActiveInvestigationSession(session);
+    setRecentSessions(sessions);
+  };
 
   useEffect(() => {
     void Promise.all([getExtensionEnabled(), getHighlightEnabled()]).then(
@@ -284,6 +341,9 @@ export function Popup() {
         setScanSummary(summary);
         setScanState("done");
       }
+    });
+    void refreshInvestigationSessionState().finally(() => {
+      setSessionTitleReady(true);
     });
   }, []);
 
@@ -346,6 +406,25 @@ export function Popup() {
     return filterTabScanSummaryEntries(scanSummary.entries, typeFilter);
   }, [scanSummary, typeFilter]);
 
+  const sessionIocCountText = useMemo(
+    () => buildInvestigationSessionIocCountText(activeSession?.totalIocCount ?? 0),
+    [activeSession]
+  );
+
+  const sessionTypeBreakdownText = useMemo(() => {
+    if (!activeSession) {
+      return "";
+    }
+    return buildInvestigationSessionTypeBreakdownText(activeSession);
+  }, [activeSession]);
+
+  const sessionActivitySummaryText = useMemo(() => {
+    if (!activeSession) {
+      return "";
+    }
+    return buildInvestigationSessionActivitySummaryText(activeSession);
+  }, [activeSession]);
+
   const handleToggle = (checked: boolean) => {
     setEnabled(checked);
     void setExtensionEnabled(checked);
@@ -384,6 +463,119 @@ export function Popup() {
       }
       window.close();
     });
+  };
+
+  const handleNewSession = () => {
+    if (!ready) {
+      return;
+    }
+
+    void (async () => {
+      const pageUrl = await resolveActiveTabPageUrl();
+      const normalizedTitle =
+        normalizeInvestigationSessionTitle(sessionTitle) ??
+        DEFAULT_INVESTIGATION_SESSION_TITLE;
+      const session = await requestCreateInvestigationSession({
+        title: normalizedTitle,
+        pageUrl,
+      });
+      if (session) {
+        applyActiveInvestigationSession(session);
+        await refreshInvestigationSessionState();
+      }
+    })();
+  };
+
+  const handleSessionTitleBlur = () => {
+    if (!ready || !sessionTitleReady) {
+      return;
+    }
+
+    const normalizedTitle = normalizeInvestigationSessionTitle(sessionTitle);
+    if (!normalizedTitle) {
+      void refreshInvestigationSessionState();
+      return;
+    }
+
+    void (async () => {
+      if (!activeSession || activeSession.title === normalizedTitle) {
+        if (!activeSession) {
+          setSessionTitle(normalizedTitle);
+        }
+        return;
+      }
+
+      const updated = await requestUpdateInvestigationSessionTitle(normalizedTitle);
+      if (updated) {
+        await refreshInvestigationSessionState();
+        return;
+      }
+      applyActiveInvestigationSession(activeSession);
+    })();
+  };
+
+  const handleReopenSession = (sessionId: string) => {
+    if (!ready || !sessionTitleReady) {
+      return;
+    }
+
+    void (async () => {
+      const session = await requestReopenInvestigationSession(sessionId);
+      if (session) {
+        await refreshInvestigationSessionState();
+      }
+    })();
+  };
+
+  const handleStartRenameSession = (session: InvestigationSession) => {
+    setRenamingSessionId(session.id);
+    setRenameDraft(session.title);
+  };
+
+  const handleCancelRenameSession = () => {
+    setRenamingSessionId(null);
+    setRenameDraft("");
+  };
+
+  const handleSaveRenameSession = (sessionId: string) => {
+    const normalizedTitle = normalizeInvestigationSessionTitle(renameDraft);
+    if (!normalizedTitle) {
+      handleCancelRenameSession();
+      return;
+    }
+
+    void (async () => {
+      const session = await requestRenameInvestigationSession({
+        sessionId,
+        title: normalizedTitle,
+      });
+      handleCancelRenameSession();
+      if (session) {
+        await refreshInvestigationSessionState();
+      }
+    })();
+  };
+
+  const handleArchiveSession = (sessionId: string) => {
+    if (!ready || !sessionTitleReady) {
+      return;
+    }
+
+    void (async () => {
+      await requestArchiveInvestigationSession(sessionId);
+      await refreshInvestigationSessionState();
+    })();
+  };
+
+  const handleDeleteSession = (sessionId: string) => {
+    if (!ready || !sessionTitleReady) {
+      return;
+    }
+
+    void (async () => {
+      await requestDeleteInvestigationSession(sessionId);
+      await refreshInvestigationSessionState();
+    })();
   };
 
   const handleTrayRowActivate = (entry: TabScanSummaryEntry) => {    void chrome.tabs
@@ -454,6 +646,7 @@ export function Popup() {
             if (summary !== null) {
               setScanSummary(summary);
               setScanState("done");
+              await refreshInvestigationSessionState();
               return;
             }
           }
@@ -500,6 +693,7 @@ export function Popup() {
             if (summary !== null) {
               setScanSummary(summary);
               setScanState("done");
+              await refreshInvestigationSessionState();
               return;
             }
           }
@@ -685,6 +879,287 @@ export function Popup() {
       >
         Open sidebar
       </button>
+      <section
+        aria-label="Investigation session"
+        style={{
+          marginTop: 14,
+          borderTop: `1px solid ${POPUP_THEME.border}`,
+          paddingTop: 12,
+        }}
+      >
+        <h2
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            margin: "0 0 8px",
+            color: POPUP_THEME.accentText,
+          }}
+        >
+          Investigation session
+        </h2>
+        {!activeSession && sessionTitleReady ? (
+          <p style={trayStatusStyle()} aria-live="polite">
+            {INVESTIGATION_SESSION_EMPTY_STATE_TEXT}
+          </p>
+        ) : null}
+        <label
+          style={{
+            display: "block",
+            fontSize: 12,
+            color: POPUP_THEME.text,
+            marginBottom: 8,
+          }}
+        >
+          Session title
+          <input
+            type="text"
+            value={sessionTitle}
+            disabled={!ready || !sessionTitleReady}
+            onChange={(event) => setSessionTitle(event.target.value)}
+            onBlur={handleSessionTitleBlur}
+            aria-label="Session title"
+            style={{
+              display: "block",
+              width: "100%",
+              marginTop: 4,
+              padding: "8px 10px",
+              borderRadius: 6,
+              border: `1px solid ${POPUP_THEME.border}`,
+              backgroundColor: POPUP_THEME.buttonBg,
+              color: POPUP_THEME.text,
+              boxSizing: "border-box",
+            }}
+          />
+        </label>
+        {activeSession ? (
+          <>
+            <p
+              aria-live="polite"
+              style={{
+                fontSize: 12,
+                margin: "0 0 4px",
+                color: POPUP_THEME.muted,
+                lineHeight: 1.5,
+              }}
+            >
+              {sessionIocCountText}
+            </p>
+            {sessionTypeBreakdownText ? (
+              <p
+                style={{
+                  fontSize: 12,
+                  margin: "0 0 4px",
+                  color: POPUP_THEME.text,
+                  lineHeight: 1.5,
+                }}
+              >
+                {sessionTypeBreakdownText}
+              </p>
+            ) : null}
+            {sessionActivitySummaryText ? (
+              <p
+                style={{
+                  fontSize: 12,
+                  margin: "0 0 10px",
+                  color: POPUP_THEME.muted,
+                  lineHeight: 1.5,
+                }}
+              >
+                {sessionActivitySummaryText}
+              </p>
+            ) : (
+              <div style={{ marginBottom: 10 }} />
+            )}
+          </>
+        ) : null}
+        <button
+          type="button"
+          disabled={!ready || !sessionTitleReady}
+          onClick={handleNewSession}
+          style={{
+            ...buttonStyle,
+            marginBottom: 0,
+            cursor: ready && sessionTitleReady ? "pointer" : "not-allowed",
+            opacity: ready && sessionTitleReady ? 1 : 0.65,
+          }}
+        >
+          New session
+        </button>
+        {recentSessions.length > 0 ? (
+          <>
+            <h3
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                margin: "12px 0 8px",
+                color: POPUP_THEME.accentText,
+              }}
+            >
+              Recent sessions
+            </h3>
+            <ul
+              aria-label="Recent investigation sessions"
+              style={{
+                listStyle: "none",
+                margin: 0,
+                padding: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                maxHeight: 180,
+                overflowY: "auto",
+              }}
+            >
+              {recentSessions.map((session) => {
+                const isActive = activeSession?.id === session.id;
+                const breakdown = buildInvestigationSessionTypeBreakdownText(session);
+                const isRenaming = renamingSessionId === session.id;
+
+                return (
+                  <li
+                    key={session.id}
+                    style={{
+                      border: `1px solid ${
+                        isActive ? POPUP_THEME.accent : POPUP_THEME.border
+                      }`,
+                      borderRadius: 6,
+                      padding: 8,
+                      backgroundColor: POPUP_THEME.trayRowBg,
+                    }}
+                  >
+                    {isRenaming ? (
+                      <>
+                        <input
+                          type="text"
+                          value={renameDraft}
+                          onChange={(event) => setRenameDraft(event.target.value)}
+                          aria-label={`Rename ${session.title}`}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            marginBottom: 8,
+                            padding: "6px 8px",
+                            borderRadius: 6,
+                            border: `1px solid ${POPUP_THEME.border}`,
+                            backgroundColor: POPUP_THEME.buttonBg,
+                            color: POPUP_THEME.text,
+                            boxSizing: "border-box",
+                          }}
+                        />
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <button
+                            type="button"
+                            onClick={() => handleSaveRenameSession(session.id)}
+                            style={sessionActionButtonStyle()}
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelRenameSession}
+                            style={sessionActionButtonStyle()}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: 8,
+                            marginBottom: 4,
+                          }}
+                        >
+                          <strong
+                            style={{
+                              fontSize: 12,
+                              color: POPUP_THEME.text,
+                              wordBreak: "break-word",
+                            }}
+                          >
+                            {session.title}
+                          </strong>
+                          {isActive ? (
+                            <span
+                              style={{
+                                flexShrink: 0,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                color: POPUP_THEME.accent,
+                              }}
+                            >
+                              Active
+                            </span>
+                          ) : null}
+                        </div>
+                        <p
+                          style={{
+                            fontSize: 11,
+                            margin: "0 0 4px",
+                            color: POPUP_THEME.muted,
+                            lineHeight: 1.45,
+                          }}
+                        >
+                          {buildInvestigationSessionIocCountText(session.totalIocCount)}
+                        </p>
+                        {breakdown ? (
+                          <p
+                            style={{
+                              fontSize: 11,
+                              margin: "0 0 8px",
+                              color: POPUP_THEME.text,
+                              lineHeight: 1.45,
+                            }}
+                          >
+                            {breakdown}
+                          </p>
+                        ) : null}
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {!isActive ? (
+                            <button
+                              type="button"
+                              onClick={() => handleReopenSession(session.id)}
+                              style={sessionActionButtonStyle()}
+                            >
+                              Reopen
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => handleStartRenameSession(session)}
+                            style={sessionActionButtonStyle()}
+                          >
+                            Rename
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleArchiveSession(session.id)}
+                            style={sessionActionButtonStyle()}
+                          >
+                            Archive
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteSession(session.id)}
+                            style={sessionActionButtonStyle()}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        ) : (
+          <p style={{ ...trayStatusStyle(), marginTop: 12 }}>No saved sessions yet.</p>
+        )}
+      </section>
       {scanState === "error" ? (        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
           Scan failed. Reload the tab and try again.
         </p>

@@ -77,6 +77,13 @@ import {
   VERA5_SETTINGS_READ_KEYS,
   VERA5_SETTINGS_STORAGE_KEYS,
 } from "./storage";
+import {
+  TEST_FIXTURE_ABUSEIPDB_API_KEY,
+  TEST_FIXTURE_FRESH_UNMASKED_SAMPLE,
+  TEST_FIXTURE_OTX_API_KEY,
+  TEST_FIXTURE_SECONDARY_API_KEY,
+  TEST_FIXTURE_SHORT_VALUE,
+} from "./fixtureSecrets";
 import { DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES } from "./domainPolicy";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
@@ -379,13 +386,18 @@ describe("Vera5 settings schema", () => {
   });
 
   it("validates api key records", () => {
-    expect(isApiKeysRecord({ abuseipdb: "secret" })).toBe(true);
-    expect(isApiKeysRecord({ abuseipdb: "secret", otx: "other" })).toBe(true);
+    expect(isApiKeysRecord({ abuseipdb: TEST_FIXTURE_SHORT_VALUE })).toBe(true);
+    expect(
+      isApiKeysRecord({
+        abuseipdb: TEST_FIXTURE_SHORT_VALUE,
+        otx: TEST_FIXTURE_SECONDARY_API_KEY,
+      })
+    ).toBe(true);
     expect(isApiKeysRecord({})).toBe(true);
     expect(isApiKeysRecord(null)).toBe(false);
     expect(isApiKeysRecord([])).toBe(false);
     expect(isApiKeysRecord({ abuseipdb: 1 })).toBe(false);
-    expect(isApiKeysRecord({ unknown: "secret" })).toBe(false);
+    expect(isApiKeysRecord({ unknown: TEST_FIXTURE_SHORT_VALUE })).toBe(false);
   });
 
   it("validates enrichment source enabled records", () => {
@@ -607,7 +619,7 @@ describe("api key display masking", () => {
 
   it("detects masked display values", () => {
     expect(isMaskedApiKeyDisplay("••••••••mnop")).toBe(true);
-    expect(isMaskedApiKeyDisplay("fresh-secret")).toBe(false);
+    expect(isMaskedApiKeyDisplay(TEST_FIXTURE_FRESH_UNMASKED_SAMPLE)).toBe(false);
   });
 });
 
@@ -628,16 +640,16 @@ describe("api key accessors", () => {
   });
 
   it("persists and reads a connector key", async () => {
-    await setApiKey("otx", "otx-test-key");
-    await expect(getApiKey("otx")).resolves.toBe("otx-test-key");
+    await setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
+    await expect(getApiKey("otx")).resolves.toBe(TEST_FIXTURE_OTX_API_KEY);
     await expect(hasApiKey("otx")).resolves.toBe(true);
     expect(store[STORAGE_KEY_API_KEYS]).toEqual({
-      otx: "otx-test-key",
+      otx: TEST_FIXTURE_OTX_API_KEY,
     });
   });
 
   it("removes a slot when cleared", async () => {
-    await setApiKey("abuseipdb", "abuse-test-key");
+    await setApiKey("abuseipdb", TEST_FIXTURE_ABUSEIPDB_API_KEY);
     await setApiKey("abuseipdb", "   ");
     await expect(getApiKey("abuseipdb")).resolves.toBe("");
     expect(store[STORAGE_KEY_API_KEYS]).toEqual({});

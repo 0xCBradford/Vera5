@@ -8,6 +8,9 @@ import {
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
 } from "../lib/storage";
 import { clearGlobalEnrichmentCooldown } from "../lib/enrichmentCooldown";
+import {
+  STORAGE_KEY_INVESTIGATION_SESSIONS,
+} from "../lib/investigationSessionStorage";
 import { handleEnrichIocMessage } from "./enrichmentHandler";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
@@ -419,5 +422,45 @@ describe("enrichment handler", () => {
       type: "ipv4",
     });
     expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+  });
+
+  it("increments the active investigation session enrichment count", async () => {
+    store[STORAGE_KEY_INVESTIGATION_SESSIONS] = {
+      schemaVersion: 1,
+      sessions: [
+        {
+          id: "vera5-inv-enrich-test",
+          title: "Case",
+          createdAt: 100,
+          updatedAt: 100,
+          pageUrl: "https://example.com",
+          totalIocCount: 0,
+          iocCountByType: {},
+          enrichmentCount: 0,
+          exportCount: 0,
+        },
+      ],
+      activeSessionId: "vera5-inv-enrich-test",
+    };
+
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "12 abuse confidence",
+    });
+
+    await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    const stored = store[STORAGE_KEY_INVESTIGATION_SESSIONS] as {
+      sessions: Array<{ enrichmentCount: number }>;
+    };
+    expect(stored.sessions[0]?.enrichmentCount).toBe(1);
   });
 });

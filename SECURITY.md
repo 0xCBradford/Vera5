@@ -22,7 +22,7 @@ Vera5 runs in your browser on pages you open. It may read visible page text to d
 | API key exposure | Keys stored in `chrome.storage.local` on your profile; masked in the options UI after save; excluded from settings export by default; never committed to the repository. |
 | IOC disclosure to third parties | Only indicator values you enrich (or open via pivot links) reach vendors you choose—not full page HTML to Vera5 infrastructure. Per-source toggles and manual-only mode limit automatic requests. |
 | Sensitive internal IOCs leaving the org | You control which sources are enabled, whether auto-fetch runs, and when to click enrich or pivot links. |
-| Malicious or confusing page content | Conservative regex matching, overlap deduplication, and documented false-positive suppressions reduce noise. |
+| Malicious or confusing page content | Conservative regex matching, overlap deduplication, and documented false-positive suppressions reduce noise. DOM confusion scenarios (decoy IOCs, fake UI chrome, selection tricks) and implemented mitigations are documented in [docs/security-model.md](docs/security-model.md#malicious-page-dom-confusion). |
 | Analyst misinterpretation | Source attribution on enrichment results; static pivots open vendor sites in a new tab under your browser session. |
 
 ## IOC leakage
@@ -179,7 +179,7 @@ Vera5 is not designed to collect usage analytics, crash telemetry, or browsing h
 - Do not commit API keys, `.env` files, or credential exports.
 - Use the project `.gitignore` and local secret storage only.
 - Do not paste keys into screenshots, issues, or public discussions.
-- CI runs secret scanning (Gitleaks) on the repository; treat any leaked key as compromised and rotate it at the vendor.
+- CI runs secret scanning (Gitleaks) on pull requests and on every push to `main`; treat any leaked key as compromised and rotate it at the vendor.
 
 ## Local-first and optional backend
 

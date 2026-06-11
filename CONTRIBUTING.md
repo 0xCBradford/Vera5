@@ -70,6 +70,18 @@ npm audit
 
 Production dependencies (`react`, `react-dom`) and security-sensitive dev tools (`vitest`) use **exact versions** in `extension/package.json` (no `^` range) so CI and local installs resolve the same release.
 
+### Secret scan (CI)
+
+Gitleaks runs on every pull request and on every push to `main` (`.github/workflows/secret-scan.yml`, config `.github/gitleaks.toml`). A failing scan blocks merge or main integration until the finding is removed or allowlisted with maintainer review.
+
+Local pre-push check (optional):
+
+```bash
+gitleaks detect --source . --config .github/gitleaks.toml
+```
+
+Copy `.env.example` to `.env` for optional local backend or tooling experiments. Credential variables in `.env.example` use empty placeholders only; non-secret defaults (localhost URLs, cache TTLs) may show example values.
+
 ### Optional git pre-commit hook
 
 After `git init`, enable the repository hook template:

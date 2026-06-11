@@ -274,6 +274,128 @@ npm run verify:security
 
 (`postbuild` runs this together with `verify:dist`.)
 
+## Production logging hygiene
+
+Vera5 does not write API keys, bulk IOC lists, scan snapshots, or vendor raw JSON to the browser console in production builds.
+
+| Surface | Policy |
+|---------|--------|
+| Content-script scan diagnostics | `devLog.ts` logs numeric scan metrics only when `import.meta.env.DEV` is true; production bundles omit `console.debug` output. |
+| Unexpected runtime errors | `logUnlessBenignExtensionError` in `extensionContext.ts` logs a truncated `name: message` string only; raw error objects, storage payloads, and bulk indicator data are never passed to `console.error`. |
+| Live connectors | No `console` usage; vendor responses stay in memory/cache unless the analyst opens raw JSON in the overlay. |
+| Regression | `npm run verify:security` rejects new production `console` calls outside the allowlisted modules, blocks sensitive payload patterns in log statements, and fails if shipped bundles contain `console.debug` or raw-object `console.error`. |
+
+## Test fixture hygiene
+
+Automated tests use placeholder credentials from `extension/src/lib/fixtureSecrets.ts` (`test-fixture-*` prefix). Committed vendor JSON under `extension/src/lib/fixtures/` must not embed live API key values; sensitive vendor field names must use `[redacted]` or the shared test placeholders. `verify:security` rejects legacy inline secret strings in `*.test.ts` files.
+
+## Malicious page DOM confusion
+
+Hostile or misleading page content can try to confuse IOC triage: decoy indicators in visible text, overlapping tokens, fake overlay chrome, or values that look like indicators but are not exact matches. Vera5 treats the page DOM as untrusted input for **detection display** while keeping **credentials, enrichment fetch, and vendor calls** in extension-controlled contexts.
+
+### Threat scenarios
+
+| Scenario | Goal of the page | What Vera5 must prevent |
+|----------|------------------|-------------------------|
+| Decoy or bait IOCs | Trigger false positives or wasted enrichments | Surfacing only regex-valid, deduplicated spans with transparent match provenance |
+| Hidden or metadata IOCs | Smuggle values via attributes or non-visible subtrees | Scanning visible text nodes only; skipping script, style, textarea, and metadata subtrees by default |
+| Selection / clipboard confusion | Enrich a value the analyst did not intend | Re-validating selection text as an exact IOC match before enrich; opening cards from verified highlights or validated matches only |
+| Fake extension UI | Mimic enrich buttons or disclosure prompts | Building overlay UI only from the content script; never executing page-supplied HTML as extension chrome |
+| Forced outbound queries | Exfiltrate data via unexpected hosts | Routing live `fetch()` through the service worker with `enrichmentFetch` host allowlisting; analyst consent gates before vendor calls |
+| Markup in indicator values | Break UI or smuggle HTML into outbound requests | Binding overlay text with `textContent`; rejecting values containing markup or newlines in `extractExactIocValue` |
+
+### Detection surface controls
+
+IOC detection walks **text nodes** under the scan root (`textWalker.ts`). Default production behavior:
+
+- Skips `<script>`, `<style>`, `<textarea>`, and metadata subtrees (`head`, `meta`, `link`, `noscript`, `template`, `title`).
+- Does **not** scan element attributes (`href`, `src`, `data-*`, event handlers, etc.); only visible text content is considered.
+- Caps scans at **2,500 text nodes** per pass to limit work on pathological DOMs.
+- Applies conservative regex rules, overlap deduplication, and documented suppressions (see [Known false positives and suppressions](architecture.md#known-false-positives-and-suppressions)).
+
+The hover overlay shows **Why detected?** with rule id, source context, on-page vs refanged values, and ignored overlaps so analysts can reconcile page text with the matched span.
+
+### Overlay and workspace UI
+
+Production on-page UI (hover card, workspace sidebar, command palette) is assembled by the content script using `document.createElement` and **`textContent`** for analyst-visible strings and vendor-derived summaries. Vendor raw JSON is redacted and length-capped before display (`enrichmentRawResponse.ts`).
+
+| Control | Purpose |
+|---------|---------|
+| Dedicated host elements (`vera5-hover-card-host`, `vera5-workspace-host`, `vera5-command-palette-host`) | Keeps extension UI in nodes the content script owns |
+| High `z-index` and scoped `pointer-events` | Reduces accidental interaction with page layers beneath real extension panels |
+| `stopPropagation` on overlay controls | Prevents page handlers from intercepting enrich, disclosure, or copy actions on Vera5 buttons |
+| `confirmOpenLiveUrl` | Requires analyst confirmation before navigating to a refanged live URL from the overlay |
+
+**Limitation:** A hostile page can still inject DOM that **looks** like Vera5. The real extension UI appears only after you invoke Vera5 (toolbar, workspace, keyboard shortcut, context menu, or highlight). Treat unexpected enrich prompts that did not follow your action as suspicious; legitimate live enrichment shows the pre-query disclosure naming **your** enabled vendors when notices are on.
+
+### Enrichment and credential isolation
+
+Page JavaScript cannot read `chrome.storage.local` or call vendor APIs with stored keys. Enrichment follows this boundary:
+
+```mermaid
+flowchart LR
+  PageDOM[Untrusted page DOM] -->|visible text only| CS[Content script]
+  CS -->|indicator value messages| SW[Service worker]
+  SW -->|HTTPS GET + your key| Vendor[Configured vendor API]
+```
+
+| Gate | Behavior |
+|------|----------|
+| Manual-only enrichment (default) | Auto-fetch on hover stays off until you disable manual-only mode |
+| Domain policy | Blocks live enrich on denylisted hostnames before pre-query disclosure |
+| Internal asset lists | Blocks outbound enrich when the indicator matches configured internal ranges |
+| Pre-query disclosure | Inline notice names enabled vendors and the indicator before the first vendor fetch |
+| `extractExactIocValue` / `sanitizeEnrichmentIoc` | Rejects multi-line, oversized, or markup-bearing values before messages reach the service worker |
+| `enrichmentFetch` allowlist | Throws before network I/O when the target host is not a declared connector API |
+
+Pivot recipe links are navigation-only (no live `fetch` from the page context). See [Remote origins matrix](#remote-origins-matrix) for declared hosts.
+
+### Residual risk and analyst practice
+
+- Decoy IOCs in **visible** page text may still match valid grammar; suppressions reduce noise but cannot eliminate judgment calls on ambiguous prose.
+- Auto-scan (when enabled) re-reads DOM mutations on allowed hosts; use domain denylist and manual-only mode on sensitive origins.
+- Validate enrichment intent on high-risk pages: confirm **Why detected?**, read the pre-query disclosure, and use **Trust & consent** presets for webmail and internal tools.
+
+For operator checks on trust gates and disclosure, use the [Trust and query checklist](../SECURITY.md#trust-and-query-checklist). For regression fixtures that exercise decoy suppressions, see [soc-validation-fixtures.md](soc-validation-fixtures.md).
+
+## Security hardening review checklist
+
+Pen-test style review for the shipped extension: supply chain, executable surface, outbound network boundaries, logging, secrets hygiene, and trust gates. Use this checklist before release branches or major permission changes.
+
+### Automated verification
+
+Run from repository root unless noted. Re-run after dependency bumps, manifest permission changes, or connector additions.
+
+| # | Control | Verification | Status |
+|---|---------|--------------|--------|
+| 1 | Production dependency audit | `cd extension && npm run audit:prod` (CI: **Extension quality** workflow, blocking) | **Verified** — 0 vulnerabilities |
+| 2 | Extension build integrity | `cd extension && npm run build` → `verify:dist` + `verify:security` in postbuild | **Verified** |
+| 3 | Unit and lint regression | `cd extension && npm run check` | **Verified** — 1018 tests (79 files) |
+| 4 | Secret scan (Gitleaks) | `gitleaks detect --source . --config .github/gitleaks.toml`; CI: `.github/workflows/secret-scan.yml` on pull requests and `main` pushes | **Verified** — no leaks |
+| 5 | `.env.example` credential placeholders | Root `.env.example`; `verify:security` rejects non-empty credential values | **Verified** |
+| 6 | Extension-page CSP | Default MV3 CSP; no remote assets in popup/options HTML (`verify:security`) | **Verified** |
+| 7 | Live fetch allowlist | `enrichmentFetch` + `DECLARED_ENRICHMENT_API_HOSTS`; only AbuseIPDB and OTX connector modules | **Verified** |
+| 8 | Enrichment GET without body | Connector modules; `verify:security` | **Verified** |
+| 9 | Production logging hygiene | No sensitive `console` in shipped bundles; redacted error strings only | **Verified** |
+| 10 | Test fixture redaction | `fixtureSecrets.ts` placeholders; no legacy inline secret strings in tests | **Verified** |
+| 11 | No `eval` / remote dynamic import | `verify:security` on `extension/src` and `extension/dist` | **Verified** |
+| 12 | Manifest permissions match documentation | Compare [Manifest permissions](#manifest-permissions) and [Host permissions](#host-permissions) to [`extension/public/manifest.json`](../extension/public/manifest.json) | **Verified** |
+
+### Operator confirmation (browser)
+
+Automated checks do not replace unpacked Chrome validation. Confirm trust, consent, and hostname gates using the [Trust and query checklist](../SECURITY.md#trust-and-query-checklist) in [SECURITY.md](../SECURITY.md):
+
+- Manual-only enrichment and **Trust & consent** settings match your workflow.
+- Denylisted hosts block live enrich without vendor calls.
+- Pre-query disclosure appears before the first vendor fetch on allowed hosts when notices are enabled.
+- Only authorized live sources and API keys are enabled.
+
+Serve `examples/` over HTTP and use SOC fixtures per [soc-validation-fixtures.md](soc-validation-fixtures.md). Record operator pass/fail in your internal release notes; do not paste API keys or full page content into issues.
+
+### Checklist maintenance
+
+When adding permissions, connectors, or CI steps, update this checklist, [SECURITY.md](../SECURITY.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md), and the manifest together so reviewers can assess upgrades before install.
+
 ## Related documents
 
 - [SECURITY.md](../SECURITY.md) — vulnerability reporting and high-level threat model

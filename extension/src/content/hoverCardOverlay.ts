@@ -22,6 +22,7 @@ import {
   listExportTemplateIds,
 } from "../lib/exportTemplates";
 import { getTabScanTrayFilter } from "../lib/tabScanSnapshotStorage";
+import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
 import {
   buildTabScanIocListClipboardText,
   buildTraySubsetEnrichmentRecords,
@@ -103,6 +104,10 @@ export {
 } from "../lib/scoring";
 
 export const HOVER_CARD_HOST_ID = "vera5-hover-card-host";
+
+function notifyInvestigationSessionExportRecorded(): void {
+  void recordActiveInvestigationSessionExportEvent();
+}
 
 let lastHoverCardAnchor: Element | null = null;
 let lastHoverCardPayload: HoverCardOverlayPayload | null = null;
@@ -876,15 +881,30 @@ function buildExportFormatActions(
       const record = buildRecord();
       if (mode === "export") {
         downloadEnrichmentExportFile(record, format, doc);
+        notifyInvestigationSessionExportRecorded();
         return;
       }
       if (format === "markdown") {
-        return copyEnrichmentExportMarkdownToClipboard(record);
+        void copyEnrichmentExportMarkdownToClipboard(record).then((copied) => {
+          if (copied) {
+            notifyInvestigationSessionExportRecorded();
+          }
+        });
+        return;
       }
       if (format === "json") {
-        return copyEnrichmentExportJsonToClipboard(record);
+        void copyEnrichmentExportJsonToClipboard(record).then((copied) => {
+          if (copied) {
+            notifyInvestigationSessionExportRecorded();
+          }
+        });
+        return;
       }
-      return copyEnrichmentExportTxtToClipboard(record);
+      void copyEnrichmentExportTxtToClipboard(record).then((copied) => {
+        if (copied) {
+          notifyInvestigationSessionExportRecorded();
+        }
+      });
     },
   }));
 }
@@ -1164,6 +1184,7 @@ function runTraySubsetExport(
   } else {
     downloadTraySubsetExportFile(cache.records, format, doc);
   }
+  notifyInvestigationSessionExportRecorded();
   return true;
 }
 
@@ -1254,6 +1275,9 @@ function buildScanListTemplateCopyDropdownActions(
             }),
             copied
           );
+          if (copied) {
+            notifyInvestigationSessionExportRecorded();
+          }
         },
         () => {
           setScanExportStatus(
@@ -1380,6 +1404,9 @@ function createTemplateExportRow(
           }),
           copied
         );
+        if (copied) {
+          notifyInvestigationSessionExportRecorded();
+        }
       },
       () => {
         setScanExportStatus(

@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   contentRegisterMessage,
+  archiveInvestigationSessionMessage,
   enrichIocMessage,
+  createInvestigationSessionMessage,
+  deleteInvestigationSessionMessage,
+  getActiveInvestigationSessionMessage,
   getTabScanSummaryMessage,
+  listInvestigationSessionsMessage,
+  renameInvestigationSessionMessage,
+  reopenInvestigationSessionMessage,
   isEnrichIocMessage,
+  isCreateInvestigationSessionMessage,
+  isGetActiveInvestigationSessionMessage,
   isGetTabScanSummaryMessage,
   isNavigateToIocAnchorMessage,
   isScanPageMessage,
@@ -18,6 +27,7 @@ import {
   scanSelectionMessage,
   enrichSelectionMessage,
   tabScanSnapshotMessage,
+  updateInvestigationSessionTitleMessage,
 } from "./messages";
 import { IOC_RULE_ID } from "./iocRegex";
 import { buildTabScanSnapshotPayload } from "./tabScanSnapshot";
@@ -77,6 +87,34 @@ describe("Vera5 message envelopes", () => {
     ).toBe(true);
     expect(isVera5Message(getTabScanSummaryMessage(12))).toBe(true);
     expect(isVera5Message(getTabScanSummaryMessage())).toBe(true);
+    expect(isVera5Message(getActiveInvestigationSessionMessage())).toBe(true);
+    expect(
+      isVera5Message(
+        createInvestigationSessionMessage({
+          title: "Case",
+          pageUrl: "https://example.com",
+        })
+      )
+    ).toBe(true);
+    expect(isVera5Message(updateInvestigationSessionTitleMessage("Renamed"))).toBe(true);
+    expect(isVera5Message(listInvestigationSessionsMessage())).toBe(true);
+    expect(
+      isVera5Message(reopenInvestigationSessionMessage("vera5-inv-1"))
+    ).toBe(true);
+    expect(
+      isVera5Message(
+        renameInvestigationSessionMessage({
+          sessionId: "vera5-inv-1",
+          title: "Renamed",
+        })
+      )
+    ).toBe(true);
+    expect(
+      isVera5Message(archiveInvestigationSessionMessage("vera5-inv-1"))
+    ).toBe(true);
+    expect(
+      isVera5Message(deleteInvestigationSessionMessage("vera5-inv-1"))
+    ).toBe(true);
   });
 
   it("builds GET_TAB_SCAN_SUMMARY", () => {

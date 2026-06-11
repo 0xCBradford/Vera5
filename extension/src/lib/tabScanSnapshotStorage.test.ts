@@ -12,12 +12,18 @@ import {
   saveTabScanSnapshot,
 } from "./tabScanSnapshotStorage";
 import { buildTabScanSummary } from "./tabScanSummary";
+import {
+  getActiveInvestigationSession,
+  STORAGE_KEY_INVESTIGATION_SESSIONS,
+} from "./investigationSessionStorage";
 
 describe("tabScanSnapshotStorage", () => {
   let store: Record<string, unknown>;
+  let localStore: Record<string, unknown>;
 
   beforeEach(() => {
     store = {};
+    localStore = {};
     vi.stubGlobal("chrome", {
       storage: {
         session: {
@@ -39,6 +45,33 @@ describe("tabScanSnapshotStorage", () => {
             const keyList = Array.isArray(keys) ? keys : [keys];
             for (const key of keyList) {
               delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in localStore) {
+                result[key] = localStore[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(localStore, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete localStore[key];
             }
             return Promise.resolve();
           },
@@ -108,6 +141,15 @@ describe("tabScanSnapshotStorage", () => {
 
     expect(response).toEqual({ ok: true, payload: { tabId: 99 } });
     expect(await getTabScanSnapshot(99)).toEqual({ ...payload, tabId: 99 });
+    const activeSession = await getActiveInvestigationSession();
+    expect(activeSession).toEqual(
+      expect.objectContaining({
+        title: "Investigation — example.com",
+        pageUrl: "https://example.com",
+        totalIocCount: 1,
+      })
+    );
+    expect(localStore[STORAGE_KEY_INVESTIGATION_SESSIONS]).toBeTruthy();
   });
 
   it("rejects snapshot messages without sender tab id", async () => {

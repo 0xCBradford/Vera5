@@ -30,6 +30,8 @@ Vitest discovers tests alongside source (`*.test.ts`, `*.test.tsx`) under `exten
 
 Golden tests lock band mapping, vendor fixture summaries, and markdown/JSON export artifacts; update snapshots deliberately when product rules change.
 
+Use `fixtureSecrets.ts` placeholders for API keys in tests; do not add inline `secret-key` or similar literals. Committed vendor JSON fixtures must not contain unredacted sensitive field values.
+
 ## Security verification
 
 ```bash
@@ -37,7 +39,7 @@ cd extension
 npm run verify:security
 ```
 
-Runs after `npm run build` via `postbuild`. Checks extension-page CSP posture (no remote assets in popup/options HTML, no weakened manifest CSP), live fetch limited to connector hosts, no `eval`, and no API key logging. See [docs/security-model.md](../security-model.md).
+Runs after `npm run build` via `postbuild`. Checks extension-page CSP posture (no remote assets in popup/options HTML, no weakened manifest CSP), live fetch limited to connector hosts, no sensitive production logging (keys, bulk IOCs, raw vendor payloads), no `eval`, and no API key logging. See [docs/security-model.md](../security-model.md).
 
 ## Manual browser checks
 
@@ -51,7 +53,15 @@ Use redacted fixtures only in issues and PRs.
 
 ## CI
 
-GitHub Actions workflows under `.github/workflows/` run lint, tests, production dependency audit (`npm run audit:prod`), a non-blocking full `npm audit` report for devDependencies, and secret scanning on pull requests. Live vendor APIs are not called in CI.
+GitHub Actions workflows under `.github/workflows/` run lint, tests, production dependency audit (`npm run audit:prod`), a non-blocking full `npm audit` report for devDependencies, and Gitleaks secret scanning on pull requests and pushes to `main`. Live vendor APIs are not called in CI.
+
+Local secret scan (same config as CI):
+
+```bash
+gitleaks detect --source . --config .github/gitleaks.toml
+```
+
+Repository root `.env.example` lists optional environment variables with empty credential placeholders; copy to `.env` locally (never commit populated `.env` files). `npm run verify:security` fails if credential keys in `.env.example` include values.
 
 Production dependencies (`react`, `react-dom`) and `vitest` use exact versions in `extension/package.json`; bump them together with `package-lock.json` when addressing advisories.
 

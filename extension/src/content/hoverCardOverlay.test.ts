@@ -21,6 +21,7 @@ import { IOC_TYPE, type IocType } from "../lib/iocRegex";
 import { getPivotRecipes } from "../lib/pivots";
 import * as copyText from "../lib/copyText";
 import { REDACTED_VALUE_PLACEHOLDER } from "../lib/enrichmentRawResponse";
+import { TEST_FIXTURE_VENDOR_SENSITIVE_FIELD } from "../lib/fixtureSecrets";
 import {
   DEFAULT_HOVER_CARD_SUMMARY,
   HOVER_CARD_ERROR_SUMMARY,
@@ -1824,7 +1825,7 @@ describe("hover card overlay", () => {
           detail: "12 abuse confidence",
           rawVendorJson: JSON.stringify({
             data: { abuseConfidenceScore: 12 },
-            Key: "secret-abuse-key",
+            Key: TEST_FIXTURE_VENDOR_SENSITIVE_FIELD,
           }),
         },
       ],
@@ -1833,7 +1834,7 @@ describe("hover card overlay", () => {
     const pre = panel.querySelector(`.${HOVER_CARD_RAW_JSON_BODY_CLASS}`);
     expect(pre?.textContent).toContain("abuseConfidenceScore");
     expect(pre?.textContent).toContain(REDACTED_VALUE_PLACEHOLDER);
-    expect(pre?.textContent).not.toContain("secret-abuse-key");
+    expect(pre?.textContent).not.toContain(TEST_FIXTURE_VENDOR_SENSITIVE_FIELD);
   });
 
   it("shows per-source expandable raw response panels for multi-source enrichment", () => {

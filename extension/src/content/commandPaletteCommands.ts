@@ -4,6 +4,7 @@ import {
   downloadTrayTemplateExportFile,
 } from "../lib/exportTemplates";
 import { safeOpenOptionsPage } from "../lib/extensionContext";
+import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
 import { handleEnrichSelectionRequest } from "./enrichSelection";
 import { getFilteredTrayEnrichmentRecords } from "./hoverCardOverlay";
 import { clearIocHighlights } from "./highlighter";
@@ -58,6 +59,7 @@ export function registerCoreCommandPaletteCommands(): void {
         return;
       }
       await copyTrayTemplateExportToClipboard("markdown-report", records);
+      void recordActiveInvestigationSessionExportEvent();
     },
   });
 
@@ -72,6 +74,7 @@ export function registerCoreCommandPaletteCommands(): void {
         return;
       }
       downloadTrayTemplateExportFile("markdown-report", records);
+      void recordActiveInvestigationSessionExportEvent();
     },
   });
 

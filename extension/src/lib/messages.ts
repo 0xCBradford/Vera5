@@ -24,6 +24,14 @@ export const MESSAGE = {
   OPEN_OPTIONS_PAGE: "OPEN_OPTIONS_PAGE",
   OPEN_SITE_PERMISSIONS: "OPEN_SITE_PERMISSIONS",
   TOGGLE_COMMAND_PALETTE: "TOGGLE_COMMAND_PALETTE",
+  GET_ACTIVE_INVESTIGATION_SESSION: "GET_ACTIVE_INVESTIGATION_SESSION",
+  CREATE_INVESTIGATION_SESSION: "CREATE_INVESTIGATION_SESSION",
+  UPDATE_INVESTIGATION_SESSION_TITLE: "UPDATE_INVESTIGATION_SESSION_TITLE",
+  LIST_INVESTIGATION_SESSIONS: "LIST_INVESTIGATION_SESSIONS",
+  REOPEN_INVESTIGATION_SESSION: "REOPEN_INVESTIGATION_SESSION",
+  RENAME_INVESTIGATION_SESSION: "RENAME_INVESTIGATION_SESSION",
+  ARCHIVE_INVESTIGATION_SESSION: "ARCHIVE_INVESTIGATION_SESSION",
+  DELETE_INVESTIGATION_SESSION: "DELETE_INVESTIGATION_SESSION",
 } as const;
 
 export type MessageType = (typeof MESSAGE)[keyof typeof MESSAGE];
@@ -63,6 +71,38 @@ export type OpenSitePermissionsMessage = {
 export type ToggleCommandPaletteMessage = {
   type: typeof MESSAGE.TOGGLE_COMMAND_PALETTE;
 };
+export type GetActiveInvestigationSessionMessage = {
+  type: typeof MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION;
+};
+export type CreateInvestigationSessionMessage = {
+  type: typeof MESSAGE.CREATE_INVESTIGATION_SESSION;
+  title: string;
+  pageUrl: string;
+};
+export type UpdateInvestigationSessionTitleMessage = {
+  type: typeof MESSAGE.UPDATE_INVESTIGATION_SESSION_TITLE;
+  title: string;
+};
+export type ListInvestigationSessionsMessage = {
+  type: typeof MESSAGE.LIST_INVESTIGATION_SESSIONS;
+};
+export type ReopenInvestigationSessionMessage = {
+  type: typeof MESSAGE.REOPEN_INVESTIGATION_SESSION;
+  sessionId: string;
+};
+export type RenameInvestigationSessionMessage = {
+  type: typeof MESSAGE.RENAME_INVESTIGATION_SESSION;
+  sessionId: string;
+  title: string;
+};
+export type ArchiveInvestigationSessionMessage = {
+  type: typeof MESSAGE.ARCHIVE_INVESTIGATION_SESSION;
+  sessionId: string;
+};
+export type DeleteInvestigationSessionMessage = {
+  type: typeof MESSAGE.DELETE_INVESTIGATION_SESSION;
+  sessionId: string;
+};
 
 export type Vera5Message =
   | PingMessage
@@ -72,7 +112,15 @@ export type Vera5Message =
   | EnrichIocMessage
   | OpenOptionsPageMessage
   | OpenSitePermissionsMessage
-  | ToggleCommandPaletteMessage;
+  | ToggleCommandPaletteMessage
+  | GetActiveInvestigationSessionMessage
+  | CreateInvestigationSessionMessage
+  | UpdateInvestigationSessionTitleMessage
+  | ListInvestigationSessionsMessage
+  | ReopenInvestigationSessionMessage
+  | RenameInvestigationSessionMessage
+  | ArchiveInvestigationSessionMessage
+  | DeleteInvestigationSessionMessage;
 
 export type MessageResponse =
   | { ok: true; payload?: unknown }
@@ -141,6 +189,183 @@ export function openSitePermissionsMessage(): OpenSitePermissionsMessage {
 
 export function toggleCommandPaletteMessage(): ToggleCommandPaletteMessage {
   return { type: MESSAGE.TOGGLE_COMMAND_PALETTE };
+}
+
+export function getActiveInvestigationSessionMessage(): GetActiveInvestigationSessionMessage {
+  return { type: MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION };
+}
+
+export function createInvestigationSessionMessage(input: {
+  title: string;
+  pageUrl: string;
+}): CreateInvestigationSessionMessage {
+  return {
+    type: MESSAGE.CREATE_INVESTIGATION_SESSION,
+    title: input.title.trim(),
+    pageUrl: input.pageUrl.trim(),
+  };
+}
+
+export function updateInvestigationSessionTitleMessage(
+  title: string
+): UpdateInvestigationSessionTitleMessage {
+  return {
+    type: MESSAGE.UPDATE_INVESTIGATION_SESSION_TITLE,
+    title: title.trim(),
+  };
+}
+
+export function listInvestigationSessionsMessage(): ListInvestigationSessionsMessage {
+  return { type: MESSAGE.LIST_INVESTIGATION_SESSIONS };
+}
+
+export function reopenInvestigationSessionMessage(
+  sessionId: string
+): ReopenInvestigationSessionMessage {
+  return {
+    type: MESSAGE.REOPEN_INVESTIGATION_SESSION,
+    sessionId: sessionId.trim(),
+  };
+}
+
+export function renameInvestigationSessionMessage(input: {
+  sessionId: string;
+  title: string;
+}): RenameInvestigationSessionMessage {
+  return {
+    type: MESSAGE.RENAME_INVESTIGATION_SESSION,
+    sessionId: input.sessionId.trim(),
+    title: input.title.trim(),
+  };
+}
+
+export function archiveInvestigationSessionMessage(
+  sessionId: string
+): ArchiveInvestigationSessionMessage {
+  return {
+    type: MESSAGE.ARCHIVE_INVESTIGATION_SESSION,
+    sessionId: sessionId.trim(),
+  };
+}
+
+export function deleteInvestigationSessionMessage(
+  sessionId: string
+): DeleteInvestigationSessionMessage {
+  return {
+    type: MESSAGE.DELETE_INVESTIGATION_SESSION,
+    sessionId: sessionId.trim(),
+  };
+}
+
+function readNonEmptySessionId(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export function isGetActiveInvestigationSessionMessage(
+  raw: unknown
+): raw is GetActiveInvestigationSessionMessage {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION
+  );
+}
+
+export function isCreateInvestigationSessionMessage(
+  raw: unknown
+): raw is CreateInvestigationSessionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.CREATE_INVESTIGATION_SESSION) {
+    return false;
+  }
+  return typeof record.title === "string" && typeof record.pageUrl === "string";
+}
+
+export function isUpdateInvestigationSessionTitleMessage(
+  raw: unknown
+): raw is UpdateInvestigationSessionTitleMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.UPDATE_INVESTIGATION_SESSION_TITLE) {
+    return false;
+  }
+  return typeof record.title === "string";
+}
+
+export function isListInvestigationSessionsMessage(
+  raw: unknown
+): raw is ListInvestigationSessionsMessage {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.LIST_INVESTIGATION_SESSIONS
+  );
+}
+
+export function isReopenInvestigationSessionMessage(
+  raw: unknown
+): raw is ReopenInvestigationSessionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.REOPEN_INVESTIGATION_SESSION) {
+    return false;
+  }
+  return readNonEmptySessionId(record.sessionId) !== null;
+}
+
+export function isRenameInvestigationSessionMessage(
+  raw: unknown
+): raw is RenameInvestigationSessionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.RENAME_INVESTIGATION_SESSION) {
+    return false;
+  }
+  return (
+    readNonEmptySessionId(record.sessionId) !== null &&
+    typeof record.title === "string"
+  );
+}
+
+export function isArchiveInvestigationSessionMessage(
+  raw: unknown
+): raw is ArchiveInvestigationSessionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.ARCHIVE_INVESTIGATION_SESSION) {
+    return false;
+  }
+  return readNonEmptySessionId(record.sessionId) !== null;
+}
+
+export function isDeleteInvestigationSessionMessage(
+  raw: unknown
+): raw is DeleteInvestigationSessionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.DELETE_INVESTIGATION_SESSION) {
+    return false;
+  }
+  return readNonEmptySessionId(record.sessionId) !== null;
 }
 
 export function getTabScanSummaryMessage(
@@ -291,6 +516,30 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   }
   if (type === MESSAGE.GET_TAB_SCAN_SUMMARY) {
     return isGetTabScanSummaryMessage(raw);
+  }
+  if (type === MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION) {
+    return isGetActiveInvestigationSessionMessage(raw);
+  }
+  if (type === MESSAGE.CREATE_INVESTIGATION_SESSION) {
+    return isCreateInvestigationSessionMessage(raw);
+  }
+  if (type === MESSAGE.UPDATE_INVESTIGATION_SESSION_TITLE) {
+    return isUpdateInvestigationSessionTitleMessage(raw);
+  }
+  if (type === MESSAGE.LIST_INVESTIGATION_SESSIONS) {
+    return isListInvestigationSessionsMessage(raw);
+  }
+  if (type === MESSAGE.REOPEN_INVESTIGATION_SESSION) {
+    return isReopenInvestigationSessionMessage(raw);
+  }
+  if (type === MESSAGE.RENAME_INVESTIGATION_SESSION) {
+    return isRenameInvestigationSessionMessage(raw);
+  }
+  if (type === MESSAGE.ARCHIVE_INVESTIGATION_SESSION) {
+    return isArchiveInvestigationSessionMessage(raw);
+  }
+  if (type === MESSAGE.DELETE_INVESTIGATION_SESSION) {
+    return isDeleteInvestigationSessionMessage(raw);
   }
   return (
     type === MESSAGE.PING ||

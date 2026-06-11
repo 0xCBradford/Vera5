@@ -21,6 +21,11 @@ import {
   serializeVera5SettingsExport,
   SettingsImportError,
 } from "./settingsExport";
+import {
+  TEST_FIXTURE_CURRENT_API_KEY,
+  TEST_FIXTURE_IMPORTED_API_KEY,
+  TEST_FIXTURE_STORED_API_KEY,
+} from "./fixtureSecrets";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
   vi.stubGlobal("chrome", {
@@ -53,7 +58,7 @@ describe("settings export", () => {
   it("omits API keys from export by default", () => {
     const settings = {
       ...createDefaultVera5Settings(),
-      apiKeys: { abuseipdb: "secret-key" },
+      apiKeys: { abuseipdb: TEST_FIXTURE_STORED_API_KEY },
       autoScanEnabled: true,
     };
 
@@ -69,14 +74,14 @@ describe("settings export", () => {
   it("includes API keys when export is explicitly requested", () => {
     const settings = {
       ...createDefaultVera5Settings(),
-      apiKeys: { abuseipdb: "secret-key" },
+      apiKeys: { abuseipdb: TEST_FIXTURE_STORED_API_KEY },
     };
 
     const document = buildVera5SettingsExportDocument(settings, true);
 
     expect(document.includeApiKeys).toBe(true);
     expect(document.settings[STORAGE_KEY_API_KEYS]).toEqual({
-      abuseipdb: "secret-key",
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
     });
     expect(exportIncludesApiKeys(document)).toBe(true);
   });
@@ -94,36 +99,36 @@ describe("settings export", () => {
     const current = {
       ...createDefaultVera5Settings(),
       manualOnlyMode: true,
-      apiKeys: { abuseipdb: "current-key" },
+      apiKeys: { abuseipdb: TEST_FIXTURE_CURRENT_API_KEY },
     };
     const imported = {
       ...createDefaultVera5Settings(),
       manualOnlyMode: false,
       autoScanEnabled: true,
-      apiKeys: { abuseipdb: "imported-key" },
+      apiKeys: { abuseipdb: TEST_FIXTURE_IMPORTED_API_KEY },
     };
 
     const merged = mergeImportedVera5Settings(current, imported, false);
 
     expect(merged.manualOnlyMode).toBe(false);
     expect(merged.autoScanEnabled).toBe(true);
-    expect(merged.apiKeys.abuseipdb).toBe("current-key");
+    expect(merged.apiKeys.abuseipdb).toBe(TEST_FIXTURE_CURRENT_API_KEY);
   });
 
   it("merges imported API keys when export included them", () => {
     const current = {
       ...createDefaultVera5Settings(),
-      apiKeys: { abuseipdb: "current-key" },
+      apiKeys: { abuseipdb: TEST_FIXTURE_CURRENT_API_KEY },
     };
     const imported = {
       ...createDefaultVera5Settings(),
-      apiKeys: { otx: "imported-key" },
+      apiKeys: { otx: TEST_FIXTURE_IMPORTED_API_KEY },
     };
 
     const merged = mergeImportedVera5Settings(current, imported, true);
 
-    expect(merged.apiKeys.abuseipdb).toBe("current-key");
-    expect(merged.apiKeys.otx).toBe("imported-key");
+    expect(merged.apiKeys.abuseipdb).toBe(TEST_FIXTURE_CURRENT_API_KEY);
+    expect(merged.apiKeys.otx).toBe(TEST_FIXTURE_IMPORTED_API_KEY);
   });
 });
 
@@ -140,7 +145,7 @@ describe("settings export storage integration", () => {
   });
 
   it("exports current settings as JSON without keys", async () => {
-    await setApiKey("abuseipdb", "stored-secret");
+    await setApiKey("abuseipdb", TEST_FIXTURE_STORED_API_KEY);
     store[STORAGE_KEY_AUTO_SCAN_ENABLED] = true;
 
     const json = await exportVera5SettingsJson(false);
@@ -149,11 +154,11 @@ describe("settings export storage integration", () => {
     expect(parsed.includeApiKeys).toBe(false);
     expect(parsed.settings.apiKeys).toBeUndefined();
     expect(parsed.settings.autoScanEnabled).toBe(true);
-    expect(json).not.toContain("stored-secret");
+    expect(json).not.toContain(TEST_FIXTURE_STORED_API_KEY);
   });
 
   it("imports settings without overwriting stored API keys", async () => {
-    await setApiKey("abuseipdb", "stored-secret");
+    await setApiKey("abuseipdb", TEST_FIXTURE_STORED_API_KEY);
     store[STORAGE_KEY_MANUAL_ONLY_MODE] = true;
 
     const exportJson = await exportVera5SettingsJson(false);
@@ -168,7 +173,7 @@ describe("settings export storage integration", () => {
     expect(store[STORAGE_KEY_MANUAL_ONLY_MODE]).toBe(false);
     expect(store[STORAGE_KEY_AUTO_SCAN_ENABLED]).toBe(true);
     expect(store[STORAGE_KEY_API_KEYS]).toEqual({
-      abuseipdb: "stored-secret",
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
     });
   });
 

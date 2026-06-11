@@ -6,6 +6,8 @@ const extensionRoot = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   ".."
 );
+const repoRoot = path.join(extensionRoot, "..");
+const envExamplePath = path.join(repoRoot, ".env.example");
 const distDir = path.join(extensionRoot, "dist");
 const publicManifestPath = path.join(
   extensionRoot,
@@ -76,16 +78,209 @@ function checkNoDynamicExecution(label, filePath, source) {
   }
 }
 
-function checkNoApiKeyLogging(filePath, source) {
+function checkNoSensitiveProductionLogging(filePath, source) {
   if (filePath.endsWith(".test.ts") || filePath.endsWith(".test.tsx")) {
     return;
   }
 
+  const basename = path.basename(filePath);
+
+  if (basename === "devLog.ts") {
+    if (/console\.(log|debug|info|warn|error)\(/.test(source)) {
+      if (!/import\.meta\.env\.DEV/.test(source)) {
+        fail(`${filePath} must gate console output with import.meta.env.DEV`);
+      }
+      if (
+        !/if\s*\(\s*!import\.meta\.env\.DEV\s*\)\s*\{\s*return;\s*\}/.test(
+          source
+        )
+      ) {
+        fail(`${filePath} must return before console output when not in DEV`);
+      }
+    }
+    return;
+  }
+
+  if (basename === "extensionContext.ts") {
+    if (/console\.error\s*\(\s*error\s*\)/.test(source)) {
+      fail(`${filePath} must not log raw error objects`);
+    }
+    if (!source.includes("formatSafeExtensionErrorMessage")) {
+      fail(`${filePath} must redact errors before console.error`);
+    }
+    return;
+  }
+
+  if (/console\.(log|debug|info|warn|error)\(/.test(source)) {
+    fail(
+      `${filePath} uses console outside allowlisted devLog/extensionContext modules`
+    );
+  }
+
   const logCalls = source.matchAll(/console\.(log|debug|info|warn|error)\([^;]*/g);
+  const sensitivePatterns = [
+    /apiKeys?/i,
+    /getApiKey|setApiKey|STORAGE_KEY_API_KEYS/i,
+    /\bmatches\b/,
+    /\bentries\b/,
+    /tabScanSnapshot/i,
+    /rawVendorJson/i,
+    /JSON\.stringify/,
+    /snapshot\.entries/i,
+    /X-OTX-API-KEY|\bKey:\s*apiKey/i,
+  ];
   for (const match of logCalls) {
     const call = match[0];
-    if (/apiKeys?|getApiKey|setApiKey|STORAGE_KEY_API_KEYS/i.test(call)) {
-      fail(`${filePath} logs API key material via ${call.slice(0, 96)}`);
+    for (const pattern of sensitivePatterns) {
+      if (pattern.test(call)) {
+        fail(
+          `${filePath} logs sensitive enrichment material via ${call.slice(0, 96)}`
+        );
+      }
+    }
+  }
+}
+
+function checkDistProductionLogging(distRoot) {
+  for (const filePath of walkFiles(distRoot, [".js"])) {
+    const basename = path.basename(filePath);
+    if (/^vendor-/.test(basename) || /^dev-/.test(basename)) {
+      continue;
+    }
+    const source = fs.readFileSync(filePath, "utf8");
+    if (/console\.debug\(/.test(source)) {
+      fail(`${filePath} ships console.debug in production bundle`);
+    }
+    if (/console\.error\s*\(\s*[A-Za-z_$][\w$]*\s*\)/.test(source)) {
+      fail(
+        `${filePath} may log raw objects via console.error(variable) in production bundle`
+      );
+    }
+  }
+}
+
+const LEGACY_INLINE_TEST_SECRET_LITERALS = [
+  "test-abuse-key",
+  "test-otx-key",
+  "test-key",
+  "bad-key",
+  "configured-key",
+  "stored-secret",
+  "stored-abuse-key",
+  "secret-key",
+  "secret-abuse-key",
+  "abuse-secret",
+  "otx-secret",
+  "other-secret",
+  "current-key",
+  "imported-key",
+  "otx-test-key",
+  "abuse-test-key",
+  "fresh-secret",
+];
+
+const FIXTURE_SENSITIVE_FIELD_PATTERN =
+  /^(key|api[_-]?key|x-otx-api-key|authorization|token|secret|password|bearer|access[_-]?token|refresh[_-]?token)$/i;
+
+function isSensitiveFixtureFieldName(key) {
+  const normalized = key.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+  if (FIXTURE_SENSITIVE_FIELD_PATTERN.test(normalized)) {
+    return true;
+  }
+  return (
+    normalized.endsWith("_key") ||
+    normalized.endsWith("-key") ||
+    normalized.includes("apikey") ||
+    normalized.includes("api_key")
+  );
+}
+
+function checkCommittedFixtureJsonRedaction(value, filePath, keyPath = "") {
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) =>
+      checkCommittedFixtureJsonRedaction(
+        entry,
+        filePath,
+        `${keyPath}[${index}]`
+      )
+    );
+    return;
+  }
+  if (typeof value !== "object" || value === null) {
+    return;
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    const nextPath = keyPath ? `${keyPath}.${key}` : key;
+    if (
+      isSensitiveFixtureFieldName(key) &&
+      typeof entry === "string" &&
+      entry !== "[redacted]" &&
+      !entry.startsWith("test-fixture-")
+    ) {
+      fail(
+        `${filePath} ${nextPath} must use [redacted] or test-fixture-* placeholders`
+      );
+    }
+    checkCommittedFixtureJsonRedaction(entry, filePath, nextPath);
+  }
+}
+
+function isCredentialEnvVarName(name) {
+  return (
+    /_(API_KEY|API_SECRET|API_TOKEN|SECRET|PASSWORD|TOKEN)$/i.test(name) ||
+    /^(API_KEY|API_SECRET|API_TOKEN)$/i.test(name)
+  );
+}
+
+function checkEnvExampleDocumentsSecretsWithoutValues() {
+  if (!fs.existsSync(envExamplePath)) {
+    fail(".env.example missing at repository root");
+  }
+
+  const lines = fs.readFileSync(envExamplePath, "utf8").split("\n");
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index].trim();
+    if (line.length === 0 || line.startsWith("#")) {
+      continue;
+    }
+    const match = line.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) {
+      continue;
+    }
+    const [, name, rawValue] = match;
+    if (!isCredentialEnvVarName(name)) {
+      continue;
+    }
+    const value = rawValue.trim();
+    if (value.length > 0) {
+      fail(
+        `.env.example line ${index + 1}: ${name} must be documented without a credential value`
+      );
+    }
+  }
+}
+
+function checkTestFixtureRedaction() {
+  const fixturesDir = path.join(srcDir, "lib", "fixtures");
+  for (const filePath of walkFiles(fixturesDir, [".json"])) {
+    const payload = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    checkCommittedFixtureJsonRedaction(payload, filePath);
+  }
+
+  for (const filePath of walkFiles(srcDir, [".test.ts", ".test.tsx"])) {
+    const source = fs.readFileSync(filePath, "utf8");
+    for (const literal of LEGACY_INLINE_TEST_SECRET_LITERALS) {
+      if (
+        source.includes(`"${literal}"`) ||
+        source.includes(`'${literal}'`)
+      ) {
+        fail(
+          `${filePath} uses legacy inline secret fixture "${literal}"; import from fixtureSecrets.ts`
+        );
+      }
     }
   }
 }
@@ -227,7 +422,7 @@ checkLiveFetchLimitedToConnectors();
 for (const filePath of walkFiles(srcDir, [".ts", ".tsx", ".js"])) {
   const source = fs.readFileSync(filePath, "utf8");
   checkNoDynamicExecution("source", filePath, source);
-  checkNoApiKeyLogging(filePath, source);
+  checkNoSensitiveProductionLogging(filePath, source);
   checkConnectorFetchUsesGetWithoutBody(filePath, source);
 }
 
@@ -242,6 +437,10 @@ for (const filePath of walkFiles(distDir, [".js"])) {
   }
 }
 
+checkDistProductionLogging(distDir);
+checkTestFixtureRedaction();
+checkEnvExampleDocumentsSecretsWithoutValues();
+
 console.log(
-  "verify-extension-security: OK (extension pages CSP, no remote assets, live fetch blocked outside declared API hosts, no eval/new Function, no API key logging, enrichment GET without body)"
+  "verify-extension-security: OK (extension pages CSP, no remote assets, live fetch blocked outside declared API hosts, no eval/new Function, no sensitive production logging, redacted test fixtures, .env.example credential placeholders empty, enrichment GET without body)"
 );
