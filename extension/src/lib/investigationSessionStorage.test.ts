@@ -23,6 +23,7 @@ import {
   startNewInvestigationSession,
   STORAGE_KEY_INVESTIGATION_SESSIONS,
   syncActiveInvestigationSessionFromScan,
+  toggleActiveInvestigationSessionIocPin,
 } from "./investigationSessionStorage";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
@@ -392,7 +393,9 @@ describe("investigationSessionStorage", () => {
     expect(session?.enrichmentCount).toBe(0);
     expect(session?.exportCount).toBe(0);
 
-    const afterEnrichment = await recordActiveInvestigationSessionEnrichmentEvent(200);
+    const afterEnrichment = await recordActiveInvestigationSessionEnrichmentEvent({
+      now: 200,
+    });
     expect(afterEnrichment).toEqual(
       expect.objectContaining({
         enrichmentCount: 1,
@@ -401,7 +404,7 @@ describe("investigationSessionStorage", () => {
       })
     );
 
-    const afterExport = await recordActiveInvestigationSessionExportEvent(300);
+    const afterExport = await recordActiveInvestigationSessionExportEvent({ now: 300 });
     expect(afterExport).toEqual(
       expect.objectContaining({
         enrichmentCount: 1,
@@ -418,8 +421,8 @@ describe("investigationSessionStorage", () => {
       pageUrl: "https://example.com/first",
       now: 100,
     });
-    await recordActiveInvestigationSessionEnrichmentEvent(150);
-    await recordActiveInvestigationSessionExportEvent(160);
+    await recordActiveInvestigationSessionEnrichmentEvent({ now: 150 });
+    await recordActiveInvestigationSessionExportEvent({ now: 160 });
 
     const synced = await syncActiveInvestigationSessionFromScan({
       pageUrl: "https://example.com/second",
@@ -441,5 +444,85 @@ describe("investigationSessionStorage", () => {
   it("ignores activity events when no active session exists", async () => {
     expect(await recordActiveInvestigationSessionEnrichmentEvent()).toBeNull();
     expect(await recordActiveInvestigationSessionExportEvent()).toBeNull();
+  });
+
+  it("records first-seen timeline entries when scan sync includes IOC values", async () => {
+    const session = await syncActiveInvestigationSessionFromScan({
+      pageUrl: "https://example.com/alert",
+      entries: [
+        { type: IOC_TYPE.DOMAIN, value: "evil.example" },
+        { type: IOC_TYPE.IPV4, value: "8.8.8.8" },
+      ],
+      now: 500,
+    });
+
+    expect(session?.iocTimelines).toEqual({
+      "evil.example": {
+        firstSeenAt: 500,
+        enrichEvents: [],
+        exportEvents: [],
+        iocType: IOC_TYPE.DOMAIN,
+      },
+      "8.8.8.8": {
+        firstSeenAt: 500,
+        enrichEvents: [],
+        exportEvents: [],
+        iocType: IOC_TYPE.IPV4,
+      },
+    });
+  });
+
+  it("records per-IOC enrich and export events on the active session", async () => {
+    await startNewInvestigationSession({
+      title: "Timeline case",
+      pageUrl: "https://example.com",
+      now: 100,
+    });
+
+    await recordActiveInvestigationSessionEnrichmentEvent({
+      iocValue: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      now: 200,
+    });
+    await recordActiveInvestigationSessionExportEvent({
+      iocValue: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      now: 300,
+    });
+
+    const active = await getActiveInvestigationSession();
+    expect(active?.iocTimelines?.["8.8.8.8"]).toEqual({
+      firstSeenAt: 200,
+      enrichEvents: [200],
+      exportEvents: [300],
+      iocType: IOC_TYPE.IPV4,
+    });
+  });
+
+  it("pins and unpins IOCs on the active session", async () => {
+    await startNewInvestigationSession({
+      title: "Pin case",
+      pageUrl: "https://example.com",
+      now: 100,
+    });
+
+    const pinned = await toggleActiveInvestigationSessionIocPin({
+      iocValue: "evil.example",
+      iocType: IOC_TYPE.DOMAIN,
+      pinned: true,
+      now: 200,
+    });
+    expect(pinned?.pinnedIocs?.["evil.example"]).toEqual({
+      pinnedAt: 200,
+      iocType: IOC_TYPE.DOMAIN,
+    });
+
+    const unpinned = await toggleActiveInvestigationSessionIocPin({
+      iocValue: "evil.example",
+      pinned: false,
+      now: 300,
+    });
+    expect(unpinned?.pinnedIocs).toBeUndefined();
+    expect(await getActiveInvestigationSession()).toEqual(unpinned);
   });
 });

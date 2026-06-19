@@ -11,6 +11,7 @@ import { clearGlobalEnrichmentCooldown } from "../lib/enrichmentCooldown";
 import {
   STORAGE_KEY_INVESTIGATION_SESSIONS,
 } from "../lib/investigationSessionStorage";
+import { STORAGE_KEY_ENRICHMENT_SOURCE_LAST_STATUS } from "../lib/enrichmentSourceOps";
 import { handleEnrichIocMessage } from "./enrichmentHandler";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
@@ -462,5 +463,30 @@ describe("enrichment handler", () => {
       sessions: Array<{ enrichmentCount: number }>;
     };
     expect(stored.sessions[0]?.enrichmentCount).toBe(1);
+  });
+
+  it("records per-source last status after enrichment", async () => {
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "12 abuse confidence",
+      fetchedAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(store[STORAGE_KEY_ENRICHMENT_SOURCE_LAST_STATUS]).toEqual({
+      abuseipdb: {
+        status: ENRICHMENT_SOURCE_STATUS.OK,
+        at: "2026-01-01T00:00:00.000Z",
+      },
+    });
   });
 });

@@ -5,6 +5,17 @@ import {
   primeAnalystNoteForIoc,
   setSessionAnalystNote,
 } from "../lib/analystNotesSession";
+import {
+  getSessionIocLabel,
+  primeIocLabelForIoc,
+  setSessionIocLabel,
+} from "../lib/iocLabelSession";
+import { IOC_LABEL_IDS, formatIocLabelDisplay, type IocLabelId } from "../lib/iocLabel";
+import {
+  getActiveInvestigationSession,
+  toggleActiveInvestigationSessionIocPin,
+} from "../lib/investigationSessionStorage";
+import { isInvestigationSessionIocPinned } from "../lib/investigationSession";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildSourceStatusBadgeClassName,
@@ -13,6 +24,13 @@ import {
   HOVER_CARD_ANALYST_NOTES_LABEL,
   HOVER_CARD_ANALYST_NOTES_PLACEHOLDER,
   HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL,
+  HOVER_CARD_IOC_LABEL_LABEL,
+  HOVER_CARD_IOC_LABEL_NONE_VALUE,
+  HOVER_CARD_IOC_LABEL_SECTION_ARIA_LABEL,
+  HOVER_CARD_IOC_LABEL_SELECT_ID,
+  HOVER_CARD_IOC_PIN_ARIA_LABEL,
+  HOVER_CARD_IOC_PIN_LABEL,
+  HOVER_CARD_IOC_PINNED_LABEL,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
   HOVER_CARD_WHY_DETECTED_SECTION_ARIA_LABEL,
@@ -35,6 +53,22 @@ import {
   type HoverCardEnrichmentState,
   type HoverCardSourceEntry,
 } from "../lib/hoverCardEnrichment";
+import {
+  formatSaveToCollectionFeedback,
+  IOC_COLLECTION_CREATE_NEW_LABEL,
+  IOC_COLLECTION_NEW_NAME_PLACEHOLDER,
+  IOC_COLLECTION_NO_COLLECTIONS_TEXT,
+  IOC_COLLECTION_PICKER_HEADING,
+  IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL,
+  IOC_COLLECTION_SAVE_TO_NEW_LABEL,
+  normalizeIocCollectionName,
+  type IocCollection,
+} from "../lib/iocCollection";
+import {
+  requestAddIocToCollection,
+  requestCreateIocCollection,
+  requestListIocCollections,
+} from "../lib/iocCollectionClient";
 import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
 import { getPivotLinks } from "../lib/pivots";
 import {
@@ -74,10 +108,175 @@ export type HoverCardProps = {
   disabledSources?: readonly EnrichmentSourceId[];
   sourceResults?: readonly HoverCardSourceEntry[];
   analystNotes?: string;
+  iocLabel?: IocLabelId;
 };
 
 export function formatHoverCardTypeLabel(type: IocType): string {
   return TYPE_LABELS[type];
+}
+
+function HoverCardSaveToCollectionSection({
+  iocType,
+  value,
+}: {
+  iocType: IocType;
+  value: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [collections, setCollections] = useState<IocCollection[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void requestListIocCollections().then((list) => {
+      if (!cancelled) {
+        setCollections(list);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const member = { iocType, value };
+
+  const handleAddToExisting = async (collection: IocCollection) => {
+    const result = await requestAddIocToCollection({
+      collectionId: collection.id,
+      member,
+    });
+    if (!result) {
+      setFeedback("Could not save to collection.");
+      return;
+    }
+    setFeedback(
+      formatSaveToCollectionFeedback({
+        collectionName: result.collection.name,
+        added: result.added,
+      })
+    );
+  };
+
+  const handleCreateAndAdd = async () => {
+    const created = await requestCreateIocCollection({ name: newName });
+    if (!created) {
+      setFeedback("Could not create collection.");
+      return;
+    }
+
+    const result = await requestAddIocToCollection({
+      collectionId: created.id,
+      member,
+    });
+    if (!result) {
+      setFeedback("Collection created, but indicator was not saved.");
+      return;
+    }
+
+    setCollections((previous) => [
+      result.collection,
+      ...previous.filter((collection) => collection.id !== result.collection.id),
+    ]);
+    setNewName("");
+    setFeedback(
+      formatSaveToCollectionFeedback({
+        collectionName: result.collection.name,
+        added: result.added,
+      })
+    );
+  };
+
+  const canCreate = normalizeIocCollectionName(newName) !== null;
+
+  return (
+    <section
+      className="vera5-hover-card-save-collection"
+      aria-label={IOC_COLLECTION_PICKER_HEADING}
+      style={{ marginBottom: 8 }}
+    >
+      <button
+        type="button"
+        className="vera5-hover-card-save-collection-toggle"
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((current) => {
+            if (current) {
+              setFeedback(null);
+            }
+            return !current;
+          });
+        }}
+      >
+        {IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL}
+      </button>
+      {open ? (
+        <div
+          className="vera5-hover-card-save-collection-panel"
+          role="group"
+          aria-label={IOC_COLLECTION_PICKER_HEADING}
+        >
+          <p className="vera5-hover-card-save-collection-heading">
+            {IOC_COLLECTION_PICKER_HEADING}
+          </p>
+          {loading ? (
+            <p style={{ margin: "0 0 8px", fontSize: 12 }}>Loading collections…</p>
+          ) : collections.length === 0 ? (
+            <p style={{ margin: "0 0 8px", fontSize: 12 }}>
+              {IOC_COLLECTION_NO_COLLECTIONS_TEXT}
+            </p>
+          ) : (
+            <div className="vera5-hover-card-save-collection-list">
+              {collections.map((collection) => (
+                <button
+                  key={collection.id}
+                  type="button"
+                  className="vera5-hover-card-action"
+                  onClick={() => void handleAddToExisting(collection)}
+                >
+                  {collection.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <label className="vera5-hover-card-save-collection-field">
+            {IOC_COLLECTION_CREATE_NEW_LABEL}
+            <input
+              type="text"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
+              aria-label={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
+            />
+          </label>
+          <button
+            type="button"
+            className="vera5-hover-card-action"
+            disabled={!canCreate}
+            onClick={() => void handleCreateAndAdd()}
+          >
+            {IOC_COLLECTION_SAVE_TO_NEW_LABEL}
+          </button>
+          {feedback ? (
+            <p
+              className="vera5-hover-card-save-collection-feedback"
+              aria-live="polite"
+            >
+              {feedback}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
 }
 
 export function HoverCard({
@@ -97,6 +296,7 @@ export function HoverCard({
   disabledSources = [],
   sourceResults = [],
   analystNotes,
+  iocLabel,
 }: HoverCardProps) {
   const typeLabel = formatHoverCardTypeLabel(type);
   const valuePresentation = resolveIndicatorValuePresentation({ value, displayValue });
@@ -111,6 +311,10 @@ export function HoverCard({
   const [note, setNote] = useState(() =>
     analystNotes ?? getSessionAnalystNote(value)
   );
+  const [label, setLabel] = useState<IocLabelId | null>(() =>
+    iocLabel ?? getSessionIocLabel(value)
+  );
+  const [pinned, setPinned] = useState(false);
   const pivotLinks = getPivotLinks(type, value);
   const view = resolveHoverCardDisplayView({
     enrichmentState,
@@ -145,6 +349,19 @@ export function HoverCard({
     });
   }, [analystNotes, value]);
 
+  useEffect(() => {
+    setLabel(iocLabel ?? getSessionIocLabel(value));
+    primeIocLabelForIoc(value, (storedLabel) => {
+      setLabel((current) => (current ? current : storedLabel));
+    });
+  }, [iocLabel, value]);
+
+  useEffect(() => {
+    void getActiveInvestigationSession().then((session) => {
+      setPinned(session ? isInvestigationSessionIocPinned(session, value) : false);
+    });
+  }, [value]);
+
   const handleCopy = (copyValue: string) => {
     void copyTextToClipboard(copyValue).then((success) => {
       if (!success) {
@@ -169,6 +386,24 @@ export function HoverCard({
     setSessionAnalystNote(value, nextNote);
   };
 
+  const handleLabelChange = (nextValue: string) => {
+    const nextLabel =
+      nextValue === HOVER_CARD_IOC_LABEL_NONE_VALUE
+        ? null
+        : (nextValue as IocLabelId);
+    setLabel(nextLabel);
+    setSessionIocLabel(value, nextLabel);
+  };
+
+  const handlePinToggle = () => {
+    void toggleActiveInvestigationSessionIocPin({
+      iocValue: value,
+      iocType: type,
+    }).then((session) => {
+      setPinned(session ? isInvestigationSessionIocPinned(session, value) : false);
+    });
+  };
+
   return (
     <aside
       className="vera5-hover-card-panel"
@@ -179,6 +414,19 @@ export function HoverCard({
     >
       <div className="vera5-hover-card-header">
         <span className="vera5-hover-card-type">{typeLabel}</span>
+        <button
+          type="button"
+          className={
+            pinned
+              ? "vera5-hover-card-ioc-pin vera5-hover-card-ioc-pin--pinned"
+              : "vera5-hover-card-ioc-pin"
+          }
+          aria-pressed={pinned}
+          aria-label={HOVER_CARD_IOC_PIN_ARIA_LABEL}
+          onClick={handlePinToggle}
+        >
+          {pinned ? HOVER_CARD_IOC_PINNED_LABEL : HOVER_CARD_IOC_PIN_LABEL}
+        </button>
         {copyActions.map((action) => {
           const copied = copiedCopyValue === action.copyValue;
           return (
@@ -406,6 +654,35 @@ export function HoverCard({
           ))}
         </nav>
       ) : null}
+      <HoverCardSaveToCollectionSection iocType={type} value={value} />
+      <section
+        className="vera5-hover-card-ioc-label"
+        aria-label={HOVER_CARD_IOC_LABEL_SECTION_ARIA_LABEL}
+        style={{ marginBottom: view.showFooter ? 8 : 0 }}
+      >
+        <label
+          className="vera5-hover-card-ioc-label-label"
+          htmlFor={HOVER_CARD_IOC_LABEL_SELECT_ID}
+        >
+          {HOVER_CARD_IOC_LABEL_LABEL}
+        </label>
+        <select
+          id={HOVER_CARD_IOC_LABEL_SELECT_ID}
+          className="vera5-hover-card-ioc-label-select"
+          value={label ?? HOVER_CARD_IOC_LABEL_NONE_VALUE}
+          aria-label={HOVER_CARD_IOC_LABEL_LABEL}
+          onChange={(event) => {
+            handleLabelChange(event.target.value);
+          }}
+        >
+          <option value={HOVER_CARD_IOC_LABEL_NONE_VALUE}>None</option>
+          {IOC_LABEL_IDS.map((labelId) => (
+            <option key={labelId} value={labelId}>
+              {formatIocLabelDisplay(labelId)}
+            </option>
+          ))}
+        </select>
+      </section>
       <section
         className="vera5-hover-card-analyst-notes"
         aria-label={HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL}

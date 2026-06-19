@@ -49,6 +49,7 @@ import {
   buildInvestigationSessionTypeBreakdownText,
   buildInvestigationSessionActivitySummaryText,
   INVESTIGATION_SESSION_EMPTY_STATE_TEXT,
+  listInvestigationSessionIocMembers,
   normalizeInvestigationSessionTitle,
   type InvestigationSession,
 } from "../lib/investigationSession";
@@ -63,6 +64,45 @@ import {
   requestUpdateInvestigationSessionTitle,
   resolveActiveTabPageUrl,
 } from "../lib/investigationSessionClient";
+import {
+  buildInvestigationSessionExportInput,
+  copyInvestigationSessionExportToClipboard,
+  downloadInvestigationSessionExportFile,
+  type InvestigationSessionExportFormat,
+} from "../lib/investigationSessionExport";
+import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
+import {
+  buildAddFilteredToCollectionActionLabel,
+  buildPromoteSessionToCollectionActionLabel,
+  formatAddFilteredToCollectionFeedback,
+  formatPromoteSessionToCollectionFeedback,
+  formatSaveToCollectionFeedback,
+  IOC_COLLECTION_ADD_FILTERED_HEADING,
+  IOC_COLLECTION_CREATE_NEW_LABEL,
+  IOC_COLLECTION_NEW_NAME_PLACEHOLDER,
+  IOC_COLLECTION_NO_COLLECTIONS_TEXT,
+  IOC_COLLECTION_PICKER_HEADING,
+  IOC_COLLECTION_PROMOTE_SESSION_BUTTON_LABEL,
+  IOC_COLLECTION_PROMOTE_SESSION_HEADING,
+  IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL,
+  IOC_COLLECTION_SAVE_TO_NEW_LABEL,
+  normalizeIocCollectionName,
+  type IocCollection,
+} from "../lib/iocCollection";
+import {
+  requestAddIocToCollection,
+  requestAddIocsToCollection,
+  requestCreateIocCollection,
+  requestListIocCollections,
+} from "../lib/iocCollectionClient";
+import { requestEnrichmentSourceOps } from "../lib/enrichmentSourceOpsClient";
+import {
+  formatEnrichmentCacheClearedAtLabel,
+  formatEnrichmentSourceLastStatusLabel,
+  formatEnrichmentSourceOpsCooldownLabel,
+  ENRICHMENT_SOURCE_OPS_SECTION_TITLE,
+  type EnrichmentSourceOpsSnapshot,
+} from "../lib/enrichmentSourceOps";
 import { VERA5_COLOR } from "../lib/theme";
 import {
   resolveWorkspaceTrayView,
@@ -124,6 +164,625 @@ function TrayIndicatorValue({ entry }: { entry: TabScanSummaryEntry }) {
         {HOVER_CARD_REFANGED_VALUE_LABEL} {presentation.refangedValue}
       </span>
     </span>
+  );
+}
+
+function SaveToCollectionTrayPanel({
+  entry,
+  open,
+  onToggle,
+  feedback,
+  onFeedback,
+}: {
+  entry: TabScanSummaryEntry;
+  open: boolean;
+  onToggle: () => void;
+  feedback: string | null;
+  onFeedback: (message: string | null) => void;
+}) {
+  const [collections, setCollections] = useState<IocCollection[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void requestListIocCollections().then((list) => {
+      if (!cancelled) {
+        setCollections(list);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const member = { iocType: entry.type, value: entry.value };
+
+  const handleAddToExisting = async (collection: IocCollection) => {
+    const result = await requestAddIocToCollection({
+      collectionId: collection.id,
+      member,
+    });
+    if (!result) {
+      onFeedback("Could not save to collection.");
+      return;
+    }
+    onFeedback(
+      formatSaveToCollectionFeedback({
+        collectionName: result.collection.name,
+        added: result.added,
+      })
+    );
+  };
+
+  const handleCreateAndAdd = async () => {
+    const created = await requestCreateIocCollection({ name: newName });
+    if (!created) {
+      onFeedback("Could not create collection.");
+      return;
+    }
+
+    const result = await requestAddIocToCollection({
+      collectionId: created.id,
+      member,
+    });
+    if (!result) {
+      onFeedback("Collection created, but indicator was not saved.");
+      return;
+    }
+
+    setCollections((previous) => [
+      result.collection,
+      ...previous.filter((collection) => collection.id !== result.collection.id),
+    ]);
+    setNewName("");
+    onFeedback(
+      formatSaveToCollectionFeedback({
+        collectionName: result.collection.name,
+        added: result.added,
+      })
+    );
+  };
+
+  const canCreate = normalizeIocCollectionName(newName) !== null;
+
+  return (
+    <div
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      style={{ marginTop: 4 }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        style={{
+          border: "none",
+          background: "transparent",
+          color: POPUP_THEME.accent,
+          cursor: "pointer",
+          fontSize: 12,
+          fontWeight: 600,
+          padding: 0,
+        }}
+      >
+        {IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL}
+      </button>
+      {open ? (
+        <div
+          role="group"
+          aria-label={IOC_COLLECTION_PICKER_HEADING}
+          style={{
+            marginTop: 6,
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: `1px solid ${POPUP_THEME.border}`,
+            backgroundColor: POPUP_THEME.surface,
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 8px",
+              fontSize: 12,
+              fontWeight: 700,
+              color: POPUP_THEME.accentText,
+            }}
+          >
+            {IOC_COLLECTION_PICKER_HEADING}
+          </p>
+          {loading ? (
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: POPUP_THEME.muted }}>
+              Loading collections…
+            </p>
+          ) : collections.length === 0 ? (
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: POPUP_THEME.muted }}>
+              {IOC_COLLECTION_NO_COLLECTIONS_TEXT}
+            </p>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                marginBottom: 8,
+              }}
+            >
+              {collections.map((collection) => (
+                <button
+                  key={collection.id}
+                  type="button"
+                  onClick={() => void handleAddToExisting(collection)}
+                  style={{
+                    ...buttonStyle,
+                    width: "100%",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  {collection.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <label
+            style={{
+              display: "block",
+              fontSize: 12,
+              color: POPUP_THEME.text,
+              marginBottom: 6,
+            }}
+          >
+            {IOC_COLLECTION_CREATE_NEW_LABEL}
+            <input
+              type="text"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
+              aria-label={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 4,
+                padding: "6px 8px",
+                borderRadius: 6,
+                border: `1px solid ${POPUP_THEME.border}`,
+                backgroundColor: POPUP_THEME.buttonBg,
+                color: POPUP_THEME.text,
+                boxSizing: "border-box",
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!canCreate}
+            onClick={() => void handleCreateAndAdd()}
+            style={{
+              ...buttonStyle,
+              width: "100%",
+              cursor: canCreate ? "pointer" : "not-allowed",
+              opacity: canCreate ? 1 : 0.65,
+            }}
+          >
+            {IOC_COLLECTION_SAVE_TO_NEW_LABEL}
+          </button>
+          {feedback ? (
+            <p
+              aria-live="polite"
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: POPUP_THEME.muted,
+                lineHeight: 1.4,
+              }}
+            >
+              {feedback}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AddFilteredToCollectionPanel({
+  entries,
+  open,
+  onToggle,
+  feedback,
+  onFeedback,
+}: {
+  entries: TabScanSummaryEntry[];
+  open: boolean;
+  onToggle: () => void;
+  feedback: string | null;
+  onFeedback: (message: string | null) => void;
+}) {
+  const [collections, setCollections] = useState<IocCollection[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [newName, setNewName] = useState("");
+  const members = entries.map((entry) => ({
+    iocType: entry.type,
+    value: entry.value,
+  }));
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void requestListIocCollections().then((list) => {
+      if (!cancelled) {
+        setCollections(list);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const handleAddToExisting = async (collection: IocCollection) => {
+    const result = await requestAddIocsToCollection({
+      collectionId: collection.id,
+      members,
+    });
+    if (!result) {
+      onFeedback("Could not add filtered indicators to collection.");
+      return;
+    }
+    onFeedback(
+      formatAddFilteredToCollectionFeedback({
+        collectionName: result.collection.name,
+        addedCount: result.addedCount,
+        duplicateCount: result.duplicateCount,
+        totalCount: result.totalCount,
+      })
+    );
+  };
+
+  const handleCreateAndAdd = async () => {
+    const created = await requestCreateIocCollection({ name: newName });
+    if (!created) {
+      onFeedback("Could not create collection.");
+      return;
+    }
+
+    const result = await requestAddIocsToCollection({
+      collectionId: created.id,
+      members,
+    });
+    if (!result) {
+      onFeedback("Collection created, but filtered indicators were not saved.");
+      return;
+    }
+
+    setCollections((previous) => [
+      result.collection,
+      ...previous.filter((collection) => collection.id !== result.collection.id),
+    ]);
+    setNewName("");
+    onFeedback(
+      formatAddFilteredToCollectionFeedback({
+        collectionName: result.collection.name,
+        addedCount: result.addedCount,
+        duplicateCount: result.duplicateCount,
+        totalCount: result.totalCount,
+      })
+    );
+  };
+
+  const canCreate = normalizeIocCollectionName(newName) !== null;
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        disabled={entries.length === 0}
+        style={{
+          border: `1px solid ${POPUP_THEME.border}`,
+          borderRadius: 6,
+          backgroundColor: POPUP_THEME.buttonBg,
+          color: POPUP_THEME.accent,
+          cursor: entries.length === 0 ? "not-allowed" : "pointer",
+          fontSize: 12,
+          fontWeight: 600,
+          padding: "6px 10px",
+          width: "100%",
+          opacity: entries.length === 0 ? 0.65 : 1,
+        }}
+      >
+        {buildAddFilteredToCollectionActionLabel(entries.length)}
+      </button>
+      {open ? (
+        <div
+          role="group"
+          aria-label={IOC_COLLECTION_ADD_FILTERED_HEADING}
+          style={{
+            marginTop: 6,
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: `1px solid ${POPUP_THEME.border}`,
+            backgroundColor: POPUP_THEME.surface,
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 8px",
+              fontSize: 12,
+              fontWeight: 700,
+              color: POPUP_THEME.accentText,
+            }}
+          >
+            {IOC_COLLECTION_ADD_FILTERED_HEADING}
+          </p>
+          {loading ? (
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: POPUP_THEME.muted }}>
+              Loading collections…
+            </p>
+          ) : collections.length === 0 ? (
+            <p style={{ margin: "0 0 8px", fontSize: 12, color: POPUP_THEME.muted }}>
+              {IOC_COLLECTION_NO_COLLECTIONS_TEXT}
+            </p>
+          ) : (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                marginBottom: 8,
+              }}
+            >
+              {collections.map((collection) => (
+                <button
+                  key={collection.id}
+                  type="button"
+                  onClick={() => void handleAddToExisting(collection)}
+                  style={{
+                    ...buttonStyle,
+                    width: "100%",
+                    textAlign: "left",
+                    cursor: "pointer",
+                  }}
+                >
+                  {collection.name}
+                </button>
+              ))}
+            </div>
+          )}
+          <label
+            style={{
+              display: "block",
+              fontSize: 12,
+              color: POPUP_THEME.text,
+              marginBottom: 6,
+            }}
+          >
+            {IOC_COLLECTION_CREATE_NEW_LABEL}
+            <input
+              type="text"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              placeholder={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
+              aria-label={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 4,
+                padding: "6px 8px",
+                borderRadius: 6,
+                border: `1px solid ${POPUP_THEME.border}`,
+                backgroundColor: POPUP_THEME.buttonBg,
+                color: POPUP_THEME.text,
+                boxSizing: "border-box",
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!canCreate}
+            onClick={() => void handleCreateAndAdd()}
+            style={{
+              ...buttonStyle,
+              width: "100%",
+              cursor: canCreate ? "pointer" : "not-allowed",
+              opacity: canCreate ? 1 : 0.65,
+            }}
+          >
+            {IOC_COLLECTION_SAVE_TO_NEW_LABEL}
+          </button>
+          {feedback ? (
+            <p
+              aria-live="polite"
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: POPUP_THEME.muted,
+                lineHeight: 1.4,
+              }}
+            >
+              {feedback}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function PromoteSessionToCollectionPanel({
+  session,
+  open,
+  onToggle,
+  feedback,
+  onFeedback,
+}: {
+  session: InvestigationSession;
+  open: boolean;
+  onToggle: () => void;
+  feedback: string | null;
+  onFeedback: (message: string | null) => void;
+}) {
+  const sessionMembers = listInvestigationSessionIocMembers(session);
+  const [collectionName, setCollectionName] = useState(session.title);
+
+  useEffect(() => {
+    setCollectionName(session.title);
+  }, [session.id, session.title]);
+
+  const handlePromote = async () => {
+    if (sessionMembers.length === 0) {
+      onFeedback(formatPromoteSessionToCollectionFeedback({
+        collectionName: collectionName.trim() || session.title,
+        addedCount: 0,
+        duplicateCount: 0,
+        totalCount: 0,
+      }));
+      return;
+    }
+
+    const created = await requestCreateIocCollection({ name: collectionName });
+    if (!created) {
+      onFeedback("Could not create collection.");
+      return;
+    }
+
+    const result = await requestAddIocsToCollection({
+      collectionId: created.id,
+      members: sessionMembers,
+    });
+    if (!result) {
+      onFeedback("Collection created, but session indicators were not saved.");
+      return;
+    }
+
+    onFeedback(
+      formatPromoteSessionToCollectionFeedback({
+        collectionName: result.collection.name,
+        addedCount: result.addedCount,
+        duplicateCount: result.duplicateCount,
+        totalCount: result.totalCount,
+      })
+    );
+  };
+
+  const canPromote = normalizeIocCollectionName(collectionName) !== null;
+
+  return (
+    <div style={{ marginTop: 10, marginBottom: 10 }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        disabled={sessionMembers.length === 0}
+        style={{
+          border: `1px solid ${POPUP_THEME.border}`,
+          borderRadius: 6,
+          backgroundColor: POPUP_THEME.buttonBg,
+          color: POPUP_THEME.accent,
+          cursor: sessionMembers.length === 0 ? "not-allowed" : "pointer",
+          fontSize: 12,
+          fontWeight: 600,
+          padding: "6px 10px",
+          width: "100%",
+          opacity: sessionMembers.length === 0 ? 0.65 : 1,
+        }}
+      >
+        {buildPromoteSessionToCollectionActionLabel(sessionMembers.length)}
+      </button>
+      {open ? (
+        <div
+          role="group"
+          aria-label={IOC_COLLECTION_PROMOTE_SESSION_HEADING}
+          style={{
+            marginTop: 6,
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: `1px solid ${POPUP_THEME.border}`,
+            backgroundColor: POPUP_THEME.surface,
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 8px",
+              fontSize: 12,
+              fontWeight: 700,
+              color: POPUP_THEME.accentText,
+            }}
+          >
+            {IOC_COLLECTION_PROMOTE_SESSION_HEADING}
+          </p>
+          <p style={{ margin: "0 0 8px", fontSize: 12, color: POPUP_THEME.muted }}>
+            {buildInvestigationSessionIocCountText(sessionMembers.length)}
+          </p>
+          <label
+            style={{
+              display: "block",
+              fontSize: 12,
+              color: POPUP_THEME.text,
+              marginBottom: 6,
+            }}
+          >
+            {IOC_COLLECTION_CREATE_NEW_LABEL}
+            <input
+              type="text"
+              value={collectionName}
+              onChange={(event) => setCollectionName(event.target.value)}
+              placeholder={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
+              aria-label={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
+              style={{
+                display: "block",
+                width: "100%",
+                marginTop: 4,
+                padding: "6px 8px",
+                borderRadius: 6,
+                border: `1px solid ${POPUP_THEME.border}`,
+                backgroundColor: POPUP_THEME.buttonBg,
+                color: POPUP_THEME.text,
+                boxSizing: "border-box",
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={!canPromote}
+            onClick={() => void handlePromote()}
+            style={{
+              ...buttonStyle,
+              width: "100%",
+              cursor: canPromote ? "pointer" : "not-allowed",
+              opacity: canPromote ? 1 : 0.65,
+            }}
+          >
+            {IOC_COLLECTION_PROMOTE_SESSION_BUTTON_LABEL}
+          </button>
+          {feedback ? (
+            <p
+              aria-live="polite"
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: POPUP_THEME.muted,
+                lineHeight: 1.4,
+              }}
+            >
+              {feedback}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -284,6 +943,35 @@ function sessionActionButtonStyle(): CSSProperties {
   };
 }
 
+function sourceOpsStatusColor(
+  statusLabel: string
+): string {
+  if (
+    statusLabel === "OK" ||
+    statusLabel === "Cached" ||
+    statusLabel === "Disabled" ||
+    statusLabel === "Skipped"
+  ) {
+    return POPUP_THEME.muted;
+  }
+  if (statusLabel === "Rate limited") {
+    return POPUP_THEME.error;
+  }
+  if (statusLabel === "No recent activity") {
+    return POPUP_THEME.muted;
+  }
+  return POPUP_THEME.error;
+}
+
+const INVESTIGATION_SESSION_EXPORT_ACTIONS: readonly {
+  format: InvestigationSessionExportFormat;
+  label: string;
+}[] = [
+  { format: "markdown", label: "Markdown" },
+  { format: "json", label: "JSON" },
+  { format: "csv", label: "CSV" },
+];
+
 export function Popup() {
   const [enabled, setEnabled] = useState(true);
   const [highlightEnabled, setHighlightEnabledState] = useState(true);
@@ -309,6 +997,27 @@ export function Popup() {
   const [recentSessions, setRecentSessions] = useState<InvestigationSession[]>([]);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [sessionExportMessage, setSessionExportMessage] = useState<string | null>(null);
+  const [sourceOps, setSourceOps] = useState<EnrichmentSourceOpsSnapshot | null>(null);
+  const [sourceOpsReady, setSourceOpsReady] = useState(false);
+  const [saveToCollectionAnchorId, setSaveToCollectionAnchorId] = useState<string | null>(
+    null
+  );
+  const [saveToCollectionFeedback, setSaveToCollectionFeedback] = useState<string | null>(
+    null
+  );
+  const [addFilteredToCollectionOpen, setAddFilteredToCollectionOpen] = useState(false);
+  const [addFilteredToCollectionFeedback, setAddFilteredToCollectionFeedback] = useState<
+    string | null
+  >(null);
+  const [promoteSessionToCollectionOpen, setPromoteSessionToCollectionOpen] = useState(false);
+  const [promoteSessionToCollectionFeedback, setPromoteSessionToCollectionFeedback] =
+    useState<string | null>(null);
+
+  const refreshSourceOps = async () => {
+    const snapshot = await requestEnrichmentSourceOps();
+    setSourceOps(snapshot);
+  };
 
   const applyActiveInvestigationSession = (session: InvestigationSession | null) => {
     setActiveSession(session);
@@ -345,7 +1054,24 @@ export function Popup() {
     void refreshInvestigationSessionState().finally(() => {
       setSessionTitleReady(true);
     });
+    void refreshSourceOps().finally(() => {
+      setSourceOpsReady(true);
+    });
   }, []);
+
+  useEffect(() => {
+    if (!sourceOps?.globalCooldownActive) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshSourceOps();
+    }, 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [sourceOps?.globalCooldownActive]);
 
   useEffect(() => {
     if (!scanSummary || scanSummary.entries.length === 0) {
@@ -456,10 +1182,20 @@ export function Popup() {
       if (!tab?.id) {
         return;
       }
+
+      const message = openWorkspaceMessage();
       try {
-        await chrome.tabs.sendMessage(tab.id, openWorkspaceMessage());
+        await chrome.tabs.sendMessage(tab.id, message);
       } catch {
-        // Content script may be unavailable on restricted pages.
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ["content.js"],
+          });
+          await chrome.tabs.sendMessage(tab.id, message);
+        } catch {
+          // Content script may be unavailable on restricted pages.
+        }
       }
       window.close();
     });
@@ -483,6 +1219,81 @@ export function Popup() {
         applyActiveInvestigationSession(session);
         await refreshInvestigationSessionState();
       }
+    })();
+  };
+
+  const resolveActiveSessionExportInput = async () => {
+    if (!activeSession) {
+      return null;
+    }
+
+    return buildInvestigationSessionExportInput({
+      session: activeSession,
+      entries: scanSummary?.entries ?? [],
+    });
+  };
+
+  const handleCopySessionExport = (format: InvestigationSessionExportFormat) => {
+    if (!ready || !sessionTitleReady || !activeSession) {
+      return;
+    }
+
+    void (async () => {
+      const input = await resolveActiveSessionExportInput();
+      if (!input) {
+        return;
+      }
+
+      const copied = await copyInvestigationSessionExportToClipboard(input, format);
+      if (copied) {
+        void recordActiveInvestigationSessionExportEvent({
+          iocs: input.records.map((record) => ({
+            value: record.value,
+            type: record.type,
+          })),
+        });
+      }
+
+      const label = INVESTIGATION_SESSION_EXPORT_ACTIONS.find(
+        (action) => action.format === format
+      )?.label;
+      setSessionExportMessage(
+        copied
+          ? `Copied session ${label ?? format} export.`
+          : `Could not copy session ${label ?? format} export.`
+      );
+    })();
+  };
+
+  const handleDownloadSessionExport = (format: InvestigationSessionExportFormat) => {
+    if (!ready || !sessionTitleReady || !activeSession) {
+      return;
+    }
+
+    void (async () => {
+      const input = await resolveActiveSessionExportInput();
+      if (!input) {
+        return;
+      }
+
+      const downloaded = downloadInvestigationSessionExportFile(input, format, document);
+      if (downloaded) {
+        void recordActiveInvestigationSessionExportEvent({
+          iocs: input.records.map((record) => ({
+            value: record.value,
+            type: record.type,
+          })),
+        });
+      }
+
+      const label = INVESTIGATION_SESSION_EXPORT_ACTIONS.find(
+        (action) => action.format === format
+      )?.label;
+      setSessionExportMessage(
+        downloaded
+          ? `Downloaded session ${label ?? format} export.`
+          : `Could not download session ${label ?? format} export.`
+      );
     })();
   };
 
@@ -970,6 +1781,16 @@ export function Popup() {
             ) : (
               <div style={{ marginBottom: 10 }} />
             )}
+            <PromoteSessionToCollectionPanel
+              session={activeSession}
+              open={promoteSessionToCollectionOpen}
+              onToggle={() => {
+                setPromoteSessionToCollectionFeedback(null);
+                setPromoteSessionToCollectionOpen((current) => !current);
+              }}
+              feedback={promoteSessionToCollectionFeedback}
+              onFeedback={setPromoteSessionToCollectionFeedback}
+            />
           </>
         ) : null}
         <button
@@ -985,6 +1806,69 @@ export function Popup() {
         >
           New session
         </button>
+        {activeSession ? (
+          <>
+            <h3
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                margin: "12px 0 8px",
+                color: POPUP_THEME.accentText,
+              }}
+            >
+              Export session
+            </h3>
+            <div
+              role="group"
+              aria-label="Copy session export"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                marginBottom: 8,
+              }}
+            >
+              {INVESTIGATION_SESSION_EXPORT_ACTIONS.map(({ format, label }) => (
+                <button
+                  key={`copy-${format}`}
+                  type="button"
+                  disabled={!ready || !sessionTitleReady}
+                  onClick={() => handleCopySessionExport(format)}
+                  style={sessionActionButtonStyle()}
+                >
+                  Copy {label}
+                </button>
+              ))}
+            </div>
+            <div
+              role="group"
+              aria-label="Download session export"
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                marginBottom: sessionExportMessage ? 8 : 0,
+              }}
+            >
+              {INVESTIGATION_SESSION_EXPORT_ACTIONS.map(({ format, label }) => (
+                <button
+                  key={`download-${format}`}
+                  type="button"
+                  disabled={!ready || !sessionTitleReady}
+                  onClick={() => handleDownloadSessionExport(format)}
+                  style={sessionActionButtonStyle()}
+                >
+                  Download {label}
+                </button>
+              ))}
+            </div>
+            {sessionExportMessage ? (
+              <p aria-live="polite" style={trayStatusStyle()}>
+                {sessionExportMessage}
+              </p>
+            ) : null}
+          </>
+        ) : null}
         {recentSessions.length > 0 ? (
           <>
             <h3
@@ -1160,6 +2044,137 @@ export function Popup() {
           <p style={{ ...trayStatusStyle(), marginTop: 12 }}>No saved sessions yet.</p>
         )}
       </section>
+      <section
+        aria-label={ENRICHMENT_SOURCE_OPS_SECTION_TITLE}
+        style={{
+          marginTop: 14,
+          borderTop: `1px solid ${POPUP_THEME.border}`,
+          paddingTop: 12,
+        }}
+      >
+        <h2
+          style={{
+            fontSize: 13,
+            fontWeight: 700,
+            margin: "0 0 8px",
+            color: POPUP_THEME.accentText,
+          }}
+        >
+          {ENRICHMENT_SOURCE_OPS_SECTION_TITLE}
+        </h2>
+        {!sourceOpsReady ? (
+          <p style={trayStatusStyle()} aria-live="polite">
+            Loading source status…
+          </p>
+        ) : !sourceOps ? (
+          <p style={trayStatusStyle()} aria-live="polite">
+            Source status unavailable.
+          </p>
+        ) : (
+          <>
+            <p
+              aria-live="polite"
+              style={{
+                fontSize: 12,
+                margin: "0 0 4px",
+                color: sourceOps.globalCooldownActive
+                  ? POPUP_THEME.error
+                  : POPUP_THEME.muted,
+                lineHeight: 1.5,
+              }}
+            >
+              {formatEnrichmentSourceOpsCooldownLabel(sourceOps)}
+            </p>
+            <p
+              style={{
+                fontSize: 12,
+                margin: "0 0 4px",
+                color: POPUP_THEME.muted,
+                lineHeight: 1.5,
+              }}
+            >
+              Last cache clear:{" "}
+              {formatEnrichmentCacheClearedAtLabel(sourceOps.lastCacheClearAt)}
+            </p>
+            <p
+              style={{
+                fontSize: 12,
+                margin: "0 0 10px",
+                color: POPUP_THEME.text,
+                lineHeight: 1.5,
+              }}
+            >
+              Cache entries: {sourceOps.totalCacheEntryCount}
+            </p>
+            <ul
+              aria-label="Enrichment source status"
+              style={{
+                listStyle: "none",
+                margin: 0,
+                padding: 0,
+                display: "flex",
+                flexDirection: "column",
+                gap: 6,
+                maxHeight: 220,
+                overflowY: "auto",
+              }}
+            >
+              {sourceOps.sources.map((row) => {
+                const statusLabel = formatEnrichmentSourceLastStatusLabel(
+                  row.lastStatus
+                );
+                return (
+                  <li
+                    key={row.sourceId}
+                    style={{
+                      border: `1px solid ${POPUP_THEME.border}`,
+                      borderRadius: 6,
+                      padding: "6px 8px",
+                      backgroundColor: POPUP_THEME.trayRowBg,
+                      display: "grid",
+                      gridTemplateColumns: "minmax(0, 1fr) auto",
+                      gap: 8,
+                      alignItems: "center",
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: POPUP_THEME.text,
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {row.displayName}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: sourceOpsStatusColor(statusLabel),
+                          marginTop: 2,
+                        }}
+                      >
+                        {statusLabel}
+                      </div>
+                    </div>
+                    <span
+                      style={{
+                        flexShrink: 0,
+                        fontSize: 11,
+                        color: POPUP_THEME.muted,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {row.cacheEntryCount} cached
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </section>
       {scanState === "error" ? (        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
           Scan failed. Reload the tab and try again.
         </p>
@@ -1229,6 +2244,16 @@ export function Popup() {
                   </button>
                 ))}
               </div>
+              <AddFilteredToCollectionPanel
+                entries={filteredEntries}
+                open={addFilteredToCollectionOpen}
+                onToggle={() => {
+                  setAddFilteredToCollectionFeedback(null);
+                  setAddFilteredToCollectionOpen((current) => !current);
+                }}
+                feedback={addFilteredToCollectionFeedback}
+                onFeedback={setAddFilteredToCollectionFeedback}
+              />
               {trayNavigationMessage ? (
                 <p
                   role="alert"
@@ -1337,6 +2362,22 @@ export function Popup() {
                         ) : null}
                       </span>
                       </div>
+                      <SaveToCollectionTrayPanel
+                        entry={entry}
+                        open={saveToCollectionAnchorId === entry.anchorId}
+                        feedback={
+                          saveToCollectionAnchorId === entry.anchorId
+                            ? saveToCollectionFeedback
+                            : null
+                        }
+                        onFeedback={setSaveToCollectionFeedback}
+                        onToggle={() => {
+                          setSaveToCollectionFeedback(null);
+                          setSaveToCollectionAnchorId((current) =>
+                            current === entry.anchorId ? null : entry.anchorId
+                          );
+                        }}
+                      />
                       <WhyDetectedTrayDetails entry={entry} />
                     </li>
                     );

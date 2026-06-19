@@ -32,6 +32,11 @@ export const MESSAGE = {
   RENAME_INVESTIGATION_SESSION: "RENAME_INVESTIGATION_SESSION",
   ARCHIVE_INVESTIGATION_SESSION: "ARCHIVE_INVESTIGATION_SESSION",
   DELETE_INVESTIGATION_SESSION: "DELETE_INVESTIGATION_SESSION",
+  GET_ENRICHMENT_SOURCE_OPS: "GET_ENRICHMENT_SOURCE_OPS",
+  LIST_IOC_COLLECTIONS: "LIST_IOC_COLLECTIONS",
+  CREATE_IOC_COLLECTION: "CREATE_IOC_COLLECTION",
+  ADD_IOC_TO_COLLECTION: "ADD_IOC_TO_COLLECTION",
+  ADD_IOCS_TO_COLLECTION: "ADD_IOCS_TO_COLLECTION",
 } as const;
 
 export type MessageType = (typeof MESSAGE)[keyof typeof MESSAGE];
@@ -103,6 +108,28 @@ export type DeleteInvestigationSessionMessage = {
   type: typeof MESSAGE.DELETE_INVESTIGATION_SESSION;
   sessionId: string;
 };
+export type GetEnrichmentSourceOpsMessage = {
+  type: typeof MESSAGE.GET_ENRICHMENT_SOURCE_OPS;
+};
+export type ListIocCollectionsMessage = {
+  type: typeof MESSAGE.LIST_IOC_COLLECTIONS;
+};
+export type CreateIocCollectionMessage = {
+  type: typeof MESSAGE.CREATE_IOC_COLLECTION;
+  name: string;
+  description?: string;
+};
+export type AddIocToCollectionMessage = {
+  type: typeof MESSAGE.ADD_IOC_TO_COLLECTION;
+  collectionId: string;
+  iocType: IocType;
+  value: string;
+};
+export type AddIocsToCollectionMessage = {
+  type: typeof MESSAGE.ADD_IOCS_TO_COLLECTION;
+  collectionId: string;
+  members: Array<{ iocType: IocType; value: string }>;
+};
 
 export type Vera5Message =
   | PingMessage
@@ -120,7 +147,12 @@ export type Vera5Message =
   | ReopenInvestigationSessionMessage
   | RenameInvestigationSessionMessage
   | ArchiveInvestigationSessionMessage
-  | DeleteInvestigationSessionMessage;
+  | DeleteInvestigationSessionMessage
+  | GetEnrichmentSourceOpsMessage
+  | ListIocCollectionsMessage
+  | CreateIocCollectionMessage
+  | AddIocToCollectionMessage
+  | AddIocsToCollectionMessage;
 
 export type MessageResponse =
   | { ok: true; payload?: unknown }
@@ -257,6 +289,49 @@ export function deleteInvestigationSessionMessage(
   };
 }
 
+export function getEnrichmentSourceOpsMessage(): GetEnrichmentSourceOpsMessage {
+  return { type: MESSAGE.GET_ENRICHMENT_SOURCE_OPS };
+}
+
+export function listIocCollectionsMessage(): ListIocCollectionsMessage {
+  return { type: MESSAGE.LIST_IOC_COLLECTIONS };
+}
+
+export function createIocCollectionMessage(input: {
+  name: string;
+  description?: string;
+}): CreateIocCollectionMessage {
+  return {
+    type: MESSAGE.CREATE_IOC_COLLECTION,
+    name: input.name,
+    ...(input.description ? { description: input.description } : {}),
+  };
+}
+
+export function addIocToCollectionMessage(input: {
+  collectionId: string;
+  iocType: IocType;
+  value: string;
+}): AddIocToCollectionMessage {
+  return {
+    type: MESSAGE.ADD_IOC_TO_COLLECTION,
+    collectionId: input.collectionId,
+    iocType: input.iocType,
+    value: input.value,
+  };
+}
+
+export function addIocsToCollectionMessage(input: {
+  collectionId: string;
+  members: Array<{ iocType: IocType; value: string }>;
+}): AddIocsToCollectionMessage {
+  return {
+    type: MESSAGE.ADD_IOCS_TO_COLLECTION,
+    collectionId: input.collectionId,
+    members: input.members,
+  };
+}
+
 function readNonEmptySessionId(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -366,6 +441,96 @@ export function isDeleteInvestigationSessionMessage(
     return false;
   }
   return readNonEmptySessionId(record.sessionId) !== null;
+}
+
+export function isGetEnrichmentSourceOpsMessage(
+  raw: unknown
+): raw is GetEnrichmentSourceOpsMessage {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.GET_ENRICHMENT_SOURCE_OPS
+  );
+}
+
+export function isListIocCollectionsMessage(
+  raw: unknown
+): raw is ListIocCollectionsMessage {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.LIST_IOC_COLLECTIONS
+  );
+}
+
+export function isCreateIocCollectionMessage(
+  raw: unknown
+): raw is CreateIocCollectionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.CREATE_IOC_COLLECTION) {
+    return false;
+  }
+  return typeof record.name === "string" && record.name.trim().length > 0;
+}
+
+export function isAddIocToCollectionMessage(
+  raw: unknown
+): raw is AddIocToCollectionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.ADD_IOC_TO_COLLECTION) {
+    return false;
+  }
+  if (typeof record.collectionId !== "string" || record.collectionId.trim().length === 0) {
+    return false;
+  }
+  if (typeof record.value !== "string" || record.value.trim().length === 0) {
+    return false;
+  }
+  return (
+    typeof record.iocType === "string" &&
+    Object.values(IOC_TYPE).includes(record.iocType as IocType)
+  );
+}
+
+function isIocCollectionMemberInput(value: unknown): value is { iocType: IocType; value: string } {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (typeof record.value !== "string" || record.value.trim().length === 0) {
+    return false;
+  }
+  return (
+    typeof record.iocType === "string" &&
+    Object.values(IOC_TYPE).includes(record.iocType as IocType)
+  );
+}
+
+export function isAddIocsToCollectionMessage(
+  raw: unknown
+): raw is AddIocsToCollectionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.ADD_IOCS_TO_COLLECTION) {
+    return false;
+  }
+  if (typeof record.collectionId !== "string" || record.collectionId.trim().length === 0) {
+    return false;
+  }
+  if (!Array.isArray(record.members) || record.members.length === 0) {
+    return false;
+  }
+  return record.members.every((member) => isIocCollectionMemberInput(member));
 }
 
 export function getTabScanSummaryMessage(
@@ -540,6 +705,21 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   }
   if (type === MESSAGE.DELETE_INVESTIGATION_SESSION) {
     return isDeleteInvestigationSessionMessage(raw);
+  }
+  if (type === MESSAGE.GET_ENRICHMENT_SOURCE_OPS) {
+    return isGetEnrichmentSourceOpsMessage(raw);
+  }
+  if (type === MESSAGE.LIST_IOC_COLLECTIONS) {
+    return isListIocCollectionsMessage(raw);
+  }
+  if (type === MESSAGE.CREATE_IOC_COLLECTION) {
+    return isCreateIocCollectionMessage(raw);
+  }
+  if (type === MESSAGE.ADD_IOC_TO_COLLECTION) {
+    return isAddIocToCollectionMessage(raw);
+  }
+  if (type === MESSAGE.ADD_IOCS_TO_COLLECTION) {
+    return isAddIocsToCollectionMessage(raw);
   }
   return (
     type === MESSAGE.PING ||

@@ -1,8 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { IOC_TYPE } from "./iocRegex";
 import {
+  applyInvestigationSessionIocTimelineEvent,
+  buildInvestigationSessionIocTimelineSummaryLines,
   computeInvestigationSessionRollups,
   createInvestigationSession,
+  getInvestigationSessionIocTimeline,
+  listInvestigationSessionIocTimelineEntries,
+  listInvestigationSessionIocMembers,
+  listInvestigationSessionPinnedIocKeys,
+  normalizeInvestigationSessionIocTimelines,
+  normalizeInvestigationSessionPinnedIocs,
+  isInvestigationSessionIocPinned,
+  sortEntriesByInvestigationSessionPinPriority,
+  toggleInvestigationSessionIocPin,
   buildDefaultInvestigationSessionTitle,
   buildInvestigationSessionIocCountText,
   buildInvestigationSessionTypeBreakdownText,
@@ -465,5 +476,173 @@ describe("investigationSession rollups", () => {
         },
       })
     ).toBe(false);
+  });
+});
+
+describe("investigationSession IOC timelines", () => {
+  it("records first seen once and appends enrich and export events", () => {
+    const base = createInvestigationSession({
+      title: "Case",
+      pageUrl: "https://example.com",
+      id: "vera5-inv-timeline",
+      createdAt: 100,
+      updatedAt: 100,
+    })!;
+
+    const firstSeen = applyInvestigationSessionIocTimelineEvent(base, {
+      iocKey: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      event: "first-seen",
+      at: 200,
+    });
+    const duplicateFirstSeen = applyInvestigationSessionIocTimelineEvent(firstSeen, {
+      iocKey: "8.8.8.8",
+      event: "first-seen",
+      at: 250,
+    });
+    const enriched = applyInvestigationSessionIocTimelineEvent(duplicateFirstSeen, {
+      iocKey: "8.8.8.8",
+      event: "enrich",
+      at: 300,
+    });
+    const exported = applyInvestigationSessionIocTimelineEvent(enriched, {
+      iocKey: "8.8.8.8",
+      event: "export",
+      at: 400,
+    });
+
+    const timeline = getInvestigationSessionIocTimeline(exported, "8.8.8.8");
+    expect(timeline).toEqual({
+      firstSeenAt: 200,
+      enrichEvents: [300],
+      exportEvents: [400],
+      iocType: IOC_TYPE.IPV4,
+    });
+    expect(listInvestigationSessionIocTimelineEntries(timeline!)).toEqual([
+      { kind: "first-seen", at: 200 },
+      { kind: "enrich", at: 300 },
+      { kind: "export", at: 400 },
+    ]);
+    expect(buildInvestigationSessionIocTimelineSummaryLines(timeline!)).toHaveLength(3);
+  });
+
+  it("normalizes stored IOC timelines", () => {
+    expect(
+      normalizeInvestigationSessionIocTimelines({
+        " evil.example ": {
+          firstSeenAt: 100,
+          enrichEvents: [200],
+          exportEvents: [300],
+          iocType: IOC_TYPE.DOMAIN,
+        },
+      })
+    ).toEqual({
+      "evil.example": {
+        firstSeenAt: 100,
+        enrichEvents: [200],
+        exportEvents: [300],
+        iocType: IOC_TYPE.DOMAIN,
+      },
+    });
+  });
+});
+
+describe("investigationSession pinned IOCs", () => {
+  it("toggles pin state and sorts pinned entries ahead of unpinned tray rows", () => {
+    const base = createInvestigationSession({
+      title: "Case",
+      pageUrl: "https://example.com",
+      id: "vera5-inv-pinned",
+      createdAt: 100,
+      updatedAt: 100,
+    })!;
+
+    const pinned = toggleInvestigationSessionIocPin(base, {
+      iocKey: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      pinned: true,
+      at: 200,
+    });
+    expect(isInvestigationSessionIocPinned(pinned, "8.8.8.8")).toBe(true);
+    expect(listInvestigationSessionPinnedIocKeys(pinned)).toEqual(["8.8.8.8"]);
+
+    const unpinned = toggleInvestigationSessionIocPin(pinned, {
+      iocKey: "8.8.8.8",
+      pinned: false,
+    });
+    expect(isInvestigationSessionIocPinned(unpinned, "8.8.8.8")).toBe(false);
+    expect(unpinned.pinnedIocs).toBeUndefined();
+
+    const sorted = sortEntriesByInvestigationSessionPinPriority(
+      [
+        { value: "example.com" },
+        { value: "8.8.8.8" },
+        { value: "evil.test" },
+      ],
+      ["8.8.8.8", "evil.test"]
+    );
+    expect(sorted.map((entry) => entry.value)).toEqual([
+      "8.8.8.8",
+      "evil.test",
+      "example.com",
+    ]);
+  });
+
+  it("lists session IOC members from timelines and pinned records", () => {
+    const session = createInvestigationSession({
+      title: "Case",
+      pageUrl: "https://example.com",
+      id: "vera5-inv-members",
+      createdAt: 100,
+      updatedAt: 100,
+      totalIocCount: 3,
+      iocCountByType: {
+        [IOC_TYPE.IPV4]: 1,
+        [IOC_TYPE.DOMAIN]: 1,
+        [IOC_TYPE.URL]: 1,
+      },
+      iocTimelines: {
+        "8.8.8.8": {
+          firstSeenAt: 100,
+          enrichEvents: [],
+          exportEvents: [],
+          iocType: IOC_TYPE.IPV4,
+        },
+        "example.com": {
+          firstSeenAt: 100,
+          enrichEvents: [],
+          exportEvents: [],
+          iocType: IOC_TYPE.DOMAIN,
+        },
+      },
+      pinnedIocs: {
+        "https://example.com/login": {
+          pinnedAt: 200,
+          iocType: IOC_TYPE.URL,
+        },
+      },
+    })!;
+
+    expect(listInvestigationSessionIocMembers(session)).toEqual([
+      { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+      { iocType: IOC_TYPE.DOMAIN, value: "example.com" },
+      { iocType: IOC_TYPE.URL, value: "https://example.com/login" },
+    ]);
+  });
+
+  it("normalizes stored pinned IOC records", () => {
+    expect(
+      normalizeInvestigationSessionPinnedIocs({
+        " 8.8.8.8 ": {
+          pinnedAt: 100,
+          iocType: IOC_TYPE.IPV4,
+        },
+      })
+    ).toEqual({
+      "8.8.8.8": {
+        pinnedAt: 100,
+        iocType: IOC_TYPE.IPV4,
+      },
+    });
   });
 });

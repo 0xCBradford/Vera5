@@ -10,9 +10,10 @@ Everything below assumes the **production on-page overlay** (content script on t
 
 | Surface | When you use it |
 |---------|-----------------|
-| **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. |
-| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page**, and read the match count (popup scan only). |
-| **Settings (options) page** | Configure API keys, enable sources, set manual-only and auto-scan, clear the enrichment cache, export or import settings. |
+| **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. Assign **Label**, **Pin**, and read **Session timeline** on the card when an investigation session is active. |
+| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page** / **Scan selection**, manage the **Investigation session** (title, rollups, export, recent sessions), review **Detected indicators**, and read **Source operations** (cache, cooldown, per-source status). |
+| **Workspace sidebar** | Optional on-page tray from **Open sidebar** in the popup: filter indicators, copy subsets, and export templates while staying on the alert page. Pinned session indicators sort to the top. |
+| **Settings (options) page** | Configure API keys, enable sources, set manual-only and auto-scan, clear the enrichment cache, export or import settings. Source health details live in the popup **Source operations** section—not a duplicate panel here. |
 | **React hover card** | Unit tests and `npm run dev` only. It is **not** shown on live page tabs. It exercises the same local scoring rules as the overlay; unit tests may also show per-source contribution chips the overlay does not render. |
 
 The keyboard shortcut runs the same scan as **Scan page** but does not update the popup match count unless you scan from the popup.
@@ -62,6 +63,107 @@ flowchart TD
 6. **Dismiss** the card with Escape or by clicking outside it. After a keyboard-opened card, **Escape** also returns focus to the highlight you opened from.
 
 Use [examples/sample-blog.html](../examples/sample-blog.html) or [examples/sample-alert.html](../examples/sample-alert.html) for local practice after a build. For Splunk-export and Security Onion-style dashboard pages, see [soc-validation-fixtures.md](soc-validation-fixtures.md).
+
+## Investigation Session (local case workspace)
+
+An **Investigation session** is a named, local workspace for one review—for example **Phishing Investigation** or **MDR-48291**. Vera5 stores sessions in **extension local storage** on your machine. There is no Vera5 cloud sync, shared team session, or hosted case platform in the current release.
+
+Sessions track:
+
+| Field | What it gives you |
+|-------|-------------------|
+| **Title** | Human-readable case name (editable in the popup). |
+| **IOC rollups** | Total indicator count and per-type breakdown (domains, IPv4, URLs, hashes, CVEs, and so on). |
+| **Activity counts** | How many enrich and export actions ran while the session was active. |
+| **Per-IOC memory** | Optional **Label**, **Pin**, and **Session timeline** (first seen, enrich events, export events) on the hover card. |
+| **Session export** | One-click **Markdown**, **JSON**, or **CSV** case artifacts with enrichment snippets and source attribution. |
+
+### Starting and naming a session
+
+1. Open the toolbar **popup**.
+2. Under **Investigation session**, edit **Session title** or click **New session** before you scan.
+3. Alternatively, run **Scan page** with no active session—Vera5 **auto-creates** a session on the first scan and ties rollups to that page.
+
+The default title is **Investigation**; after a scan it may include the page hostname. Rename anytime; the title field saves when you leave the field.
+
+### Phishing and email triage workflow
+
+Typical path when reviewing a phish report, webmail thread, or `.eml` rendered in the browser:
+
+```mermaid
+flowchart TD
+  Open[Open message or alert page]
+  Name[Name session in popup]
+  Scan[Scan page]
+  Rollup[Read IOC rollups in popup]
+  Triage[Enrich and label key indicators]
+  Pin[Pin priority IOCs]
+  Export[Export session Markdown or JSON]
+  Open --> Name
+  Name --> Scan
+  Scan --> Rollup
+  Rollup --> Triage
+  Triage --> Pin
+  Pin --> Export
+```
+
+1. **Open the message or alert** in a tab Vera5 is allowed to read. If the site is on the default sensitive webmail denylist, adjust domain policy in settings before live enrich (see [Before you start](#before-you-start)).
+2. **Name the session** (for example **Phishing Investigation — vendor impersonation**).
+3. **Scan the page** from the popup or keyboard shortcut. Expect domains, URLs, IPv4 addresses, and file hashes from links, headers, and body text.
+4. **Read rollups** in the popup: total indicators and lines such as **8 domains · 4 IPs · 2 hashes · 9 URLs**. Use **Detected indicators** filters to focus on URLs or domains first.
+5. **Open the workspace sidebar** (**Open sidebar**) if you want a persistent on-page list while scrolling a long thread.
+6. **Enrich** high-value IOCs (landing domains, redirect URLs, sender-related IPs, attachment hashes) using **›** on highlights or the hover card.
+7. **Label** indicators on the hover card (**Benign**, **Internal**, **Suppress false positive**, **Case important**) to record triage decisions locally.
+8. **Pin** priority IOCs with the **Pin** control on the hover card; pinned rows rise to the top of the workspace sidebar list.
+9. **Export the session** (**Copy Markdown**, **Copy JSON**, **Download CSV**, and so on) for case notes, handoff, or ticket paste. Exports redact API keys and raw vendor secrets; they include session summary, indicator rows, enrichment snippets, and source attribution.
+
+Practice locally with [examples/sample-alert.html](../examples/sample-alert.html), which mixes IPv4, domain, URL, hash, and CVE-style indicators in alert prose.
+
+### MDR and alert-dashboard workflow
+
+Use the same session model when pivoting from an alert queue page, SOC dashboard export, or ticket with embedded indicators:
+
+1. **Name the session** after the alert or ticket ID so **Recent sessions** stays searchable after browser restarts.
+2. **Scan the visible alert body** (not the entire mailbox). Rollups show what Vera5 extracted from on-screen text—useful for quick type counts before deep enrichment.
+3. **Prioritize by type** using popup filters: URLs and domains for phish/MDR pivots; IPv4 for C2 or scanning noise; hashes for malware family checks.
+4. **Record activity** as you enrich and export—popup **Activity** lines reflect enrich/export counts tied to the session.
+5. **Reopen** a saved session from **Recent sessions** after closing the browser; rollups and timelines persist locally.
+6. For dashboard-style validation pages (Splunk export layouts, Security Onion views), see fixture guidance in [soc-validation-fixtures.md](soc-validation-fixtures.md).
+
+### Session management in the popup
+
+| Action | Where | Effect |
+|--------|-------|--------|
+| **New session** | Investigation session | Creates a fresh active session with your title; scan rollups attach to it. |
+| **Session title** | Text field | Updates the active session name (saved on blur). |
+| **Reopen** | Recent sessions | Makes a saved session active again. |
+| **Rename** | Recent sessions | Changes title without losing rollups or timelines. |
+| **Archive** | Recent sessions | Hides the session from **Recent sessions**; data stays in local storage until **Delete**. Archived sessions cannot be reopened from the popup. |
+| **Delete** | Recent sessions | Permanently removes the session from local storage. |
+
+### Session export formats
+
+When an active session exists, the popup **Export session** group offers:
+
+| Format | Best for |
+|--------|----------|
+| **Markdown** | Case notes, wiki pages, ticket comments—with summary header, indicator table, enrichment sections, and attribution. |
+| **JSON** | Automation, downstream parsers, or archival (`schemaVersion`, session metadata, IOC array with enrichments). |
+| **CSV** | Spreadsheets and SOAR ingest—one row per IOC using the same CSV row contract as tray subset export. |
+
+Use **Copy** for clipboard paste or **Download** for a file. Session exports **never include API keys** or `rawVendorJson` secrets; vendor JSON in notes or summaries is redacted when detected.
+
+### Source operations
+
+The popup **Source operations** section summarizes enrichment health: global rate-limit cooldown, last cache clear time, total cache entries, and per-source last status with cached row counts. After you **Clear cache** on the settings page, the **Last cache clear** timestamp updates there. For vendor quota details, see [api-integrations.md](api-integrations.md).
+
+### What Investigation Session does not do
+
+| Not in scope | What to use instead |
+|--------------|---------------------|
+| Team or cloud case sync | Export Markdown/JSON and share through your existing case tools. |
+| Cross-tab “seen elsewhere” alerts | Re-scan or reopen the session on the relevant tab. |
+| Full hosted case management | Local session + export only. |
 
 ## Local enrichment cache
 
@@ -213,6 +315,8 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | Hit a rate limit | Read the retry hint; wait for cooldown; check vendor usage dashboards listed in [api-integrations.md](api-integrations.md). |
 | Conflicting risk signals | Read **How this score was computed**; follow pivots for diverging sources; do not treat the headline band as consensus when **Sources disagree** is shown. |
 | Single live source only | Expect **Unknown risk** and an empty reasoning note until a second source returns parseable OK data. |
+| Phishing case handoff | Name session, enrich key IOCs, label/pin priorities, **Export session** Markdown or JSON; verify denylist if webmail blocked enrich. |
+| MDR alert revisit after restart | Popup **Recent sessions** → **Reopen**; confirm rollups match the alert page you scan again. |
 | Sensitive / classified work | Manual-only on; enable only approved sources; do not export settings with keys unless policy allows. |
 
 ## Troubleshooting

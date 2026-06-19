@@ -35,6 +35,7 @@ import {
   isEnrichmentSourceId,
 } from "../lib/enrichmentSourceRegistry";
 import { recordActiveInvestigationSessionEnrichmentEvent } from "../lib/investigationSessionStorage";
+import { recordEnrichmentSourceLastStatuses } from "../lib/enrichmentSourceOps";
 import type { EnrichIocMessage, MessageResponse } from "../lib/messages";
 import { isEnrichIocMessage } from "../lib/messages";
 import {
@@ -261,6 +262,15 @@ export async function handleEnrichIocMessage(
   }
 
   const { source, sources } = await enrichFromMessage(raw);
-  await recordActiveInvestigationSessionEnrichmentEvent();
+  const sanitized = sanitizeEnrichmentIoc({
+    value: raw.value,
+    type: raw.iocType,
+  });
+  await recordEnrichmentSourceLastStatuses(sources);
+  await recordActiveInvestigationSessionEnrichmentEvent(
+    sanitized
+      ? { iocValue: sanitized.value, iocType: sanitized.type }
+      : undefined
+  );
   return { ok: true, payload: { source, sources } };
 }

@@ -9,6 +9,9 @@ import {
   type EnrichmentSourceCacheTtlRecord,
 } from "./storage";
 
+export const STORAGE_KEY_ENRICHMENT_CACHE_CLEARED_AT =
+  "enrichmentCacheClearedAt";
+
 export const STORAGE_KEY_ENRICHMENT_CACHE = "enrichmentCache";
 
 export const DEFAULT_MAX_ENRICHMENT_CACHE_ENTRIES = 500;
@@ -55,6 +58,20 @@ export function countEnrichmentCacheEntries(
   cache: EnrichmentCacheRecord
 ): number {
   return Object.keys(cache).length;
+}
+
+export function countEnrichmentCacheEntriesBySource(
+  cache: EnrichmentCacheRecord
+): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const cacheKey of Object.keys(cache)) {
+    const parsed = parseEnrichmentCacheKey(cacheKey);
+    if (!parsed) {
+      continue;
+    }
+    counts[parsed.sourceId] = (counts[parsed.sourceId] ?? 0) + 1;
+  }
+  return counts;
 }
 
 export function getMaxEnrichmentCacheEntries(): number {
@@ -342,8 +359,36 @@ export async function writeEnrichmentCacheEntry(
   await upsertEnrichmentCacheEntry(cacheKey, payload, fetchedAt);
 }
 
-export async function clearEnrichmentCache(): Promise<void> {
+export type ClearEnrichmentCacheOptions = {
+  recordClearTimestamp?: boolean;
+};
+
+export async function readEnrichmentCacheClearedAt(): Promise<string | null> {
+  const result = await chrome.storage.local.get(
+    STORAGE_KEY_ENRICHMENT_CACHE_CLEARED_AT
+  );
+  const value = result[STORAGE_KEY_ENRICHMENT_CACHE_CLEARED_AT];
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return null;
+  }
+  return value;
+}
+
+export async function persistEnrichmentCacheClearedAt(
+  clearedAtMs: number = Date.now()
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_ENRICHMENT_CACHE_CLEARED_AT]: new Date(clearedAtMs).toISOString(),
+  });
+}
+
+export async function clearEnrichmentCache(
+  options?: ClearEnrichmentCacheOptions
+): Promise<void> {
   await chrome.storage.local.remove(STORAGE_KEY_ENRICHMENT_CACHE);
+  if (options?.recordClearTimestamp === true) {
+    await persistEnrichmentCacheClearedAt();
+  }
 }
 
 export async function invalidateEnrichmentCacheForIoc(

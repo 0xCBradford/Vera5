@@ -516,6 +516,56 @@ export function buildVera5UiStylesCss(): string {
 .vera5-tray-why-detected .vera5-why-detected {
   margin-top: 4px;
 }
+.vera5-tray-save-collection {
+  margin-top: 4px;
+}
+.vera5-tray-save-collection-toggle {
+  border: none;
+  background: transparent;
+  color: var(--vera5-accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+.vera5-tray-save-collection-panel {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--vera5-border);
+  background: var(--vera5-surface);
+}
+.vera5-tray-save-collection-heading {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--vera5-accent-text);
+}
+.vera5-tray-save-collection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.vera5-tray-save-collection-feedback {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--vera5-text-muted);
+  line-height: 1.4;
+}
+.vera5-workspace-field-label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vera5-text-muted);
+}
+.vera5-workspace-field-label input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
 .vera5-hover-card-analyst-notes {
   margin-top: 8px;
 }
@@ -548,6 +598,127 @@ export function buildVera5UiStylesCss(): string {
 .vera5-hover-card-analyst-notes-input:focus {
   outline: 2px solid color-mix(in srgb, var(--vera5-accent) 35%, transparent);
   outline-offset: 1px;
+}
+.vera5-hover-card-ioc-label {
+  margin-top: 8px;
+}
+.vera5-hover-card-ioc-label-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-ioc-label-select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--vera5-border);
+  background-color: #ffffff;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.vera5-hover-card-ioc-label-select:focus {
+  outline: 2px solid color-mix(in srgb, var(--vera5-accent) 35%, transparent);
+  outline-offset: 1px;
+}
+.vera5-hover-card-ioc-timeline {
+  margin-top: 8px;
+}
+.vera5-hover-card-ioc-timeline-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-ioc-timeline-list {
+  margin: 0;
+  padding-left: 16px;
+  color: #334155;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.vera5-hover-card-ioc-timeline-item {
+  margin: 0;
+}
+.vera5-hover-card-ioc-pin {
+  border: 1px solid var(--vera5-border);
+  border-radius: 4px;
+  background: #ffffff;
+  color: #334155;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.vera5-hover-card-ioc-pin--pinned {
+  border-color: color-mix(in srgb, var(--vera5-accent) 45%, var(--vera5-border));
+  color: var(--vera5-accent-text);
+  background: color-mix(in srgb, var(--vera5-accent) 8%, #ffffff);
+}
+.vera5-hover-card-ioc-pin:focus {
+  outline: 2px solid color-mix(in srgb, var(--vera5-accent) 35%, transparent);
+  outline-offset: 1px;
+}
+.vera5-hover-card-save-collection {
+  margin-top: 8px;
+}
+.vera5-hover-card-save-collection-toggle {
+  border: none;
+  background: transparent;
+  color: var(--vera5-accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+.vera5-hover-card-save-collection-panel {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--vera5-border);
+  background: var(--vera5-surface);
+}
+.vera5-hover-card-save-collection-heading {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--vera5-accent-text);
+}
+.vera5-hover-card-save-collection-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.vera5-hover-card-save-collection-field {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vera5-text-muted);
+}
+.vera5-hover-card-save-collection-field input {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+.vera5-hover-card-save-collection-feedback {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--vera5-text-muted);
+  line-height: 1.4;
 }
 .vera5-hover-card-export {
   margin-top: 8px;
@@ -978,8 +1149,8 @@ html.vera5-workspace-open {
   color: #dbeafe;
 }
 .vera5-workspace-toggle--on .vera5-workspace-toggle-switch {
-  background: #1d4ed8;
-  border-color: #2563eb;
+  background: #1dd8a6;
+  border-color: #16b88b;
 }
 .vera5-workspace-toggle--on .vera5-workspace-toggle-knob {
   transform: translateX(14px);
@@ -1127,6 +1298,16 @@ html.vera5-workspace-open {
 }
 .vera5-workspace-tray-row--bulk-selected {
   border-color: color-mix(in srgb, #38bdf8 45%, #475569);
+}
+.vera5-workspace-tray-row--pinned {
+  border-color: color-mix(in srgb, var(--vera5-accent) 35%, #475569);
+}
+.vera5-workspace-tray-pin {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--vera5-accent-text);
+  font-size: 12px;
+  line-height: 1;
 }
 .vera5-workspace-tray-select {
   flex-shrink: 0;

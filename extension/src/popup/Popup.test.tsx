@@ -6,11 +6,24 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IOC_RULE_ID, IOC_TYPE } from "../lib/iocRegex";
 import { createInvestigationSession } from "../lib/investigationSession";
+import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
+import { ENRICHMENT_SOURCE } from "../lib/enrichmentSourceRegistry";
+import { createEmptyEnrichmentCache } from "../lib/cache";
+import { buildEnrichmentSourceOpsRows } from "../lib/enrichmentSourceOps";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import * as tabScanSummary from "../lib/tabScanSummary";
+import { createIocCollection } from "../lib/iocCollection";
 import { MESSAGE } from "../lib/messages";
 import { Popup } from "./Popup";
+
+const sampleCollection = createIocCollection({
+  id: "vera5-col-popup-test",
+  name: "Phishing Campaign",
+  createdAt: 100,
+  updatedAt: 100,
+  members: [],
+})!;
 
 const sampleActiveSession = createInvestigationSession({
   id: "vera5-inv-popup-test",
@@ -18,13 +31,24 @@ const sampleActiveSession = createInvestigationSession({
   pageUrl: "https://example.com/alert",
   createdAt: 100,
   updatedAt: 200,
-  totalIocCount: 23,
+  totalIocCount: 2,
   iocCountByType: {
-    [IOC_TYPE.DOMAIN]: 8,
-    [IOC_TYPE.IPV4]: 4,
-    [IOC_TYPE.MD5]: 1,
-    [IOC_TYPE.SHA256]: 1,
-    [IOC_TYPE.URL]: 9,
+    [IOC_TYPE.IPV4]: 1,
+    [IOC_TYPE.DOMAIN]: 1,
+  },
+  iocTimelines: {
+    "8.8.8.8": {
+      firstSeenAt: 100,
+      enrichEvents: [],
+      exportEvents: [],
+      iocType: IOC_TYPE.IPV4,
+    },
+    "example.com": {
+      firstSeenAt: 100,
+      enrichEvents: [],
+      exportEvents: [],
+      iocType: IOC_TYPE.DOMAIN,
+    },
   },
 });
 
@@ -79,14 +103,48 @@ const emptySummary = buildTabScanSummary({
   tabId: 7,
 });
 
+const defaultSourceOpsSnapshot = {
+  globalCooldownRemainingSeconds: 0,
+  globalCooldownActive: false,
+  lastCacheClearAt: null,
+  totalCacheEntryCount: 0,
+  sources: buildEnrichmentSourceOpsRows({
+    lastStatus: {},
+    cache: createEmptyEnrichmentCache(),
+  }),
+};
+
+const sampleSourceOpsSnapshot = {
+  globalCooldownRemainingSeconds: 30,
+  globalCooldownActive: true,
+  lastCacheClearAt: "2026-01-01T12:00:00.000Z",
+  totalCacheEntryCount: 2,
+  sources: buildEnrichmentSourceOpsRows({
+    lastStatus: {
+      [ENRICHMENT_SOURCE.ABUSEIPDB]: {
+        status: ENRICHMENT_SOURCE_STATUS.ERROR,
+        at: "2026-01-01T00:00:00.000Z",
+        errorCode: "rate_limited",
+      },
+    },
+    cache: {
+      "8.8.8.8|abuseipdb": { fetchedAt: 1, payload: {} },
+      "1.1.1.1|abuseipdb": { fetchedAt: 2, payload: {} },
+    },
+  }),
+};
+
 function stubChrome(options: {
   initialSummary?: ReturnType<typeof buildTabScanSummary> | null;
   postScanSummary?: ReturnType<typeof buildTabScanSummary> | null;
   activeSession?: ReturnType<typeof createInvestigationSession> | null;
   recentSessions?: ReturnType<typeof createInvestigationSession>[];
+  sourceOps?: typeof defaultSourceOpsSnapshot;
   navigateResponse?: unknown;
   navigateSendFailed?: boolean;
+  collections?: ReturnType<typeof createIocCollection>[];
 }): void {
+  const collections = [...(options.collections ?? [])];
   vi.stubGlobal("chrome", {
     storage: {
       local: {
@@ -96,7 +154,7 @@ function stubChrome(options: {
     },
     runtime: {
       id: "test-extension-id",
-      sendMessage: vi.fn(async (message: { type?: string }) => {
+      sendMessage: vi.fn(async (message: { type?: string; name?: string; collectionId?: string; iocType?: string; value?: string }) => {
         if (message?.type === MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION) {
           return {
             ok: true,
@@ -107,6 +165,113 @@ function stubChrome(options: {
           return {
             ok: true,
             payload: { sessions: options.recentSessions ?? [] },
+          };
+        }
+        if (message?.type === MESSAGE.GET_ENRICHMENT_SOURCE_OPS) {
+          return {
+            ok: true,
+            payload: options.sourceOps ?? defaultSourceOpsSnapshot,
+          };
+        }
+        if (message?.type === MESSAGE.LIST_IOC_COLLECTIONS) {
+          return {
+            ok: true,
+            payload: { collections },
+          };
+        }
+        if (message?.type === MESSAGE.CREATE_IOC_COLLECTION) {
+          const created = createIocCollection({
+            id: `vera5-col-${collections.length + 1}`,
+            name: message.name ?? "",
+            createdAt: 200,
+            updatedAt: 200,
+            members: [],
+          });
+          if (!created) {
+            return { ok: false, error: "could not create collection" };
+          }
+          collections.unshift(created);
+          return { ok: true, payload: { collection: created } };
+        }
+        if (message?.type === MESSAGE.ADD_IOC_TO_COLLECTION) {
+          const index = collections.findIndex(
+            (collection) => collection?.id === message.collectionId
+          );
+          if (index < 0 || !collections[index]) {
+            return { ok: false, error: "collection not found" };
+          }
+          const existing = collections[index]!;
+          const member = {
+            iocType: message.iocType as (typeof IOC_TYPE)[keyof typeof IOC_TYPE],
+            value: message.value ?? "",
+          };
+          const alreadyPresent = existing.members.some(
+            (item) => item.iocType === member.iocType && item.value === member.value
+          );
+          const nextMembers = alreadyPresent
+            ? existing.members
+            : [...existing.members, member];
+          const updated = createIocCollection({
+            ...existing,
+            members: nextMembers,
+            updatedAt: 300,
+          });
+          if (!updated) {
+            return { ok: false, error: "could not add indicator to collection" };
+          }
+          collections[index] = updated;
+          return {
+            ok: true,
+            payload: { collection: updated, added: !alreadyPresent },
+          };
+        }
+        if (message?.type === MESSAGE.ADD_IOCS_TO_COLLECTION) {
+          const bulkMessage = message as {
+            collectionId?: string;
+            members?: Array<{ iocType: string; value: string }>;
+          };
+          const index = collections.findIndex(
+            (collection) => collection?.id === bulkMessage.collectionId
+          );
+          if (index < 0 || !collections[index]) {
+            return { ok: false, error: "collection not found" };
+          }
+          const existing = collections[index]!;
+          const incoming = bulkMessage.members ?? [];
+          let addedCount = 0;
+          let duplicateCount = 0;
+          const nextMembers = [...existing.members];
+          for (const member of incoming) {
+            const alreadyPresent = nextMembers.some(
+              (item) => item.iocType === member.iocType && item.value === member.value
+            );
+            if (alreadyPresent) {
+              duplicateCount++;
+              continue;
+            }
+            nextMembers.push({
+              iocType: member.iocType as (typeof IOC_TYPE)[keyof typeof IOC_TYPE],
+              value: member.value,
+            });
+            addedCount++;
+          }
+          const updated = createIocCollection({
+            ...existing,
+            members: nextMembers,
+            updatedAt: 300,
+          });
+          if (!updated) {
+            return { ok: false, error: "could not add indicators to collection" };
+          }
+          collections[index] = updated;
+          return {
+            ok: true,
+            payload: {
+              collection: updated,
+              addedCount,
+              duplicateCount,
+              totalCount: incoming.length,
+            },
           };
         }
         return {
@@ -205,10 +370,46 @@ describe("Popup IOC tray", () => {
       ) as HTMLInputElement | null;
       expect(titleInput?.value).toBe("Phishing Investigation");
     });
-    expect(mounted?.container.textContent).toContain("23 indicators");
-    expect(mounted?.container.textContent).toContain(
-      "8 domains · 4 IPs · 2 hashes · 9 URLs"
-    );
+    expect(mounted?.container.textContent).toContain("2 indicators");
+    expect(mounted?.container.textContent).toContain("1 domain · 1 IP");
+  });
+
+  it("shows source operations with cooldown, cache clear, and per-source status", async () => {
+    stubChrome({
+      initialSummary: null,
+      sourceOps: sampleSourceOpsSnapshot,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Source operations");
+      expect(mounted?.container.textContent).toContain(
+        "Rate limit cooldown: 30s remaining"
+      );
+    });
+    expect(mounted?.container.textContent).toContain("Last cache clear:");
+    expect(mounted?.container.textContent).toContain("Cache entries: 2");
+    expect(mounted?.container.textContent).toContain("AbuseIPDB");
+    expect(mounted?.container.textContent).toContain("Rate limited");
+    expect(mounted?.container.textContent).toContain("2 cached");
+  });
+
+  it("shows session export copy and download actions when a session is active", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Export session");
+    });
+    expect(mounted?.container.textContent).toContain("Copy Markdown");
+    expect(mounted?.container.textContent).toContain("Copy JSON");
+    expect(mounted?.container.textContent).toContain("Copy CSV");
+    expect(mounted?.container.textContent).toContain("Download Markdown");
+    expect(mounted?.container.textContent).toContain("Download JSON");
+    expect(mounted?.container.textContent).toContain("Download CSV");
   });
 
   it("shows recent sessions with reopen, rename, archive, and delete actions", async () => {
@@ -373,6 +574,114 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain(
         "Could not open this indicator on the page. Reload the tab and rescan."
+      );
+    });
+  });
+
+  it("opens save-to-collection picker and saves an indicator to an existing collection", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      collections: [sampleCollection],
+    });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+    });
+
+    const saveToggle = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Save to collection…"
+    );
+    expect(saveToggle).toBeDefined();
+    flushSync(() => {
+      saveToggle?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Phishing Campaign");
+    });
+
+    const collectionButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Phishing Campaign"
+    );
+    expect(collectionButton).toBeDefined();
+    flushSync(() => {
+      collectionButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Saved to Phishing Campaign.");
+    });
+  });
+
+  it("adds all filtered tray indicators to an existing collection", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      collections: [sampleCollection],
+    });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+    });
+
+    const addFilteredButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Add filtered to collection… (3)"
+    );
+    expect(addFilteredButton).toBeDefined();
+    flushSync(() => {
+      addFilteredButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Phishing Campaign");
+    });
+
+    const collectionButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Phishing Campaign"
+    );
+    expect(collectionButton).toBeDefined();
+    flushSync(() => {
+      collectionButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "Added 3 indicators to Phishing Campaign."
+      );
+    });
+  });
+
+  it("promotes the active investigation session to a new collection", async () => {
+    stubChrome({
+      initialSummary: null,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      const titleInput = mounted?.container.querySelector(
+        'input[aria-label="Session title"]'
+      ) as HTMLInputElement | null;
+      expect(titleInput?.value).toBe("Phishing Investigation");
+    });
+
+    const promoteToggle = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Promote session to collection… (2)"
+    );
+    expect(promoteToggle).toBeDefined();
+    flushSync(() => {
+      promoteToggle?.click();
+    });
+
+    const createButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Create collection from session"
+    );
+    expect(createButton).toBeDefined();
+    flushSync(() => {
+      createButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "Promoted 2 session indicators to Phishing Investigation."
       );
     });
   });

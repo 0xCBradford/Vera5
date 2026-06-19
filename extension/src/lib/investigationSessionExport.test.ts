@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildHoverCardSourceEntries } from "./hoverCardEnrichment";
 import {
   buildNormalizedEnrichmentRecord,
@@ -10,8 +10,11 @@ import {
   buildInvestigationSessionExportCsv,
   buildInvestigationSessionExportDocument,
   buildInvestigationSessionExportFilename,
+  buildInvestigationSessionExportInput,
   buildInvestigationSessionExportMarkdown,
+  copyInvestigationSessionExportToClipboard,
   containsInvestigationSessionExportSecrets,
+  downloadInvestigationSessionExportFile,
   INVESTIGATION_SESSION_EXPORT_ATTRIBUTION_HEADING,
   INVESTIGATION_SESSION_EXPORT_CSV_HEADER,
   INVESTIGATION_SESSION_EXPORT_ENRICHMENT_HEADING,
@@ -24,6 +27,8 @@ import {
 import { renderTraySubsetExportTemplate } from "./exportTemplates";
 import { TEST_FIXTURE_ABUSEIPDB_API_KEY } from "./fixtureSecrets";
 import { REDACTED_VALUE_PLACEHOLDER } from "./enrichmentRawResponse";
+import * as copyText from "./copyText";
+import * as tabScanSummary from "./tabScanSummary";
 import { IOC_TYPE } from "./iocRegex";
 
 const EXPORTED_AT = "2026-06-10T12:00:00.000Z";
@@ -330,5 +335,91 @@ describe("investigationSessionExport redaction", () => {
         serializeInvestigationSessionExportJson(exportInput)
       )
     ).toBe(false);
+  });
+});
+
+describe("investigationSessionExport actions", () => {
+  const exportInput = {
+    session: sampleSession,
+    records: [enrichedIpv4Record, plainDomainRecord],
+    exportedAt: EXPORTED_AT,
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("builds export input from session tray entries", async () => {
+    vi.spyOn(tabScanSummary, "buildTraySubsetEnrichmentRecords").mockResolvedValue([
+      enrichedIpv4Record,
+    ]);
+
+    const input = await buildInvestigationSessionExportInput({
+      session: sampleSession,
+      entries: [{ type: IOC_TYPE.IPV4, value: "185.220.101.4", anchorId: "vera5-hl-1" }],
+      exportedAt: EXPORTED_AT,
+    });
+
+    expect(input.session).toEqual(sampleSession);
+    expect(input.records).toEqual([enrichedIpv4Record]);
+    expect(input.exportedAt).toBe(EXPORTED_AT);
+  });
+
+  it("copies markdown, json, and csv session exports to the clipboard", async () => {
+    const copy = vi.spyOn(copyText, "copyTextToClipboard").mockResolvedValue(true);
+
+    await expect(
+      copyInvestigationSessionExportToClipboard(exportInput, "markdown")
+    ).resolves.toBe(true);
+    await expect(
+      copyInvestigationSessionExportToClipboard(exportInput, "json")
+    ).resolves.toBe(true);
+    await expect(
+      copyInvestigationSessionExportToClipboard(exportInput, "csv")
+    ).resolves.toBe(true);
+
+    expect(copy).toHaveBeenCalledWith(buildInvestigationSessionExportMarkdown(exportInput));
+    expect(copy).toHaveBeenCalledWith(serializeInvestigationSessionExportJson(exportInput));
+    expect(copy).toHaveBeenCalledWith(buildInvestigationSessionExportCsv(exportInput));
+  });
+
+  it("returns false when copying an empty csv export", async () => {
+    const copy = vi.spyOn(copyText, "copyTextToClipboard").mockResolvedValue(true);
+
+    await expect(
+      copyInvestigationSessionExportToClipboard(
+        { session: sampleSession, records: [], exportedAt: EXPORTED_AT },
+        "csv"
+      )
+    ).resolves.toBe(false);
+
+    expect(copy).not.toHaveBeenCalled();
+  });
+
+  it("downloads session export files with the expected filename", () => {
+    const anchor = {
+      href: "",
+      download: "",
+      click: vi.fn(),
+      remove: vi.fn(),
+    };
+    const doc = {
+      createElement: vi.fn(() => anchor as unknown as HTMLAnchorElement),
+      body: {
+        appendChild: vi.fn(),
+        removeChild: vi.fn(),
+      },
+    } as unknown as Document;
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:session-export");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+
+    expect(downloadInvestigationSessionExportFile(exportInput, "markdown", doc)).toBe(
+      true
+    );
+    expect(anchor.download).toBe(
+      buildInvestigationSessionExportFilename(sampleSession, EXPORTED_AT, "markdown")
+    );
+    expect(anchor.click).toHaveBeenCalledOnce();
+    expect(anchor.remove).toHaveBeenCalledOnce();
   });
 });

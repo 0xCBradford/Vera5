@@ -1,0 +1,282 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden: investigation session export CSV snapshots > empty indicator records 1`] = `""`;
+
+exports[`golden: investigation session export CSV snapshots > full session export 1`] = `
+"ioc,ioc_type,summary,risk_score,tags,sources,analyst_notes,exported_at
+185.220.101.4,ipv4,74 abuse confidence,High risk (59/100),ssh,"- AbuseIPDB (Cached): 74 abuse confidence [ssh] — Last updated: Jun 2, 2026, 7:00 AM | - OTX (Live): 3 threat pulses [scanner]",,2026-06-10T12:00:00.000Z
+example.com,domain,,Risk score unavailable,,No enrichment source results available.,,2026-06-10T12:00:00.000Z"
+`;
+
+exports[`golden: investigation session export JSON snapshots > empty indicator records 1`] = `
+"{
+  "schemaVersion": 1,
+  "exportedAt": "2026-06-10T12:00:00.000Z",
+  "session": {
+    "id": "vera5-inv-golden-empty",
+    "title": "Empty export session",
+    "pageUrl": "https://example.com/blank",
+    "createdAt": "2023-11-14T22:13:20.000Z",
+    "updatedAt": "2023-11-14T22:13:20.000Z",
+    "totalIocCount": 0,
+    "iocCountByType": {},
+    "enrichmentCount": 0,
+    "exportCount": 0
+  },
+  "iocs": []
+}"
+`;
+
+exports[`golden: investigation session export JSON snapshots > full session export 1`] = `
+"{
+  "schemaVersion": 1,
+  "exportedAt": "2026-06-10T12:00:00.000Z",
+  "session": {
+    "id": "vera5-inv-golden-export",
+    "title": "Phishing Investigation",
+    "pageUrl": "https://mail.example.com/alert",
+    "createdAt": "2023-11-14T22:13:20.000Z",
+    "updatedAt": "2023-11-14T22:19:20.000Z",
+    "totalIocCount": 2,
+    "iocCountByType": {
+      "ipv4": 1,
+      "domain": 1
+    },
+    "enrichmentCount": 2,
+    "exportCount": 1,
+    "notes": "Initial triage notes"
+  },
+  "iocs": [
+    {
+      "schemaVersion": 1,
+      "exportedAt": "2026-06-10T12:00:00.000Z",
+      "ioc": "185.220.101.4",
+      "iocType": "ipv4",
+      "iocTypeLabel": "IPv4 address",
+      "enrichmentState": "ready",
+      "summary": "74 abuse confidence",
+      "tags": [
+        "ssh"
+      ],
+      "sources": [
+        {
+          "sourceId": "abuseipdb",
+          "name": "AbuseIPDB",
+          "status": "ok",
+          "summary": "74 abuse confidence",
+          "tags": [
+            "ssh"
+          ],
+          "fromCache": true,
+          "lastUpdatedLine": "Last updated: Jun 2, 2026, 7:00 AM",
+          "badgeText": "Cached"
+        },
+        {
+          "sourceId": "otx",
+          "name": "OTX",
+          "status": "ok",
+          "summary": "3 threat pulses",
+          "tags": [
+            "scanner"
+          ],
+          "fromCache": false,
+          "badgeText": "Live"
+        }
+      ],
+      "disabledSources": [],
+      "score": {
+        "mode": "available",
+        "label": "high",
+        "summaryText": "High risk (59/100)",
+        "compositeSignal": 59.29729729729729,
+        "reasoningLines": [
+          "AbuseIPDB: High (74/100, weight 1.00).",
+          "OTX: Suspicious (42/100, weight 0.85)."
+        ]
+      },
+      "disagreement": false,
+      "pivots": [
+        {
+          "provider": "abuseipdb",
+          "label": "AbuseIPDB",
+          "href": "https://www.abuseipdb.com/check/185.220.101.4"
+        },
+        {
+          "provider": "otx",
+          "label": "OTX",
+          "href": "https://otx.alienvault.com/indicator/ip/185.220.101.4"
+        },
+        {
+          "provider": "virustotal",
+          "label": "VirusTotal",
+          "href": "https://www.virustotal.com/gui/ip-address/185.220.101.4"
+        },
+        {
+          "provider": "urlscan",
+          "label": "URLScan.io",
+          "href": "https://urlscan.io/search/#ip:185.220.101.4"
+        },
+        {
+          "provider": "greynoise",
+          "label": "GreyNoise",
+          "href": "https://viz.greynoise.io/ip/185.220.101.4"
+        },
+        {
+          "provider": "shodan",
+          "label": "Shodan",
+          "href": "https://www.shodan.io/host/185.220.101.4"
+        },
+        {
+          "provider": "pulsedive",
+          "label": "Pulsedive",
+          "href": "https://pulsedive.com/explore?q=185.220.101.4"
+        },
+        {
+          "provider": "censys",
+          "label": "Censys",
+          "href": "https://search.censys.io/hosts/185.220.101.4"
+        },
+        {
+          "provider": "threatfox",
+          "label": "ThreatFox",
+          "href": "https://threatfox.abuse.ch/browse.php?search=ioc:185.220.101.4"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "exportedAt": "2026-06-10T12:00:00.000Z",
+      "ioc": "example.com",
+      "iocType": "domain",
+      "iocTypeLabel": "Domain",
+      "enrichmentState": "error",
+      "tags": [],
+      "sources": [],
+      "disabledSources": [],
+      "score": {
+        "mode": "none",
+        "headline": "Risk score unavailable",
+        "detail": "No enrichment source results are available to compute a local advisory score."
+      },
+      "disagreement": false,
+      "pivots": [
+        {
+          "provider": "otx",
+          "label": "OTX",
+          "href": "https://otx.alienvault.com/indicator/domain/example.com"
+        },
+        {
+          "provider": "virustotal",
+          "label": "VirusTotal",
+          "href": "https://www.virustotal.com/gui/domain/example.com"
+        },
+        {
+          "provider": "urlscan",
+          "label": "URLScan.io",
+          "href": "https://urlscan.io/search/#domain:example.com"
+        },
+        {
+          "provider": "shodan",
+          "label": "Shodan",
+          "href": "https://www.shodan.io/search?query=example.com"
+        },
+        {
+          "provider": "pulsedive",
+          "label": "Pulsedive",
+          "href": "https://pulsedive.com/explore?q=example.com"
+        },
+        {
+          "provider": "censys",
+          "label": "Censys",
+          "href": "https://search.censys.io/domains/example.com"
+        },
+        {
+          "provider": "threatfox",
+          "label": "ThreatFox",
+          "href": "https://threatfox.abuse.ch/browse.php?search=ioc:example.com"
+        },
+        {
+          "provider": "urlhaus",
+          "label": "URLHaus",
+          "href": "https://urlhaus.abuse.ch/browse.php?search=example.com"
+        }
+      ]
+    }
+  ]
+}"
+`;
+
+exports[`golden: investigation session export markdown snapshots > empty indicator records 1`] = `
+"# Investigation Session Export
+
+## Session summary
+
+- **Title:** Empty export session
+- **Page URL:** https://example.com/blank
+- **Created:** 2023-11-14T22:13:20.000Z
+- **Updated:** 2023-11-14T22:13:20.000Z
+- **Exported:** 2026-06-10T12:00:00.000Z
+- **Indicators:** 0 indicators
+
+## Indicators
+
+_No indicator rows are available for this export._
+
+## Enrichment details
+
+No enrichment source results are available to compute a local advisory score.
+
+## Source attribution
+
+No enrichment source results are available for indicators in this session.
+"
+`;
+
+exports[`golden: investigation session export markdown snapshots > full session export 1`] = `
+"# Investigation Session Export
+
+## Session summary
+
+- **Title:** Phishing Investigation
+- **Page URL:** https://mail.example.com/alert
+- **Created:** 2023-11-14T22:13:20.000Z
+- **Updated:** 2023-11-14T22:19:20.000Z
+- **Exported:** 2026-06-10T12:00:00.000Z
+- **Indicators:** 2 indicators
+- **By type:** 1 domain · 1 IP
+- **Activity:** 2 enrichments · 1 export
+- **Notes:** Initial triage notes
+
+## Indicators
+
+| Type | IOC | Enrichment summary |
+| --- | --- | --- |
+| IPv4 address | 185.220.101.4 | 74 abuse confidence |
+| Domain | example.com | No enrichment source results are available to compute a local advisory score. |
+
+## Enrichment details
+
+### 185.220.101.4
+
+**Type:** IPv4 address
+
+Risk score: High risk (59/100)
+
+### How this score was computed
+
+1. AbuseIPDB: High (74/100, weight 1.00).
+2. OTX: Suspicious (42/100, weight 0.85).
+
+### Source Summary
+
+- AbuseIPDB (Cached): 74 abuse confidence [ssh] — Last updated: Jun 2, 2026, 7:00 AM
+- OTX (Live): 3 threat pulses [scanner]
+
+## Source attribution
+
+Enrichment performed locally with your configured API keys.
+
+- - AbuseIPDB (Cached): 74 abuse confidence [ssh] — Last updated: Jun 2, 2026, 7:00 AM
+- - OTX (Live): 3 threat pulses [scanner]
+"
+`;

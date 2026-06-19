@@ -26,6 +26,7 @@ import {
   resolveTrayEntryMatchProvenance,
   type IocTypeFilter,
   type TabScanSummary,
+  type TabScanSummaryEntry,
   type TrayEntryEnrichmentStatus,
 } from "../lib/tabScanSummary";
 import {
@@ -39,6 +40,31 @@ import {
   saveTabScanTrayFilter,
 } from "../lib/tabScanSnapshotStorage";
 import { normalizeIocNoteKey } from "../lib/analystNotesStorage";
+import {
+  buildAddFilteredToCollectionActionLabel,
+  formatAddFilteredToCollectionFeedback,
+  formatSaveToCollectionFeedback,
+  IOC_COLLECTION_ADD_FILTERED_HEADING,
+  IOC_COLLECTION_CREATE_NEW_LABEL,
+  IOC_COLLECTION_NEW_NAME_PLACEHOLDER,
+  IOC_COLLECTION_NO_COLLECTIONS_TEXT,
+  IOC_COLLECTION_PICKER_HEADING,
+  IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL,
+  IOC_COLLECTION_SAVE_TO_NEW_LABEL,
+  normalizeIocCollectionName,
+  type IocCollection,
+} from "../lib/iocCollection";
+import {
+  requestAddIocToCollection,
+  requestAddIocsToCollection,
+  requestCreateIocCollection,
+  requestListIocCollections,
+} from "../lib/iocCollectionClient";
+import {
+  listInvestigationSessionPinnedIocKeys,
+  normalizeInvestigationSessionIocTimelineKey,
+  sortEntriesByInvestigationSessionPinPriority,
+} from "../lib/investigationSession";
 import { resolveWorkspaceTrayView } from "../lib/workspaceTrayState";
 import { HOVER_CARD_ANALYST_NOTES_INPUT_ID } from "../lib/hoverCardEnrichment";
 import { ensureVera5UiStyles } from "../lib/vera5UiStyles";
@@ -118,7 +144,18 @@ type WorkspaceState = {
   trayNavigationMessage: string | null;
   trayEnrichmentStatuses: Record<string, TrayEntryEnrichmentStatus>;
   trayMultiSelectAnchorIds: Record<string, true>;
+  sessionPinnedIocKeys: string[];
   selectedAnchorId: string | null;
+  saveToCollectionAnchorId: string | null;
+  saveToCollectionFeedback: string | null;
+  saveToCollectionNewName: string;
+  saveToCollectionOptions: IocCollection[];
+  saveToCollectionLoading: boolean;
+  addFilteredToCollectionOpen: boolean;
+  addFilteredToCollectionFeedback: string | null;
+  addFilteredToCollectionNewName: string;
+  addFilteredToCollectionOptions: IocCollection[];
+  addFilteredToCollectionLoading: boolean;
   selection: {
     highlight: HTMLElement;
     payload: HoverCardOverlayPayload;
@@ -143,7 +180,18 @@ function createInitialWorkspaceState(): WorkspaceState {
     trayNavigationMessage: null,
     trayEnrichmentStatuses: {},
     trayMultiSelectAnchorIds: {},
+    sessionPinnedIocKeys: [],
     selectedAnchorId: null,
+    saveToCollectionAnchorId: null,
+    saveToCollectionFeedback: null,
+    saveToCollectionNewName: "",
+    saveToCollectionOptions: [],
+    saveToCollectionLoading: false,
+    addFilteredToCollectionOpen: false,
+    addFilteredToCollectionFeedback: null,
+    addFilteredToCollectionNewName: "",
+    addFilteredToCollectionOptions: [],
+    addFilteredToCollectionLoading: false,
     selection: null,
   };
 }
@@ -351,6 +399,25 @@ async function loadTrayEnrichmentStatuses(): Promise<void> {
   }
 }
 
+async function loadSessionPinnedIocKeys(): Promise<void> {
+  try {
+    const { getActiveInvestigationSession } = await import(
+      "../lib/investigationSessionStorage"
+    );
+    const session = await getActiveInvestigationSession();
+    workspaceState.sessionPinnedIocKeys = session
+      ? listInvestigationSessionPinnedIocKeys(session)
+      : [];
+  } catch (error) {
+    logUnlessBenignExtensionError(error);
+    workspaceState.sessionPinnedIocKeys = [];
+  }
+}
+
+async function loadWorkspaceTrayContext(): Promise<void> {
+  await Promise.all([loadTrayEnrichmentStatuses(), loadSessionPinnedIocKeys()]);
+}
+
 function buildSummaryFromScanPayload(payload: unknown): TabScanSummary | null {
   if (payload === null || typeof payload !== "object") {
     return null;
@@ -413,7 +480,7 @@ async function refreshWorkspaceScanState(doc: Document): Promise<void> {
   }
 
   if (workspaceState.scanSummary && workspaceState.scanSummary.entries.length > 0) {
-    void loadTrayEnrichmentStatuses()
+    void loadWorkspaceTrayContext()
       .then(() => {
         if (workspaceState.open) {
           renderWorkspaceTop(doc);
@@ -438,6 +505,345 @@ function createWorkspaceButton(
   button.disabled = disabled;
   button.addEventListener("click", onClick);
   return button;
+}
+
+async function openWorkspaceSaveToCollectionPicker(
+  anchorId: string,
+  doc: Document
+): Promise<void> {
+  workspaceState.saveToCollectionAnchorId = anchorId;
+  workspaceState.saveToCollectionFeedback = null;
+  workspaceState.saveToCollectionNewName = "";
+  workspaceState.saveToCollectionLoading = true;
+  workspaceState.saveToCollectionOptions = [];
+  renderWorkspaceTop(doc);
+  workspaceState.saveToCollectionOptions = await requestListIocCollections();
+  workspaceState.saveToCollectionLoading = false;
+  renderWorkspaceTop(doc);
+}
+
+function appendSaveToCollectionTrayPanel(
+  row: HTMLElement,
+  entry: TabScanSummaryEntry,
+  doc: Document
+): void {
+  const wrapper = doc.createElement("div");
+  wrapper.className = "vera5-tray-save-collection";
+  wrapper.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+  wrapper.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+  });
+
+  const open = workspaceState.saveToCollectionAnchorId === entry.anchorId;
+  const toggle = doc.createElement("button");
+  toggle.type = "button";
+  toggle.className = "vera5-tray-save-collection-toggle";
+  toggle.textContent = IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL;
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  toggle.addEventListener("click", () => {
+    if (open) {
+      workspaceState.saveToCollectionAnchorId = null;
+      workspaceState.saveToCollectionFeedback = null;
+      renderWorkspaceTop(doc);
+      return;
+    }
+    void openWorkspaceSaveToCollectionPicker(entry.anchorId, doc);
+  });
+  wrapper.appendChild(toggle);
+
+  if (!open) {
+    row.appendChild(wrapper);
+    return;
+  }
+
+  const panel = doc.createElement("div");
+  panel.className = "vera5-tray-save-collection-panel";
+  panel.setAttribute("role", "group");
+  panel.setAttribute("aria-label", IOC_COLLECTION_PICKER_HEADING);
+
+  const heading = doc.createElement("p");
+  heading.className = "vera5-tray-save-collection-heading";
+  heading.textContent = IOC_COLLECTION_PICKER_HEADING;
+  panel.appendChild(heading);
+
+  if (workspaceState.saveToCollectionLoading) {
+    const loading = doc.createElement("p");
+    loading.className = "vera5-workspace-empty";
+    loading.textContent = "Loading collections…";
+    panel.appendChild(loading);
+  } else if (workspaceState.saveToCollectionOptions.length === 0) {
+    const empty = doc.createElement("p");
+    empty.className = "vera5-workspace-empty";
+    empty.textContent = IOC_COLLECTION_NO_COLLECTIONS_TEXT;
+    panel.appendChild(empty);
+  } else {
+    const list = doc.createElement("div");
+    list.className = "vera5-tray-save-collection-list";
+    for (const collection of workspaceState.saveToCollectionOptions) {
+      list.appendChild(
+        createWorkspaceButton(collection.name, doc, () => {
+          void (async () => {
+            const result = await requestAddIocToCollection({
+              collectionId: collection.id,
+              member: { iocType: entry.type, value: entry.value },
+            });
+            workspaceState.saveToCollectionFeedback = result
+              ? formatSaveToCollectionFeedback({
+                  collectionName: result.collection.name,
+                  added: result.added,
+                })
+              : "Could not save to collection.";
+            renderWorkspaceTop(doc);
+          })();
+        })
+      );
+    }
+    panel.appendChild(list);
+  }
+
+  const label = doc.createElement("label");
+  label.className = "vera5-workspace-field-label";
+  label.textContent = IOC_COLLECTION_CREATE_NEW_LABEL;
+  const input = doc.createElement("input");
+  input.type = "text";
+  input.value = workspaceState.saveToCollectionNewName;
+  input.placeholder = IOC_COLLECTION_NEW_NAME_PLACEHOLDER;
+  input.setAttribute("aria-label", IOC_COLLECTION_NEW_NAME_PLACEHOLDER);
+  input.addEventListener("input", () => {
+    workspaceState.saveToCollectionNewName = input.value;
+    renderWorkspaceTop(doc);
+  });
+  label.appendChild(input);
+  panel.appendChild(label);
+
+  panel.appendChild(
+    createWorkspaceButton(
+      IOC_COLLECTION_SAVE_TO_NEW_LABEL,
+      doc,
+      () => {
+        void (async () => {
+          const created = await requestCreateIocCollection({
+            name: workspaceState.saveToCollectionNewName,
+          });
+          if (!created) {
+            workspaceState.saveToCollectionFeedback = "Could not create collection.";
+            renderWorkspaceTop(doc);
+            return;
+          }
+          const result = await requestAddIocToCollection({
+            collectionId: created.id,
+            member: { iocType: entry.type, value: entry.value },
+          });
+          if (!result) {
+            workspaceState.saveToCollectionFeedback =
+              "Collection created, but indicator was not saved.";
+            renderWorkspaceTop(doc);
+            return;
+          }
+          workspaceState.saveToCollectionOptions = [
+            result.collection,
+            ...workspaceState.saveToCollectionOptions.filter(
+              (item) => item.id !== result.collection.id
+            ),
+          ];
+          workspaceState.saveToCollectionNewName = "";
+          workspaceState.saveToCollectionFeedback = formatSaveToCollectionFeedback({
+            collectionName: result.collection.name,
+            added: result.added,
+          });
+          renderWorkspaceTop(doc);
+        })();
+      },
+      normalizeIocCollectionName(workspaceState.saveToCollectionNewName) === null
+    )
+  );
+
+  if (workspaceState.saveToCollectionFeedback) {
+    const feedback = doc.createElement("p");
+    feedback.className = "vera5-tray-save-collection-feedback";
+    feedback.setAttribute("aria-live", "polite");
+    feedback.textContent = workspaceState.saveToCollectionFeedback;
+    panel.appendChild(feedback);
+  }
+
+  wrapper.appendChild(panel);
+  row.appendChild(wrapper);
+}
+
+async function openWorkspaceAddFilteredToCollectionPicker(
+  doc: Document
+): Promise<void> {
+  workspaceState.addFilteredToCollectionOpen = true;
+  workspaceState.addFilteredToCollectionFeedback = null;
+  workspaceState.addFilteredToCollectionNewName = "";
+  workspaceState.addFilteredToCollectionLoading = true;
+  workspaceState.addFilteredToCollectionOptions = [];
+  renderWorkspaceTop(doc);
+  workspaceState.addFilteredToCollectionOptions = await requestListIocCollections();
+  workspaceState.addFilteredToCollectionLoading = false;
+  renderWorkspaceTop(doc);
+}
+
+function appendAddFilteredToCollectionPanel(
+  container: HTMLElement,
+  entries: TabScanSummaryEntry[],
+  doc: Document
+): void {
+  const wrapper = doc.createElement("div");
+  wrapper.className = "vera5-tray-save-collection";
+  wrapper.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+  wrapper.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+  });
+
+  const members = entries.map((entry) => ({
+    iocType: entry.type,
+    value: entry.value,
+  }));
+  const open = workspaceState.addFilteredToCollectionOpen;
+  const toggle = doc.createElement("button");
+  toggle.type = "button";
+  toggle.className = "vera5-tray-save-collection-toggle";
+  toggle.textContent = buildAddFilteredToCollectionActionLabel(entries.length);
+  toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  toggle.disabled = entries.length === 0;
+  toggle.addEventListener("click", () => {
+    if (open) {
+      workspaceState.addFilteredToCollectionOpen = false;
+      workspaceState.addFilteredToCollectionFeedback = null;
+      renderWorkspaceTop(doc);
+      return;
+    }
+    void openWorkspaceAddFilteredToCollectionPicker(doc);
+  });
+  wrapper.appendChild(toggle);
+
+  if (!open) {
+    container.appendChild(wrapper);
+    return;
+  }
+
+  const panel = doc.createElement("div");
+  panel.className = "vera5-tray-save-collection-panel";
+  panel.setAttribute("role", "group");
+  panel.setAttribute("aria-label", IOC_COLLECTION_ADD_FILTERED_HEADING);
+
+  const heading = doc.createElement("p");
+  heading.className = "vera5-tray-save-collection-heading";
+  heading.textContent = IOC_COLLECTION_ADD_FILTERED_HEADING;
+  panel.appendChild(heading);
+
+  if (workspaceState.addFilteredToCollectionLoading) {
+    const loading = doc.createElement("p");
+    loading.className = "vera5-workspace-empty";
+    loading.textContent = "Loading collections…";
+    panel.appendChild(loading);
+  } else if (workspaceState.addFilteredToCollectionOptions.length === 0) {
+    const empty = doc.createElement("p");
+    empty.className = "vera5-workspace-empty";
+    empty.textContent = IOC_COLLECTION_NO_COLLECTIONS_TEXT;
+    panel.appendChild(empty);
+  } else {
+    const list = doc.createElement("div");
+    list.className = "vera5-tray-save-collection-list";
+    for (const collection of workspaceState.addFilteredToCollectionOptions) {
+      list.appendChild(
+        createWorkspaceButton(collection.name, doc, () => {
+          void (async () => {
+            const result = await requestAddIocsToCollection({
+              collectionId: collection.id,
+              members,
+            });
+            workspaceState.addFilteredToCollectionFeedback = result
+              ? formatAddFilteredToCollectionFeedback({
+                  collectionName: result.collection.name,
+                  addedCount: result.addedCount,
+                  duplicateCount: result.duplicateCount,
+                  totalCount: result.totalCount,
+                })
+              : "Could not add filtered indicators to collection.";
+            renderWorkspaceTop(doc);
+          })();
+        })
+      );
+    }
+    panel.appendChild(list);
+  }
+
+  const label = doc.createElement("label");
+  label.className = "vera5-workspace-field-label";
+  label.textContent = IOC_COLLECTION_CREATE_NEW_LABEL;
+  const input = doc.createElement("input");
+  input.type = "text";
+  input.value = workspaceState.addFilteredToCollectionNewName;
+  input.placeholder = IOC_COLLECTION_NEW_NAME_PLACEHOLDER;
+  input.setAttribute("aria-label", IOC_COLLECTION_NEW_NAME_PLACEHOLDER);
+  input.addEventListener("input", () => {
+    workspaceState.addFilteredToCollectionNewName = input.value;
+    renderWorkspaceTop(doc);
+  });
+  label.appendChild(input);
+  panel.appendChild(label);
+
+  panel.appendChild(
+    createWorkspaceButton(
+      IOC_COLLECTION_SAVE_TO_NEW_LABEL,
+      doc,
+      () => {
+        void (async () => {
+          const created = await requestCreateIocCollection({
+            name: workspaceState.addFilteredToCollectionNewName,
+          });
+          if (!created) {
+            workspaceState.addFilteredToCollectionFeedback = "Could not create collection.";
+            renderWorkspaceTop(doc);
+            return;
+          }
+          const result = await requestAddIocsToCollection({
+            collectionId: created.id,
+            members,
+          });
+          if (!result) {
+            workspaceState.addFilteredToCollectionFeedback =
+              "Collection created, but filtered indicators were not saved.";
+            renderWorkspaceTop(doc);
+            return;
+          }
+          workspaceState.addFilteredToCollectionOptions = [
+            result.collection,
+            ...workspaceState.addFilteredToCollectionOptions.filter(
+              (item) => item.id !== result.collection.id
+            ),
+          ];
+          workspaceState.addFilteredToCollectionNewName = "";
+          workspaceState.addFilteredToCollectionFeedback =
+            formatAddFilteredToCollectionFeedback({
+              collectionName: result.collection.name,
+              addedCount: result.addedCount,
+              duplicateCount: result.duplicateCount,
+              totalCount: result.totalCount,
+            });
+          renderWorkspaceTop(doc);
+        })();
+      },
+      normalizeIocCollectionName(workspaceState.addFilteredToCollectionNewName) === null
+    )
+  );
+
+  if (workspaceState.addFilteredToCollectionFeedback) {
+    const feedback = doc.createElement("p");
+    feedback.className = "vera5-tray-save-collection-feedback";
+    feedback.setAttribute("aria-live", "polite");
+    feedback.textContent = workspaceState.addFilteredToCollectionFeedback;
+    panel.appendChild(feedback);
+  }
+
+  wrapper.appendChild(panel);
+  container.appendChild(wrapper);
 }
 
 function createWorkspaceIconButton(
@@ -558,7 +964,7 @@ async function handleWorkspaceScan(doc: Document): Promise<void> {
       logUnlessBenignExtensionError(error);
     });
 
-    void loadTrayEnrichmentStatuses()
+    void loadWorkspaceTrayContext()
       .then(() => {
         if (workspaceState.open && workspaceState.scanState === "done") {
           renderWorkspaceTop(doc);
@@ -615,7 +1021,7 @@ async function handleWorkspaceSelectionScan(doc: Document): Promise<void> {
       logUnlessBenignExtensionError(error);
     });
 
-    void loadTrayEnrichmentStatuses()
+    void loadWorkspaceTrayContext()
       .then(() => {
         if (workspaceState.open && workspaceState.scanState === "done") {
           renderWorkspaceTop(doc);
@@ -1034,7 +1440,7 @@ async function startTrayEnrichQueue(
   } catch (error) {
     logUnlessBenignExtensionError(error);
   } finally {
-    await loadTrayEnrichmentStatuses();
+    await loadWorkspaceTrayContext();
     if (workspaceState.open) {
       renderWorkspaceTop(doc);
     }
@@ -1268,6 +1674,11 @@ function renderWorkspaceTop(doc: Document): void {
   }
   top.appendChild(filterRow);
 
+  const filteredEntries = sortEntriesByInvestigationSessionPinPriority(
+    filterTabScanSummaryEntries(summary.entries, workspaceState.typeFilter),
+    workspaceState.sessionPinnedIocKeys
+  );
+
   const selectedTrayAnchorIds = resolveSelectedTrayAnchorIdsForEnrich();
   const queueRunning = isTrayEnrichQueueRunning();
   const queueSnapshot = getTrayEnrichQueueSnapshot();
@@ -1305,6 +1716,8 @@ function renderWorkspaceTop(doc: Document): void {
   }
   top.appendChild(bulkRow);
 
+  appendAddFilteredToCollectionPanel(bulkRow, filteredEntries, doc);
+
   if (queueRunning && queueSnapshot) {
     const queueStatus = doc.createElement("p");
     queueStatus.className = "vera5-workspace-tray-queue-status";
@@ -1321,11 +1734,6 @@ function renderWorkspaceTop(doc: Document): void {
     navMessage.textContent = workspaceState.trayNavigationMessage;
     top.appendChild(navMessage);
   }
-
-  const filteredEntries = filterTabScanSummaryEntries(
-    summary.entries,
-    workspaceState.typeFilter
-  );
 
   if (filteredEntries.length === 0) {
     const noMatches = doc.createElement("p");
@@ -1367,6 +1775,12 @@ function renderWorkspaceTop(doc: Document): void {
     row.classList.toggle(
       "vera5-workspace-tray-row--bulk-selected",
       Boolean(workspaceState.trayMultiSelectAnchorIds[entry.anchorId])
+    );
+    row.classList.toggle(
+      "vera5-workspace-tray-row--pinned",
+      workspaceState.sessionPinnedIocKeys.includes(
+        normalizeInvestigationSessionIocTimelineKey(entry.value)
+      )
     );
 
     const selectCheckbox = doc.createElement("input");
@@ -1423,6 +1837,17 @@ function renderWorkspaceTop(doc: Document): void {
 
     const mainRow = doc.createElement("div");
     mainRow.className = "vera5-workspace-tray-row-main";
+    if (
+      workspaceState.sessionPinnedIocKeys.includes(
+        normalizeInvestigationSessionIocTimelineKey(entry.value)
+      )
+    ) {
+      const pinBadge = doc.createElement("span");
+      pinBadge.className = "vera5-workspace-tray-pin";
+      pinBadge.textContent = "★";
+      pinBadge.setAttribute("aria-label", "Pinned for triage");
+      mainRow.appendChild(pinBadge);
+    }
     mainRow.append(selectCheckbox, typeBadge, valueContainer);
 
     if (enrichmentStatus) {
@@ -1434,6 +1859,8 @@ function renderWorkspaceTop(doc: Document): void {
     }
 
     row.appendChild(mainRow);
+
+    appendSaveToCollectionTrayPanel(row, entry, doc);
 
     const whyDetectedView = buildWhyDetectedView({
       type: entry.type,
@@ -1594,6 +2021,9 @@ export function toggleWorkspace(doc: Document = document): void {
   openWorkspace(doc);
 }
 
+let workspaceSidebarMessageListenerInstalled = false;
+let workspaceSidebarStorageListenerInstalled = false;
+
 export function setupWorkspaceSidebarListener(doc: Document = document): void {
   registerWorkspacePayloadUpdateHandler((payload, updateDoc) => {
     updateWorkspaceDetailPanel(payload, updateDoc);
@@ -1603,10 +2033,46 @@ export function setupWorkspaceSidebarListener(doc: Document = document): void {
     syncWorkspaceTextSelectionAvailability(doc);
   });
 
-  if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
+  if (
+    typeof chrome !== "undefined" &&
+    chrome.runtime?.onMessage &&
+    !workspaceSidebarMessageListenerInstalled
+  ) {
+    workspaceSidebarMessageListenerInstalled = true;
+    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+      if (isToggleWorkspaceMessage(message)) {
+        try {
+          toggleWorkspace(doc);
+          sendResponse({ ok: true, payload: { open: isWorkspaceOpen(doc) } });
+        } catch (error) {
+          rethrowUnlessStaleExtensionError(error);
+        }
+        return true;
+      }
+
+      if (isOpenWorkspaceMessage(message)) {
+        try {
+          openWorkspace(doc);
+          sendResponse({ ok: true, payload: { open: true } });
+        } catch (error) {
+          rethrowUnlessStaleExtensionError(error);
+        }
+        return true;
+      }
+
+      return false;
+    });
+  }
+
+  if (
+    typeof chrome === "undefined" ||
+    !chrome.storage?.onChanged ||
+    workspaceSidebarStorageListenerInstalled
+  ) {
     return;
   }
 
+  workspaceSidebarStorageListenerInstalled = true;
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "session" || !workspaceState.open) {
       return;
@@ -1621,36 +2087,14 @@ export function setupWorkspaceSidebarListener(doc: Document = document): void {
       });
     }
   });
-
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (isToggleWorkspaceMessage(message)) {
-      try {
-        toggleWorkspace(doc);
-        sendResponse({ ok: true, payload: { open: isWorkspaceOpen(doc) } });
-      } catch (error) {
-        rethrowUnlessStaleExtensionError(error);
-      }
-      return true;
-    }
-
-    if (isOpenWorkspaceMessage(message)) {
-      try {
-        openWorkspace(doc);
-        sendResponse({ ok: true, payload: { open: true } });
-      } catch (error) {
-        rethrowUnlessStaleExtensionError(error);
-      }
-      return true;
-    }
-
-    return false;
-  });
 }
 
 export function resetWorkspaceSidebarForTests(): void {
   cancelTrayEnrichQueue();
   resetTrayEnrichQueueForTests();
   workspaceState = createInitialWorkspaceState();
+  workspaceSidebarMessageListenerInstalled = false;
+  workspaceSidebarStorageListenerInstalled = false;
   clearWorkspaceSelectionState();
   setWorkspaceSelectionState({ open: false, selectedAnchorId: null, payloadValue: null });
 }

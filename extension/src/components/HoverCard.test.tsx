@@ -22,6 +22,8 @@ import {
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
 } from "../lib/hoverCardEnrichment";
 import { IOC_TYPE } from "../lib/iocRegex";
+import { createIocCollection } from "../lib/iocCollection";
+import { MESSAGE } from "../lib/messages";
 import { HOVER_CARD_ENRICHMENT_MODIFIER_CLASS } from "../lib/vera5UiStyles";
 import { VERA5_UI_STYLE_ID } from "../lib/vera5UiStyles";
 import {
@@ -751,5 +753,74 @@ describe("HoverCard enrichment states", () => {
     });
 
     expect(getSessionAnalystNote("8.8.8.8")).toBe("Check proxy logs.");
+  });
+
+  it("opens save-to-collection picker and saves the current indicator", async () => {
+    const sampleCollection = createIocCollection({
+      id: "vera5-col-react-hover",
+      name: "APT29 Research",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [],
+    })!;
+
+    vi.stubGlobal("chrome", {
+      runtime: {
+        id: "test-extension-id",
+        sendMessage: vi.fn(async (message: { type?: string }) => {
+          if (message?.type === MESSAGE.LIST_IOC_COLLECTIONS) {
+            return { ok: true, payload: { collections: [sampleCollection] } };
+          }
+          if (message?.type === MESSAGE.ADD_IOC_TO_COLLECTION) {
+            return {
+              ok: true,
+              payload: {
+                collection: {
+                  ...sampleCollection,
+                  members: [{ iocType: "ipv4", value: "8.8.8.8" }],
+                  updatedAt: 200,
+                },
+                added: true,
+              },
+            };
+          }
+          return { ok: true };
+        }),
+        openOptionsPage: vi.fn(),
+      },
+    });
+
+    mounted = renderHoverCard({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const toggle = mounted.container.querySelector<HTMLButtonElement>(
+      ".vera5-hover-card-save-collection-toggle"
+    );
+    expect(toggle?.textContent).toBe("Save to collection…");
+    flushSync(() => {
+      toggle?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("APT29 Research");
+    });
+
+    const collectionButton = Array.from(
+      mounted.container.querySelectorAll<HTMLButtonElement>(
+        ".vera5-hover-card-action"
+      )
+    ).find((button) => button.textContent === "APT29 Research");
+    expect(collectionButton).toBeDefined();
+    flushSync(() => {
+      collectionButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Saved to APT29 Research.");
+    });
+
+    vi.unstubAllGlobals();
   });
 });

@@ -59,7 +59,12 @@ export function registerCoreCommandPaletteCommands(): void {
         return;
       }
       await copyTrayTemplateExportToClipboard("markdown-report", records);
-      void recordActiveInvestigationSessionExportEvent();
+      void recordActiveInvestigationSessionExportEvent({
+        iocs: records.map((record) => ({
+          value: record.value,
+          type: record.type,
+        })),
+      });
     },
   });
 
@@ -74,7 +79,12 @@ export function registerCoreCommandPaletteCommands(): void {
         return;
       }
       downloadTrayTemplateExportFile("markdown-report", records);
-      void recordActiveInvestigationSessionExportEvent();
+      void recordActiveInvestigationSessionExportEvent({
+        iocs: records.map((record) => ({
+          value: record.value,
+          type: record.type,
+        })),
+      });
     },
   });
 

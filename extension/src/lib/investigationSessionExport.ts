@@ -9,7 +9,11 @@ import {
   type NormalizedEnrichmentRiskScore,
 } from "./enrichmentExport";
 import { buildDisabledSourcePlaceholders } from "./hoverCardEnrichment";
-import type { IocType } from "./iocRegex";
+import { copyTextToClipboard } from "./copyText";
+import {
+  buildTraySubsetEnrichmentRecords,
+  type TabScanSummaryEntry,
+} from "./tabScanSummary";
 import {
   buildInvestigationSessionActivitySummaryText,
   buildInvestigationSessionIocCountText,
@@ -453,4 +457,86 @@ export function buildInvestigationSessionExportFilename(
       .replace(/^-+|-+$/g, "") || "investigation-session";
   const extension = format === "json" ? "json" : format === "csv" ? "csv" : "md";
   return `vera5-session-${slug}-${exportedAt.slice(0, 10)}.${extension}`;
+}
+
+export type InvestigationSessionExportFormat = "markdown" | "json" | "csv";
+
+export async function buildInvestigationSessionExportInput(input: {
+  session: InvestigationSession;
+  entries: ReadonlyArray<TabScanSummaryEntry>;
+  exportedAt?: string;
+}): Promise<InvestigationSessionExportInput> {
+  const records = await buildTraySubsetEnrichmentRecords(input.entries);
+  return {
+    session: input.session,
+    records,
+    exportedAt: input.exportedAt ?? new Date().toISOString(),
+  };
+}
+
+function resolveInvestigationSessionExportContent(
+  input: InvestigationSessionExportInput,
+  format: InvestigationSessionExportFormat
+): { content: string; mimeType: string } {
+  const sanitized = resolveInvestigationSessionExportInput(input);
+
+  if (format === "json") {
+    return {
+      content: serializeInvestigationSessionExportJson(sanitized),
+      mimeType: "application/json",
+    };
+  }
+
+  if (format === "csv") {
+    return {
+      content: buildInvestigationSessionExportCsv(sanitized),
+      mimeType: "text/csv",
+    };
+  }
+
+  return {
+    content: buildInvestigationSessionExportMarkdown(sanitized),
+    mimeType: "text/markdown",
+  };
+}
+
+export async function copyInvestigationSessionExportToClipboard(
+  input: InvestigationSessionExportInput,
+  format: InvestigationSessionExportFormat
+): Promise<boolean> {
+  const { content } = resolveInvestigationSessionExportContent(input, format);
+  if (content.length === 0) {
+    return false;
+  }
+  return copyTextToClipboard(content);
+}
+
+export function downloadInvestigationSessionExportFile(
+  input: InvestigationSessionExportInput,
+  format: InvestigationSessionExportFormat,
+  doc: Document = document
+): boolean {
+  const exportedAt = input.exportedAt ?? new Date().toISOString();
+  const { content, mimeType } = resolveInvestigationSessionExportContent(
+    { ...input, exportedAt },
+    format
+  );
+  if (content.length === 0) {
+    return false;
+  }
+
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = doc.createElement("a");
+  anchor.href = url;
+  anchor.download = buildInvestigationSessionExportFilename(
+    input.session,
+    exportedAt,
+    format
+  );
+  doc.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  return true;
 }

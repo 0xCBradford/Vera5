@@ -6,12 +6,15 @@ import {
 } from "./extensionContext";
 import type { IocType } from "./iocRegex";
 import {
+  applyInvestigationSessionIocTimelineEvent,
   buildDefaultInvestigationSessionTitle,
   computeInvestigationSessionRollups,
   createInvestigationSession,
   normalizeInvestigationSession,
+  toggleInvestigationSessionIocPin,
   updateInvestigationSession,
   type InvestigationSession,
+  type InvestigationSessionIocTimelineEventKind,
 } from "./investigationSession";
 
 export const INVESTIGATION_SESSIONS_SCHEMA_VERSION = 1;
@@ -429,7 +432,7 @@ export async function archiveInvestigationSession(sessionId: string): Promise<bo
 
 export async function syncActiveInvestigationSessionFromScan(input: {
   pageUrl: string;
-  entries: ReadonlyArray<{ type: IocType }>;
+  entries: ReadonlyArray<{ type: IocType; value?: string }>;
   now?: number;
 }): Promise<InvestigationSession | null> {
   const now = input.now ?? Date.now();
@@ -439,8 +442,10 @@ export async function syncActiveInvestigationSessionFromScan(input: {
     ? store.sessions.find((entry) => entry.id === store.activeSessionId) ?? null
     : null;
 
+  let workingSession: InvestigationSession | null = null;
+
   if (!activeSession) {
-    const created = createInvestigationSession({
+    workingSession = createInvestigationSession({
       title: buildDefaultInvestigationSessionTitle(input.pageUrl),
       pageUrl: input.pageUrl,
       createdAt: now,
@@ -448,25 +453,34 @@ export async function syncActiveInvestigationSessionFromScan(input: {
       totalIocCount: rollups.totalIocCount,
       iocCountByType: rollups.iocCountByType,
     });
-    if (!created) {
-      return null;
-    }
-    const saved = await saveStoredInvestigationSession(created, { setActive: true });
-    return saved ? created : null;
+  } else {
+    workingSession = updateInvestigationSession(activeSession, {
+      pageUrl: input.pageUrl,
+      totalIocCount: rollups.totalIocCount,
+      iocCountByType: rollups.iocCountByType,
+      updatedAt: now,
+    });
   }
 
-  const updated = updateInvestigationSession(activeSession, {
-    pageUrl: input.pageUrl,
-    totalIocCount: rollups.totalIocCount,
-    iocCountByType: rollups.iocCountByType,
-    updatedAt: now,
-  });
-  if (!updated) {
+  if (!workingSession) {
     return null;
   }
 
-  const saved = await saveStoredInvestigationSession(updated, { setActive: true });
-  return saved ? updated : null;
+  for (const entry of input.entries) {
+    const value = entry.value?.trim();
+    if (!value) {
+      continue;
+    }
+    workingSession = applyInvestigationSessionIocTimelineEvent(workingSession, {
+      iocKey: value,
+      iocType: entry.type,
+      event: "first-seen",
+      at: now,
+    });
+  }
+
+  const saved = await saveStoredInvestigationSession(workingSession, { setActive: true });
+  return saved ? workingSession : null;
 }
 
 export async function startNewInvestigationSession(input: {
@@ -508,6 +522,11 @@ export async function renameActiveInvestigationSession(input: {
 async function incrementActiveInvestigationSessionActivityCount(input: {
   field: "enrichmentCount" | "exportCount";
   now?: number;
+  timelineEvents?: ReadonlyArray<{
+    iocValue: string;
+    iocType?: IocType;
+    event: Extract<InvestigationSessionIocTimelineEventKind, "enrich" | "export">;
+  }>;
 }): Promise<InvestigationSession | null> {
   const now = input.now ?? Date.now();
   const store = await getInvestigationSessionsStore();
@@ -520,9 +539,20 @@ async function incrementActiveInvestigationSessionActivityCount(input: {
     return null;
   }
 
-  const updated = updateInvestigationSession(session, {
+  let workingSession = session;
+  for (const timelineEvent of input.timelineEvents ?? []) {
+    workingSession = applyInvestigationSessionIocTimelineEvent(workingSession, {
+      iocKey: timelineEvent.iocValue,
+      iocType: timelineEvent.iocType,
+      event: timelineEvent.event,
+      at: now,
+    });
+  }
+
+  const updated = updateInvestigationSession(workingSession, {
     [input.field]: session[input.field] + 1,
     updatedAt: now,
+    iocTimelines: workingSession.iocTimelines,
   });
   if (!updated) {
     return null;
@@ -532,20 +562,92 @@ async function incrementActiveInvestigationSessionActivityCount(input: {
   return saved ? updated : null;
 }
 
+export type RecordInvestigationSessionIocActivityInput = {
+  iocValue?: string;
+  iocType?: IocType;
+  iocs?: ReadonlyArray<{ value: string; type?: IocType }>;
+  now?: number;
+};
+
+function buildInvestigationSessionTimelineEvents(
+  input: RecordInvestigationSessionIocActivityInput | undefined,
+  event: Extract<InvestigationSessionIocTimelineEventKind, "enrich" | "export">
+): ReadonlyArray<{
+  iocValue: string;
+  iocType?: IocType;
+  event: Extract<InvestigationSessionIocTimelineEventKind, "enrich" | "export">;
+}> {
+  if (input?.iocs && input.iocs.length > 0) {
+    return input.iocs.map((ioc) => ({
+      iocValue: ioc.value,
+      iocType: ioc.type,
+      event,
+    }));
+  }
+  if (input?.iocValue?.trim()) {
+    return [
+      {
+        iocValue: input.iocValue,
+        iocType: input.iocType,
+        event,
+      },
+    ];
+  }
+  return [];
+}
+
 export async function recordActiveInvestigationSessionEnrichmentEvent(
-  now?: number
+  input?: RecordInvestigationSessionIocActivityInput
 ): Promise<InvestigationSession | null> {
   return incrementActiveInvestigationSessionActivityCount({
     field: "enrichmentCount",
-    now,
+    now: input?.now,
+    timelineEvents: buildInvestigationSessionTimelineEvents(input, "enrich"),
   });
 }
 
 export async function recordActiveInvestigationSessionExportEvent(
-  now?: number
+  input?: RecordInvestigationSessionIocActivityInput
 ): Promise<InvestigationSession | null> {
   return incrementActiveInvestigationSessionActivityCount({
     field: "exportCount",
-    now,
+    now: input?.now,
+    timelineEvents: buildInvestigationSessionTimelineEvents(input, "export"),
   });
+}
+
+export async function toggleActiveInvestigationSessionIocPin(input: {
+  iocValue: string;
+  iocType?: IocType;
+  pinned?: boolean;
+  now?: number;
+}): Promise<InvestigationSession | null> {
+  const now = input.now ?? Date.now();
+  const store = await getInvestigationSessionsStore();
+  if (!store.activeSessionId) {
+    return null;
+  }
+
+  const session = store.sessions.find((entry) => entry.id === store.activeSessionId);
+  if (!session || store.archivedSessionIds?.includes(session.id)) {
+    return null;
+  }
+
+  const withPin = toggleInvestigationSessionIocPin(session, {
+    iocKey: input.iocValue,
+    iocType: input.iocType,
+    pinned: input.pinned,
+    at: now,
+  });
+
+  const updated = updateInvestigationSession(withPin, {
+    pinnedIocs: withPin.pinnedIocs ?? null,
+    updatedAt: now,
+  });
+  if (!updated) {
+    return null;
+  }
+
+  const saved = await saveStoredInvestigationSession(updated, { setActive: true });
+  return saved ? updated : null;
 }

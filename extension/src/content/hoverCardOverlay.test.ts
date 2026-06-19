@@ -70,9 +70,13 @@ import {
   HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID,
   buildExportRecordFromPayload,
   focusFirstHoverCardControl,
+  HOVER_CARD_SAVE_TO_COLLECTION_TOGGLE_CLASS,
+  resetHoverCardSaveToCollectionStateForTests,
   showHoverCardNearAnchor,
   updateHoverCardAnalystNoteIfOpen,
 } from "./hoverCardOverlay";
+import { createIocCollection } from "../lib/iocCollection";
+import { MESSAGE } from "../lib/messages";
 import * as enrichmentExport from "../lib/enrichmentExport";
 import * as exportTemplates from "../lib/exportTemplates";
 import { buildNormalizedEnrichmentRecord } from "../lib/enrichmentExport";
@@ -2582,5 +2586,98 @@ describe("pre-query disclosure section", () => {
 
     expect(panel.querySelector(".vera5-pre-query-disclosure")).toBeNull();
     expect(panel.textContent).not.toContain("Vera5 will query");
+  });
+});
+
+describe("hover card save to collection", () => {
+  const sampleCollection = createIocCollection({
+    id: "vera5-col-hover-test",
+    name: "Qakbot Investigation",
+    createdAt: 100,
+    updatedAt: 100,
+    members: [],
+  })!;
+
+  afterEach(() => {
+    resetHoverCardSaveToCollectionStateForTests();
+    hideHoverCard(document);
+    vi.unstubAllGlobals();
+  });
+
+  it("opens picker and saves the current indicator to an existing collection", async () => {
+    vi.stubGlobal("chrome", {
+      runtime: {
+        id: "test-extension-id",
+        sendMessage: vi.fn(async (message: { type?: string; collectionId?: string }) => {
+          if (message?.type === MESSAGE.LIST_IOC_COLLECTIONS) {
+            return { ok: true, payload: { collections: [sampleCollection] } };
+          }
+          if (message?.type === MESSAGE.ADD_IOC_TO_COLLECTION) {
+            return {
+              ok: true,
+              payload: {
+                collection: {
+                  ...sampleCollection,
+                  members: [{ iocType: "ipv4", value: "8.8.8.8" }],
+                  updatedAt: 200,
+                },
+                added: true,
+              },
+            };
+          }
+          return { ok: true };
+        }),
+      },
+    });
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 50,
+        left: 50,
+        width: 40,
+        height: 16,
+        right: 90,
+        bottom: 66,
+        x: 50,
+        y: 50,
+        toJSON: () => ({}),
+      }),
+    });
+
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const readPanel = (): HTMLElement => {
+      const host = document.getElementById(HOVER_CARD_HOST_ID);
+      expect(host?.firstElementChild).toBeInstanceOf(HTMLElement);
+      return host!.firstElementChild as HTMLElement;
+    };
+
+    let panel = readPanel();
+    const toggle = panel.querySelector<HTMLButtonElement>(
+      `.${HOVER_CARD_SAVE_TO_COLLECTION_TOGGLE_CLASS}`
+    );
+    expect(toggle?.textContent).toBe("Save to collection…");
+    toggle!.click();
+
+    await vi.waitFor(() => {
+      panel = readPanel();
+      expect(panel.textContent).toContain("Qakbot Investigation");
+    });
+
+    const collectionButton = [...panel.querySelectorAll<HTMLButtonElement>(
+      `.${HOVER_CARD_ACTION_CLASS}`
+    )].find((button) => button.textContent === "Qakbot Investigation");
+    expect(collectionButton).toBeDefined();
+    collectionButton!.click();
+
+    await vi.waitFor(() => {
+      panel = readPanel();
+      expect(panel.textContent).toContain("Saved to Qakbot Investigation.");
+    });
   });
 });

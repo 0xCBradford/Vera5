@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { clearEnrichmentCache } from "../lib/cache";
+import { ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE } from "../lib/enrichmentSourceOps";
 import { prefersReducedMotion } from "../lib/motionPreference";
 import {
   downloadVera5SettingsExport,
@@ -1113,7 +1114,7 @@ export function Options() {
 
   const handleClearCache = () => {
     setClearCacheState("clearing");
-    void clearEnrichmentCache()
+    void clearEnrichmentCache({ recordClearTimestamp: true })
       .then(() => {
         setClearCacheState("cleared");
       })
@@ -1640,14 +1641,17 @@ export function Options() {
                             </span>
                           )}
                         </div>
-                        <div className="v5-source__health">
-                          Source health monitoring coming soon.
-                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
+              <p
+                className="v5-status v5-status--muted"
+                style={{ marginTop: 12, marginBottom: 0 }}
+              >
+                {ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE}
+              </p>
             </div>
           </section>
 

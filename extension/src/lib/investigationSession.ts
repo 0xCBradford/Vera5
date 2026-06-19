@@ -1,3 +1,4 @@
+import { normalizeIocNoteKey } from "./analystNotesStorage";
 import { IOC_TYPE, type IocType } from "./iocRegex";
 import { countIocsByType } from "./tabScanSummary";
 
@@ -9,9 +10,35 @@ export const DEFAULT_INVESTIGATION_SESSION_TITLE = "Investigation";
 export const INVESTIGATION_SESSION_EMPTY_STATE_TEXT =
   "No active investigation session. Scan this page to start one automatically, or name a new session below.";
 
-export type InvestigationSessionIocRollup = {
-  totalIocCount: number;
-  iocCountByType: Partial<Record<IocType, number>>;
+export const MAX_INVESTIGATION_SESSION_IOC_TIMELINE_EVENTS = 100;
+
+export type InvestigationSessionIocTimelineEventKind = "first-seen" | "enrich" | "export";
+
+export type InvestigationSessionIocTimeline = {
+  firstSeenAt: number;
+  enrichEvents: number[];
+  exportEvents: number[];
+  iocType?: IocType;
+};
+
+export type InvestigationSessionIocTimelines = Record<
+  string,
+  InvestigationSessionIocTimeline
+>;
+
+export type InvestigationSessionPinnedIoc = {
+  pinnedAt: number;
+  iocType?: IocType;
+};
+
+export type InvestigationSessionPinnedIocs = Record<
+  string,
+  InvestigationSessionPinnedIoc
+>;
+
+export type InvestigationSessionIocTimelineEntry = {
+  kind: InvestigationSessionIocTimelineEventKind;
+  at: number;
 };
 
 export type InvestigationSession = {
@@ -25,6 +52,13 @@ export type InvestigationSession = {
   enrichmentCount: number;
   exportCount: number;
   notes?: string;
+  iocTimelines?: InvestigationSessionIocTimelines;
+  pinnedIocs?: InvestigationSessionPinnedIocs;
+};
+
+export type InvestigationSessionIocRollup = {
+  totalIocCount: number;
+  iocCountByType: Partial<Record<IocType, number>>;
 };
 
 export type CreateInvestigationSessionInput = {
@@ -38,6 +72,8 @@ export type CreateInvestigationSessionInput = {
   iocCountByType?: Partial<Record<IocType, number>>;
   enrichmentCount?: number;
   exportCount?: number;
+  iocTimelines?: InvestigationSessionIocTimelines;
+  pinnedIocs?: InvestigationSessionPinnedIocs;
 };
 
 export type UpdateInvestigationSessionInput = {
@@ -49,6 +85,8 @@ export type UpdateInvestigationSessionInput = {
   iocCountByType?: Partial<Record<IocType, number>>;
   enrichmentCount?: number;
   exportCount?: number;
+  iocTimelines?: InvestigationSessionIocTimelines | null;
+  pinnedIocs?: InvestigationSessionPinnedIocs | null;
 };
 
 const IOC_TYPES = new Set<string>(Object.values(IOC_TYPE));
@@ -257,6 +295,360 @@ export function buildInvestigationSessionActivitySummaryText(
   return parts.join(" · ");
 }
 
+export function normalizeInvestigationSessionIocTimelineKey(value: string): string {
+  return normalizeIocNoteKey(value);
+}
+
+function readInvestigationSessionIocTimelineEventTimes(
+  value: unknown
+): number[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const events: number[] = [];
+  for (const entry of value) {
+    const timestamp = readTimestamp(entry);
+    if (timestamp === null) {
+      return null;
+    }
+    events.push(timestamp);
+  }
+  return events;
+}
+
+export function normalizeInvestigationSessionIocTimeline(
+  value: unknown
+): InvestigationSessionIocTimeline | null {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const firstSeenAt = readTimestamp(record.firstSeenAt);
+  const enrichEvents = readInvestigationSessionIocTimelineEventTimes(record.enrichEvents);
+  const exportEvents = readInvestigationSessionIocTimelineEventTimes(record.exportEvents);
+  if (firstSeenAt === null || enrichEvents === null || exportEvents === null) {
+    return null;
+  }
+
+  const timeline: InvestigationSessionIocTimeline = {
+    firstSeenAt,
+    enrichEvents: enrichEvents.slice(0, MAX_INVESTIGATION_SESSION_IOC_TIMELINE_EVENTS),
+    exportEvents: exportEvents.slice(0, MAX_INVESTIGATION_SESSION_IOC_TIMELINE_EVENTS),
+  };
+  if (record.iocType !== undefined) {
+    if (!isIocType(record.iocType)) {
+      return null;
+    }
+    timeline.iocType = record.iocType;
+  }
+  return timeline;
+}
+
+export function normalizeInvestigationSessionIocTimelines(
+  value: unknown
+): InvestigationSessionIocTimelines | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized: InvestigationSessionIocTimelines = {};
+  for (const [key, timelineValue] of Object.entries(value)) {
+    const trimmedKey = normalizeInvestigationSessionIocTimelineKey(key);
+    const timeline = normalizeInvestigationSessionIocTimeline(timelineValue);
+    if (trimmedKey.length === 0 || !timeline) {
+      continue;
+    }
+    normalized[trimmedKey] = timeline;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function appendInvestigationSessionIocTimelineEventTime(
+  events: readonly number[],
+  at: number
+): number[] {
+  const next = [...events, at];
+  if (next.length <= MAX_INVESTIGATION_SESSION_IOC_TIMELINE_EVENTS) {
+    return next;
+  }
+  return next.slice(next.length - MAX_INVESTIGATION_SESSION_IOC_TIMELINE_EVENTS);
+}
+
+export function applyInvestigationSessionIocTimelineEvent(
+  session: InvestigationSession,
+  input: {
+    iocKey: string;
+    iocType?: IocType;
+    event: InvestigationSessionIocTimelineEventKind;
+    at?: number;
+  }
+): InvestigationSession {
+  const key = normalizeInvestigationSessionIocTimelineKey(input.iocKey);
+  if (key.length === 0) {
+    return session;
+  }
+
+  const at = input.at ?? Date.now();
+  const timelines = { ...(session.iocTimelines ?? {}) };
+  const existing = timelines[key];
+
+  if (input.event === "first-seen") {
+    if (existing) {
+      return session;
+    }
+    timelines[key] = {
+      firstSeenAt: at,
+      enrichEvents: [],
+      exportEvents: [],
+      ...(input.iocType ? { iocType: input.iocType } : {}),
+    };
+    return { ...session, iocTimelines: timelines };
+  }
+
+  if (existing) {
+    timelines[key] = {
+      ...existing,
+      enrichEvents:
+        input.event === "enrich"
+          ? appendInvestigationSessionIocTimelineEventTime(existing.enrichEvents, at)
+          : existing.enrichEvents,
+      exportEvents:
+        input.event === "export"
+          ? appendInvestigationSessionIocTimelineEventTime(existing.exportEvents, at)
+          : existing.exportEvents,
+      ...(input.iocType && !existing.iocType ? { iocType: input.iocType } : {}),
+    };
+    return { ...session, iocTimelines: timelines };
+  }
+
+  timelines[key] = {
+    firstSeenAt: at,
+    enrichEvents: input.event === "enrich" ? [at] : [],
+    exportEvents: input.event === "export" ? [at] : [],
+    ...(input.iocType ? { iocType: input.iocType } : {}),
+  };
+  return { ...session, iocTimelines: timelines };
+}
+
+export function getInvestigationSessionIocTimeline(
+  session: InvestigationSession,
+  iocValue: string
+): InvestigationSessionIocTimeline | null {
+  const key = normalizeInvestigationSessionIocTimelineKey(iocValue);
+  if (key.length === 0) {
+    return null;
+  }
+  return session.iocTimelines?.[key] ?? null;
+}
+
+export function listInvestigationSessionIocTimelineEntries(
+  timeline: InvestigationSessionIocTimeline
+): InvestigationSessionIocTimelineEntry[] {
+  return [
+    { kind: "first-seen", at: timeline.firstSeenAt },
+    ...timeline.enrichEvents.map((at) => ({ kind: "enrich" as const, at })),
+    ...timeline.exportEvents.map((at) => ({ kind: "export" as const, at })),
+  ].sort((left, right) => left.at - right.at);
+}
+
+export function formatInvestigationSessionIocTimelineTimestamp(at: number): string {
+  if (!Number.isFinite(at)) {
+    return "Unknown time";
+  }
+  return new Date(at).toLocaleString();
+}
+
+export function formatInvestigationSessionIocTimelineEntryLabel(
+  kind: InvestigationSessionIocTimelineEventKind
+): string {
+  switch (kind) {
+    case "first-seen":
+      return "First seen";
+    case "enrich":
+      return "Enriched";
+    case "export":
+      return "Exported";
+  }
+}
+
+export function buildInvestigationSessionIocTimelineSummaryLines(
+  timeline: InvestigationSessionIocTimeline
+): string[] {
+  return listInvestigationSessionIocTimelineEntries(timeline).map(
+    (entry) =>
+      `${formatInvestigationSessionIocTimelineEntryLabel(entry.kind)} · ${formatInvestigationSessionIocTimelineTimestamp(entry.at)}`
+  );
+}
+
+export function normalizeInvestigationSessionPinnedIocs(
+  value: unknown
+): InvestigationSessionPinnedIocs | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const normalized: InvestigationSessionPinnedIocs = {};
+  for (const [key, pinnedValue] of Object.entries(value)) {
+    const trimmedKey = normalizeInvestigationSessionIocTimelineKey(key);
+    if (trimmedKey.length === 0) {
+      continue;
+    }
+    if (pinnedValue === null || typeof pinnedValue !== "object" || Array.isArray(pinnedValue)) {
+      continue;
+    }
+    const record = pinnedValue as Record<string, unknown>;
+    const pinnedAt = readTimestamp(record.pinnedAt);
+    if (pinnedAt === null) {
+      continue;
+    }
+    const pinned: InvestigationSessionPinnedIoc = { pinnedAt };
+    if (record.iocType !== undefined) {
+      if (!isIocType(record.iocType)) {
+        continue;
+      }
+      pinned.iocType = record.iocType;
+    }
+    normalized[trimmedKey] = pinned;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+export function isInvestigationSessionIocPinned(
+  session: InvestigationSession,
+  iocValue: string
+): boolean {
+  const key = normalizeInvestigationSessionIocTimelineKey(iocValue);
+  if (key.length === 0) {
+    return false;
+  }
+  return Boolean(session.pinnedIocs?.[key]);
+}
+
+export function listInvestigationSessionPinnedIocKeys(
+  session: InvestigationSession
+): string[] {
+  if (!session.pinnedIocs) {
+    return [];
+  }
+
+  return Object.entries(session.pinnedIocs)
+    .sort((left, right) => left[1].pinnedAt - right[1].pinnedAt)
+    .map(([key]) => key);
+}
+
+export function listInvestigationSessionIocMembers(
+  session: InvestigationSession
+): Array<{ iocType: IocType; value: string }> {
+  const members: Array<{ iocType: IocType; value: string }> = [];
+  const seen = new Set<string>();
+
+  const addMember = (rawValue: string, iocType?: IocType) => {
+    const value = rawValue.trim();
+    if (value.length === 0 || !iocType || !isIocType(iocType)) {
+      return;
+    }
+    const key = normalizeInvestigationSessionIocTimelineKey(value);
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    members.push({ iocType, value });
+  };
+
+  if (session.iocTimelines) {
+    for (const [key, timeline] of Object.entries(session.iocTimelines)) {
+      addMember(key, timeline.iocType ?? session.pinnedIocs?.[key]?.iocType);
+    }
+  }
+
+  if (session.pinnedIocs) {
+    for (const [key, pinned] of Object.entries(session.pinnedIocs)) {
+      addMember(key, pinned.iocType);
+    }
+  }
+
+  return members;
+}
+
+export function sortEntriesByInvestigationSessionPinPriority<T extends { value: string }>(
+  entries: readonly T[],
+  pinnedKeys: readonly string[]
+): T[] {
+  if (pinnedKeys.length === 0) {
+    return [...entries];
+  }
+
+  const pinnedSet = new Set(pinnedKeys);
+  const entryByKey = new Map<string, T>();
+  for (const entry of entries) {
+    entryByKey.set(normalizeInvestigationSessionIocTimelineKey(entry.value), entry);
+  }
+
+  const pinnedEntries: T[] = [];
+  for (const key of pinnedKeys) {
+    const entry = entryByKey.get(key);
+    if (entry) {
+      pinnedEntries.push(entry);
+    }
+  }
+
+  const unpinnedEntries = entries.filter(
+    (entry) => !pinnedSet.has(normalizeInvestigationSessionIocTimelineKey(entry.value))
+  );
+
+  return [...pinnedEntries, ...unpinnedEntries];
+}
+
+export function toggleInvestigationSessionIocPin(
+  session: InvestigationSession,
+  input: {
+    iocKey: string;
+    iocType?: IocType;
+    pinned?: boolean;
+    at?: number;
+  }
+): InvestigationSession {
+  const key = normalizeInvestigationSessionIocTimelineKey(input.iocKey);
+  if (key.length === 0) {
+    return session;
+  }
+
+  const pinnedIocs = { ...(session.pinnedIocs ?? {}) };
+  const currentlyPinned = Boolean(pinnedIocs[key]);
+  const nextPinned =
+    input.pinned === undefined ? !currentlyPinned : input.pinned;
+
+  if (!nextPinned) {
+    delete pinnedIocs[key];
+  } else {
+    pinnedIocs[key] = {
+      pinnedAt: input.at ?? Date.now(),
+      ...(input.iocType ? { iocType: input.iocType } : {}),
+    };
+  }
+
+  if (Object.keys(pinnedIocs).length === 0) {
+    const next = { ...session };
+    delete next.pinnedIocs;
+    return next;
+  }
+
+  return {
+    ...session,
+    pinnedIocs,
+  };
+}
+
 function readInvestigationSessionActivityCounts(
   record: Record<string, unknown>
 ): { enrichmentCount: number; exportCount: number } | null {
@@ -351,6 +743,8 @@ export function createInvestigationSession(
   }
 
   const notes = normalizeInvestigationSessionNotes(input.notes);
+  const iocTimelines = normalizeInvestigationSessionIocTimelines(input.iocTimelines);
+  const pinnedIocs = normalizeInvestigationSessionPinnedIocs(input.pinnedIocs);
   const session: InvestigationSession = {
     id,
     title,
@@ -364,6 +758,12 @@ export function createInvestigationSession(
   };
   if (notes !== undefined) {
     session.notes = notes;
+  }
+  if (iocTimelines !== undefined) {
+    session.iocTimelines = iocTimelines;
+  }
+  if (pinnedIocs !== undefined) {
+    session.pinnedIocs = pinnedIocs;
   }
   return session;
 }
@@ -425,6 +825,26 @@ export function updateInvestigationSession(
     return null;
   }
 
+  let nextIocTimelines: InvestigationSessionIocTimelines | undefined;
+  if (input.iocTimelines === null) {
+    nextIocTimelines = undefined;
+  } else if (input.iocTimelines === undefined) {
+    nextIocTimelines = session.iocTimelines
+      ? { ...session.iocTimelines }
+      : undefined;
+  } else {
+    nextIocTimelines = normalizeInvestigationSessionIocTimelines(input.iocTimelines);
+  }
+
+  let nextPinnedIocs: InvestigationSessionPinnedIocs | undefined;
+  if (input.pinnedIocs === null) {
+    nextPinnedIocs = undefined;
+  } else if (input.pinnedIocs === undefined) {
+    nextPinnedIocs = session.pinnedIocs ? { ...session.pinnedIocs } : undefined;
+  } else {
+    nextPinnedIocs = normalizeInvestigationSessionPinnedIocs(input.pinnedIocs);
+  }
+
   const next: InvestigationSession = {
     id: session.id,
     title: nextTitle,
@@ -438,6 +858,12 @@ export function updateInvestigationSession(
   };
   if (nextNotes !== undefined) {
     next.notes = nextNotes;
+  }
+  if (nextIocTimelines !== undefined) {
+    next.iocTimelines = nextIocTimelines;
+  }
+  if (nextPinnedIocs !== undefined) {
+    next.pinnedIocs = nextPinnedIocs;
   }
   return next;
 }
@@ -487,6 +913,18 @@ export function isInvestigationSession(value: unknown): value is InvestigationSe
   if (readInvestigationSessionActivityCounts(record) === null) {
     return false;
   }
+  if (record.iocTimelines !== undefined) {
+    const timelines = normalizeInvestigationSessionIocTimelines(record.iocTimelines);
+    if (!timelines || JSON.stringify(timelines) !== JSON.stringify(record.iocTimelines)) {
+      return false;
+    }
+  }
+  if (record.pinnedIocs !== undefined) {
+    const pinnedIocs = normalizeInvestigationSessionPinnedIocs(record.pinnedIocs);
+    if (!pinnedIocs || JSON.stringify(pinnedIocs) !== JSON.stringify(record.pinnedIocs)) {
+      return false;
+    }
+  }
 
   if (record.notes === undefined) {
     return true;
@@ -520,6 +958,8 @@ export function normalizeInvestigationSession(
   }
 
   const notes = normalizeInvestigationSessionNotes(value.notes);
+  const iocTimelines = normalizeInvestigationSessionIocTimelines(value.iocTimelines);
+  const pinnedIocs = normalizeInvestigationSessionPinnedIocs(value.pinnedIocs);
   const normalized: InvestigationSession = {
     id: value.id.trim(),
     title: normalizeInvestigationSessionTitle(value.title) ?? value.title.trim(),
@@ -533,6 +973,12 @@ export function normalizeInvestigationSession(
   };
   if (notes !== undefined) {
     normalized.notes = notes;
+  }
+  if (iocTimelines !== undefined) {
+    normalized.iocTimelines = iocTimelines;
+  }
+  if (pinnedIocs !== undefined) {
+    normalized.pinnedIocs = pinnedIocs;
   }
   return normalized;
 }

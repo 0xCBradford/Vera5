@@ -78,6 +78,21 @@ export const HOVER_CARD_ANALYST_NOTES_PLACEHOLDER =
 export const HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL = "Analyst notes";
 export const HOVER_CARD_ANALYST_NOTES_INPUT_ID = "vera5-analyst-notes-input";
 
+export const HOVER_CARD_IOC_LABEL_LABEL = "Label";
+export const HOVER_CARD_IOC_LABEL_SECTION_ARIA_LABEL = "Indicator label";
+export const HOVER_CARD_IOC_LABEL_SELECT_ID = "vera5-ioc-label-select";
+export const HOVER_CARD_IOC_LABEL_NONE_VALUE = "";
+
+export const HOVER_CARD_IOC_TIMELINE_LABEL = "Session timeline";
+export const HOVER_CARD_IOC_TIMELINE_SECTION_ARIA_LABEL =
+  "Session timeline for this indicator";
+export const HOVER_CARD_IOC_TIMELINE_EMPTY_TEXT =
+  "No session timeline for this indicator yet.";
+
+export const HOVER_CARD_IOC_PIN_LABEL = "Pin";
+export const HOVER_CARD_IOC_PINNED_LABEL = "Pinned";
+export const HOVER_CARD_IOC_PIN_ARIA_LABEL = "Pin indicator for triage priority";
+
 export const HOVER_CARD_ENRICHMENT_DISCLAIMER =
   "Enrichment uses your API keys and sends only the selected indicator value to vendors you enable—not the full page.";
 

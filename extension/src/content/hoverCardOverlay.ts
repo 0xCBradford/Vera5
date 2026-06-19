@@ -1,6 +1,12 @@
 import type { IgnoredOverlapMatch, IocRuleId, IocType } from "../lib/iocRegex";
 import { resolveHoverCardAnalystNote, primeAnalystNoteForIoc, setSessionAnalystNote } from "../lib/analystNotesSession";
 import { normalizeIocNoteKey } from "../lib/analystNotesStorage";
+import { IOC_LABEL_IDS, formatIocLabelDisplay, type IocLabelId } from "../lib/iocLabel";
+import {
+  primeIocLabelForIoc,
+  resolveHoverCardIocLabel,
+  setSessionIocLabel,
+} from "../lib/iocLabelSession";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildNormalizedEnrichmentRecord,
@@ -22,7 +28,16 @@ import {
   listExportTemplateIds,
 } from "../lib/exportTemplates";
 import { getTabScanTrayFilter } from "../lib/tabScanSnapshotStorage";
-import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
+import {
+  getActiveInvestigationSession,
+  recordActiveInvestigationSessionExportEvent,
+  toggleActiveInvestigationSessionIocPin,
+} from "../lib/investigationSessionStorage";
+import {
+  buildInvestigationSessionIocTimelineSummaryLines,
+  getInvestigationSessionIocTimeline,
+  isInvestigationSessionIocPinned,
+} from "../lib/investigationSession";
 import {
   buildTabScanIocListClipboardText,
   buildTraySubsetEnrichmentRecords,
@@ -43,6 +58,16 @@ import {
   HOVER_CARD_ANALYST_NOTES_LABEL,
   HOVER_CARD_ANALYST_NOTES_PLACEHOLDER,
   HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL,
+  HOVER_CARD_IOC_LABEL_LABEL,
+  HOVER_CARD_IOC_LABEL_NONE_VALUE,
+  HOVER_CARD_IOC_LABEL_SECTION_ARIA_LABEL,
+  HOVER_CARD_IOC_LABEL_SELECT_ID,
+  HOVER_CARD_IOC_TIMELINE_EMPTY_TEXT,
+  HOVER_CARD_IOC_TIMELINE_LABEL,
+  HOVER_CARD_IOC_TIMELINE_SECTION_ARIA_LABEL,
+  HOVER_CARD_IOC_PIN_ARIA_LABEL,
+  HOVER_CARD_IOC_PIN_LABEL,
+  HOVER_CARD_IOC_PINNED_LABEL,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
   HOVER_CARD_WHY_DETECTED_HEADING,
@@ -78,6 +103,22 @@ import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
 import { ENRICHMENT_SOURCE_LABELS } from "../lib/enrichmentSourceRegistry";
 import { buildPreQueryDisclosureMessage, cancelPreQueryDisclosure, resolvePreQueryDisclosure } from "../lib/enrichmentPolicy";
 import {
+  formatSaveToCollectionFeedback,
+  IOC_COLLECTION_CREATE_NEW_LABEL,
+  IOC_COLLECTION_NEW_NAME_PLACEHOLDER,
+  IOC_COLLECTION_NO_COLLECTIONS_TEXT,
+  IOC_COLLECTION_PICKER_HEADING,
+  IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL,
+  IOC_COLLECTION_SAVE_TO_NEW_LABEL,
+  normalizeIocCollectionName,
+  type IocCollection,
+} from "../lib/iocCollection";
+import {
+  requestAddIocToCollection,
+  requestCreateIocCollection,
+  requestListIocCollections,
+} from "../lib/iocCollectionClient";
+import {
   buildEnrichmentSummaryClassName,
   ensureVera5UiStyles,
 } from "../lib/vera5UiStyles";
@@ -105,13 +146,31 @@ export {
 
 export const HOVER_CARD_HOST_ID = "vera5-hover-card-host";
 
-function notifyInvestigationSessionExportRecorded(): void {
-  void recordActiveInvestigationSessionExportEvent();
+function notifyInvestigationSessionExportRecorded(
+  iocs?: ReadonlyArray<{ value: string; type?: IocType }>
+): void {
+  void recordActiveInvestigationSessionExportEvent(
+    iocs && iocs.length > 0 ? { iocs } : undefined
+  );
+}
+
+function mapEnrichmentRecordsToTimelineIocs(
+  records: ReadonlyArray<{ value: string; type?: IocType }>
+): ReadonlyArray<{ value: string; type?: IocType }> {
+  return records.map((record) => ({
+    value: record.value,
+    type: record.type,
+  }));
 }
 
 let lastHoverCardAnchor: Element | null = null;
 let lastHoverCardPayload: HoverCardOverlayPayload | null = null;
 let lastHoverCardFocusReturnTarget: HTMLElement | null = null;
+let hoverCardSaveToCollectionOpen = false;
+let hoverCardSaveToCollectionFeedback: string | null = null;
+let hoverCardSaveToCollectionNewName = "";
+let hoverCardSaveToCollectionOptions: IocCollection[] = [];
+let hoverCardSaveToCollectionLoading = false;
 
 const HOVER_CARD_FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -193,6 +252,28 @@ export const HOVER_CARD_ANALYST_NOTES_LABEL_CLASS =
   "vera5-hover-card-analyst-notes-label";
 export const HOVER_CARD_ANALYST_NOTES_INPUT_CLASS =
   "vera5-hover-card-analyst-notes-input";
+export const HOVER_CARD_IOC_LABEL_CLASS = "vera5-hover-card-ioc-label";
+export const HOVER_CARD_IOC_LABEL_LABEL_CLASS = "vera5-hover-card-ioc-label-label";
+export const HOVER_CARD_IOC_LABEL_SELECT_CLASS = "vera5-hover-card-ioc-label-select";
+export const HOVER_CARD_SAVE_TO_COLLECTION_CLASS = "vera5-hover-card-save-collection";
+export const HOVER_CARD_SAVE_TO_COLLECTION_TOGGLE_CLASS =
+  "vera5-hover-card-save-collection-toggle";
+export const HOVER_CARD_SAVE_TO_COLLECTION_PANEL_CLASS =
+  "vera5-hover-card-save-collection-panel";
+export const HOVER_CARD_SAVE_TO_COLLECTION_HEADING_CLASS =
+  "vera5-hover-card-save-collection-heading";
+export const HOVER_CARD_SAVE_TO_COLLECTION_LIST_CLASS =
+  "vera5-hover-card-save-collection-list";
+export const HOVER_CARD_SAVE_TO_COLLECTION_FEEDBACK_CLASS =
+  "vera5-hover-card-save-collection-feedback";
+export const HOVER_CARD_SAVE_TO_COLLECTION_FIELD_CLASS =
+  "vera5-hover-card-save-collection-field";
+export const HOVER_CARD_IOC_TIMELINE_CLASS = "vera5-hover-card-ioc-timeline";
+export const HOVER_CARD_IOC_TIMELINE_LABEL_CLASS = "vera5-hover-card-ioc-timeline-label";
+export const HOVER_CARD_IOC_TIMELINE_LIST_CLASS = "vera5-hover-card-ioc-timeline-list";
+export const HOVER_CARD_IOC_TIMELINE_ITEM_CLASS = "vera5-hover-card-ioc-timeline-item";
+export const HOVER_CARD_IOC_PIN_BUTTON_CLASS = "vera5-hover-card-ioc-pin";
+export const HOVER_CARD_IOC_PIN_BUTTON_PINNED_CLASS = "vera5-hover-card-ioc-pin--pinned";
 export const HOVER_CARD_EXPORT_SECTION_CLASS = "vera5-hover-card-export";
 export const HOVER_CARD_EXPORT_ACTIONS_CLASS = "vera5-hover-card-export-actions";
 export const HOVER_CARD_EXPORT_BUTTON_CLASS = "vera5-hover-card-export-button";
@@ -249,6 +330,7 @@ export type HoverCardOverlayPayload = {
   showDisabledSourcesInWorkspace?: boolean;
   sourceResults?: readonly HoverCardSourceEntry[];
   analystNotes?: string;
+  iocLabel?: IocLabelId;
   preQueryDisclosure?: {
     sourceIds: readonly EnrichmentSourceId[];
   };
@@ -879,15 +961,16 @@ function buildExportFormatActions(
     label: mode === "export" ? exportLabel : copyLabel,
     action: () => {
       const record = buildRecord();
+      const timelineIocs = [{ value: record.value, type: record.type }];
       if (mode === "export") {
         downloadEnrichmentExportFile(record, format, doc);
-        notifyInvestigationSessionExportRecorded();
+        notifyInvestigationSessionExportRecorded(timelineIocs);
         return;
       }
       if (format === "markdown") {
         void copyEnrichmentExportMarkdownToClipboard(record).then((copied) => {
           if (copied) {
-            notifyInvestigationSessionExportRecorded();
+            notifyInvestigationSessionExportRecorded(timelineIocs);
           }
         });
         return;
@@ -895,14 +978,14 @@ function buildExportFormatActions(
       if (format === "json") {
         void copyEnrichmentExportJsonToClipboard(record).then((copied) => {
           if (copied) {
-            notifyInvestigationSessionExportRecorded();
+            notifyInvestigationSessionExportRecorded(timelineIocs);
           }
         });
         return;
       }
       void copyEnrichmentExportTxtToClipboard(record).then((copied) => {
         if (copied) {
-          notifyInvestigationSessionExportRecorded();
+          notifyInvestigationSessionExportRecorded(timelineIocs);
         }
       });
     },
@@ -1184,7 +1267,9 @@ function runTraySubsetExport(
   } else {
     downloadTraySubsetExportFile(cache.records, format, doc);
   }
-  notifyInvestigationSessionExportRecorded();
+  notifyInvestigationSessionExportRecorded(
+    mapEnrichmentRecordsToTimelineIocs(cache.records)
+  );
   return true;
 }
 
@@ -1276,7 +1361,9 @@ function buildScanListTemplateCopyDropdownActions(
             copied
           );
           if (copied) {
-            notifyInvestigationSessionExportRecorded();
+            notifyInvestigationSessionExportRecorded(
+              mapEnrichmentRecordsToTimelineIocs(cache.records)
+            );
           }
         },
         () => {
@@ -1405,7 +1492,9 @@ function createTemplateExportRow(
           copied
         );
         if (copied) {
-          notifyInvestigationSessionExportRecorded();
+          notifyInvestigationSessionExportRecorded(
+            mapEnrichmentRecordsToTimelineIocs(cache.records)
+          );
         }
       },
       () => {
@@ -1514,6 +1603,320 @@ function createExportSection(
 
   section.appendChild(footer);
 
+  return section;
+}
+
+function createIocLabelSection(
+  value: string,
+  initialLabel: IocLabelId | null,
+  doc: Document
+): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_IOC_LABEL_CLASS;
+  section.setAttribute("aria-label", HOVER_CARD_IOC_LABEL_SECTION_ARIA_LABEL);
+
+  const heading = createSectionHeading(HOVER_CARD_IOC_LABEL_LABEL, doc);
+  heading.id = "vera5-ioc-label-heading";
+  heading.className = HOVER_CARD_IOC_LABEL_LABEL_CLASS;
+
+  const select = doc.createElement("select");
+  select.id = HOVER_CARD_IOC_LABEL_SELECT_ID;
+  select.className = HOVER_CARD_IOC_LABEL_SELECT_CLASS;
+  select.setAttribute("aria-labelledby", heading.id);
+
+  const noneOption = doc.createElement("option");
+  noneOption.value = HOVER_CARD_IOC_LABEL_NONE_VALUE;
+  noneOption.textContent = "None";
+  select.appendChild(noneOption);
+
+  for (const labelId of IOC_LABEL_IDS) {
+    const option = doc.createElement("option");
+    option.value = labelId;
+    option.textContent = formatIocLabelDisplay(labelId);
+    select.appendChild(option);
+  }
+
+  select.value = initialLabel ?? HOVER_CARD_IOC_LABEL_NONE_VALUE;
+
+  select.addEventListener("change", () => {
+    const nextLabel =
+      select.value === HOVER_CARD_IOC_LABEL_NONE_VALUE
+        ? null
+        : (select.value as IocLabelId);
+    setSessionIocLabel(value, nextLabel);
+  });
+  select.addEventListener("mousedown", (event) => {
+    event.stopPropagation();
+  });
+
+  primeIocLabelForIoc(value, (label) => {
+    if (select.value === HOVER_CARD_IOC_LABEL_NONE_VALUE && label) {
+      select.value = label;
+    }
+  });
+
+  section.appendChild(heading);
+  section.appendChild(select);
+  return section;
+}
+
+function createIocPinButton(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): HTMLButtonElement {
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = HOVER_CARD_IOC_PIN_BUTTON_CLASS;
+  button.setAttribute("aria-label", HOVER_CARD_IOC_PIN_ARIA_LABEL);
+
+  const syncButton = (pinned: boolean): void => {
+    button.setAttribute("aria-pressed", pinned ? "true" : "false");
+    button.textContent = pinned ? HOVER_CARD_IOC_PINNED_LABEL : HOVER_CARD_IOC_PIN_LABEL;
+    button.classList.toggle(HOVER_CARD_IOC_PIN_BUTTON_PINNED_CLASS, pinned);
+  };
+
+  syncButton(false);
+
+  void getActiveInvestigationSession().then((session) => {
+    if (!session) {
+      return;
+    }
+    syncButton(isInvestigationSessionIocPinned(session, payload.value));
+  });
+
+  button.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void toggleActiveInvestigationSessionIocPin({
+      iocValue: payload.value,
+      iocType: payload.type,
+    }).then((session) => {
+      if (!session) {
+        return;
+      }
+      syncButton(isInvestigationSessionIocPinned(session, payload.value));
+    });
+  });
+
+  return button;
+}
+
+function createIocTimelineSection(value: string, doc: Document): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_IOC_TIMELINE_CLASS;
+  section.setAttribute("aria-label", HOVER_CARD_IOC_TIMELINE_SECTION_ARIA_LABEL);
+
+  const heading = createSectionHeading(HOVER_CARD_IOC_TIMELINE_LABEL, doc);
+  heading.id = "vera5-ioc-timeline-heading";
+  heading.className = HOVER_CARD_IOC_TIMELINE_LABEL_CLASS;
+
+  const list = doc.createElement("ul");
+  list.className = HOVER_CARD_IOC_TIMELINE_LIST_CLASS;
+  list.setAttribute("aria-labelledby", heading.id);
+
+  const emptyItem = doc.createElement("li");
+  emptyItem.className = HOVER_CARD_IOC_TIMELINE_ITEM_CLASS;
+  emptyItem.textContent = HOVER_CARD_IOC_TIMELINE_EMPTY_TEXT;
+  list.appendChild(emptyItem);
+
+  section.appendChild(heading);
+  section.appendChild(list);
+
+  void getActiveInvestigationSession().then((session) => {
+    if (!session) {
+      return;
+    }
+    const timeline = getInvestigationSessionIocTimeline(session, value);
+    if (!timeline) {
+      return;
+    }
+
+    list.replaceChildren();
+    for (const line of buildInvestigationSessionIocTimelineSummaryLines(timeline)) {
+      const item = doc.createElement("li");
+      item.className = HOVER_CARD_IOC_TIMELINE_ITEM_CLASS;
+      item.textContent = line;
+      list.appendChild(item);
+    }
+  });
+
+  return section;
+}
+
+function resetHoverCardSaveToCollectionState(): void {
+  hoverCardSaveToCollectionOpen = false;
+  hoverCardSaveToCollectionFeedback = null;
+  hoverCardSaveToCollectionNewName = "";
+  hoverCardSaveToCollectionOptions = [];
+  hoverCardSaveToCollectionLoading = false;
+}
+
+export function resetHoverCardSaveToCollectionStateForTests(): void {
+  resetHoverCardSaveToCollectionState();
+}
+
+async function openHoverCardSaveToCollectionPicker(doc: Document): Promise<void> {
+  hoverCardSaveToCollectionOpen = true;
+  hoverCardSaveToCollectionFeedback = null;
+  hoverCardSaveToCollectionNewName = "";
+  hoverCardSaveToCollectionLoading = true;
+  hoverCardSaveToCollectionOptions = [];
+  refreshHoverCardIfOpen(doc);
+  hoverCardSaveToCollectionOptions = await requestListIocCollections();
+  hoverCardSaveToCollectionLoading = false;
+  refreshHoverCardIfOpen(doc);
+}
+
+function createSaveToCollectionSection(
+  payload: HoverCardOverlayPayload,
+  doc: Document
+): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_SAVE_TO_COLLECTION_CLASS;
+  section.setAttribute("aria-label", IOC_COLLECTION_PICKER_HEADING);
+  section.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+  section.addEventListener("keydown", (event) => {
+    event.stopPropagation();
+  });
+
+  const toggle = doc.createElement("button");
+  toggle.type = "button";
+  toggle.className = HOVER_CARD_SAVE_TO_COLLECTION_TOGGLE_CLASS;
+  toggle.textContent = IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL;
+  toggle.setAttribute("aria-expanded", hoverCardSaveToCollectionOpen ? "true" : "false");
+  toggle.addEventListener("click", () => {
+    if (hoverCardSaveToCollectionOpen) {
+      hoverCardSaveToCollectionOpen = false;
+      hoverCardSaveToCollectionFeedback = null;
+      refreshHoverCardIfOpen(doc);
+      return;
+    }
+    void openHoverCardSaveToCollectionPicker(doc);
+  });
+  section.appendChild(toggle);
+
+  if (!hoverCardSaveToCollectionOpen) {
+    return section;
+  }
+
+  const panel = doc.createElement("div");
+  panel.className = HOVER_CARD_SAVE_TO_COLLECTION_PANEL_CLASS;
+  panel.setAttribute("role", "group");
+  panel.setAttribute("aria-label", IOC_COLLECTION_PICKER_HEADING);
+
+  const heading = doc.createElement("p");
+  heading.className = HOVER_CARD_SAVE_TO_COLLECTION_HEADING_CLASS;
+  heading.textContent = IOC_COLLECTION_PICKER_HEADING;
+  panel.appendChild(heading);
+
+  if (hoverCardSaveToCollectionLoading) {
+    const loading = doc.createElement("p");
+    loading.className = "vera5-workspace-empty";
+    loading.textContent = "Loading collections…";
+    panel.appendChild(loading);
+  } else if (hoverCardSaveToCollectionOptions.length === 0) {
+    const empty = doc.createElement("p");
+    empty.className = "vera5-workspace-empty";
+    empty.textContent = IOC_COLLECTION_NO_COLLECTIONS_TEXT;
+    panel.appendChild(empty);
+  } else {
+    const list = doc.createElement("div");
+    list.className = HOVER_CARD_SAVE_TO_COLLECTION_LIST_CLASS;
+    for (const collection of hoverCardSaveToCollectionOptions) {
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.className = HOVER_CARD_ACTION_CLASS;
+      button.textContent = collection.name;
+      button.addEventListener("click", () => {
+        void (async () => {
+          const result = await requestAddIocToCollection({
+            collectionId: collection.id,
+            member: { iocType: payload.type, value: payload.value },
+          });
+          hoverCardSaveToCollectionFeedback = result
+            ? formatSaveToCollectionFeedback({
+                collectionName: result.collection.name,
+                added: result.added,
+              })
+            : "Could not save to collection.";
+          refreshHoverCardIfOpen(doc);
+        })();
+      });
+      list.appendChild(button);
+    }
+    panel.appendChild(list);
+  }
+
+  const label = doc.createElement("label");
+  label.className = HOVER_CARD_SAVE_TO_COLLECTION_FIELD_CLASS;
+  label.textContent = IOC_COLLECTION_CREATE_NEW_LABEL;
+  const input = doc.createElement("input");
+  input.type = "text";
+  input.value = hoverCardSaveToCollectionNewName;
+  input.placeholder = IOC_COLLECTION_NEW_NAME_PLACEHOLDER;
+  input.setAttribute("aria-label", IOC_COLLECTION_NEW_NAME_PLACEHOLDER);
+  input.addEventListener("input", () => {
+    hoverCardSaveToCollectionNewName = input.value;
+    refreshHoverCardIfOpen(doc);
+  });
+  input.addEventListener("mousedown", (event) => {
+    event.stopPropagation();
+  });
+  label.appendChild(input);
+  panel.appendChild(label);
+
+  const createButton = doc.createElement("button");
+  createButton.type = "button";
+  createButton.className = HOVER_CARD_ACTION_CLASS;
+  createButton.textContent = IOC_COLLECTION_SAVE_TO_NEW_LABEL;
+  createButton.disabled =
+    normalizeIocCollectionName(hoverCardSaveToCollectionNewName) === null;
+  createButton.addEventListener("click", () => {
+    void (async () => {
+      const created = await requestCreateIocCollection({
+        name: hoverCardSaveToCollectionNewName,
+      });
+      if (!created) {
+        hoverCardSaveToCollectionFeedback = "Could not create collection.";
+        refreshHoverCardIfOpen(doc);
+        return;
+      }
+      const result = await requestAddIocToCollection({
+        collectionId: created.id,
+        member: { iocType: payload.type, value: payload.value },
+      });
+      if (!result) {
+        hoverCardSaveToCollectionFeedback =
+          "Collection created, but indicator was not saved.";
+        refreshHoverCardIfOpen(doc);
+        return;
+      }
+      hoverCardSaveToCollectionOptions = [
+        result.collection,
+        ...hoverCardSaveToCollectionOptions.filter(
+          (item) => item.id !== result.collection.id
+        ),
+      ];
+      hoverCardSaveToCollectionNewName = "";
+      hoverCardSaveToCollectionFeedback = formatSaveToCollectionFeedback({
+        collectionName: result.collection.name,
+        added: result.added,
+      });
+      refreshHoverCardIfOpen(doc);
+    })();
+  });
+  panel.appendChild(createButton);
+
+  if (hoverCardSaveToCollectionFeedback) {
+    const feedback = doc.createElement("p");
+    feedback.className = HOVER_CARD_SAVE_TO_COLLECTION_FEEDBACK_CLASS;
+    feedback.setAttribute("aria-live", "polite");
+    feedback.textContent = hoverCardSaveToCollectionFeedback;
+    panel.appendChild(feedback);
+  }
+
+  section.appendChild(panel);
   return section;
 }
 
@@ -1759,6 +2162,13 @@ export function buildHoverCardPanel(
     resolveHoverCardAnalystNote(payload.value, payload.analystNotes),
     doc
   );
+  const iocLabelSection = createIocLabelSection(
+    payload.value,
+    resolveHoverCardIocLabel(payload.value, payload.iocLabel),
+    doc
+  );
+  const iocTimelineSection = createIocTimelineSection(payload.value, doc);
+  const saveToCollectionSection = createSaveToCollectionSection(payload, doc);
   const exportSection = createExportSection(payload, doc);
   const whyDetectedView = buildWhyDetectedView({
     type: payload.type,
@@ -1792,6 +2202,7 @@ export function buildHoverCardPanel(
 
   const headerActions = doc.createElement("div");
   headerActions.className = "vera5-hover-card-header-actions";
+  headerActions.appendChild(createIocPinButton(payload, doc));
   headerActions.appendChild(createIndicatorCopyActions(payload, doc));
   if (options.detailClear) {
     headerActions.appendChild(createDetailClearButton(options.detailClear, doc));
@@ -1884,6 +2295,12 @@ export function buildHoverCardPanel(
   if (pivotRecipesPanel) {
     panel.appendChild(pivotRecipesPanel);
   }
+  iocLabelSection.style.marginBottom = showFooter ? "8px" : "0";
+  panel.appendChild(iocLabelSection);
+  iocTimelineSection.style.marginBottom = showFooter ? "8px" : "0";
+  panel.appendChild(iocTimelineSection);
+  saveToCollectionSection.style.marginBottom = showFooter ? "8px" : "0";
+  panel.appendChild(saveToCollectionSection);
   analystNotesSection.style.marginBottom = showFooter ? "8px" : "0";
   panel.appendChild(analystNotesSection);
   exportSection.style.marginBottom = showFooter ? "8px" : "0";
@@ -1925,6 +2342,9 @@ export function showHoverCardNearAnchor(
   doc: Document = document,
   options: ShowHoverCardFocusOptions = {}
 ): HTMLElement {
+  if (lastHoverCardPayload && lastHoverCardPayload.value !== payload.value) {
+    resetHoverCardSaveToCollectionState();
+  }
   lastHoverCardAnchor = anchor;
   const host = ensureHoverCardHost(doc);
   host.replaceChildren();
@@ -1959,6 +2379,9 @@ export function showHoverCardNearRange(
   }
   if (node instanceof Element) {
     anchor = node;
+  }
+  if (lastHoverCardPayload && lastHoverCardPayload.value !== payload.value) {
+    resetHoverCardSaveToCollectionState();
   }
   lastHoverCardAnchor = anchor;
   const host = ensureHoverCardHost(doc);
@@ -2033,6 +2456,40 @@ export function updateHoverCardAnalystNoteIfOpen(
   }
 }
 
+export function updateHoverCardIocLabelIfOpen(
+  iocKey: string,
+  label: IocLabelId | null,
+  doc: Document = document
+): void {
+  if (!lastHoverCardPayload) {
+    return;
+  }
+  if (
+    normalizeIocNoteKey(lastHoverCardPayload.value) !== normalizeIocNoteKey(iocKey)
+  ) {
+    return;
+  }
+
+  const select = doc.getElementById(
+    HOVER_CARD_IOC_LABEL_SELECT_ID
+  ) as HTMLSelectElement | null;
+  const nextValue = label ?? HOVER_CARD_IOC_LABEL_NONE_VALUE;
+  if (!select || select.value === nextValue) {
+    return;
+  }
+
+  const hadFocus = doc.activeElement === select;
+  select.value = nextValue;
+  lastHoverCardPayload = {
+    ...lastHoverCardPayload,
+    iocLabel: label ?? undefined,
+  };
+
+  if (hadFocus) {
+    select.focus();
+  }
+}
+
 export function refreshHoverCardIfOpen(doc: Document = document): void {
   if (!lastHoverCardAnchor || !lastHoverCardPayload) {
     return;
@@ -2042,6 +2499,7 @@ export function refreshHoverCardIfOpen(doc: Document = document): void {
 
 export function hideHoverCard(doc: Document = document): void {
   cancelPreQueryDisclosure();
+  resetHoverCardSaveToCollectionState();
   const host = doc.getElementById(HOVER_CARD_HOST_ID);
   if (!host) {
     return;

@@ -24,6 +24,7 @@ import {
   TEST_FIXTURE_OTX_API_KEY,
   TEST_FIXTURE_STORED_API_KEY,
 } from "../lib/fixtureSecrets";
+import { ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE } from "../lib/enrichmentSourceOps";
 import { maskApiKeyForDisplay } from "../lib/storage";
 import { Options } from "./Options";
 
@@ -114,6 +115,23 @@ describe("Options API key inputs", () => {
     expect(
       mounted.container.querySelector('input[aria-label="Enable GreyNoise"]')
     ).not.toBeNull();
+  });
+
+  it("points source health to the popup instead of a duplicate panel", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain(
+      ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE
+    );
+    expect(mounted.container.textContent).not.toContain(
+      "Source health monitoring coming soon."
+    );
+    expect(
+      mounted.container.querySelectorAll(".v5-source__health").length
+    ).toBe(0);
   });
 
   it("renders the manual-only enrichment toggle", async () => {

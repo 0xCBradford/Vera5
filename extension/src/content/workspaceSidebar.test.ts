@@ -14,6 +14,8 @@ import {
 import {
   DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
 } from "./enrichmentBackgroundFetch";
+import { createIocCollection } from "../lib/iocCollection";
+import { MESSAGE } from "../lib/messages";
 import {
   closeWorkspace,
   isWorkspaceOpen,
@@ -23,6 +25,14 @@ import {
   WORKSPACE_HOST_ID,
   WORKSPACE_HTML_CLASS,
 } from "./workspaceSidebar";
+
+const sampleCollection = createIocCollection({
+  id: "vera5-col-workspace-test",
+  name: "APT29 Research",
+  createdAt: 100,
+  updatedAt: 100,
+  members: [],
+})!;
 
 describe("workspace sidebar", () => {
   beforeEach(() => {
@@ -115,6 +125,183 @@ describe("workspace sidebar", () => {
 
     await vi.waitFor(() => {
       expect(document.body.textContent).toContain("1 indicator");
+    });
+  });
+
+  it("opens save-to-collection picker from a tray row and saves to an existing collection", async () => {
+    const summary = buildTabScanSummary({
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/alert",
+        entries: [{ type: "ipv4", value: "8.8.8.8", anchorId: "vera5-hl-1" }],
+      }),
+      tabId: 7,
+    });
+    vi.spyOn(tabScanSummaryContent, "getTabScanSummaryForCurrentTab").mockResolvedValue(
+      summary
+    );
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: () => Promise.resolve({}),
+          set: () => Promise.resolve(),
+        },
+        session: {
+          get: () => Promise.resolve({}),
+          set: () => Promise.resolve(),
+          remove: () => Promise.resolve(),
+        },
+        onChanged: {
+          addListener: vi.fn(),
+        },
+      },
+      runtime: {
+        id: "test-extension-id",
+        sendMessage: vi.fn(async (message: { type?: string; collectionId?: string; iocType?: string; value?: string }) => {
+          if (message?.type === MESSAGE.LIST_IOC_COLLECTIONS) {
+            return { ok: true, payload: { collections: [sampleCollection] } };
+          }
+          if (message?.type === MESSAGE.ADD_IOC_TO_COLLECTION) {
+            return {
+              ok: true,
+              payload: {
+                collection: {
+                  ...sampleCollection,
+                  members: [{ iocType: "ipv4", value: "8.8.8.8" }],
+                  updatedAt: 200,
+                },
+                added: true,
+              },
+            };
+          }
+          return { ok: true };
+        }),
+        openOptionsPage: vi.fn(),
+        onMessage: {
+          addListener: vi.fn(),
+        },
+      },
+      tabs: {
+        create: vi.fn(),
+      },
+    });
+
+    openWorkspace(document);
+
+    await vi.waitFor(() => {
+      expect(document.querySelector(".vera5-tray-save-collection-toggle")).not.toBeNull();
+    });
+
+    const saveToggle = [...document.querySelectorAll<HTMLButtonElement>(
+      ".vera5-tray-save-collection-toggle"
+    )].find((button) => button.textContent === "Save to collection…");
+    expect(saveToggle).toBeDefined();
+    saveToggle!.click();
+
+    await vi.waitFor(() => {
+      expect(document.querySelector(".vera5-tray-save-collection-panel")).not.toBeNull();
+      expect(document.body.textContent).toContain("APT29 Research");
+    });
+
+    const collectionButton = [...document.querySelectorAll<HTMLButtonElement>(
+      ".vera5-tray-save-collection-list .vera5-workspace-button"
+    )].find((button) => button.textContent === "APT29 Research");
+    expect(collectionButton).toBeDefined();
+    collectionButton!.click();
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain("Saved to APT29 Research.");
+    });
+  });
+
+  it("adds all filtered tray indicators to an existing collection", async () => {
+    const summary = buildTabScanSummary({
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/alert",
+        entries: [
+          { type: "ipv4", value: "8.8.8.8", anchorId: "vera5-hl-1" },
+          { type: "domain", value: "example.com", anchorId: "vera5-hl-2" },
+        ],
+      }),
+      tabId: 7,
+    });
+    vi.spyOn(tabScanSummaryContent, "getTabScanSummaryForCurrentTab").mockResolvedValue(
+      summary
+    );
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: () => Promise.resolve({}),
+          set: () => Promise.resolve(),
+        },
+        session: {
+          get: () => Promise.resolve({}),
+          set: () => Promise.resolve(),
+          remove: () => Promise.resolve(),
+        },
+        onChanged: {
+          addListener: vi.fn(),
+        },
+      },
+      runtime: {
+        id: "test-extension-id",
+        sendMessage: vi.fn(async (message: { type?: string; collectionId?: string; members?: unknown[] }) => {
+          if (message?.type === MESSAGE.LIST_IOC_COLLECTIONS) {
+            return { ok: true, payload: { collections: [sampleCollection] } };
+          }
+          if (message?.type === MESSAGE.ADD_IOCS_TO_COLLECTION) {
+            return {
+              ok: true,
+              payload: {
+                collection: {
+                  ...sampleCollection,
+                  members: [
+                    { iocType: "ipv4", value: "8.8.8.8" },
+                    { iocType: "domain", value: "example.com" },
+                  ],
+                  updatedAt: 200,
+                },
+                addedCount: 2,
+                duplicateCount: 0,
+                totalCount: 2,
+              },
+            };
+          }
+          return { ok: true };
+        }),
+        openOptionsPage: vi.fn(),
+        onMessage: {
+          addListener: vi.fn(),
+        },
+      },
+      tabs: {
+        create: vi.fn(),
+      },
+    });
+
+    openWorkspace(document);
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain("Add filtered to collection… (2)");
+    });
+
+    const addFilteredToggle = [...document.querySelectorAll<HTMLButtonElement>(
+      ".vera5-tray-save-collection-toggle"
+    )].find((button) => button.textContent === "Add filtered to collection… (2)");
+    expect(addFilteredToggle).toBeDefined();
+    addFilteredToggle!.click();
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain("APT29 Research");
+    });
+
+    const collectionButton = [...document.querySelectorAll<HTMLButtonElement>(
+      ".vera5-tray-save-collection-list .vera5-workspace-button"
+    )].find((button) => button.textContent === "APT29 Research");
+    expect(collectionButton).toBeDefined();
+    collectionButton!.click();
+
+    await vi.waitFor(() => {
+      expect(document.body.textContent).toContain("Added 2 indicators to APT29 Research.");
     });
   });
 

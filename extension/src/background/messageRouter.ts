@@ -19,6 +19,13 @@ import {
   handleUpdateInvestigationSessionTitleMessage,
 } from "./investigationSessionHandler";
 import { handleEnrichIocMessage } from "./enrichmentHandler";
+import { handleGetEnrichmentSourceOpsMessage } from "./enrichmentSourceOpsHandler";
+import {
+  handleAddIocToCollectionMessage,
+  handleAddIocsToCollectionMessage,
+  handleCreateIocCollectionMessage,
+  handleListIocCollectionsMessage,
+} from "./iocCollectionHandler";
 
 export type { MessageResponse } from "../lib/messages";
 
@@ -55,6 +62,16 @@ export function routeIncomingMessage(raw: unknown): MessageResponse {
       return { ok: false, error: "investigation session archive requires async handler" };
     case MESSAGE.DELETE_INVESTIGATION_SESSION:
       return { ok: false, error: "investigation session delete requires async handler" };
+    case MESSAGE.GET_ENRICHMENT_SOURCE_OPS:
+      return { ok: false, error: "enrichment source ops requires async handler" };
+    case MESSAGE.LIST_IOC_COLLECTIONS:
+      return { ok: false, error: "ioc collection list requires async handler" };
+    case MESSAGE.CREATE_IOC_COLLECTION:
+      return { ok: false, error: "ioc collection create requires async handler" };
+    case MESSAGE.ADD_IOC_TO_COLLECTION:
+      return { ok: false, error: "add ioc to collection requires async handler" };
+    case MESSAGE.ADD_IOCS_TO_COLLECTION:
+      return { ok: false, error: "add iocs to collection requires async handler" };
     case MESSAGE.ENRICH_IOC:
       return { ok: false, error: "enrich request requires async handler" };
     case MESSAGE.OPEN_OPTIONS_PAGE:
@@ -132,6 +149,26 @@ export async function routeIncomingMessageAsync(
 
   if (raw.type === MESSAGE.DELETE_INVESTIGATION_SESSION) {
     return handleDeleteInvestigationSessionMessage(raw);
+  }
+
+  if (raw.type === MESSAGE.GET_ENRICHMENT_SOURCE_OPS) {
+    return handleGetEnrichmentSourceOpsMessage();
+  }
+
+  if (raw.type === MESSAGE.LIST_IOC_COLLECTIONS) {
+    return handleListIocCollectionsMessage();
+  }
+
+  if (raw.type === MESSAGE.CREATE_IOC_COLLECTION) {
+    return handleCreateIocCollectionMessage(raw);
+  }
+
+  if (raw.type === MESSAGE.ADD_IOC_TO_COLLECTION) {
+    return handleAddIocToCollectionMessage(raw);
+  }
+
+  if (raw.type === MESSAGE.ADD_IOCS_TO_COLLECTION) {
+    return handleAddIocsToCollectionMessage(raw);
   }
 
   return routeIncomingMessage(raw);
