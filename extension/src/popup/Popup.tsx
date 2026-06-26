@@ -132,7 +132,7 @@ import {
   ENRICHMENT_SOURCE_OPS_SECTION_TITLE,
   type EnrichmentSourceOpsSnapshot,
 } from "../lib/enrichmentSourceOps";
-import { VERA5_COLOR } from "../lib/theme";
+import { VERA5_COLOR, VERA5_FONT } from "../lib/theme";
 import {
   resolveWorkspaceTrayView,
   resolveCollectionMemberOpenFeedback,
@@ -1356,26 +1356,42 @@ export {
 };
 
 const POPUP_THEME = {
+  page: VERA5_COLOR.bg,
   surface: VERA5_COLOR.surface,
   text: VERA5_COLOR.text,
   muted: VERA5_COLOR.textMuted,
   border: VERA5_COLOR.border,
   accent: VERA5_COLOR.accent,
   accentText: VERA5_COLOR.accentText,
+  onAccent: VERA5_COLOR.onAccent,
   buttonBg: VERA5_COLOR.surfaceRaised,
+  secondaryBg: VERA5_COLOR.surfaceSunken,
   error: VERA5_COLOR.dangerText,
   trayRowBg: VERA5_COLOR.surfaceSunken,
   filterActiveBg: VERA5_COLOR.accentActiveBg,
   success: VERA5_COLOR.successText,
 };
 
+/** Primary action — solid electric amber with dark text. */
+const primaryButtonStyle = {
+  width: "100%",
+  padding: "8px 12px",
+  borderRadius: 10,
+  border: "1px solid transparent",
+  backgroundColor: POPUP_THEME.accent,
+  color: POPUP_THEME.onAccent,
+  fontWeight: 600 as const,
+  cursor: "pointer" as const,
+};
+
+/** Secondary / neutral action — surface fill, no accent. */
 const buttonStyle = {
   width: "100%",
   padding: "8px 12px",
-  borderRadius: 6,
+  borderRadius: 10,
   border: `1px solid ${POPUP_THEME.border}`,
-  backgroundColor: POPUP_THEME.buttonBg,
-  color: POPUP_THEME.accentText,
+  backgroundColor: POPUP_THEME.secondaryBg,
+  color: POPUP_THEME.text,
   fontWeight: 600 as const,
   cursor: "pointer" as const,
 };
@@ -1386,7 +1402,7 @@ function filterChipStyle(active: boolean): CSSProperties {
     borderRadius: 999,
     border: `1px solid ${active ? POPUP_THEME.filterActiveBg : POPUP_THEME.border}`,
     backgroundColor: active ? POPUP_THEME.filterActiveBg : POPUP_THEME.buttonBg,
-    color: active ? "#ffffff" : POPUP_THEME.accentText,
+    color: active ? POPUP_THEME.onAccent : POPUP_THEME.accentText,
     fontSize: 11,
     fontWeight: 600,
     cursor: "pointer",
@@ -1615,8 +1631,9 @@ export function Popup() {
 
   useEffect(() => {
     document.body.style.margin = "0";
-    document.body.style.backgroundColor = POPUP_THEME.surface;
+    document.body.style.backgroundColor = POPUP_THEME.page;
     document.body.style.color = POPUP_THEME.text;
+    document.body.style.fontFamily = VERA5_FONT.sans;
   }, []);
 
   const trayView = resolvePopupTrayView({ enabled, scanState, scanSummary });
@@ -2055,21 +2072,30 @@ export function Popup() {
         minWidth: 280,
         maxWidth: 360,
         padding: 14,
-        fontFamily: "system-ui, sans-serif",
-        backgroundColor: POPUP_THEME.surface,
+        fontFamily: VERA5_FONT.sans,
+        backgroundColor: POPUP_THEME.page,
         color: POPUP_THEME.text,
       }}
     >
       <h1
         style={{
-          fontSize: 18,
+          fontFamily: VERA5_FONT.wordmark,
+          fontSize: 22,
           fontWeight: 700,
-          letterSpacing: "0.04em",
-          color: POPUP_THEME.accent,
+          letterSpacing: "-0.03em",
+          color: POPUP_THEME.text,
           margin: "0 0 14px",
         }}
       >
-        VERA5
+        Vera
+        <span
+          style={{
+            color: POPUP_THEME.accent,
+            textShadow: "0 0 26px rgba(255, 178, 36, 0.22)",
+          }}
+        >
+          5
+        </span>
       </h1>
       <label
         style={{
@@ -2087,6 +2113,7 @@ export function Popup() {
           disabled={!ready}
           onChange={(event) => handleToggle(event.target.checked)}
           aria-label="Extension enabled"
+          style={{ accentColor: POPUP_THEME.accent }}
         />
         Extension enabled
       </label>
@@ -2106,6 +2133,7 @@ export function Popup() {
           disabled={!ready || !enabled}
           onChange={(event) => handleHighlightToggle(event.target.checked)}
           aria-label="Highlight indicators"
+          style={{ accentColor: POPUP_THEME.accent }}
         />
         Highlight indicators
       </label>
@@ -2114,7 +2142,7 @@ export function Popup() {
         disabled={!ready || !enabled || scanState === "scanning"}
         onClick={handleScanPage}
         style={{
-          ...buttonStyle,
+          ...primaryButtonStyle,
           marginBottom: 8,
           cursor: !ready || !enabled ? "not-allowed" : "pointer",
           opacity: !ready || !enabled ? 0.65 : 1,
@@ -2153,7 +2181,7 @@ export function Popup() {
         disabled={!ready}
         onClick={handleOpenSettings}
         style={{
-          ...buttonStyle,
+          ...primaryButtonStyle,
           marginBottom: 8,
           cursor: ready ? "pointer" : "not-allowed",
           opacity: ready ? 1 : 0.65,
@@ -2166,7 +2194,7 @@ export function Popup() {
         disabled={!ready}
         onClick={handleOpenPermissions}
         style={{
-          ...buttonStyle,
+          ...primaryButtonStyle,
           cursor: ready ? "pointer" : "not-allowed",
           opacity: ready ? 1 : 0.65,
         }}

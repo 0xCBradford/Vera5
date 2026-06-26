@@ -1,0 +1,154 @@
+/*
+ * VERA5 canonical design tokens — copied verbatim from the vera5.io brand system.
+ * Single source of truth for CSS surfaces (popup, settings, injected content UI).
+ * The TS mirror lives in `extension/src/lib/theme.ts` (used by inline styles).
+ * Keep the two in sync.
+ *
+ * CSP: fonts are bundled LOCALLY as woff2 under /fonts and loaded via @font-face.
+ * No remote/CDN font links are permitted.
+ */
+
+/* ---- Local fonts (drop the woff2 files in extension/public/fonts/) ---- */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/Inter-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/Inter-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/fonts/Inter-SemiBold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/Inter-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("/fonts/JetBrainsMono-Medium.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fonts/SpaceGrotesk-Bold.woff2") format("woff2");
+}
+
+:root {
+  /* Surfaces (70% of the UI — dark neutrals, NOT blue-gray) */
+  --surface-page: #0b0e11;
+  --surface-1: #12171e;
+  --surface-2: #19202a;
+  --surface-raised: #222b36;
+
+  /* Accent (10% — intentional, never dominant) */
+  --accent: #ffb224;
+  --accent-hover: #ffc24d;
+  --accent-weak: rgba(255, 178, 36, 0.12);
+  --accent-glow: rgba(255, 178, 36, 0.14);
+  --on-accent: #0b0e11;
+
+  /* Semantic status (use sparingly, by meaning only) */
+  --signal-red: #ff4d5a;
+  --terminal-teal: #22c7a9;
+  --deep-violet: #8b5cf6;
+
+  /* Text (20%) */
+  --text-primary: #f5f7fa;
+  --text-secondary: #a7b0ba;
+  --text-low: #6b7480;
+
+  /* Borders & dividers */
+  --border-soft: #262d36;
+  --border-hard: #313a45;
+  --border-hairline: #232a33;
+  --border-accent: rgba(255, 178, 36, 0.38);
+
+  /* Radius */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+
+  /* Shadows (depth via layering, not big shadows) */
+  --shadow-low: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --shadow-med: 0 6px 18px rgba(0, 0, 0, 0.28);
+  --shadow-high: 0 12px 32px rgba(0, 0, 0, 0.35);
+  --highlight-top: inset 0 1px 0 rgba(245, 247, 250, 0.045);
+
+  /* Spacing (8px system) */
+  --s-xs: 4px;
+  --s-sm: 8px;
+  --s-md: 16px;
+  --s-lg: 24px;
+  --s-xl: 32px;
+
+  /* Motion */
+  --t-hover: 140ms;
+  --t-card: 200ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Typography */
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+  --font-wordmark: "Space Grotesk", "Inter", system-ui, sans-serif;
+
+  /* ----------------------------------------------------------------
+   * Back-compat aliases: the settings page (options.css) consumes the
+   * legacy --v5-* names. They now resolve to the canonical Vera5 tokens
+   * above so there is one source of truth for color.
+   * ---------------------------------------------------------------- */
+  --v5-bg: var(--surface-page);
+  --v5-surface: var(--surface-1);
+  --v5-surface-raised: var(--surface-raised);
+  --v5-surface-sunken: var(--surface-2);
+  --v5-border: var(--border-hard);
+  --v5-border-subtle: var(--border-soft);
+  --v5-text: var(--text-primary);
+  --v5-text-muted: var(--text-secondary);
+  --v5-accent: var(--accent);
+  --v5-accent-strong: var(--accent-hover);
+  --v5-accent-text: var(--text-primary);
+  --v5-accent-active-bg: var(--accent);
+  --v5-success: var(--terminal-teal);
+  --v5-success-text: var(--terminal-teal);
+  --v5-warning: var(--accent);
+  --v5-warning-text: var(--accent);
+  --v5-danger: var(--signal-red);
+  --v5-danger-text: var(--signal-red);
+
+  --v5-radius-sm: var(--r-sm);
+  --v5-radius-md: var(--r-md);
+  --v5-radius-lg: var(--r-lg);
+
+  --v5-shadow-sm: var(--shadow-low);
+  --v5-shadow-md: var(--shadow-med);
+  --v5-shadow-lg: var(--shadow-high);
+
+  --v5-font-sans: var(--font-ui);
+  --v5-font-mono: var(--font-mono);
+
+  --v5-focus-ring: 0 0 0 2px rgba(255, 178, 36, 0.6);
+  --v5-transition-fast: var(--t-hover);
+  --v5-transition-base: var(--t-card);
+
+  color-scheme: dark;
+}

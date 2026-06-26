@@ -9,6 +9,7 @@ cd extension
 npm run check      # eslint + vitest
 npm run build      # dist/ + verify:dist + verify:security
 npm run test       # vitest only
+npm run test:e2e   # Playwright browser harness (requires build + browser install)
 npm run typecheck  # tsc --noEmit
 ```
 
@@ -32,6 +33,70 @@ Golden tests lock band mapping, vendor fixture summaries, and markdown/JSON expo
 
 Use `fixtureSecrets.ts` placeholders for API keys in tests; do not add inline `secret-key` or similar literals. Committed vendor JSON fixtures must not contain unredacted sensitive field values.
 
+## Browser E2E (Playwright)
+
+Playwright loads the unpacked production build (`extension/dist/`) in Chromium for smoke tests that need a real extension context. Specs live under `extension/e2e/` and share the fixture in `e2e/fixtures/extension.ts`.
+
+### Prerequisites
+
+- Node.js 20 (same as CI)
+- Dependencies installed: `cd extension && npm ci`
+- A fresh production build: `npm run build` (writes `dist/` and runs `verify:dist` / `verify:security`)
+
+### First-time browser install
+
+Playwright uses its own Chromium build (not the Chrome app on your machine). Install it once per machine or after upgrading `@playwright/test`:
+
+```bash
+cd extension
+npm run test:e2e:install
+```
+
+On Linux (including CI), system libraries may be required:
+
+```bash
+npx playwright install chromium --with-deps
+```
+
+### Run locally
+
+```bash
+cd extension
+npm run build
+npm run test:e2e
+```
+
+`test:e2e` runs `verify-dist-manifest.mjs` first, then `playwright test`. The harness launches Chromium with `--load-extension` pointed at `dist/`, waits for the MV3 background service worker, and runs specs such as popup load checks in `e2e/harness.load.spec.ts`.
+
+Optional Playwright CLI flags:
+
+```bash
+npx playwright test e2e/harness.load.spec.ts   # single spec
+npx playwright test --ui                       # interactive UI mode
+npx playwright show-trace test-results/.../trace.zip
+```
+
+Traces are retained on failure (`playwright.config.ts`).
+
+### E2E layout
+
+| Path | Role |
+|------|------|
+| `e2e/fixtures/extension.ts` | Persistent Chromium context loading unpacked `dist/` |
+| `e2e/extensionPaths.ts` | Resolves `extension/dist` for the fixture |
+| `e2e/*.spec.ts` | Browser smoke specs |
+| `playwright.config.ts` | Serial workers, timeouts, CI reporters |
+
+Browser E2E does not call live vendor APIs. Longer investigation flows will use deterministic fixtures and mocked enrichment in dedicated specs.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `dist/manifest.json missing — run npm run build first` | Run `npm run build` in `extension/` before `npm run test:e2e`. |
+| Playwright cannot find Chromium | Run `npm run test:e2e:install` (Linux: add `--with-deps` as above). |
+| Extension id / service worker timeout | Rebuild `dist/`; confirm `background.js` is present and `npm run verify:dist` passes. |
+
 ## Security verification
 
 ```bash
@@ -53,7 +118,7 @@ Use redacted fixtures only in issues and PRs.
 
 ## CI
 
-GitHub Actions workflows under `.github/workflows/` run lint, tests, production dependency audit (`npm run audit:prod`), a non-blocking full `npm audit` report for devDependencies, and Gitleaks secret scanning on pull requests and pushes to `main`. Live vendor APIs are not called in CI.
+GitHub Actions workflows under `.github/workflows/` run lint, unit tests, production dependency audit (`npm run audit:prod`), a non-blocking full `npm audit` report for devDependencies, Gitleaks secret scanning on pull requests and pushes to `main`, and a `browser-e2e-harness` job in `extension-quality.yml` that builds `dist/`, installs Playwright Chromium, and runs `npm run test:e2e`. Live vendor APIs are not called in CI.
 
 Local secret scan (same config as CI):
 

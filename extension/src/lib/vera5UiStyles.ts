@@ -22,18 +22,18 @@ export function buildEnrichmentSummaryClassName(
 export function buildVera5UiStylesCss(): string {
   return `
 .vera5-hover-card-panel {
-  --vera5-surface: #f8fafc;
-  --vera5-text: #1a1a1a;
-  --vera5-border: #c5d4e8;
-  --vera5-accent: #1a5fb4;
-  --vera5-accent-text: #1a3f6b;
-  --vera5-muted: #4a5568;
-  --vera5-muted-label: #6b7280;
-  --vera5-error: #9b2c2c;
-  --vera5-ready: #1a3f6b;
-  --vera5-button-bg: #ffffff;
-  --vera5-copy-success-bg: #e8f4ea;
-  --vera5-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  --vera5-surface: #12171e;
+  --vera5-text: #f5f7fa;
+  --vera5-border: #313a45;
+  --vera5-accent: #ffb224;
+  --vera5-accent-text: #f5f7fa;
+  --vera5-muted: #a7b0ba;
+  --vera5-muted-label: #a7b0ba;
+  --vera5-error: #ff4d5a;
+  --vera5-ready: #f5f7fa;
+  --vera5-button-bg: #19202a;
+  --vera5-copy-success-bg: color-mix(in srgb, #22c7a9 16%, #12171e);
+  --vera5-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
   box-sizing: border-box;
   min-width: 220px;
   max-width: 320px;
@@ -418,14 +418,14 @@ export function buildVera5UiStylesCss(): string {
   white-space: nowrap;
 }
 .vera5-hover-card-source-badge--ok {
-  color: #166534;
-  background-color: color-mix(in srgb, #22c55e 16%, white);
-  border-color: color-mix(in srgb, #22c55e 35%, var(--vera5-border));
+  color: #22c7a9;
+  background-color: color-mix(in srgb, #22c7a9 16%, #12171e);
+  border-color: color-mix(in srgb, #22c7a9 35%, var(--vera5-border));
 }
 .vera5-hover-card-source-badge--cached {
-  color: #1e40af;
-  background-color: color-mix(in srgb, #3b82f6 14%, white);
-  border-color: color-mix(in srgb, #3b82f6 35%, var(--vera5-border));
+  color: #a7b0ba;
+  background-color: var(--vera5-button-bg);
+  border-color: var(--vera5-border);
 }
 .vera5-hover-card-source-last-updated {
   display: block;
@@ -434,9 +434,9 @@ export function buildVera5UiStylesCss(): string {
   line-height: 1.35;
 }
 .vera5-hover-card-source-badge--error {
-  color: #991b1b;
-  background-color: color-mix(in srgb, #ef4444 14%, white);
-  border-color: color-mix(in srgb, #ef4444 35%, var(--vera5-border));
+  color: #ff4d5a;
+  background-color: color-mix(in srgb, #ff4d5a 14%, #12171e);
+  border-color: color-mix(in srgb, #ff4d5a 35%, var(--vera5-border));
 }
 .vera5-hover-card-source-badge--skipped {
   color: var(--vera5-muted-label);
@@ -585,15 +585,15 @@ export function buildVera5UiStylesCss(): string {
   padding: 6px 8px;
   border-radius: 4px;
   border: 1px solid var(--vera5-border);
-  background-color: #ffffff;
-  color: #0f172a;
+  background-color: #19202a;
+  color: #f5f7fa;
   font-family: inherit;
   font-size: 12px;
   line-height: 1.4;
   resize: vertical;
 }
 .vera5-hover-card-analyst-notes-input::placeholder {
-  color: #64748b;
+  color: #6b7480;
 }
 .vera5-hover-card-analyst-notes-input:focus {
   outline: 2px solid color-mix(in srgb, var(--vera5-accent) 35%, transparent);
@@ -617,8 +617,8 @@ export function buildVera5UiStylesCss(): string {
   padding: 6px 8px;
   border-radius: 4px;
   border: 1px solid var(--vera5-border);
-  background-color: #ffffff;
-  color: #0f172a;
+  background-color: #19202a;
+  color: #f5f7fa;
   font-family: inherit;
   font-size: 12px;
   line-height: 1.4;
@@ -642,7 +642,7 @@ export function buildVera5UiStylesCss(): string {
 .vera5-hover-card-ioc-timeline-list {
   margin: 0;
   padding-left: 16px;
-  color: #334155;
+  color: #a7b0ba;
   font-size: 12px;
   line-height: 1.5;
 }
@@ -652,8 +652,8 @@ export function buildVera5UiStylesCss(): string {
 .vera5-hover-card-ioc-pin {
   border: 1px solid var(--vera5-border);
   border-radius: 4px;
-  background: #ffffff;
-  color: #334155;
+  background: #19202a;
+  color: #f5f7fa;
   font-family: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -664,7 +664,7 @@ export function buildVera5UiStylesCss(): string {
 .vera5-hover-card-ioc-pin--pinned {
   border-color: color-mix(in srgb, var(--vera5-accent) 45%, var(--vera5-border));
   color: var(--vera5-accent-text);
-  background: color-mix(in srgb, var(--vera5-accent) 8%, #ffffff);
+  background: color-mix(in srgb, var(--vera5-accent) 8%, #12171e);
 }
 .vera5-hover-card-ioc-pin:focus {
   outline: 2px solid color-mix(in srgb, var(--vera5-accent) 35%, transparent);
@@ -837,12 +837,12 @@ export function buildVera5UiStylesCss(): string {
   outline: none;
 }
 .vera5-ioc-highlight {
-  --vera5-highlight-accent: #39ff14;
-  --vera5-highlight-underline: color-mix(in srgb, #39ff14 85%, transparent);
-  --vera5-highlight-bg: color-mix(in srgb, #39ff14 30%, transparent);
-  --vera5-highlight-badge-text: #052e16;
-  --vera5-highlight-badge-bg: color-mix(in srgb, #39ff14 55%, #ffffff);
-  --vera5-enrich-icon: #16a34a;
+  --vera5-highlight-accent: #ffb224;
+  --vera5-highlight-underline: color-mix(in srgb, #ffb224 85%, transparent);
+  --vera5-highlight-bg: color-mix(in srgb, #ffb224 22%, transparent);
+  --vera5-highlight-badge-text: #0b0e11;
+  --vera5-highlight-badge-bg: color-mix(in srgb, #ffb224 70%, #0b0e11);
+  --vera5-enrich-icon: #ffb224;
   display: inline;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
@@ -905,36 +905,28 @@ export function buildVera5UiStylesCss(): string {
 }
 @media (prefers-color-scheme: dark) {
   .vera5-hover-card-panel {
-    --vera5-surface: #1e293b;
-    --vera5-text: #e2e8f0;
-    --vera5-border: #475569;
-    --vera5-accent: #60a5fa;
-    --vera5-accent-text: #dbeafe;
-    --vera5-muted: #94a3b8;
-    --vera5-muted-label: #94a3b8;
-    --vera5-error: #fca5a5;
-    --vera5-ready: #93c5fd;
-    --vera5-button-bg: #334155;
-    --vera5-copy-success-bg: #14532d;
-    --vera5-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
-  }
-  .vera5-ioc-highlight {
-    --vera5-highlight-accent: #39ff14;
-    --vera5-highlight-underline: color-mix(in srgb, #39ff14 90%, transparent);
-    --vera5-highlight-bg: color-mix(in srgb, #39ff14 35%, transparent);
-    --vera5-highlight-badge-text: #052e16;
-    --vera5-highlight-badge-bg: color-mix(in srgb, #39ff14 72%, #000000);
-    --vera5-enrich-icon: #39ff14;
+    --vera5-surface: #12171e;
+    --vera5-text: #f5f7fa;
+    --vera5-border: #313a45;
+    --vera5-accent: #ffb224;
+    --vera5-accent-text: #f5f7fa;
+    --vera5-muted: #a7b0ba;
+    --vera5-muted-label: #a7b0ba;
+    --vera5-error: #ff4d5a;
+    --vera5-ready: #f5f7fa;
+    --vera5-button-bg: #19202a;
+    --vera5-copy-success-bg: color-mix(in srgb, #22c7a9 16%, #12171e);
+    --vera5-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
   }
   .vera5-hover-card-source-badge--ok {
-    color: #bbf7d0;
-    background-color: color-mix(in srgb, #22c55e 22%, #1e293b);
-    border-color: color-mix(in srgb, #22c55e 40%, #475569);
+    color: #22c7a9;
+    background-color: color-mix(in srgb, #22c7a9 22%, #12171e);
+    border-color: color-mix(in srgb, #22c7a9 40%, #313a45);
   }
   .vera5-hover-card-source-badge--error {
-    color: #fecaca;
-    background-color: color-mix(in srgb, #ef4444 20%, #1e293b);
-    border-color: color-mix(in srgb, #ef4444 40%, #475569);
+    color: #ff4d5a;
+    background-color: color-mix(in srgb, #ff4d5a 20%, #12171e);
+    border-color: color-mix(in srgb, #ff4d5a 40%, #313a45);
   }
 }
 .vera5-workspace-host {
@@ -961,9 +953,9 @@ html.vera5-workspace-open {
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
-  background: #1e293b;
-  color: #e2e8f0;
-  border: 1px solid #475569;
+  background: #12171e;
+  color: #f5f7fa;
+  border: 1px solid #313a45;
   border-radius: 12px;
   box-shadow: -8px 0 24px rgba(0, 0, 0, 0.35);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -985,11 +977,11 @@ html.vera5-workspace-open {
   height: 52px;
   padding: 0;
   margin: 0;
-  border: 1px solid #475569;
+  border: 1px solid #313a45;
   border-right: none;
   border-radius: 8px 0 0 8px;
-  background: #334155;
-  color: #60a5fa;
+  background: #222b36;
+  color: #a7b0ba;
   font-size: 18px;
   font-weight: 700;
   line-height: 1;
@@ -999,10 +991,10 @@ html.vera5-workspace-open {
 }
 .vera5-workspace-edge-tab:hover,
 .vera5-workspace-edge-tab:focus-visible {
-  background: #3b4558;
-  color: #93c5fd;
+  background: #222b36;
+  color: #ffc24d;
   outline: none;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.35);
+  box-shadow: 0 0 0 3px rgba(255, 178, 36, 0.35);
 }
 .vera5-workspace-sidebar--collapsed .vera5-workspace-top,
 .vera5-workspace-sidebar--collapsed .vera5-workspace-bottom,
@@ -1018,26 +1010,28 @@ html.vera5-workspace-open {
   justify-content: space-between;
   gap: 8px;
   padding: 12px 14px 10px;
-  border-bottom: 1px solid #334155;
+  border-bottom: 1px solid #222b36;
   flex-shrink: 0;
 }
 .vera5-workspace-title {
   margin: 0;
+  font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
   font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #60a5fa;
+  letter-spacing: -0.03em;
+  color: #f5f7fa;
   text-decoration: none;
-  text-shadow:
-    0 0 6px rgba(255, 255, 255, 0.28),
-    0 0 14px rgba(255, 255, 255, 0.12);
+}
+.vera5-workspace-title-5 {
+  color: #ffb224;
+  text-shadow: 0 0 26px rgba(255, 178, 36, 0.22);
 }
 .vera5-workspace-title:hover,
 .vera5-workspace-title:focus-visible {
-  color: #93c5fd;
+  color: #f5f7fa;
   text-decoration: none;
   outline: none;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.45);
+  box-shadow: 0 0 0 3px rgba(255, 178, 36, 0.45);
   border-radius: 4px;
 }
 .vera5-workspace-close {
@@ -1049,9 +1043,9 @@ html.vera5-workspace-open {
   font-weight: 600;
   line-height: 1;
   border-radius: 6px;
-  border: 1px solid #475569;
-  background: #334155;
-  color: #dbeafe;
+  border: 1px solid #313a45;
+  background: #222b36;
+  color: #a7b0ba;
   cursor: pointer;
 }
 .vera5-workspace-top,
@@ -1060,7 +1054,7 @@ html.vera5-workspace-open {
   min-height: 0;
   overflow: auto;
   padding: 12px 14px;
-  scrollbar-color: #3b82f6 #ffffff;
+  scrollbar-color: #313a45 #12171e;
   scrollbar-width: thin;
 }
 .vera5-workspace-top::-webkit-scrollbar,
@@ -1070,22 +1064,22 @@ html.vera5-workspace-open {
 }
 .vera5-workspace-top::-webkit-scrollbar-track,
 .vera5-workspace-bottom::-webkit-scrollbar-track {
-  background: #ffffff;
+  background: #12171e;
 }
 .vera5-workspace-top::-webkit-scrollbar-thumb,
 .vera5-workspace-bottom::-webkit-scrollbar-thumb {
-  background: #3b82f6;
+  background: #313a45;
   border-radius: 999px;
-  border: 2px solid #ffffff;
+  border: 2px solid #12171e;
 }
 .vera5-workspace-top::-webkit-scrollbar-button,
 .vera5-workspace-bottom::-webkit-scrollbar-button {
-  background: #3b82f6;
+  background: #313a45;
 }
 .vera5-workspace-divider {
   flex-shrink: 0;
   height: 4px;
-  background: #475569;
+  background: #313a45;
   border: 0;
   margin: 0;
 }
@@ -1093,7 +1087,7 @@ html.vera5-workspace-open {
   margin: 0;
   font-size: 12px;
   line-height: 1.5;
-  color: #94a3b8;
+  color: #a7b0ba;
 }
 .vera5-workspace-toggle-row {
   display: flex;
@@ -1110,9 +1104,9 @@ html.vera5-workspace-open {
   min-width: 0;
   padding: 6px 8px 6px 10px;
   border-radius: 999px;
-  border: 1px solid #475569;
-  background: #334155;
-  color: #dbeafe;
+  border: 1px solid #313a45;
+  background: #222b36;
+  color: #a7b0ba;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
@@ -1129,8 +1123,8 @@ html.vera5-workspace-open {
   width: 30px;
   height: 16px;
   border-radius: 999px;
-  background: #475569;
-  border: 1px solid #64748b;
+  background: #222b36;
+  border: 1px solid #313a45;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .vera5-workspace-toggle-knob {
@@ -1140,21 +1134,21 @@ html.vera5-workspace-open {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: #e2e8f0;
+  background: #a7b0ba;
   transition: transform 0.15s ease, background 0.15s ease;
 }
 .vera5-workspace-toggle--on {
-  border-color: #475569;
-  background: #334155;
-  color: #dbeafe;
+  border-color: #313a45;
+  background: #222b36;
+  color: #a7b0ba;
 }
 .vera5-workspace-toggle--on .vera5-workspace-toggle-switch {
-  background: #1dd8a6;
-  border-color: #16b88b;
+  background: #ffb224;
+  border-color: #ffb224;
 }
 .vera5-workspace-toggle--on .vera5-workspace-toggle-knob {
   transform: translateX(14px);
-  background: #ffffff;
+  background: #0b0e11;
 }
 .vera5-workspace-toggle:disabled {
   opacity: 0.65;
@@ -1167,23 +1161,23 @@ html.vera5-workspace-open {
   margin-bottom: 8px;
   padding: 8px 12px;
   border-radius: 6px;
-  border: 1px solid #1d4ed8;
-  background: #1d4ed8;
-  color: #ffffff;
+  border: 1px solid transparent;
+  background: #ffb224;
+  color: #0b0e11;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 .vera5-workspace-button:hover:not(:disabled) {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: #ffc24d;
+  border-color: #ffc24d;
 }
 .vera5-workspace-button:disabled {
   opacity: 0.65;
   cursor: not-allowed;
-  border-color: #475569;
-  background: #334155;
-  color: #94a3b8;
+  border-color: #313a45;
+  background: #222b36;
+  color: #a7b0ba;
 }
 .vera5-workspace-tray-heading-row {
   display: flex;
@@ -1192,13 +1186,13 @@ html.vera5-workspace-open {
   gap: 8px;
   margin: 14px 0 8px;
   padding-top: 12px;
-  border-top: 1px solid #475569;
+  border-top: 1px solid #313a45;
 }
 .vera5-workspace-tray-heading {
   margin: 0;
   font-size: 13px;
   font-weight: 700;
-  color: #dbeafe;
+  color: #a7b0ba;
 }
 .vera5-workspace-icon-button {
   flex-shrink: 0;
@@ -1206,9 +1200,9 @@ html.vera5-workspace-open {
   height: 28px;
   padding: 0;
   border-radius: 6px;
-  border: 1px solid #475569;
-  background: #334155;
-  color: #60a5fa;
+  border: 1px solid #313a45;
+  background: #222b36;
+  color: #a7b0ba;
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
@@ -1225,16 +1219,16 @@ html.vera5-workspace-open {
   height: 28px;
   padding: 0;
   border-radius: 6px;
-  border: 1px solid #475569;
-  background: #334155;
-  color: #60a5fa;
+  border: 1px solid #313a45;
+  background: #222b36;
+  color: #a7b0ba;
   font-size: 16px;
   line-height: 1;
   cursor: pointer;
 }
 .vera5-hover-card-detail-clear:hover {
-  background: #3b4558;
-  color: #93c5fd;
+  background: #222b36;
+  color: #ffc24d;
 }
 @keyframes vera5-workspace-spin {
   from {
@@ -1247,7 +1241,7 @@ html.vera5-workspace-open {
 .vera5-workspace-tray-summary {
   margin: 0 0 10px;
   font-size: 12px;
-  color: #94a3b8;
+  color: #a7b0ba;
 }
 .vera5-workspace-filter-row {
   display: flex;
@@ -1258,17 +1252,17 @@ html.vera5-workspace-open {
 .vera5-workspace-filter-chip {
   padding: 4px 8px;
   border-radius: 999px;
-  border: 1px solid #475569;
-  background: #334155;
-  color: #dbeafe;
+  border: 1px solid #313a45;
+  background: #222b36;
+  color: #a7b0ba;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
 }
 .vera5-workspace-filter-chip[aria-pressed="true"] {
-  border-color: #1d4ed8;
-  background: #1d4ed8;
-  color: #ffffff;
+  border-color: #ffb224;
+  background: #ffb224;
+  color: #0b0e11;
 }
 .vera5-workspace-tray-list {
   list-style: none;
@@ -1285,8 +1279,8 @@ html.vera5-workspace-open {
   gap: 4px;
   padding: 6px 8px;
   border-radius: 6px;
-  border: 1px solid #475569;
-  background: #0f172a;
+  border: 1px solid #313a45;
+  background: #19202a;
   font-size: 12px;
   line-height: 1.4;
   cursor: pointer;
@@ -1297,10 +1291,10 @@ html.vera5-workspace-open {
   gap: 8px;
 }
 .vera5-workspace-tray-row--bulk-selected {
-  border-color: color-mix(in srgb, #38bdf8 45%, #475569);
+  border-color: color-mix(in srgb, #ffb224 45%, #313a45);
 }
 .vera5-workspace-tray-row--pinned {
-  border-color: color-mix(in srgb, var(--vera5-accent) 35%, #475569);
+  border-color: color-mix(in srgb, var(--vera5-accent) 35%, #313a45);
 }
 .vera5-workspace-tray-pin {
   flex-shrink: 0;
@@ -1323,7 +1317,7 @@ html.vera5-workspace-open {
 .vera5-workspace-tray-queue-status {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #94a3b8;
+  color: #a7b0ba;
   line-height: 1.5;
 }
 .vera5-tray-enrich-queue-warning-backdrop {
@@ -1340,9 +1334,9 @@ html.vera5-workspace-open {
   width: min(420px, 100%);
   padding: 16px;
   border-radius: 8px;
-  border: 1px solid #475569;
-  background: #1e293b;
-  color: #e2e8f0;
+  border: 1px solid #313a45;
+  background: #12171e;
+  color: #f5f7fa;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.45);
 }
 .vera5-tray-enrich-queue-warning-heading {
@@ -1355,7 +1349,7 @@ html.vera5-workspace-open {
   white-space: pre-wrap;
   font-size: 12px;
   line-height: 1.5;
-  color: #cbd5e1;
+  color: #a7b0ba;
 }
 .vera5-tray-enrich-queue-warning-actions {
   display: flex;
@@ -1363,15 +1357,15 @@ html.vera5-workspace-open {
   gap: 8px;
 }
 .vera5-workspace-tray-row[aria-selected="true"] {
-  border-color: #60a5fa;
-  background: color-mix(in srgb, #60a5fa 12%, #0f172a);
+  border-color: #ffb224;
+  background: color-mix(in srgb, #ffb224 12%, #19202a);
 }
 .vera5-workspace-tray-type {
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 4px;
-  background: #334155;
-  color: #60a5fa;
+  background: #222b36;
+  color: #a7b0ba;
   font-size: 10px;
   font-weight: 700;
 }
@@ -1379,7 +1373,7 @@ html.vera5-workspace-open {
   flex: 1;
   min-width: 0;
   word-break: break-all;
-  color: #e2e8f0;
+  color: #f5f7fa;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -1387,14 +1381,14 @@ html.vera5-workspace-open {
 .vera5-workspace-tray-value-on-page {
   display: block;
   word-break: break-all;
-  color: #e2e8f0;
+  color: #f5f7fa;
 }
 .vera5-workspace-tray-refanged-value {
   display: block;
   word-break: break-all;
   font-size: 11px;
   line-height: 1.45;
-  color: #94a3b8;
+  color: #a7b0ba;
 }
 .vera5-workspace-tray-hint {
   flex-shrink: 0;
@@ -1402,21 +1396,21 @@ html.vera5-workspace-open {
   font-weight: 600;
   padding: 1px 6px;
   border-radius: 4px;
-  background: #334155;
-  color: #94a3b8;
+  background: #222b36;
+  color: #a7b0ba;
   pointer-events: none;
   user-select: none;
 }
 .vera5-workspace-tray-hint--live {
-  color: #bbf7d0;
+  color: #22c7a9;
 }
 .vera5-workspace-tray-hint--error {
-  color: #fca5a5;
+  color: #ff4d5a;
 }
 .vera5-workspace-error {
   margin: 8px 0 0;
   font-size: 12px;
-  color: #fca5a5;
+  color: #ff4d5a;
   line-height: 1.5;
 }
 .vera5-workspace-detail-panel {
@@ -1427,17 +1421,17 @@ html.vera5-workspace-open {
   box-shadow: none !important;
   animation: none !important;
   padding: 0 !important;
-  --vera5-surface: #1e293b;
-  --vera5-text: #e2e8f0;
-  --vera5-border: #475569;
-  --vera5-accent: #60a5fa;
-  --vera5-accent-text: #dbeafe;
-  --vera5-muted: #94a3b8;
-  --vera5-muted-label: #94a3b8;
-  --vera5-error: #fca5a5;
-  --vera5-ready: #93c5fd;
-  --vera5-button-bg: #334155;
-  --vera5-copy-success-bg: #14532d;
+  --vera5-surface: #12171e;
+  --vera5-text: #f5f7fa;
+  --vera5-border: #313a45;
+  --vera5-accent: #ffb224;
+  --vera5-accent-text: #f5f7fa;
+  --vera5-muted: #a7b0ba;
+  --vera5-muted-label: #a7b0ba;
+  --vera5-error: #ff4d5a;
+  --vera5-ready: #f5f7fa;
+  --vera5-button-bg: #19202a;
+  --vera5-copy-success-bg: color-mix(in srgb, #22c7a9 16%, #12171e);
   --vera5-shadow: none;
 }
 .vera5-command-palette-backdrop {
@@ -1459,9 +1453,9 @@ html.vera5-workspace-open {
   gap: 8px;
   padding: 12px;
   border-radius: 10px;
-  border: 1px solid #c5d4e8;
-  background: #f8fafc;
-  color: #1a1a1a;
+  border: 1px solid #313a45;
+  background: #12171e;
+  color: #f5f7fa;
   font-family: system-ui, sans-serif;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
 }
@@ -1469,14 +1463,14 @@ html.vera5-workspace-open {
   box-sizing: border-box;
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #c5d4e8;
+  border: 1px solid #313a45;
   border-radius: 8px;
-  background: #ffffff;
-  color: #1a1a1a;
+  background: #19202a;
+  color: #f5f7fa;
   font: 14px/1.4 system-ui, sans-serif;
 }
 .vera5-command-palette-input:focus-visible {
-  outline: 2px solid #1a5fb4;
+  outline: 2px solid #ffb224;
   outline-offset: 1px;
 }
 .vera5-command-palette-list {
@@ -1503,48 +1497,48 @@ html.vera5-workspace-open {
 }
 .vera5-command-palette-item:hover,
 .vera5-command-palette-item--selected {
-  border-color: #c5d4e8;
-  background: #eef4fb;
+  border-color: #313a45;
+  background: #19202a;
 }
 .vera5-command-palette-item-label {
   font-size: 14px;
   font-weight: 600;
-  color: #1a3f6b;
+  color: #f5f7fa;
 }
 .vera5-command-palette-item-description {
   font-size: 12px;
-  color: #4a5568;
+  color: #a7b0ba;
 }
 .vera5-command-palette-empty,
 .vera5-command-palette-hint {
   margin: 0;
   font-size: 12px;
-  color: #6b7280;
+  color: #6b7480;
 }
 @media (prefers-color-scheme: dark) {
   .vera5-command-palette-panel {
-    border-color: #475569;
-    background: #0f172a;
-    color: #e2e8f0;
+    border-color: #313a45;
+    background: #19202a;
+    color: #f5f7fa;
     box-shadow: none;
   }
   .vera5-command-palette-input {
-    border-color: #475569;
-    background: #1e293b;
-    color: #e2e8f0;
+    border-color: #313a45;
+    background: #12171e;
+    color: #f5f7fa;
   }
   .vera5-command-palette-item:hover,
   .vera5-command-palette-item--selected {
-    border-color: #475569;
-    background: #1e293b;
+    border-color: #313a45;
+    background: #12171e;
   }
   .vera5-command-palette-item-label {
-    color: #dbeafe;
+    color: #a7b0ba;
   }
   .vera5-command-palette-item-description,
   .vera5-command-palette-empty,
   .vera5-command-palette-hint {
-    color: #94a3b8;
+    color: #a7b0ba;
   }
 }
 @media (prefers-reduced-motion: reduce) {

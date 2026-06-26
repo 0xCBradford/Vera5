@@ -1930,7 +1930,10 @@ function renderWorkspace(doc: Document): void {
   title.href = VERA5_WEBSITE_URL;
   title.target = "_blank";
   title.rel = "noopener noreferrer";
-  title.textContent = "VERA5";
+  const titleFive = doc.createElement("span");
+  titleFive.className = "vera5-workspace-title-5";
+  titleFive.textContent = "5";
+  title.append("Vera", titleFive);
 
   const closeButton = doc.createElement("button");
   closeButton.type = "button";

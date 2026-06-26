@@ -8,7 +8,7 @@ Guides for developers working on the Vera5 browser extension. These documents de
 |----------|--------|
 | [extension-architecture.md](extension-architecture.md) | Package layout, build output, background vs content vs UI |
 | [documentation-governance.md](documentation-governance.md) | Public vs private docs, link hygiene, naming |
-| [testing.md](testing.md) | Lint, unit tests, golden fixtures, verify scripts |
+| [testing.md](testing.md) | Lint, unit tests, golden fixtures, verify scripts, browser E2E (Playwright) |
 
 ## Subsystems
 

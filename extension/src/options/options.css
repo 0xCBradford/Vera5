@@ -1,47 +1,10 @@
 /*
  * VERA5 Settings — premium dark theme.
  *
- * CSS custom properties mirror the canonical tokens in
- * `extension/src/lib/theme.ts`. Keep the two in sync.
+ * Colors/typography come from the canonical Vera5 tokens in
+ * `extension/src/styles/tokens.css` (imported by options/main.tsx). This file
+ * only consumes the `--v5-*` aliases; it defines no hardcoded palette.
  */
-
-:root {
-  --v5-bg: #000000;
-  --v5-surface: #1e293b;
-  --v5-surface-raised: #334155;
-  --v5-surface-sunken: #0f172a;
-  --v5-border: #475569;
-  --v5-border-subtle: #334155;
-  --v5-text: #e2e8f0;
-  --v5-text-muted: #94a3b8;
-  --v5-accent: #60a5fa;
-  --v5-accent-strong: #3b82f6;
-  --v5-accent-text: #dbeafe;
-  --v5-accent-active-bg: #1d4ed8;
-  --v5-success: #4ade80;
-  --v5-success-text: #bbf7d0;
-  --v5-warning: #fbbf24;
-  --v5-warning-text: #fde68a;
-  --v5-danger: #f87171;
-  --v5-danger-text: #fca5a5;
-
-  --v5-radius-sm: 6px;
-  --v5-radius-md: 8px;
-  --v5-radius-lg: 12px;
-
-  --v5-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --v5-shadow-md: 0 4px 14px rgba(0, 0, 0, 0.45);
-  --v5-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
-
-  --v5-font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --v5-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-
-  --v5-focus-ring: 0 0 0 3px rgba(96, 165, 250, 0.45);
-  --v5-transition-fast: 0.15s ease;
-  --v5-transition-base: 0.2s ease;
-
-  color-scheme: dark;
-}
 
 html,
 body {
@@ -99,7 +62,7 @@ body {
   height: 30px;
   border-radius: var(--v5-radius-md);
   background: linear-gradient(135deg, var(--v5-accent-strong), var(--v5-accent));
-  color: #0b1220;
+  color: #0b0e11;
   font-weight: 700;
   font-size: 13px;
   letter-spacing: 0.02em;
@@ -245,7 +208,7 @@ body {
   height: 7px;
   border-radius: 999px;
   background: var(--v5-success);
-  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.18);
+  box-shadow: 0 0 0 3px rgba(34, 199, 169, 0.18);
 }
 
 /* ---------- Cards ---------- */
@@ -375,20 +338,20 @@ body {
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: #cbd5e1;
+  background: #a7b0ba;
   box-shadow: var(--v5-shadow-sm);
   transition: transform var(--v5-transition-base),
     background-color var(--v5-transition-base);
 }
 
 .v5-toggle__input:checked + .v5-toggle__track {
-  background: var(--v5-accent-strong);
+  background: var(--v5-accent);
   border-color: var(--v5-accent);
 }
 
 .v5-toggle__input:checked + .v5-toggle__track .v5-toggle__thumb {
   transform: translateX(18px);
-  background: #ffffff;
+  background: #0b0e11;
 }
 
 .v5-toggle__input:focus-visible + .v5-toggle__track {
@@ -482,18 +445,18 @@ body {
 
 .v5-ioc-card:has(.v5-ioc-card__input:checked) {
   border-color: var(--v5-accent);
-  background: rgba(96, 165, 250, 0.1);
+  background: rgba(255, 178, 36, 0.12);
 }
 
 .v5-ioc-card:has(.v5-ioc-card__input:checked) .v5-ioc-card__badge {
-  background: var(--v5-accent-strong);
-  color: #fff;
+  background: var(--v5-accent);
+  color: #0b0e11;
 }
 
 .v5-ioc-card__input:checked ~ .v5-ioc-card__check {
-  background: var(--v5-accent-strong);
+  background: var(--v5-accent);
   border-color: var(--v5-accent);
-  color: #fff;
+  color: #0b0e11;
 }
 
 .v5-ioc-card__input:focus-visible ~ .v5-ioc-card__check {
@@ -593,14 +556,14 @@ body {
 
 .v5-badge--on {
   color: var(--v5-success-text);
-  background: rgba(74, 222, 128, 0.12);
-  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(34, 199, 169, 0.12);
+  border-color: rgba(34, 199, 169, 0.35);
 }
 
 .v5-badge--warn {
   color: var(--v5-warning-text);
-  background: rgba(251, 191, 36, 0.12);
-  border-color: rgba(251, 191, 36, 0.35);
+  background: rgba(255, 178, 36, 0.12);
+  border-color: rgba(255, 178, 36, 0.35);
 }
 
 .v5-badge--off {
@@ -705,7 +668,7 @@ body {
 .v5-preset--active {
   background: var(--v5-accent-active-bg);
   border-color: var(--v5-accent);
-  color: #fff;
+  color: #0b0e11;
 }
 
 /* ---------- Buttons ---------- */
@@ -745,7 +708,7 @@ body {
 .v5-btn--primary {
   background: linear-gradient(135deg, var(--v5-accent-strong), var(--v5-accent));
   border-color: transparent;
-  color: #0b1220;
+  color: #0b0e11;
 }
 
 .v5-btn--primary:hover {
@@ -755,8 +718,8 @@ body {
 
 .v5-btn--danger {
   color: var(--v5-danger-text);
-  border-color: rgba(248, 113, 113, 0.4);
-  background: rgba(248, 113, 113, 0.08);
+  border-color: rgba(255, 77, 90, 0.4);
+  background: rgba(255, 77, 90, 0.1);
 }
 
 .v5-btn--danger:hover {
@@ -814,9 +777,9 @@ body {
   gap: 12px;
   align-items: flex-start;
   padding: 14px 16px;
-  border: 1px solid rgba(74, 222, 128, 0.3);
+  border: 1px solid rgba(34, 199, 169, 0.3);
   border-radius: var(--v5-radius-md);
-  background: rgba(74, 222, 128, 0.07);
+  background: rgba(34, 199, 169, 0.07);
 }
 
 .v5-banner__icon {
@@ -976,7 +939,7 @@ body {
 }
 
 /* ============================================================
- * Visual overrides
+ * Layout extras (top bar, info note, domain list) — Vera5 dark tokens.
  * ============================================================ */
 
 /* Sticky top bar with centered "Saved automatically". */
@@ -991,7 +954,7 @@ body {
   background: linear-gradient(
     90deg,
     var(--v5-surface) 0%,
-    var(--v5-accent-strong) 50%,
+    var(--v5-surface-raised) 50%,
     var(--v5-surface) 100%
   );
   border-bottom: 1px solid var(--v5-border);
@@ -1005,7 +968,7 @@ body {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #ffffff;
+  color: var(--v5-text);
 }
 
 .v5-topbar__dot {
@@ -1013,7 +976,7 @@ body {
   height: 9px;
   border-radius: 999px;
   background: var(--v5-success);
-  box-shadow: 0 0 0 3px rgba(74, 222, 128, 0.3);
+  box-shadow: 0 0 0 3px rgba(34, 199, 169, 0.3);
 }
 
 /* Offset sticky sidebar + anchored sections beneath the top bar. */
@@ -1025,114 +988,15 @@ body {
   scroll-margin-top: 78px;
 }
 
-/* Overview stat boxes: white background, black text. */
-.v5-stat {
-  background: #ffffff;
-  border-color: #ffffff;
-}
-
-.v5-stat__label {
-  color: #000000;
-}
-
-.v5-stat__value {
-  color: #000000;
-}
-
-.v5-stat__value small {
-  color: #334155;
-}
-
-/* Unify every overview pill to a single background. */
-.v5-chip,
-.v5-chip--muted {
-  background: var(--v5-surface-raised);
-  border: 1px solid var(--v5-border);
-  color: var(--v5-accent-text);
-}
-
-/* Enrichment source cards: white background with readable dark text. */
-.v5-source {
-  background: #ffffff;
-}
-
-.v5-source:hover {
-  border-color: var(--v5-accent);
-}
-
-.v5-source__name {
-  color: #000000;
-}
-
-.v5-source__body {
-  border-top-color: #e2e8f0;
-}
-
-.v5-source .v5-row__hint {
-  color: #334155;
-}
-
-.v5-source .v5-field__label {
-  color: #000000;
-}
-
-.v5-source .v5-status--muted {
-  color: #334155;
-}
-
-.v5-source__health {
-  color: #334155;
-  border-top-color: #cbd5e1;
-}
-
-.v5-source .v5-btn--link {
-  color: #1d4ed8;
-}
-
-.v5-source .v5-btn--link:hover {
-  color: #1e3a8a;
-}
-
-/* Inputs: white background with black text/dots. */
-.v5-input {
-  background: #ffffff;
-  color: #000000;
-  border-color: #cbd5e1;
-}
-
-.v5-input::placeholder {
-  color: #6b7280;
-}
-
-/* Clear cache button label white. */
-.v5-btn--danger {
-  color: #ffffff;
-}
-
-/* Sidebar info note: clean white box. */
-.v5-sidebar__footer {
-  background: #ffffff;
-  border-color: #ffffff;
-  border-radius: var(--v5-radius-lg);
-  padding: 16px 16px 18px;
-  box-shadow: var(--v5-shadow-md);
-}
-
+/* Sidebar info note (local-first reassurance box). */
 .v5-info-note__title {
   margin-bottom: 8px;
   font-size: 13px;
   font-weight: 700;
-  color: #000000;
+  color: var(--v5-text);
 }
 
-.v5-sidebar__footer .v5-lock__text {
-  color: #334155;
-}
-
-.v5-sidebar__footer .v5-lock__icon {
-  color: #15803d;
-}
-
+/* Private-range domain list. */
 .v5-domain-list {
   list-style: none;
   margin: 0;
@@ -1150,12 +1014,13 @@ body {
   padding: 8px 10px;
   border: 1px solid var(--v5-border);
   border-radius: var(--v5-radius-md);
-  background: #ffffff;
+  background: var(--v5-surface-sunken);
 }
 
 .v5-domain-list__item code {
   font-size: 13px;
-  color: #0f172a;
+  font-family: var(--v5-font-mono);
+  color: var(--v5-text);
   word-break: break-all;
 }
 

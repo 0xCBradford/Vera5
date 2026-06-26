@@ -32,6 +32,12 @@
     }
   },
   "options_page": "options.html",
+  "web_accessible_resources": [
+    {
+      "resources": ["fonts/*.woff2"],
+      "matches": ["http://*/*", "https://*/*"]
+    }
+  ],
   "commands": {
     "scan-page": {
       "description": "Scan the current page for indicators",

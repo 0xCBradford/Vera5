@@ -19,6 +19,8 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:smoke": "vitest run src/background/messageHandler.smoke.test.ts",
+    "test:e2e": "node scripts/verify-dist-manifest.mjs && playwright test",
+    "test:e2e:install": "playwright install chromium",
     "check": "npm run lint && npm run test",
     "audit:prod": "npm audit --omit=dev"
   },
@@ -36,6 +38,7 @@
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^5.2.0",
+    "@playwright/test": "^1.52.0",
     "happy-dom": "^20.9.0",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3",

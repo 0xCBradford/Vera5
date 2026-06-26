@@ -19,7 +19,7 @@ describe("vera5 UI styles", () => {
     expect(css).toContain("@media (prefers-color-scheme: dark)");
     expect(css).toContain(".vera5-hover-card-panel");
     expect(css).toContain(".vera5-ioc-highlight");
-    expect(css).toContain("--vera5-surface: #1e293b");
+    expect(css).toContain("--vera5-surface: #12171e");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toContain("animation: none !important");
     expect(css).toContain("vera5-panel-reveal");
