@@ -24,7 +24,10 @@ import {
   handleAddIocToCollectionMessage,
   handleAddIocsToCollectionMessage,
   handleCreateIocCollectionMessage,
+  handleDeleteIocCollectionMessage,
   handleListIocCollectionsMessage,
+  handleRemoveIocFromCollectionMessage,
+  handleRenameIocCollectionMessage,
 } from "./iocCollectionHandler";
 
 export type { MessageResponse } from "../lib/messages";
@@ -72,6 +75,12 @@ export function routeIncomingMessage(raw: unknown): MessageResponse {
       return { ok: false, error: "add ioc to collection requires async handler" };
     case MESSAGE.ADD_IOCS_TO_COLLECTION:
       return { ok: false, error: "add iocs to collection requires async handler" };
+    case MESSAGE.RENAME_IOC_COLLECTION:
+      return { ok: false, error: "rename ioc collection requires async handler" };
+    case MESSAGE.DELETE_IOC_COLLECTION:
+      return { ok: false, error: "delete ioc collection requires async handler" };
+    case MESSAGE.REMOVE_IOC_FROM_COLLECTION:
+      return { ok: false, error: "remove ioc from collection requires async handler" };
     case MESSAGE.ENRICH_IOC:
       return { ok: false, error: "enrich request requires async handler" };
     case MESSAGE.OPEN_OPTIONS_PAGE:
@@ -169,6 +178,18 @@ export async function routeIncomingMessageAsync(
 
   if (raw.type === MESSAGE.ADD_IOCS_TO_COLLECTION) {
     return handleAddIocsToCollectionMessage(raw);
+  }
+
+  if (raw.type === MESSAGE.RENAME_IOC_COLLECTION) {
+    return handleRenameIocCollectionMessage(raw);
+  }
+
+  if (raw.type === MESSAGE.DELETE_IOC_COLLECTION) {
+    return handleDeleteIocCollectionMessage(raw);
+  }
+
+  if (raw.type === MESSAGE.REMOVE_IOC_FROM_COLLECTION) {
+    return handleRemoveIocFromCollectionMessage(raw);
   }
 
   return routeIncomingMessage(raw);

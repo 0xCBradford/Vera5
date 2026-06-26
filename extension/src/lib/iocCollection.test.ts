@@ -4,7 +4,10 @@ import {
   addIocCollectionMember,
   addIocCollectionMembers,
   buildIocCollectionMemberDedupeKey,
+  buildIocCollectionSummaryLine,
+  buildPromoteSessionToCollectionActionLabel,
   createIocCollection,
+  formatPromoteSessionToCollectionFeedback,
   generateIocCollectionId,
   IOC_COLLECTION_ID_PREFIX,
   isIocCollection,
@@ -17,6 +20,9 @@ import {
   normalizeIocCollectionMembers,
   normalizeIocCollectionMemberValue,
   normalizeIocCollectionName,
+  removeIocCollectionMember,
+  sortIocCollectionsForDisplay,
+  updateIocCollection,
 } from "./iocCollection";
 
 describe("iocCollection schema", () => {
@@ -256,5 +262,201 @@ describe("iocCollection add helpers", () => {
     expect(
       normalizeIocCollectionMember({ iocType: IOC_TYPE.IPV4, value: "   " })
     ).toBeNull();
+  });
+});
+
+describe("iocCollection manager display helpers", () => {
+  it("builds summary lines and sorts collections by last updated", () => {
+    const older = createIocCollection({
+      id: "vera5-col-older",
+      name: "Older case",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [{ iocType: IOC_TYPE.IPV4, value: "8.8.8.8" }],
+    })!;
+    const newer = createIocCollection({
+      id: "vera5-col-newer",
+      name: "APT29 Research",
+      createdAt: 200,
+      updatedAt: 300,
+      members: [
+        { iocType: IOC_TYPE.DOMAIN, value: "example.com" },
+        { iocType: IOC_TYPE.URL, value: "https://example.com/login" },
+      ],
+    })!;
+
+    expect(buildIocCollectionSummaryLine(newer)).toContain("2 indicators");
+    expect(buildIocCollectionSummaryLine(newer)).toContain("Last updated:");
+    expect(sortIocCollectionsForDisplay([older, newer]).map((entry) => entry.id)).toEqual([
+      newer.id,
+      older.id,
+    ]);
+  });
+});
+
+describe("iocCollection update helpers", () => {
+  it("renames a collection and bumps updatedAt", () => {
+    const base = createIocCollection({
+      id: "vera5-col-rename",
+      name: "Original",
+      createdAt: 100,
+      updatedAt: 100,
+    })!;
+
+    const renamed = updateIocCollection(base, { name: "  Renamed Case  " }, 250);
+    expect(renamed).toEqual({
+      id: "vera5-col-rename",
+      name: "Renamed Case",
+      createdAt: 100,
+      updatedAt: 250,
+      members: [],
+    });
+  });
+
+  it("rejects empty rename names", () => {
+    const base = createIocCollection({
+      id: "vera5-col-rename-invalid",
+      name: "Original",
+      createdAt: 100,
+      updatedAt: 100,
+    })!;
+
+    expect(updateIocCollection(base, { name: "   " })).toBeNull();
+  });
+
+  it("removes a member by type and normalized value", () => {
+    const base = createIocCollection({
+      id: "vera5-col-remove",
+      name: "Case",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [
+        { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+        { iocType: IOC_TYPE.DOMAIN, value: "evil.example" },
+      ],
+    })!;
+
+    const updated = removeIocCollectionMember(
+      base,
+      { iocType: IOC_TYPE.IPV4, value: "  8.8.8.8 " },
+      200
+    );
+    expect(updated).toEqual({
+      id: "vera5-col-remove",
+      name: "Case",
+      createdAt: 100,
+      updatedAt: 200,
+      members: [{ iocType: IOC_TYPE.DOMAIN, value: "evil.example" }],
+    });
+  });
+
+  it("returns null when removing a member that is not present", () => {
+    const base = createIocCollection({
+      id: "vera5-col-remove-missing",
+      name: "Case",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [{ iocType: IOC_TYPE.IPV4, value: "8.8.8.8" }],
+    })!;
+
+    expect(
+      removeIocCollectionMember(base, {
+        iocType: IOC_TYPE.DOMAIN,
+        value: "missing.example",
+      })
+    ).toBeNull();
+  });
+});
+
+describe("iocCollection member add remove dedupe lifecycle", () => {
+  it("adds, dedupes, and removes members in order", () => {
+    const base = createIocCollection({
+      id: "vera5-col-lifecycle",
+      name: "Case",
+      createdAt: 100,
+      updatedAt: 100,
+    })!;
+
+    const withMembers = addIocCollectionMembers(
+      base,
+      [
+        { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+        { iocType: IOC_TYPE.IPV4, value: "  8.8.8.8 " },
+        { iocType: IOC_TYPE.DOMAIN, value: "evil.example" },
+      ],
+      150
+    );
+
+    expect(withMembers.members).toEqual([
+      { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+      { iocType: IOC_TYPE.DOMAIN, value: "evil.example" },
+    ]);
+
+    const afterRemove = removeIocCollectionMember(
+      withMembers,
+      { iocType: IOC_TYPE.DOMAIN, value: "evil.example" },
+      200
+    );
+
+    expect(afterRemove).toEqual({
+      id: "vera5-col-lifecycle",
+      name: "Case",
+      createdAt: 100,
+      updatedAt: 200,
+      members: [{ iocType: IOC_TYPE.IPV4, value: "8.8.8.8" }],
+    });
+  });
+});
+
+describe("iocCollection session promote helpers", () => {
+  it("builds action labels with optional session IOC counts", () => {
+    expect(buildPromoteSessionToCollectionActionLabel(0)).toBe(
+      "Promote session to collection…"
+    );
+    expect(buildPromoteSessionToCollectionActionLabel(3)).toBe(
+      "Promote session to collection… (3)"
+    );
+  });
+
+  it("formats promote feedback for empty, full, partial, and duplicate-only outcomes", () => {
+    expect(
+      formatPromoteSessionToCollectionFeedback({
+        collectionName: "Phishing Investigation",
+        addedCount: 0,
+        duplicateCount: 0,
+        totalCount: 0,
+      })
+    ).toBe("This session has no indicators to promote.");
+
+    expect(
+      formatPromoteSessionToCollectionFeedback({
+        collectionName: "Phishing Investigation",
+        addedCount: 2,
+        duplicateCount: 0,
+        totalCount: 2,
+      })
+    ).toBe("Promoted 2 session indicators to Phishing Investigation.");
+
+    expect(
+      formatPromoteSessionToCollectionFeedback({
+        collectionName: "Phishing Investigation",
+        addedCount: 1,
+        duplicateCount: 1,
+        totalCount: 2,
+      })
+    ).toBe(
+      "Promoted 1 session indicator to Phishing Investigation. 1 was already saved."
+    );
+
+    expect(
+      formatPromoteSessionToCollectionFeedback({
+        collectionName: "Phishing Investigation",
+        addedCount: 0,
+        duplicateCount: 2,
+        totalCount: 2,
+      })
+    ).toBe(
+      "All 2 session indicators were already in Phishing Investigation."
+    );
   });
 });

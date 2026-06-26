@@ -15,6 +15,7 @@ import {
   buildTabScanCountSummaryText,
   buildTrayRowNavigationAriaLabel,
   filterTabScanSummaryEntries,
+  findTabScanSummaryEntryForCollectionMember,
   formatTrayRowEnrichmentHint,
   IOC_TYPE_TRAY_LABEL,
   listIocTypesPresentInSummary,
@@ -73,27 +74,55 @@ import {
 import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
 import {
   buildAddFilteredToCollectionActionLabel,
+  buildIocCollectionSummaryLine,
   buildPromoteSessionToCollectionActionLabel,
   formatAddFilteredToCollectionFeedback,
   formatPromoteSessionToCollectionFeedback,
   formatSaveToCollectionFeedback,
   IOC_COLLECTION_ADD_FILTERED_HEADING,
   IOC_COLLECTION_CREATE_NEW_LABEL,
+  IOC_COLLECTION_MANAGER_EMPTY_TEXT,
+  IOC_COLLECTION_MANAGER_LIST_ARIA_LABEL,
+  IOC_COLLECTION_MANAGER_SECTION_LABEL,
+  IOC_COLLECTION_MEMBERS_EMPTY_TEXT,
+  IOC_COLLECTION_MEMBERS_HEADING,
+  IOC_COLLECTION_DELETE_LABEL,
+  IOC_COLLECTION_HIDE_MEMBERS_LABEL,
   IOC_COLLECTION_NEW_NAME_PLACEHOLDER,
   IOC_COLLECTION_NO_COLLECTIONS_TEXT,
   IOC_COLLECTION_PICKER_HEADING,
   IOC_COLLECTION_PROMOTE_SESSION_BUTTON_LABEL,
   IOC_COLLECTION_PROMOTE_SESSION_HEADING,
+  IOC_COLLECTION_REMOVE_MEMBER_LABEL,
+  IOC_COLLECTION_RENAME_LABEL,
   IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL,
   IOC_COLLECTION_SAVE_TO_NEW_LABEL,
+  IOC_COLLECTION_VIEW_MEMBERS_LABEL,
   normalizeIocCollectionName,
+  sortIocCollectionsForDisplay,
   type IocCollection,
+  type IocCollectionMember,
 } from "../lib/iocCollection";
+import {
+  buildIocCollectionExportInput,
+  downloadIocCollectionExportCsvFile,
+  downloadIocCollectionExportJsonFile,
+  downloadIocCollectionExportMarkdownFile,
+  formatIocCollectionExportCsvFeedback,
+  formatIocCollectionExportJsonFeedback,
+  formatIocCollectionExportMarkdownFeedback,
+  IOC_COLLECTION_EXPORT_CSV_LABEL,
+  IOC_COLLECTION_EXPORT_JSON_LABEL,
+  IOC_COLLECTION_EXPORT_MARKDOWN_LABEL,
+} from "../lib/iocCollectionExport";
 import {
   requestAddIocToCollection,
   requestAddIocsToCollection,
   requestCreateIocCollection,
+  requestDeleteIocCollection,
   requestListIocCollections,
+  requestRemoveIocFromCollection,
+  requestRenameIocCollection,
 } from "../lib/iocCollectionClient";
 import { requestEnrichmentSourceOps } from "../lib/enrichmentSourceOpsClient";
 import {
@@ -106,6 +135,7 @@ import {
 import { VERA5_COLOR } from "../lib/theme";
 import {
   resolveWorkspaceTrayView,
+  resolveCollectionMemberOpenFeedback,
   resolveTrayNavigationFeedback,
 } from "../lib/workspaceTrayState";
 
@@ -783,6 +813,472 @@ function PromoteSessionToCollectionPanel({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function CollectionsManagerPanel() {
+  const [collections, setCollections] = useState<IocCollection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedCollectionId, setExpandedCollectionId] = useState<string | null>(null);
+  const [renamingCollectionId, setRenamingCollectionId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+
+  const refreshCollections = async () => {
+    const list = await requestListIocCollections();
+    setCollections(sortIocCollectionsForDisplay(list));
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    void requestListIocCollections().then((list) => {
+      if (!cancelled) {
+        setCollections(sortIocCollectionsForDisplay(list));
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleToggleMembers = (collectionId: string) => {
+    setExpandedCollectionId((current) => (current === collectionId ? null : collectionId));
+  };
+
+  const handleStartRenameCollection = (collection: IocCollection) => {
+    setRenamingCollectionId(collection.id);
+    setRenameDraft(collection.name);
+    setExpandedCollectionId(null);
+  };
+
+  const handleCancelRenameCollection = () => {
+    setRenamingCollectionId(null);
+    setRenameDraft("");
+  };
+
+  const handleSaveRenameCollection = (collectionId: string) => {
+    const normalizedName = normalizeIocCollectionName(renameDraft);
+    if (!normalizedName) {
+      handleCancelRenameCollection();
+      return;
+    }
+
+    void (async () => {
+      const updated = await requestRenameIocCollection({
+        collectionId,
+        name: normalizedName,
+      });
+      handleCancelRenameCollection();
+      if (updated) {
+        await refreshCollections();
+      }
+    })();
+  };
+
+  const handleDeleteCollection = (collectionId: string) => {
+    void (async () => {
+      const deleted = await requestDeleteIocCollection(collectionId);
+      if (!deleted) {
+        return;
+      }
+      if (expandedCollectionId === collectionId) {
+        setExpandedCollectionId(null);
+      }
+      if (renamingCollectionId === collectionId) {
+        handleCancelRenameCollection();
+      }
+      await refreshCollections();
+    })();
+  };
+
+  const handleRemoveMember = (
+    collectionId: string,
+    member: IocCollectionMember
+  ) => {
+    void (async () => {
+      const result = await requestRemoveIocFromCollection({
+        collectionId,
+        member,
+      });
+      if (result) {
+        await refreshCollections();
+      }
+    })();
+  };
+
+  const handleOpenCollectionMember = (member: IocCollectionMember) => {
+    void chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(async ([tab]) => {
+        if (!tab?.id) {
+          setNavigationMessage(
+            resolveCollectionMemberOpenFeedback({
+              tabId: undefined,
+              summary: null,
+              member,
+              entryFound: false,
+            })
+          );
+          return;
+        }
+
+        const summary = await requestTabScanSummaryForActiveTab();
+        const entry = summary
+          ? findTabScanSummaryEntryForCollectionMember(summary, member)
+          : null;
+        const preNavigationFeedback = resolveCollectionMemberOpenFeedback({
+          tabId: tab.id,
+          summary,
+          member,
+          entryFound: entry !== null,
+        });
+        if (preNavigationFeedback || !entry) {
+          setNavigationMessage(preNavigationFeedback);
+          return;
+        }
+
+        try {
+          const response = await chrome.tabs.sendMessage(
+            tab.id,
+            navigateToIocAnchorMessage(entry.anchorId)
+          );
+          setNavigationMessage(
+            resolveCollectionMemberOpenFeedback({
+              tabId: tab.id,
+              summary,
+              member,
+              entryFound: true,
+              response,
+            })
+          );
+        } catch {
+          setNavigationMessage(
+            resolveCollectionMemberOpenFeedback({
+              tabId: tab.id,
+              summary,
+              member,
+              entryFound: true,
+              sendFailed: true,
+            })
+          );
+        }
+      });
+  };
+
+  const handleExportCollectionMarkdown = (collection: IocCollection) => {
+    void (async () => {
+      const input = await buildIocCollectionExportInput({ collection });
+      const downloaded = downloadIocCollectionExportMarkdownFile(input, document);
+      setExportMessage(
+        formatIocCollectionExportMarkdownFeedback({
+          collectionName: collection.name,
+          success: downloaded,
+        })
+      );
+    })();
+  };
+
+  const handleExportCollectionJson = (collection: IocCollection) => {
+    void (async () => {
+      const input = await buildIocCollectionExportInput({ collection });
+      const downloaded = downloadIocCollectionExportJsonFile(input, document);
+      setExportMessage(
+        formatIocCollectionExportJsonFeedback({
+          collectionName: collection.name,
+          success: downloaded,
+        })
+      );
+    })();
+  };
+
+  const handleExportCollectionCsv = (collection: IocCollection) => {
+    void (async () => {
+      const input = await buildIocCollectionExportInput({ collection });
+      const downloaded = downloadIocCollectionExportCsvFile(input, document);
+      setExportMessage(
+        formatIocCollectionExportCsvFeedback({
+          collectionName: collection.name,
+          success: downloaded,
+        })
+      );
+    })();
+  };
+
+  return (
+    <section
+      aria-label={IOC_COLLECTION_MANAGER_SECTION_LABEL}
+      style={{
+        marginTop: 14,
+        borderTop: `1px solid ${POPUP_THEME.border}`,
+        paddingTop: 12,
+      }}
+    >
+      <h2
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          margin: "0 0 8px",
+          color: POPUP_THEME.accentText,
+        }}
+      >
+        {IOC_COLLECTION_MANAGER_SECTION_LABEL}
+      </h2>
+      {loading ? (
+        <p style={trayStatusStyle()} aria-live="polite">
+          Loading collections…
+        </p>
+      ) : collections.length === 0 ? (
+        <p style={trayStatusStyle()} aria-live="polite">
+          {IOC_COLLECTION_MANAGER_EMPTY_TEXT}
+        </p>
+      ) : (
+        <ul
+          aria-label={IOC_COLLECTION_MANAGER_LIST_ARIA_LABEL}
+          style={{
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+            maxHeight: 240,
+            overflowY: "auto",
+          }}
+        >
+          {collections.map((collection) => {
+            const isExpanded = expandedCollectionId === collection.id;
+            const isRenaming = renamingCollectionId === collection.id;
+
+            return (
+              <li
+                key={collection.id}
+                style={{
+                  border: `1px solid ${POPUP_THEME.border}`,
+                  borderRadius: 6,
+                  padding: 8,
+                  backgroundColor: POPUP_THEME.trayRowBg,
+                }}
+              >
+                {isRenaming ? (
+                  <>
+                    <input
+                      type="text"
+                      value={renameDraft}
+                      onChange={(event) => setRenameDraft(event.target.value)}
+                      aria-label={`Rename ${collection.name}`}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        marginBottom: 8,
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        border: `1px solid ${POPUP_THEME.border}`,
+                        backgroundColor: POPUP_THEME.buttonBg,
+                        color: POPUP_THEME.text,
+                        boxSizing: "border-box",
+                      }}
+                    />
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleSaveRenameCollection(collection.id)}
+                        style={sessionActionButtonStyle()}
+                      >
+                        Save
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCancelRenameCollection}
+                        style={sessionActionButtonStyle()}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        color: POPUP_THEME.text,
+                        wordBreak: "break-word",
+                        marginBottom: 4,
+                      }}
+                    >
+                      {collection.name}
+                    </div>
+                    <p
+                      style={{
+                        fontSize: 11,
+                        margin: "0 0 8px",
+                        color: POPUP_THEME.muted,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {buildIocCollectionSummaryLine(collection)}
+                    </p>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleMembers(collection.id)}
+                        style={sessionActionButtonStyle()}
+                        aria-expanded={isExpanded}
+                      >
+                        {isExpanded
+                          ? IOC_COLLECTION_HIDE_MEMBERS_LABEL
+                          : IOC_COLLECTION_VIEW_MEMBERS_LABEL}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleStartRenameCollection(collection)}
+                        style={sessionActionButtonStyle()}
+                      >
+                        {IOC_COLLECTION_RENAME_LABEL}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCollection(collection.id)}
+                        style={sessionActionButtonStyle()}
+                      >
+                        {IOC_COLLECTION_DELETE_LABEL}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExportCollectionMarkdown(collection)}
+                        style={sessionActionButtonStyle()}
+                      >
+                        {IOC_COLLECTION_EXPORT_MARKDOWN_LABEL}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExportCollectionJson(collection)}
+                        style={sessionActionButtonStyle()}
+                      >
+                        {IOC_COLLECTION_EXPORT_JSON_LABEL}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExportCollectionCsv(collection)}
+                        style={sessionActionButtonStyle()}
+                      >
+                        {IOC_COLLECTION_EXPORT_CSV_LABEL}
+                      </button>
+                    </div>
+                    {isExpanded ? (
+                      <div style={{ marginTop: 8 }}>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            color: POPUP_THEME.accentText,
+                            marginBottom: 6,
+                          }}
+                        >
+                          {IOC_COLLECTION_MEMBERS_HEADING}
+                        </div>
+                        {collection.members.length === 0 ? (
+                          <p style={{ ...trayStatusStyle(), margin: 0 }}>
+                            {IOC_COLLECTION_MEMBERS_EMPTY_TEXT}
+                          </p>
+                        ) : (
+                          <ul
+                            style={{
+                              listStyle: "none",
+                              margin: 0,
+                              padding: 0,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 6,
+                            }}
+                          >
+                            {collection.members.map((member) => (
+                              <li
+                                key={`${member.iocType}:${member.value}`}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "flex-start",
+                                  justifyContent: "space-between",
+                                  gap: 8,
+                                  borderTop: `1px solid ${POPUP_THEME.border}`,
+                                  paddingTop: 6,
+                                }}
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenCollectionMember(member)}
+                                  aria-label={buildTrayRowNavigationAriaLabel(member.value)}
+                                  style={{
+                                    fontSize: 11,
+                                    color: POPUP_THEME.text,
+                                    wordBreak: "break-all",
+                                    flex: 1,
+                                    textAlign: "left",
+                                    padding: 0,
+                                    border: "none",
+                                    background: "transparent",
+                                    cursor: "pointer",
+                                  }}
+                                >
+                                  <span style={{ color: POPUP_THEME.muted }}>
+                                    {IOC_TYPE_TRAY_LABEL[member.iocType]}:{" "}
+                                  </span>
+                                  {member.value}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleRemoveMember(collection.id, member)
+                                  }
+                                  style={sessionActionButtonStyle()}
+                                >
+                                  {IOC_COLLECTION_REMOVE_MEMBER_LABEL}
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {navigationMessage ? (
+        <p
+          role="alert"
+          aria-live="polite"
+          style={{
+            fontSize: 12,
+            margin: "8px 0 0",
+            color: POPUP_THEME.error,
+            lineHeight: 1.5,
+          }}
+        >
+          {navigationMessage}
+        </p>
+      ) : null}
+      {exportMessage ? (
+        <p
+          aria-live="polite"
+          style={{
+            fontSize: 12,
+            margin: navigationMessage ? "6px 0 0" : "8px 0 0",
+            color: POPUP_THEME.muted,
+            lineHeight: 1.5,
+          }}
+        >
+          {exportMessage}
+        </p>
+      ) : null}
+    </section>
   );
 }
 
@@ -2044,6 +2540,7 @@ export function Popup() {
           <p style={{ ...trayStatusStyle(), marginTop: 12 }}>No saved sessions yet.</p>
         )}
       </section>
+      <CollectionsManagerPanel />
       <section
         aria-label={ENRICHMENT_SOURCE_OPS_SECTION_TITLE}
         style={{

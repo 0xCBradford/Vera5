@@ -209,6 +209,74 @@ export function addIocCollectionMember(
   return addIocCollectionMembers(collection, [input], now);
 }
 
+export type UpdateIocCollectionInput = {
+  name?: string;
+  description?: string | null;
+};
+
+export function updateIocCollection(
+  collection: IocCollection,
+  input: UpdateIocCollectionInput,
+  now: number = Date.now()
+): IocCollection | null {
+  const next: IocCollection = { ...collection };
+
+  if (input.name !== undefined) {
+    const name = normalizeIocCollectionName(input.name);
+    if (!name) {
+      return null;
+    }
+    next.name = name;
+  }
+
+  if (input.description !== undefined) {
+    if (input.description === null) {
+      delete next.description;
+    } else {
+      const description = normalizeIocCollectionDescription(input.description);
+      if (description === undefined) {
+        delete next.description;
+      } else {
+        next.description = description;
+      }
+    }
+  }
+
+  const updatedAt =
+    Number.isFinite(now) && now >= next.createdAt ? now : next.updatedAt;
+  return {
+    ...next,
+    updatedAt,
+  };
+}
+
+export function removeIocCollectionMember(
+  collection: IocCollection,
+  member: IocCollectionMemberInput,
+  now: number = Date.now()
+): IocCollection | null {
+  const normalized = normalizeIocCollectionMember(member);
+  if (!normalized) {
+    return null;
+  }
+
+  const targetKey = buildIocCollectionMemberDedupeKey(normalized);
+  const nextMembers = collection.members.filter(
+    (entry) => buildIocCollectionMemberDedupeKey(entry) !== targetKey
+  );
+  if (nextMembers.length === collection.members.length) {
+    return null;
+  }
+
+  const updatedAt =
+    Number.isFinite(now) && now >= collection.createdAt ? now : collection.updatedAt;
+  return {
+    ...collection,
+    members: nextMembers,
+    updatedAt,
+  };
+}
+
 function isIocCollectionMembers(value: unknown): value is IocCollectionMember[] {
   if (!Array.isArray(value)) {
     return false;
@@ -359,4 +427,52 @@ export function formatPromoteSessionToCollectionFeedback(input: {
   }
   const duplicateLabel = input.duplicateCount === 1 ? "was" : "were";
   return `Promoted ${input.addedCount} session ${indicatorLabel} to ${input.collectionName}. ${input.duplicateCount} ${duplicateLabel} already saved.`;
+}
+
+export const IOC_COLLECTION_MANAGER_SECTION_LABEL = "IOC collections";
+export const IOC_COLLECTION_MANAGER_LIST_ARIA_LABEL = "Saved IOC collections";
+export const IOC_COLLECTION_MANAGER_EMPTY_TEXT = "No saved collections yet.";
+export const IOC_COLLECTION_VIEW_MEMBERS_LABEL = "View members";
+export const IOC_COLLECTION_HIDE_MEMBERS_LABEL = "Hide members";
+export const IOC_COLLECTION_MEMBERS_HEADING = "Collection members";
+export const IOC_COLLECTION_MEMBERS_EMPTY_TEXT = "No indicators in this collection.";
+export const IOC_COLLECTION_RENAME_LABEL = "Rename";
+export const IOC_COLLECTION_DELETE_LABEL = "Delete";
+export const IOC_COLLECTION_REMOVE_MEMBER_LABEL = "Remove";
+
+export function buildIocCollectionMemberCountText(memberCount: number): string {
+  const count = Number.isFinite(memberCount) && memberCount >= 0 ? memberCount : 0;
+  return count === 1 ? "1 indicator" : `${count} indicators`;
+}
+
+export function countIocCollectionMembersByType(
+  members: readonly IocCollectionMember[]
+): Partial<Record<IocType, number>> {
+  const counts: Partial<Record<IocType, number>> = {};
+  for (const member of members) {
+    counts[member.iocType] = (counts[member.iocType] ?? 0) + 1;
+  }
+  return counts;
+}
+
+export function formatIocCollectionUpdatedAt(updatedAt: number): string {
+  if (!Number.isFinite(updatedAt)) {
+    return "Unknown date";
+  }
+  return new Date(updatedAt).toLocaleString();
+}
+
+export function buildIocCollectionSummaryLine(collection: IocCollection): string {
+  return `${buildIocCollectionMemberCountText(collection.members.length)} · Last updated: ${formatIocCollectionUpdatedAt(collection.updatedAt)}`;
+}
+
+export function sortIocCollectionsForDisplay(
+  collections: readonly IocCollection[]
+): IocCollection[] {
+  return [...collections].sort((left, right) => {
+    if (right.updatedAt !== left.updatedAt) {
+      return right.updatedAt - left.updatedAt;
+    }
+    return left.name.localeCompare(right.name);
+  });
 }

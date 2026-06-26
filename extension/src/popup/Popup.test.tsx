@@ -14,6 +14,7 @@ import { buildTabScanSummary } from "../lib/tabScanSummary";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import * as tabScanSummary from "../lib/tabScanSummary";
 import { createIocCollection } from "../lib/iocCollection";
+import * as iocCollectionExport from "../lib/iocCollectionExport";
 import { MESSAGE } from "../lib/messages";
 import { Popup } from "./Popup";
 
@@ -272,6 +273,74 @@ function stubChrome(options: {
               duplicateCount,
               totalCount: incoming.length,
             },
+          };
+        }
+        if (message?.type === MESSAGE.RENAME_IOC_COLLECTION) {
+          const renameMessage = message as { collectionId?: string; name?: string };
+          const index = collections.findIndex(
+            (collection) => collection?.id === renameMessage.collectionId
+          );
+          if (index < 0 || !collections[index]) {
+            return { ok: false, error: "could not rename collection" };
+          }
+          const existing = collections[index]!;
+          const updated = createIocCollection({
+            ...existing,
+            name: renameMessage.name ?? "",
+            updatedAt: 400,
+          });
+          if (!updated) {
+            return { ok: false, error: "could not rename collection" };
+          }
+          collections[index] = updated;
+          return { ok: true, payload: { collection: updated } };
+        }
+        if (message?.type === MESSAGE.DELETE_IOC_COLLECTION) {
+          const deleteMessage = message as { collectionId?: string };
+          const index = collections.findIndex(
+            (collection) => collection?.id === deleteMessage.collectionId
+          );
+          if (index < 0) {
+            return { ok: false, error: "collection not found" };
+          }
+          collections.splice(index, 1);
+          return { ok: true, payload: { deleted: true } };
+        }
+        if (message?.type === MESSAGE.REMOVE_IOC_FROM_COLLECTION) {
+          const removeMessage = message as {
+            collectionId?: string;
+            iocType?: string;
+            value?: string;
+          };
+          const index = collections.findIndex(
+            (collection) => collection?.id === removeMessage.collectionId
+          );
+          if (index < 0 || !collections[index]) {
+            return { ok: false, error: "collection not found" };
+          }
+          const existing = collections[index]!;
+          const nextMembers = existing.members.filter(
+            (member) =>
+              !(
+                member.iocType === removeMessage.iocType &&
+                member.value === removeMessage.value
+              )
+          );
+          if (nextMembers.length === existing.members.length) {
+            return { ok: false, error: "could not remove indicator from collection" };
+          }
+          const updated = createIocCollection({
+            ...existing,
+            members: nextMembers,
+            updatedAt: 500,
+          });
+          if (!updated) {
+            return { ok: false, error: "could not remove indicator from collection" };
+          }
+          collections[index] = updated;
+          return {
+            ok: true,
+            payload: { collection: updated, removed: true },
           };
         }
         return {
@@ -597,13 +666,15 @@ describe("Popup IOC tray", () => {
     });
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("Phishing Campaign");
+      const collectionButton = Array.from(mounted.container.querySelectorAll("button")).find(
+        (button) => button.textContent === "Phishing Campaign"
+      );
+      expect(collectionButton).toBeDefined();
     });
 
     const collectionButton = Array.from(mounted.container.querySelectorAll("button")).find(
       (button) => button.textContent === "Phishing Campaign"
     );
-    expect(collectionButton).toBeDefined();
     flushSync(() => {
       collectionButton?.click();
     });
@@ -632,13 +703,15 @@ describe("Popup IOC tray", () => {
     });
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("Phishing Campaign");
+      const collectionButton = Array.from(mounted.container.querySelectorAll("button")).find(
+        (button) => button.textContent === "Phishing Campaign"
+      );
+      expect(collectionButton).toBeDefined();
     });
 
     const collectionButton = Array.from(mounted.container.querySelectorAll("button")).find(
       (button) => button.textContent === "Phishing Campaign"
     );
-    expect(collectionButton).toBeDefined();
     flushSync(() => {
       collectionButton?.click();
     });
@@ -648,6 +721,357 @@ describe("Popup IOC tray", () => {
         "Added 3 indicators to Phishing Campaign."
       );
     });
+  });
+
+  it("lists saved collections with member count and last updated", async () => {
+    const aptCollection = createIocCollection({
+      id: "vera5-col-apt",
+      name: "APT29 Research",
+      createdAt: 100,
+      updatedAt: 300,
+      members: [
+        { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+        { iocType: IOC_TYPE.DOMAIN, value: "example.com" },
+      ],
+    })!;
+    stubChrome({
+      initialSummary: null,
+      collections: [sampleCollection, aptCollection],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("APT29 Research");
+    });
+    expect(mounted?.container.textContent).toContain("2 indicators");
+    expect(mounted?.container.textContent).toContain("Last updated:");
+    expect(mounted?.container.textContent).toContain("Phishing Campaign");
+  });
+
+  it("manages collections with rename, delete, view members, and remove member", async () => {
+    const managedCollection = createIocCollection({
+      id: "vera5-col-managed",
+      name: "Qakbot Investigation",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [
+        { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+        { iocType: IOC_TYPE.DOMAIN, value: "evil.example" },
+      ],
+    })!;
+    stubChrome({
+      initialSummary: null,
+      collections: [managedCollection],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Qakbot Investigation");
+    });
+
+    const viewMembersButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "View members"
+    );
+    expect(viewMembersButton).toBeDefined();
+    flushSync(() => {
+      viewMembersButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+      expect(mounted?.container.textContent).toContain("evil.example");
+    });
+
+    const removeButtons = Array.from(mounted.container.querySelectorAll("button")).filter(
+      (button) => button.textContent === "Remove"
+    );
+    expect(removeButtons.length).toBeGreaterThan(0);
+    flushSync(() => {
+      removeButtons[0]?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).not.toContain("8.8.8.8");
+      expect(mounted?.container.textContent).toContain("evil.example");
+    });
+
+    const renameButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Rename"
+    );
+    expect(renameButton).toBeDefined();
+    flushSync(() => {
+      renameButton?.click();
+    });
+
+    const renameInput = mounted.container.querySelector(
+      'input[aria-label="Rename Qakbot Investigation"]'
+    ) as HTMLInputElement | null;
+    expect(renameInput).not.toBeNull();
+    flushSync(() => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      nativeInputValueSetter?.call(renameInput, "Renamed Hunt");
+      renameInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const saveButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Save"
+    );
+    expect(saveButton).toBeDefined();
+    flushSync(() => {
+      saveButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Renamed Hunt");
+      expect(mounted?.container.textContent).not.toContain("Qakbot Investigation");
+    });
+
+    const deleteButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Delete"
+    );
+    expect(deleteButton).toBeDefined();
+    flushSync(() => {
+      deleteButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).not.toContain("Renamed Hunt");
+    });
+  });
+
+  it("opens a collection member on the current page when it matches the scan summary", async () => {
+    const managedCollection = createIocCollection({
+      id: "vera5-col-open",
+      name: "Qakbot Investigation",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [{ iocType: IOC_TYPE.IPV4, value: "8.8.8.8" }],
+    })!;
+    stubChrome({
+      initialSummary: sampleSummary,
+      collections: [managedCollection],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Qakbot Investigation");
+    });
+
+    const viewMembersButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "View members"
+    );
+    expect(viewMembersButton).toBeDefined();
+    flushSync(() => {
+      viewMembersButton?.click();
+    });
+
+    const openMemberButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.getAttribute("aria-label") === "View 8.8.8.8 on page"
+    );
+    expect(openMemberButton).toBeDefined();
+    flushSync(() => {
+      openMemberButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, {
+        type: "NAVIGATE_TO_IOC_ANCHOR",
+        anchorId: "vera5-hl-1",
+      });
+    });
+  });
+
+  it("reports when a collection member is not on the current page", async () => {
+    const managedCollection = createIocCollection({
+      id: "vera5-col-missing",
+      name: "Off-page Case",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [{ iocType: IOC_TYPE.DOMAIN, value: "evil.example" }],
+    })!;
+    stubChrome({
+      initialSummary: sampleSummary,
+      collections: [managedCollection],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Off-page Case");
+    });
+
+    const viewMembersButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "View members"
+    );
+    flushSync(() => {
+      viewMembersButton?.click();
+    });
+
+    const openMemberButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.getAttribute("aria-label") === "View evil.example on page"
+    );
+    expect(openMemberButton).toBeDefined();
+    flushSync(() => {
+      openMemberButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "evil.example is not on the current page. Scan again to refresh the list."
+      );
+    });
+  });
+
+  it("exports a collection as Markdown from the manager panel", async () => {
+    const managedCollection = createIocCollection({
+      id: "vera5-col-export",
+      name: "Phishing Campaign",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [{ iocType: IOC_TYPE.IPV4, value: "8.8.8.8" }],
+    })!;
+    const buildInput = vi
+      .spyOn(iocCollectionExport, "buildIocCollectionExportInput")
+      .mockResolvedValue({
+        collection: managedCollection,
+        records: [],
+        exportedAt: "2026-06-10T12:00:00.000Z",
+      });
+    const download = vi
+      .spyOn(iocCollectionExport, "downloadIocCollectionExportMarkdownFile")
+      .mockReturnValue(true);
+
+    stubChrome({
+      initialSummary: null,
+      collections: [managedCollection],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Phishing Campaign");
+    });
+
+    const exportButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Export Markdown"
+    );
+    expect(exportButton).toBeDefined();
+    flushSync(() => {
+      exportButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(buildInput).toHaveBeenCalledWith({ collection: managedCollection });
+      expect(download).toHaveBeenCalledTimes(1);
+      expect(mounted?.container.textContent).toContain(
+        "Downloaded Markdown export for Phishing Campaign."
+      );
+    });
+
+    buildInput.mockRestore();
+    download.mockRestore();
+  });
+
+  it("exports a collection as JSON from the manager panel", async () => {
+    const managedCollection = createIocCollection({
+      id: "vera5-col-export-json",
+      name: "APT29 Research",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [{ iocType: IOC_TYPE.DOMAIN, value: "evil.example" }],
+    })!;
+    const buildInput = vi
+      .spyOn(iocCollectionExport, "buildIocCollectionExportInput")
+      .mockResolvedValue({
+        collection: managedCollection,
+        records: [],
+        exportedAt: "2026-06-10T12:00:00.000Z",
+      });
+    const download = vi
+      .spyOn(iocCollectionExport, "downloadIocCollectionExportJsonFile")
+      .mockReturnValue(true);
+
+    stubChrome({
+      initialSummary: null,
+      collections: [managedCollection],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("APT29 Research");
+    });
+
+    const exportButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Export JSON"
+    );
+    expect(exportButton).toBeDefined();
+    flushSync(() => {
+      exportButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(buildInput).toHaveBeenCalledWith({ collection: managedCollection });
+      expect(download).toHaveBeenCalledTimes(1);
+      expect(mounted?.container.textContent).toContain(
+        "Downloaded JSON export for APT29 Research."
+      );
+    });
+
+    buildInput.mockRestore();
+    download.mockRestore();
+  });
+
+  it("exports a collection as CSV from the manager panel", async () => {
+    const managedCollection = createIocCollection({
+      id: "vera5-col-export-csv",
+      name: "Phishing Campaign",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [
+        { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+        { iocType: IOC_TYPE.DOMAIN, value: "evil.example" },
+      ],
+    })!;
+    const buildInput = vi
+      .spyOn(iocCollectionExport, "buildIocCollectionExportInput")
+      .mockResolvedValue({
+        collection: managedCollection,
+        records: [],
+        exportedAt: "2026-06-10T12:00:00.000Z",
+      });
+    const download = vi
+      .spyOn(iocCollectionExport, "downloadIocCollectionExportCsvFile")
+      .mockReturnValue(true);
+
+    stubChrome({
+      initialSummary: null,
+      collections: [managedCollection],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Phishing Campaign");
+    });
+
+    const exportButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Export CSV"
+    );
+    expect(exportButton).toBeDefined();
+    flushSync(() => {
+      exportButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(buildInput).toHaveBeenCalledWith({ collection: managedCollection });
+      expect(download).toHaveBeenCalledTimes(1);
+      expect(mounted?.container.textContent).toContain(
+        "Downloaded CSV export for Phishing Campaign."
+      );
+    });
+
+    buildInput.mockRestore();
+    download.mockRestore();
   });
 
   it("promotes the active investigation session to a new collection", async () => {

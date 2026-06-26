@@ -67,7 +67,7 @@ const INVESTIGATION_SESSION_EXPORT_FORBIDDEN_TOKENS = [
   '"apiKey"',
 ] as const;
 
-function sanitizeInvestigationSessionExportText(
+export function sanitizeInvestigationSessionExportText(
   value: string | undefined
 ): string | undefined {
   if (value === undefined) {

@@ -4,13 +4,19 @@ import {
   addIocToCollectionMessage,
   addIocsToCollectionMessage,
   createIocCollectionMessage,
+  deleteIocCollectionMessage,
   listIocCollectionsMessage,
+  removeIocFromCollectionMessage,
+  renameIocCollectionMessage,
 } from "../lib/messages";
 import {
   handleAddIocToCollectionMessage,
   handleAddIocsToCollectionMessage,
   handleCreateIocCollectionMessage,
+  handleDeleteIocCollectionMessage,
   handleListIocCollectionsMessage,
+  handleRemoveIocFromCollectionMessage,
+  handleRenameIocCollectionMessage,
 } from "./iocCollectionHandler";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
@@ -137,5 +143,122 @@ describe("iocCollectionHandler", () => {
     expect(
       (bulk.payload as { collection: { members: unknown[] } }).collection.members
     ).toHaveLength(3);
+  });
+
+  it("renames, deletes, and removes members from collections", async () => {
+    const created = await handleCreateIocCollectionMessage(
+      createIocCollectionMessage({ name: "Manage Me" })
+    );
+    const collectionId = (
+      created.payload as { collection: { id: string } }
+    ).collection.id;
+
+    await handleAddIocToCollectionMessage(
+      addIocToCollectionMessage({
+        collectionId,
+        iocType: IOC_TYPE.IPV4,
+        value: "8.8.8.8",
+      })
+    );
+
+    const renamed = await handleRenameIocCollectionMessage(
+      renameIocCollectionMessage({
+        collectionId,
+        name: "Renamed Case",
+      })
+    );
+    expect(renamed.ok).toBe(true);
+    expect(
+      (renamed.payload as { collection: { name: string } }).collection.name
+    ).toBe("Renamed Case");
+
+    const removed = await handleRemoveIocFromCollectionMessage(
+      removeIocFromCollectionMessage({
+        collectionId,
+        iocType: IOC_TYPE.IPV4,
+        value: "8.8.8.8",
+      })
+    );
+    expect(removed.ok).toBe(true);
+    expect((removed.payload as { removed: boolean }).removed).toBe(true);
+    expect(
+      (removed.payload as { collection: { members: unknown[] } }).collection.members
+    ).toHaveLength(0);
+
+    const deleted = await handleDeleteIocCollectionMessage(
+      deleteIocCollectionMessage(collectionId)
+    );
+    expect(deleted.ok).toBe(true);
+    expect((deleted.payload as { deleted: boolean }).deleted).toBe(true);
+
+    const listed = await handleListIocCollectionsMessage();
+    expect(
+      (listed.payload as { collections: unknown[] }).collections
+    ).toHaveLength(0);
+  });
+
+  it("promotes session IOC members into a new collection", async () => {
+    const sessionMembers = [
+      { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+      { iocType: IOC_TYPE.DOMAIN, value: "example.com" },
+    ];
+
+    const created = await handleCreateIocCollectionMessage(
+      createIocCollectionMessage({ name: "Phishing Investigation" })
+    );
+    const collectionId = (
+      created.payload as { collection: { id: string } }
+    ).collection.id;
+
+    const promoted = await handleAddIocsToCollectionMessage(
+      addIocsToCollectionMessage({
+        collectionId,
+        members: sessionMembers,
+      })
+    );
+
+    expect(promoted.ok).toBe(true);
+    expect((promoted.payload as { addedCount: number }).addedCount).toBe(2);
+    expect((promoted.payload as { duplicateCount: number }).duplicateCount).toBe(0);
+    expect(
+      (promoted.payload as { collection: { members: unknown[] } }).collection.members
+    ).toEqual(sessionMembers);
+  });
+
+  it("reports duplicate session IOC members when promoting into a collection that already contains them", async () => {
+    const created = await handleCreateIocCollectionMessage(
+      createIocCollectionMessage({ name: "Phishing Investigation" })
+    );
+    const collectionId = (
+      created.payload as { collection: { id: string } }
+    ).collection.id;
+
+    await handleAddIocToCollectionMessage(
+      addIocToCollectionMessage({
+        collectionId,
+        iocType: IOC_TYPE.IPV4,
+        value: "8.8.8.8",
+      })
+    );
+
+    const sessionMembers = [
+      { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+      { iocType: IOC_TYPE.DOMAIN, value: "example.com" },
+      { iocType: IOC_TYPE.IPV4, value: "  8.8.8.8 " },
+    ];
+
+    const promoted = await handleAddIocsToCollectionMessage(
+      addIocsToCollectionMessage({
+        collectionId,
+        members: sessionMembers,
+      })
+    );
+
+    expect(promoted.ok).toBe(true);
+    expect((promoted.payload as { addedCount: number }).addedCount).toBe(1);
+    expect((promoted.payload as { duplicateCount: number }).duplicateCount).toBe(2);
+    expect(
+      (promoted.payload as { collection: { members: unknown[] } }).collection.members
+    ).toHaveLength(2);
   });
 });

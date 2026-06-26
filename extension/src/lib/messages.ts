@@ -37,6 +37,9 @@ export const MESSAGE = {
   CREATE_IOC_COLLECTION: "CREATE_IOC_COLLECTION",
   ADD_IOC_TO_COLLECTION: "ADD_IOC_TO_COLLECTION",
   ADD_IOCS_TO_COLLECTION: "ADD_IOCS_TO_COLLECTION",
+  RENAME_IOC_COLLECTION: "RENAME_IOC_COLLECTION",
+  DELETE_IOC_COLLECTION: "DELETE_IOC_COLLECTION",
+  REMOVE_IOC_FROM_COLLECTION: "REMOVE_IOC_FROM_COLLECTION",
 } as const;
 
 export type MessageType = (typeof MESSAGE)[keyof typeof MESSAGE];
@@ -130,6 +133,21 @@ export type AddIocsToCollectionMessage = {
   collectionId: string;
   members: Array<{ iocType: IocType; value: string }>;
 };
+export type RenameIocCollectionMessage = {
+  type: typeof MESSAGE.RENAME_IOC_COLLECTION;
+  collectionId: string;
+  name: string;
+};
+export type DeleteIocCollectionMessage = {
+  type: typeof MESSAGE.DELETE_IOC_COLLECTION;
+  collectionId: string;
+};
+export type RemoveIocFromCollectionMessage = {
+  type: typeof MESSAGE.REMOVE_IOC_FROM_COLLECTION;
+  collectionId: string;
+  iocType: IocType;
+  value: string;
+};
 
 export type Vera5Message =
   | PingMessage
@@ -152,7 +170,10 @@ export type Vera5Message =
   | ListIocCollectionsMessage
   | CreateIocCollectionMessage
   | AddIocToCollectionMessage
-  | AddIocsToCollectionMessage;
+  | AddIocsToCollectionMessage
+  | RenameIocCollectionMessage
+  | DeleteIocCollectionMessage
+  | RemoveIocFromCollectionMessage;
 
 export type MessageResponse =
   | { ok: true; payload?: unknown }
@@ -329,6 +350,39 @@ export function addIocsToCollectionMessage(input: {
     type: MESSAGE.ADD_IOCS_TO_COLLECTION,
     collectionId: input.collectionId,
     members: input.members,
+  };
+}
+
+export function renameIocCollectionMessage(input: {
+  collectionId: string;
+  name: string;
+}): RenameIocCollectionMessage {
+  return {
+    type: MESSAGE.RENAME_IOC_COLLECTION,
+    collectionId: input.collectionId.trim(),
+    name: input.name,
+  };
+}
+
+export function deleteIocCollectionMessage(
+  collectionId: string
+): DeleteIocCollectionMessage {
+  return {
+    type: MESSAGE.DELETE_IOC_COLLECTION,
+    collectionId: collectionId.trim(),
+  };
+}
+
+export function removeIocFromCollectionMessage(input: {
+  collectionId: string;
+  iocType: IocType;
+  value: string;
+}): RemoveIocFromCollectionMessage {
+  return {
+    type: MESSAGE.REMOVE_IOC_FROM_COLLECTION,
+    collectionId: input.collectionId.trim(),
+    iocType: input.iocType,
+    value: input.value,
   };
 }
 
@@ -533,6 +587,57 @@ export function isAddIocsToCollectionMessage(
   return record.members.every((member) => isIocCollectionMemberInput(member));
 }
 
+export function isRenameIocCollectionMessage(
+  raw: unknown
+): raw is RenameIocCollectionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.RENAME_IOC_COLLECTION) {
+    return false;
+  }
+  if (typeof record.collectionId !== "string" || record.collectionId.trim().length === 0) {
+    return false;
+  }
+  return typeof record.name === "string" && record.name.trim().length > 0;
+}
+
+export function isDeleteIocCollectionMessage(
+  raw: unknown
+): raw is DeleteIocCollectionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.DELETE_IOC_COLLECTION) {
+    return false;
+  }
+  return typeof record.collectionId === "string" && record.collectionId.trim().length > 0;
+}
+
+export function isRemoveIocFromCollectionMessage(
+  raw: unknown
+): raw is RemoveIocFromCollectionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.REMOVE_IOC_FROM_COLLECTION) {
+    return false;
+  }
+  if (typeof record.collectionId !== "string" || record.collectionId.trim().length === 0) {
+    return false;
+  }
+  if (typeof record.value !== "string" || record.value.trim().length === 0) {
+    return false;
+  }
+  return (
+    typeof record.iocType === "string" &&
+    Object.values(IOC_TYPE).includes(record.iocType as IocType)
+  );
+}
+
 export function getTabScanSummaryMessage(
   tabId?: number
 ): GetTabScanSummaryMessage {
@@ -720,6 +825,15 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   }
   if (type === MESSAGE.ADD_IOCS_TO_COLLECTION) {
     return isAddIocsToCollectionMessage(raw);
+  }
+  if (type === MESSAGE.RENAME_IOC_COLLECTION) {
+    return isRenameIocCollectionMessage(raw);
+  }
+  if (type === MESSAGE.DELETE_IOC_COLLECTION) {
+    return isDeleteIocCollectionMessage(raw);
+  }
+  if (type === MESSAGE.REMOVE_IOC_FROM_COLLECTION) {
+    return isRemoveIocFromCollectionMessage(raw);
   }
   return (
     type === MESSAGE.PING ||

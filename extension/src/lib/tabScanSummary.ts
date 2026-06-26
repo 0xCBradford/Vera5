@@ -18,6 +18,10 @@ import {
 } from "./hoverCardEnrichment";
 import { IOC_TYPE, type IocMatchProvenance, type IocType } from "./iocRegex";
 import {
+  normalizeIocCollectionMemberValue,
+  type IocCollectionMemberInput,
+} from "./iocCollection";
+import {
   API_KEY_SLOTS,
   getVera5Settings,
   listDisabledEnrichmentSources,
@@ -204,10 +208,10 @@ export async function loadTrayEntryEnrichmentStatuses(
   return statuses;
 }
 
-export async function buildTraySubsetEnrichmentRecords(
-  entries: ReadonlyArray<TabScanSummaryEntry>
+export async function buildIocValueEnrichmentRecords(
+  items: ReadonlyArray<{ iocType: IocType; value: string }>
 ): Promise<NormalizedEnrichmentRecord[]> {
-  if (entries.length === 0) {
+  if (items.length === 0) {
     return [];
   }
 
@@ -218,13 +222,13 @@ export async function buildTraySubsetEnrichmentRecords(
   const exportedAt = new Date().toISOString();
   const records: NormalizedEnrichmentRecord[] = [];
 
-  for (const entry of entries) {
+  for (const item of items) {
     const cachedInputs = [];
     for (const sourceId of API_KEY_SLOTS) {
       if (disabledSources.includes(sourceId)) {
         continue;
       }
-      const cached = await readCachedEnrichmentSourceResult(entry.value, sourceId);
+      const cached = await readCachedEnrichmentSourceResult(item.value, sourceId);
       if (!cached) {
         continue;
       }
@@ -245,8 +249,8 @@ export async function buildTraySubsetEnrichmentRecords(
 
     records.push(
       buildNormalizedEnrichmentRecord({
-        value: entry.value,
-        iocType: entry.type,
+        value: item.value,
+        iocType: item.iocType,
         sourceResults: buildHoverCardSourceEntries(cachedInputs),
         disabledSources,
         exportedAt,
@@ -255,6 +259,14 @@ export async function buildTraySubsetEnrichmentRecords(
   }
 
   return records;
+}
+
+export async function buildTraySubsetEnrichmentRecords(
+  entries: ReadonlyArray<TabScanSummaryEntry>
+): Promise<NormalizedEnrichmentRecord[]> {
+  return buildIocValueEnrichmentRecords(
+    entries.map((entry) => ({ iocType: entry.type, value: entry.value }))
+  );
 }
 
 export function countIocsByType(
@@ -433,4 +445,20 @@ export function resolveTrayTemplateCopyFeedback(input: {
   }
   const noun = input.count === 1 ? "indicator" : "indicators";
   return `Copied ${input.count} filtered ${noun} as ${getExportTemplateLabel(input.templateId)}.`;
+}
+
+export function findTabScanSummaryEntryForCollectionMember(
+  summary: TabScanSummary,
+  member: IocCollectionMemberInput
+): TabScanSummaryEntry | null {
+  const normalizedValue = normalizeIocCollectionMemberValue(member.value);
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return (
+    summary.entries.find(
+      (entry) => entry.type === member.iocType && entry.value === normalizedValue
+    ) ?? null
+  );
 }

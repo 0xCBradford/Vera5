@@ -3,7 +3,10 @@ import {
   addIocToCollectionMessage,
   addIocsToCollectionMessage,
   createIocCollectionMessage,
+  deleteIocCollectionMessage,
   listIocCollectionsMessage,
+  removeIocFromCollectionMessage,
+  renameIocCollectionMessage,
   type MessageResponse,
 } from "./messages";
 import {
@@ -147,6 +150,61 @@ export async function requestAddIocsToCollection(input: {
     })
   )) as MessageResponse | null;
   return parseAddIocsToCollectionResponse(response);
+}
+
+function parseDeleteIocCollectionResponse(response: MessageResponse | null): boolean {
+  if (!response?.ok || typeof response.payload !== "object" || response.payload === null) {
+    return false;
+  }
+  return (response.payload as { deleted?: unknown }).deleted === true;
+}
+
+function parseRemoveIocFromCollectionResponse(
+  response: MessageResponse | null
+): { collection: IocCollection; removed: boolean } | null {
+  if (!response?.ok || typeof response.payload !== "object" || response.payload === null) {
+    return null;
+  }
+
+  const payload = response.payload as { collection?: unknown; removed?: unknown };
+  if (!isIocCollection(payload.collection)) {
+    return null;
+  }
+  return {
+    collection: payload.collection,
+    removed: payload.removed === true,
+  };
+}
+
+export async function requestRenameIocCollection(input: {
+  collectionId: string;
+  name: string;
+}): Promise<IocCollection | null> {
+  const response = (await safeRuntimeSendMessage(
+    renameIocCollectionMessage(input)
+  )) as MessageResponse | null;
+  return parseIocCollectionMutationResponse(response);
+}
+
+export async function requestDeleteIocCollection(collectionId: string): Promise<boolean> {
+  const response = (await safeRuntimeSendMessage(
+    deleteIocCollectionMessage(collectionId)
+  )) as MessageResponse | null;
+  return parseDeleteIocCollectionResponse(response);
+}
+
+export async function requestRemoveIocFromCollection(input: {
+  collectionId: string;
+  member: IocCollectionMemberInput;
+}): Promise<{ collection: IocCollection; removed: boolean } | null> {
+  const response = (await safeRuntimeSendMessage(
+    removeIocFromCollectionMessage({
+      collectionId: input.collectionId,
+      iocType: input.member.iocType,
+      value: input.member.value,
+    })
+  )) as MessageResponse | null;
+  return parseRemoveIocFromCollectionResponse(response);
 }
 
 export function isIocType(value: unknown): value is IocType {

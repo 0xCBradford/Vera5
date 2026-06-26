@@ -2,9 +2,15 @@ import {
   isAddIocToCollectionMessage,
   isAddIocsToCollectionMessage,
   isCreateIocCollectionMessage,
+  isDeleteIocCollectionMessage,
+  isRemoveIocFromCollectionMessage,
+  isRenameIocCollectionMessage,
   type AddIocToCollectionMessage,
   type AddIocsToCollectionMessage,
   type CreateIocCollectionMessage,
+  type DeleteIocCollectionMessage,
+  type RemoveIocFromCollectionMessage,
+  type RenameIocCollectionMessage,
   type MessageResponse,
 } from "../lib/messages";
 import {
@@ -15,8 +21,11 @@ import {
 import {
   addStoredIocCollectionMembers,
   createStoredIocCollection,
+  deleteStoredIocCollection,
   getStoredIocCollection,
   listStoredIocCollections,
+  removeStoredIocCollectionMember,
+  renameStoredIocCollection,
 } from "../lib/iocCollectionStorage";
 
 export async function handleListIocCollectionsMessage(): Promise<MessageResponse> {
@@ -118,6 +127,69 @@ export async function handleAddIocsToCollectionMessage(
       addedCount: collection.members.length - beforeCount,
       duplicateCount,
       totalCount: message.members.length,
+    },
+  };
+}
+
+export async function handleRenameIocCollectionMessage(
+  message: RenameIocCollectionMessage
+): Promise<MessageResponse> {
+  if (!isRenameIocCollectionMessage(message)) {
+    return { ok: false, error: "invalid rename collection request" };
+  }
+
+  const collection = await renameStoredIocCollection({
+    collectionId: message.collectionId,
+    name: message.name,
+  });
+  if (!collection || !isIocCollection(collection)) {
+    return { ok: false, error: "could not rename collection" };
+  }
+
+  return { ok: true, payload: { collection } };
+}
+
+export async function handleDeleteIocCollectionMessage(
+  message: DeleteIocCollectionMessage
+): Promise<MessageResponse> {
+  if (!isDeleteIocCollectionMessage(message)) {
+    return { ok: false, error: "invalid delete collection request" };
+  }
+
+  const deleted = await deleteStoredIocCollection(message.collectionId);
+  if (!deleted) {
+    return { ok: false, error: "collection not found" };
+  }
+
+  return { ok: true, payload: { deleted: true } };
+}
+
+export async function handleRemoveIocFromCollectionMessage(
+  message: RemoveIocFromCollectionMessage
+): Promise<MessageResponse> {
+  if (!isRemoveIocFromCollectionMessage(message)) {
+    return { ok: false, error: "invalid remove from collection request" };
+  }
+
+  const existing = await getStoredIocCollection(message.collectionId);
+  if (!existing) {
+    return { ok: false, error: "collection not found" };
+  }
+
+  const beforeCount = existing.members.length;
+  const collection = await removeStoredIocCollectionMember({
+    collectionId: message.collectionId,
+    member: { iocType: message.iocType, value: message.value },
+  });
+  if (!collection || !isIocCollection(collection)) {
+    return { ok: false, error: "could not remove indicator from collection" };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      collection,
+      removed: collection.members.length < beforeCount,
     },
   };
 }

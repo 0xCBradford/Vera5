@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildTabScanSummary } from "./tabScanSummary";
 import { buildTabScanSnapshotPayload } from "./tabScanSnapshot";
 import {
+  resolveCollectionMemberOpenFeedback,
   resolveTrayNavigationFeedback,
   resolveWorkspaceTrayView,
 } from "./workspaceTrayState";
@@ -85,5 +86,41 @@ describe("resolveWorkspaceTrayView scan results", () => {
         scanSummary: emptySummary,
       })
     ).toBe("empty");
+  });
+});
+
+describe("resolveCollectionMemberOpenFeedback", () => {
+  it("prompts to scan when the page has no summary yet", () => {
+    expect(
+      resolveCollectionMemberOpenFeedback({
+        tabId: 7,
+        summary: null,
+        member: { value: "8.8.8.8" },
+        entryFound: false,
+      })
+    ).toBe("Scan this page to locate 8.8.8.8 on the page.");
+  });
+
+  it("reports when the member is not on the current page", () => {
+    expect(
+      resolveCollectionMemberOpenFeedback({
+        tabId: 7,
+        summary: sampleSummary,
+        member: { value: "185.220.101.4" },
+        entryFound: false,
+      })
+    ).toBe("185.220.101.4 is not on the current page. Scan again to refresh the list.");
+  });
+
+  it("returns null when navigation succeeds", () => {
+    expect(
+      resolveCollectionMemberOpenFeedback({
+        tabId: 7,
+        summary: sampleSummary,
+        member: { value: "8.8.8.8" },
+        entryFound: true,
+        response: { ok: true },
+      })
+    ).toBeNull();
   });
 });

@@ -47,3 +47,38 @@ export function resolveTrayNavigationFeedback(input: {
 
   return null;
 }
+
+export function resolveCollectionMemberOpenFeedback(input: {
+  tabId?: number;
+  summary: TabScanSummary | null;
+  member: { value: string };
+  entryFound: boolean;
+  response?: unknown;
+  sendFailed?: boolean;
+}): string | null {
+  if (input.sendFailed || input.tabId === undefined) {
+    return resolveTrayNavigationFeedback({
+      tabId: input.tabId,
+      sendFailed: input.sendFailed,
+      indicatorValue: input.member.value,
+    });
+  }
+
+  if (input.response !== undefined) {
+    return resolveTrayNavigationFeedback({
+      tabId: input.tabId,
+      response: input.response,
+      indicatorValue: input.member.value,
+    });
+  }
+
+  if (!input.summary) {
+    return `Scan this page to locate ${input.member.value} on the page.`;
+  }
+
+  if (!input.entryFound) {
+    return `${input.member.value} is not on the current page. Scan again to refresh the list.`;
+  }
+
+  return null;
+}

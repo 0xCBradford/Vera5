@@ -10,9 +10,9 @@ Everything below assumes the **production on-page overlay** (content script on t
 
 | Surface | When you use it |
 |---------|-----------------|
-| **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. Assign **Label**, **Pin**, and read **Session timeline** on the card when an investigation session is active. |
-| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page** / **Scan selection**, manage the **Investigation session** (title, rollups, export, recent sessions), review **Detected indicators**, and read **Source operations** (cache, cooldown, per-source status). |
-| **Workspace sidebar** | Optional on-page tray from **Open sidebar** in the popup: filter indicators, copy subsets, and export templates while staying on the alert page. Pinned session indicators sort to the top. |
+| **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. Assign **Label**, **Pin**, and read **Session timeline** on the card when an investigation session is active. Use **Save to collection…** to add an indicator to a persistent collection. |
+| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page** / **Scan selection**, manage the **Investigation session** (title, rollups, export, recent sessions, **Promote session to collection…**), review **Detected indicators** (**Save to collection…**, **Add filtered to collection…**), manage **IOC collections**, and read **Source operations** (cache, cooldown, per-source status). |
+| **Workspace sidebar** | Optional on-page tray from **Open sidebar** in the popup: filter indicators, **Save to collection…**, **Add filtered to collection…**, copy subsets, and export templates while staying on the alert page. Pinned session indicators sort to the top. |
 | **Settings (options) page** | Configure API keys, enable sources, set manual-only and auto-scan, clear the enrichment cache, export or import settings. Source health details live in the popup **Source operations** section—not a duplicate panel here. |
 | **React hover card** | Unit tests and `npm run dev` only. It is **not** shown on live page tabs. It exercises the same local scoring rules as the overlay; unit tests may also show per-source contribution chips the overlay does not render. |
 
@@ -55,7 +55,7 @@ flowchart TD
 
 1. **Scan the page** from the toolbar popup (**Scan page**) or the keyboard shortcut (`Ctrl+Shift+Y` / `Cmd+Shift+Y`).
 2. **Review highlights** on indicators Vera5 detected in visible page text. With a highlight focused (or the page focused after scan), use **ArrowDown** / **ArrowUp** to move to the next or previous indicator in document order for rapid triage.
-3. **Open the hover card** by clicking a highlighted value, or use **Tab** to focus a highlight and press **Enter** or **Space**. Keyboard opens move focus into the card (starting at **Copy Indicator**) so you can reach buttons, pivot links, and analyst notes without the mouse.
+3. **Open the hover card** by clicking a highlighted value, or use **Tab** to focus a highlight and press **Enter** or **Space**. Keyboard opens move focus into the card (starting at the first focusable control—**Copy Indicator**, **Copy defanged** when shown, or session controls such as **Pin** when a session is active) so you can reach buttons, pivot links, and analyst notes without the mouse.
 4. **Enrich when needed:**
    - With **manual-only** on, click the **›** icon on the highlight to request live threat intelligence.
    - With manual-only off, opening the card schedules enrichment automatically (see [Rapid clicks and quota protection](#rapid-clicks-and-quota-protection)).
@@ -164,6 +164,81 @@ The popup **Source operations** section summarizes enrichment health: global rat
 | Team or cloud case sync | Export Markdown/JSON and share through your existing case tools. |
 | Cross-tab “seen elsewhere” alerts | Re-scan or reopen the session on the relevant tab. |
 | Full hosted case management | Local session + export only. |
+
+## Session vs IOC collection
+
+Vera5 offers two local grouping models. They complement each other; neither replaces your external case platform.
+
+| | **Investigation session** | **IOC collection** |
+|---|---------------------------|---------------------|
+| **Purpose** | Active case workspace for the tab you are reviewing now | Persistent named corpus you build across scans and sessions |
+| **Typical names** | **Phishing Investigation**, **MDR-48291** | **Phishing Campaign**, **APT29 Research**, **Qakbot Investigation** |
+| **What it stores** | Session title, rollups from the **latest scan on the synced page**, enrich/export activity, per-IOC **Label** / **Pin** / **Session timeline** | A deduped list of indicator type + value pairs you explicitly saved |
+| **How indicators enter** | Automatically from scans while the session is active; session memory tracks enrich/export events | **Save to collection…** on tray, overlay, or sidebar; **Add filtered to collection…**; **Promote session to collection…** |
+| **Lifetime** | Tied to session management (**New session**, **Reopen**, **Archive**, **Delete**) | Survives **New session**, browser restarts, and tab changes until you delete the collection |
+| **Export** | **Export session** Markdown / JSON / CSV from the active tab’s current scan | **Export Markdown** / **JSON** / **CSV** per collection from **IOC collections** |
+| **Best for** | Live triage rollups, labels, pins, and session-scoped handoff on the page under review | Hunt lists, campaign tracking, ticket CSVs, and corpora that outlive one session |
+
+**Rule of thumb:** use a **session** for “what am I working on this page right now?” Use a **collection** for “what indicators do I want to keep and reuse across pages or sessions?”
+
+You can run both at once: enrich and label in an active session, then **Save to collection…** or **Promote session to collection…** when you need a durable list for export or cross-session review.
+
+## IOC collections (persistent indicator groupings)
+
+An **IOC collection** is a locally stored, named set of indicators—for example **Phishing Campaign** or **APT29 Research**. Collections live in **extension local storage** on your machine. There is no Vera5 cloud sync, team-shared collection, or server push in the current release.
+
+Collections track:
+
+| Field | What it gives you |
+|-------|-------------------|
+| **Name** | Human-readable collection label (create, rename in the popup manager). |
+| **Members** | Typed indicators (IPv4, domain, URL, hash, CVE, and so on) you saved explicitly. Duplicate type + value pairs dedupe. |
+| **Last updated** | Timestamp when members were last added or removed. |
+| **Collection export** | **Markdown**, **JSON**, or **CSV** artifacts with collection summary, member rows, and cached enrichment snippets when available. |
+
+### Adding indicators to a collection
+
+| Action | Where | Effect |
+|--------|-------|--------|
+| **Save to collection…** | Popup tray row, workspace sidebar row, or on-page overlay | Opens a picker: choose an existing collection or **Create new collection** + **Save to new collection**. |
+| **Add filtered to collection… (N)** | Popup **Detected indicators** or workspace sidebar bulk row | Adds all indicators matching the current tray filter to a collection (dedupes silently). |
+| **Promote session to collection…** | Popup **Investigation session** | Copies all session IOC members into a **new** collection you name (**Create collection from session**). Does not merge into an existing collection. |
+
+Saving to a collection does **not** replace session rollups or session export. Session labels, pins, and timelines stay on the session model.
+
+### Managing collections in the popup
+
+Under **IOC collections**:
+
+| Action | Effect |
+|--------|--------|
+| **View members** / **Hide members** | Expand the member list for a collection. |
+| Member link | Jumps to the page highlight when that IOC is on the **current tab**; otherwise shows feedback to rescan. |
+| **Rename** | Changes the collection name. |
+| **Remove** | Removes one member from the collection. |
+| **Delete** | Permanently removes the collection from local storage. |
+| **Export Markdown** / **Export JSON** / **Export CSV** | Downloads a collection artifact (empty collections skip CSV download). |
+
+Collections persist when you click **New session**, reopen a different session, or close and reopen the browser.
+
+### Collection export formats
+
+| Format | Best for |
+|--------|----------|
+| **Markdown** | Case notes or wiki paste—collection summary, IOC table, enrichment snippets when cached, source attribution. |
+| **JSON** | Automation or archival (`schemaVersion`, collection metadata, `members` array). |
+| **CSV** | Spreadsheets and ticket handoff—one row per member using the same CSV row contract as session and tray export. |
+
+Collection exports **never include API keys** or `rawVendorJson` secrets. They are separate builders from **Export session** and per-indicator overlay export.
+
+### What IOC collections do not do
+
+| Not in scope | What to use instead |
+|--------------|---------------------|
+| Team or cloud collection sync | Export JSON/CSV and share through your existing tools. |
+| Automatic enrichment of every collection member | Enrich indicators on the page, then export; collection export includes cached snippets only. |
+| Replace investigation sessions | Sessions for live rollups, labels, pins, and session export; collections for durable cross-session lists. |
+| Hosted case or MISP/OpenCTI push | Local collections + export only. |
 
 ## Local enrichment cache
 
@@ -316,6 +391,7 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | Conflicting risk signals | Read **How this score was computed**; follow pivots for diverging sources; do not treat the headline band as consensus when **Sources disagree** is shown. |
 | Single live source only | Expect **Unknown risk** and an empty reasoning note until a second source returns parseable OK data. |
 | Phishing case handoff | Name session, enrich key IOCs, label/pin priorities, **Export session** Markdown or JSON; verify denylist if webmail blocked enrich. |
+| Campaign or hunt corpus across sessions | **Save to collection…** or **Add filtered to collection…** as you triage; **Export CSV** from **IOC collections** for ticket paste; collections survive **New session**. |
 | MDR alert revisit after restart | Popup **Recent sessions** → **Reopen**; confirm rollups match the alert page you scan again. |
 | Sensitive / classified work | Manual-only on; enable only approved sources; do not export settings with keys unless policy allows. |
 
@@ -338,3 +414,4 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 - [local-mode.md](local-mode.md) — what stays on your machine vs what reaches vendors
 - [security-model.md](security-model.md) — permissions and host access
 - [architecture.md](architecture.md) — supported indicator types and connector scope
+- [export-artifacts.md](export-artifacts.md) — per-indicator markdown and JSON export contract

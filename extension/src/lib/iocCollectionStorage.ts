@@ -8,6 +8,8 @@ import {
   addIocCollectionMembers,
   createIocCollection,
   normalizeIocCollection,
+  removeIocCollectionMember,
+  updateIocCollection,
   type IocCollection,
   type IocCollectionMemberInput,
 } from "./iocCollection";
@@ -242,6 +244,58 @@ export async function addStoredIocCollectionMembers(input: {
     input.members,
     input.now ?? Date.now()
   );
+  const saved = await saveStoredIocCollection(updated);
+  return saved ? updated : null;
+}
+
+export async function renameStoredIocCollection(input: {
+  collectionId: string;
+  name: string;
+  now?: number;
+}): Promise<IocCollection | null> {
+  const id = input.collectionId.trim();
+  if (id.length === 0) {
+    return null;
+  }
+
+  const collection = await getStoredIocCollection(id);
+  if (!collection) {
+    return null;
+  }
+
+  const updated = updateIocCollection(collection, { name: input.name }, input.now ?? Date.now());
+  if (!updated) {
+    return null;
+  }
+
+  const saved = await saveStoredIocCollection(updated);
+  return saved ? updated : null;
+}
+
+export async function removeStoredIocCollectionMember(input: {
+  collectionId: string;
+  member: IocCollectionMemberInput;
+  now?: number;
+}): Promise<IocCollection | null> {
+  const id = input.collectionId.trim();
+  if (id.length === 0) {
+    return null;
+  }
+
+  const collection = await getStoredIocCollection(id);
+  if (!collection) {
+    return null;
+  }
+
+  const updated = removeIocCollectionMember(
+    collection,
+    input.member,
+    input.now ?? Date.now()
+  );
+  if (!updated) {
+    return null;
+  }
+
   const saved = await saveStoredIocCollection(updated);
   return saved ? updated : null;
 }

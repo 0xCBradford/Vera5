@@ -12,6 +12,8 @@ import {
   listStoredIocCollections,
   normalizeIocCollectionsStore,
   persistIocCollectionsStore,
+  removeStoredIocCollectionMember,
+  renameStoredIocCollection,
   saveStoredIocCollection,
   STORAGE_KEY_IOC_COLLECTIONS,
 } from "./iocCollectionStorage";
@@ -238,5 +240,45 @@ describe("iocCollectionStorage", () => {
         members: [{ iocType: IOC_TYPE.IPV4, value: "8.8.8.8" }],
       })
     ).toBeNull();
+  });
+
+  it("renames and removes members from stored collections", async () => {
+    const collection = buildCollection({
+      id: "vera5-col-manage",
+      name: "Original",
+      createdAt: 100,
+      updatedAt: 100,
+      members: [
+        { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+        { iocType: IOC_TYPE.DOMAIN, value: "evil.example" },
+      ],
+    });
+    await saveStoredIocCollection(collection!);
+
+    const renamed = await renameStoredIocCollection({
+      collectionId: "vera5-col-manage",
+      name: "  Renamed Case  ",
+      now: 200,
+    });
+    expect(renamed).toEqual({
+      id: "vera5-col-manage",
+      name: "Renamed Case",
+      createdAt: 100,
+      updatedAt: 200,
+      members: collection!.members,
+    });
+
+    const updated = await removeStoredIocCollectionMember({
+      collectionId: "vera5-col-manage",
+      member: { iocType: IOC_TYPE.IPV4, value: "8.8.8.8" },
+      now: 300,
+    });
+    expect(updated).toEqual({
+      id: "vera5-col-manage",
+      name: "Renamed Case",
+      createdAt: 100,
+      updatedAt: 300,
+      members: [{ iocType: IOC_TYPE.DOMAIN, value: "evil.example" }],
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import * as cache from "./cache";
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
-import { IOC_RULE_ID } from "./iocRegex";
+import { IOC_RULE_ID, IOC_TYPE } from "./iocRegex";
 import {
   buildTabScanCountSummaryText,
   buildTabScanIocListClipboardText,
@@ -10,6 +10,7 @@ import {
   buildTraySubsetEnrichmentRecords,
   countIocsByType,
   filterTabScanSummaryEntries,
+  findTabScanSummaryEntryForCollectionMember,
   formatTrayRowEnrichmentHint,
   isTabScanSummary,
   listIocTypesPresentInSummary,
@@ -284,5 +285,25 @@ describe("tabScanSummary", () => {
         },
       ],
     });
+  });
+
+  it("finds a collection member in the current tab scan summary", () => {
+    const summary = buildTabScanSummary(snapshot);
+    expect(
+      findTabScanSummaryEntryForCollectionMember(summary, {
+        iocType: IOC_TYPE.IPV4,
+        value: "  8.8.8.8 ",
+      })
+    ).toMatchObject({
+      type: IOC_TYPE.IPV4,
+      value: "8.8.8.8",
+      anchorId: "vera5-hl-1",
+    });
+    expect(
+      findTabScanSummaryEntryForCollectionMember(summary, {
+        iocType: IOC_TYPE.DOMAIN,
+        value: "8.8.8.8",
+      })
+    ).toBeNull();
   });
 });
