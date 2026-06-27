@@ -5,6 +5,11 @@ import {
   type Worker,
 } from "@playwright/test";
 import fs from "node:fs";
+import {
+  expectNoLiveEnrichmentNetworkRequests,
+  setupCiEnrichmentMocks,
+  type LiveEnrichmentNetworkGuard,
+} from "./enrichmentMockRoutes";
 import { extensionDistPath } from "../extensionPaths";
 
 function resolveExtensionId(serviceWorker: Worker): string {
@@ -34,6 +39,8 @@ async function waitForExtensionServiceWorker(
   return worker;
 }
 
+let activeEnrichmentNetworkGuard: LiveEnrichmentNetworkGuard | null = null;
+
 export const test = base.extend<{
   context: BrowserContext;
   extensionId: string;
@@ -53,9 +60,12 @@ export const test = base.extend<{
       ],
     });
 
+    activeEnrichmentNetworkGuard = await setupCiEnrichmentMocks(context);
+
     try {
       await use(context);
     } finally {
+      activeEnrichmentNetworkGuard = null;
       await context.close();
     }
   },
@@ -63,6 +73,12 @@ export const test = base.extend<{
     const serviceWorker = await waitForExtensionServiceWorker(context);
     await use(resolveExtensionId(serviceWorker));
   },
+});
+
+test.afterEach(() => {
+  if (activeEnrichmentNetworkGuard) {
+    expectNoLiveEnrichmentNetworkRequests(activeEnrichmentNetworkGuard);
+  }
 });
 
 export { expect } from "@playwright/test";

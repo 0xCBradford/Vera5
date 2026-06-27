@@ -53,6 +53,8 @@ export const STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE =
 export const STORAGE_KEY_SHOW_PRE_QUERY_NOTICES = "showPreQueryNotices";
 export const STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED =
   "preQueryNoticePreferenceConfigured";
+export const STORAGE_KEY_INSTALL_QUICK_START_COMPLETED =
+  "installQuickStartCompleted";
 export const STORAGE_KEY_DOMAIN_POLICY_MODE = "domainPolicyMode";
 export const STORAGE_KEY_DOMAIN_ALLOWLIST = "domainAllowlist";
 export const STORAGE_KEY_DOMAIN_DENYLIST = "domainDenylist";
@@ -88,6 +90,7 @@ export const STORAGE_KEYS = {
   SHOW_PRE_QUERY_NOTICES: STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
   PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED:
     STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
+  INSTALL_QUICK_START_COMPLETED: STORAGE_KEY_INSTALL_QUICK_START_COMPLETED,
   DOMAIN_POLICY_MODE: STORAGE_KEY_DOMAIN_POLICY_MODE,
   DOMAIN_ALLOWLIST: STORAGE_KEY_DOMAIN_ALLOWLIST,
   DOMAIN_DENYLIST: STORAGE_KEY_DOMAIN_DENYLIST,
@@ -132,6 +135,7 @@ export type Vera5Settings = {
   showDisabledSourcesInWorkspace: boolean;
   showPreQueryNotices: boolean;
   preQueryNoticePreferenceConfigured: boolean;
+  installQuickStartCompleted: boolean;
   domainPolicyMode: DomainPolicyMode;
   domainAllowlist: string[];
   domainDenylist: string[];
@@ -160,6 +164,7 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]?: unknown;
   [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]?: unknown;
   [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]?: unknown;
+  [STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]?: unknown;
   [STORAGE_KEY_DOMAIN_POLICY_MODE]?: unknown;
   [STORAGE_KEY_DOMAIN_ALLOWLIST]?: unknown;
   [STORAGE_KEY_DOMAIN_DENYLIST]?: unknown;
@@ -187,6 +192,7 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE,
   STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
   STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
+  STORAGE_KEY_INSTALL_QUICK_START_COMPLETED,
   STORAGE_KEY_DOMAIN_POLICY_MODE,
   STORAGE_KEY_DOMAIN_ALLOWLIST,
   STORAGE_KEY_DOMAIN_DENYLIST,
@@ -313,6 +319,7 @@ export function createDefaultVera5Settings(): Vera5Settings {
     showDisabledSourcesInWorkspace: false,
     showPreQueryNotices: true,
     preQueryNoticePreferenceConfigured: false,
+    installQuickStartCompleted: false,
     domainPolicyMode: createDefaultDomainPolicy().mode,
     domainAllowlist: [],
     domainDenylist: [...createDefaultDomainPolicy().denylist],
@@ -475,6 +482,10 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
       raw[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED],
       defaults.preQueryNoticePreferenceConfigured
     ),
+    installQuickStartCompleted: readStoredBoolean(
+      raw[STORAGE_KEY_INSTALL_QUICK_START_COMPLETED],
+      defaults.installQuickStartCompleted
+    ),
     domainPolicyMode: normalizeDomainPolicyMode(
       raw[STORAGE_KEY_DOMAIN_POLICY_MODE]
     ),
@@ -566,6 +577,8 @@ export function vera5SettingsToStoragePayload(
     [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: settings.showPreQueryNotices,
     [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]:
       settings.preQueryNoticePreferenceConfigured,
+    [STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]:
+      settings.installQuickStartCompleted,
     [STORAGE_KEY_DOMAIN_POLICY_MODE]: settings.domainPolicyMode,
     [STORAGE_KEY_DOMAIN_ALLOWLIST]: settings.domainAllowlist,
     [STORAGE_KEY_DOMAIN_DENYLIST]: settings.domainDenylist,
@@ -787,6 +800,24 @@ export async function getShowPreQueryNotices(): Promise<boolean> {
 export async function getPreQueryNoticePreferenceConfigured(): Promise<boolean> {
   const settings = await getVera5Settings();
   return settings.preQueryNoticePreferenceConfigured;
+}
+
+export async function getInstallQuickStartCompleted(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  if (settings.installQuickStartCompleted) {
+    return true;
+  }
+  return settings.preQueryNoticePreferenceConfigured;
+}
+
+export async function completeInstallQuickStart(
+  showPreQueryNotices: boolean
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]: true,
+    [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: showPreQueryNotices,
+    [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]: true,
+  });
 }
 
 export async function setPreQueryNoticePreference(

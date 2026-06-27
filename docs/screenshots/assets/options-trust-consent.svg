@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="Screenshot placeholder: options trust and consent">
+  <rect width="1280" height="720" fill="#0f172a"/>
+  <rect x="40" y="40" width="1200" height="640" rx="8" fill="#1e293b" stroke="#334155" stroke-width="2"/>
+  <text x="640" y="330" fill="#94a3b8" font-family="system-ui,sans-serif" font-size="22" text-anchor="middle">Vera5 screenshot placeholder</text>
+  <text x="640" y="370" fill="#64748b" font-family="system-ui,sans-serif" font-size="16" text-anchor="middle">options-trust-consent.svg</text>
+  <text x="640" y="410" fill="#475569" font-family="system-ui,sans-serif" font-size="14" text-anchor="middle">Replace with PNG/WebP capture per docs/screenshots.md #11</text>
+</svg>

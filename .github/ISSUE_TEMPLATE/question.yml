@@ -1,0 +1,50 @@
+name: Question / setup help
+description: Ask about install, configuration, keys, or operator usage
+title: "[Question]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For install, BYO keys, and trust defaults, start with [README.md](https://github.com/0xCBradford/Vera5/blob/main/README.md).
+
+        **Do not paste API keys** in public issues. Describe whether keys are configured in **Vera5 Settings** (not `.env`).
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: Topic
+      options:
+        - Install / load unpacked
+        - API keys or enrichment sources
+        - Trust, domain policy, or pre-query notices
+        - Scan, tray, or overlay usage
+        - Export templates or sessions / collections
+        - CI, tests, or contributing
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried so far?
+      description: Commands run, settings toggles, fixture pages under `examples/`, browser version
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have not included API keys or sensitive IOCs in this issue
+          required: true

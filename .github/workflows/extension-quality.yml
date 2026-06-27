@@ -2,6 +2,13 @@ name: Extension quality
 
 on:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      skip_browser_e2e:
+        description: Skip browser E2E smokes (quota-sensitive manual runs)
+        required: false
+        type: boolean
+        default: false
 
 defaults:
   run:
@@ -37,7 +44,8 @@ jobs:
       - name: Test
         run: npm run test
 
-  browser-e2e-harness:
+  browser-e2e-smokes:
+    if: github.event_name == 'pull_request' || github.event.inputs.skip_browser_e2e != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -51,17 +59,13 @@ jobs:
           cache-dependency-path: extension/package-lock.json
 
       - name: Install dependencies
-        working-directory: extension
         run: npm ci
 
       - name: Build extension
-        working-directory: extension
         run: npm run build
 
       - name: Install Playwright Chromium
-        working-directory: extension
         run: npx playwright install chromium --with-deps
 
-      - name: Browser E2E harness
-        working-directory: extension
-        run: npm run test:e2e
+      - name: Critical browser E2E smokes (PR gate)
+        run: npm run test:e2e:critical

@@ -1,6 +1,73 @@
 # Vera5
 
-Browser extension for on-demand indicator detection on pages you browse. After a scan, matching indicators can be highlighted; clicking a highlight opens an overlay with copy, export, **Recommended next pivots**, and—when configured—live threat intelligence from sources you enable. **Investigation sessions** give you a named local case workspace with IOC rollups, enrich/export activity, per-indicator labels and timelines, and session export (Markdown, JSON, CSV). **IOC collections** are separate persistent named groupings where you save indicators from the tray, overlay, or workspace sidebar, promote session members into a new collection, and export for ticket handoff. Pre-query disclosure, hostname domain policy, and optional internal-asset lists gate vendor queries before they leave the browser. Settings, API keys, enrichment cache, analyst notes, investigation sessions, IOC collections, and preferences stay in local browser storage. Vera5 does not operate a shared enrichment backend; you supply API keys and they remain on your machine.
+Browser extension for on-demand indicator detection on pages you browse. After a scan, matching indicators can be highlighted; clicking a highlight opens an overlay with copy, export, **Recommended next pivots**, and—when configured—live threat intelligence from sources you enable. **Investigation sessions** give you a named local case workspace with IOC rollups, enrich/export activity, per-indicator labels and timelines, and session export (Markdown, JSON, CSV). **IOC collections** are separate persistent named groupings where you save indicators from the tray, overlay, or workspace sidebar, promote session members into a new collection, and export for ticket handoff. Pre-query disclosure, hostname domain policy, and optional internal-asset lists gate vendor queries before they leave the browser. Settings, keys, cache, sessions, and collections stay in local storage; Vera5 does not operate a shared enrichment backend.
+
+## Quick start (install and keys)
+
+**Install (developers and testers)**
+
+```bash
+cd extension
+npm install
+npm run build
+```
+
+1. Open `chrome://extensions`, enable **Developer mode**, **Load unpacked**, select **`extension/dist`** (must contain `manifest.json`).
+2. Pin the Vera5 toolbar action. After code changes, run `npm run build` and **Reload** the extension.
+
+See [Load unpacked (Chrome)](#load-unpacked-chrome) for fixture pages and a full manual walkthrough.
+
+**Bring your own API keys (BYOK/BYOA)**
+
+Vera5 does not ship vendor credentials or proxy enrichment through maintainer infrastructure.
+
+1. Open **Vera5 Settings** from the toolbar popup.
+2. Enter your own **AbuseIPDB** and/or **OTX** API keys (masked in the UI).
+3. Enable those sources under **Enrichment sources**. Keys stay in `chrome.storage.local` on your machine.
+4. Leave **Manual-only enrichment** on (default) until you are ready for automatic fetches on card open.
+
+The extension does not read API keys from a repository `.env` file. Optional root `.env.example` is for maintainer tooling only.
+
+**Privacy in one minute**
+
+- Scans and detection run locally on pages you open.
+- Live enrichment sends **only the selected indicator value** to vendors **you** enable—not full page content.
+- No maintainer telemetry, crash reporting, or Vera5-operated network endpoints by default.
+- Trust controls (pre-query notices, domain policy, internal asset lists) can block vendor calls before they leave the browser.
+
+Details: [Privacy and keys (BYOK/BYOA)](#privacy-and-keys-byokbyoa), [SECURITY.md](SECURITY.md), [docs/security-model.md](docs/security-model.md).
+
+## Core capabilities
+
+End-to-end analyst triage on `http://` and `https://` tabs—scan, review, enrich with consent, score, export, and track a case locally.
+
+| Area | What you get |
+|------|----------------|
+| **Scoring** | Locally computed composite **Risk score** (advisory band and optional **/100**) from per-source summaries; **How this score was computed** reasoning chain; **Sources disagree** callout when bands diverge. Requires parseable results from enabled sources—see [Composite risk score](#what-works-today). |
+| **IOC tray** | Popup **Detected indicators** list and optional page **workspace sidebar**: type filters, row navigation to highlights, **Why detected?**, save-to-collection actions, and bulk enrich selection. |
+| **Export templates** | Per-indicator and filtered-subset ticket templates (**Jira comment**, **TheHive case note**, **Analyst update**, **Obsidian note**, **Markdown report**, **CSV rows**); session and collection exports (Markdown, JSON, CSV). |
+| **Trust & consent** | Pre-query disclosure before vendor calls; hostname **domain policy** (allow/deny lists and presets); **internal asset lists** that block enrichment for matching IOC values; analyst workflow presets. |
+| **Command palette** | **Ctrl+Shift+K** / **Cmd+Shift+K** — filterable commands for scan, enrich selection, tray copy/export, clear highlights, and **Open options**. |
+| **Investigation sessions** | Named local case workspace in the popup: IOC rollups, **Pin**/**Label**/timeline on the overlay, session export, **Promote session to collection…**, and **Recent sessions** (local storage only). |
+
+Keyboard: **Ctrl+Shift+Y** / **Cmd+Shift+Y** runs **Scan page**. Operator surfaces, configuration order, and examples: [Operator surfaces](#operator-surfaces), [Configuration flow](#configuration-flow), [Try detection and enrichment locally](#try-detection-and-enrichment-locally).
+
+## Limitations
+
+Honest MVP boundaries—what Vera5 does **not** do today:
+
+| Limitation | Detail |
+|------------|--------|
+| **Browser support** | Chromium with Manifest V3 (Chrome, Edge, Brave, similar). No Firefox extension build in this repository. |
+| **Install path** | Unpacked load from `extension/dist/` for development and evaluation; store packaging is separate release work. |
+| **Live enrichment** | HTTPS enrichment runs only for **AbuseIPDB** (IPv4) and **OTX** (IPv4, domain, URL, hashes, CVE). Other registered sources show status rows and pivot links—not live vendor queries. |
+| **Backend** | No Vera5-operated enrichment relay, shared team workspace, or cloud sync for sessions, collections, or keys. |
+| **Page coverage** | Content scripts on `http://` and `https://` only. Detection reads visible text nodes (not attributes, scripts, or hidden fields); stops after 2,500 text nodes per scan. |
+| **Data sent to vendors** | Indicator values you choose to enrich—not full pages, attachments, or clipboard dumps. |
+| **Scoring** | Advisory labels computed locally; not a vendor verdict. Blended **/100** needs at least two parseable OK source results. |
+| **Automation** | Pull request CI runs browser smokes on Playwright Chromium with mocked vendors—it does not replace manual unpacked Chrome checks before you rely on the extension in production triage. |
+
+More detail: [docs/architecture.md](docs/architecture.md), [docs/api-integrations.md](docs/api-integrations.md), [docs/contributors/testing.md](docs/contributors/testing.md) (E2E scope and limits).
 
 ## Operator surfaces
 
@@ -31,7 +98,7 @@ See [Local mode — what runs where](docs/local-mode.md) for browser runtime and
 | **Selection scan** | On dense dashboard exports, highlight a table row or panel and use **Scan selection** in the popup (or workspace sidebar when open) to detect indicators only in that range—without rescanning the full page. |
 | **Selection enrich** | Select indicator text (including inside a scanned highlight) and use **Enrich selection** (popup, workspace sidebar, command palette, or context menu) to open the overlay and request enrichment for that value when it resolves to a single supported indicator. |
 | **Keyboard triage** | Highlights are focusable (`Tab`). **ArrowDown** / **ArrowUp** move to the next or previous highlight in document order (wraps at the ends); from page focus after scan, **ArrowDown** selects the first highlight and **ArrowUp** the last. **Enter** / **Space** on a focused highlight opens the overlay and moves focus to the first focusable control in the panel (**Copy Indicator**, **Copy defanged** when shown, or session controls such as **Pin** when a session is active). **Escape** closes the overlay; after a keyboard-opened card, focus returns to the highlight. Arrow keys do not triage while focus is inside the overlay panel. |
-| **IOC tray** | Scrollable list with per-type filter chips and count summary (for example `11 indicators · 2 IP · 1 CVE`). Click a row to scroll to the page highlight and open the on-page overlay. Optional source-attributed status hints (for example `OTX · Cached`) when a stored enrichment result exists. Each row can expand **Why detected?** (type, reason, source context, ignored overlaps). When defanged text differs from the stored value, rows show the on-page form and a **Refanged:** line. Clear feedback when a row’s highlight is missing after DOM changes—rescan to refresh. In the workspace tray, row checkboxes select indicators for bulk enrich. Bulk copy, export, and ticket-template actions live on the overlay and respect the tab’s stored tray filter (popup or workspace sidebar). |
+| **IOC tray** | Scrollable list with per-type filter chips and count summary (for example `10 indicators · 2 IP · 2 CVE` on `sample-alert.html`). Click a row to scroll to the page highlight and open the on-page overlay. Optional source-attributed status hints (for example `OTX · Cached`) when a stored enrichment result exists. Each row can expand **Why detected?** (type, reason, source context, ignored overlaps). When defanged text differs from the stored value, rows show the on-page form and a **Refanged:** line. Clear feedback when a row’s highlight is missing after DOM changes—rescan to refresh. In the workspace tray, row checkboxes select indicators for bulk enrich. Bulk copy, export, and ticket-template actions live on the overlay and respect the tab’s stored tray filter (popup or workspace sidebar). |
 | **On-page highlights** | After scan, detected indicators get an inline underline, type badge, and **›** enrich control when highlighting is enabled. |
 | **Detection provenance** | Each match stores a rule id and source text hint from the scan. **Why detected?** on the overlay and IOC tray explains the indicator type, detection reason, surrounding context, and any overlapping matches dropped during dedupe. |
 | **Defang and refang** | Detects common defanged forms in visible text (`hxxp`/`hxxps`, bracket dots such as `[.]`, bracket scheme separators). Match values are refanged for enrichment, pivots, and default copy; highlights still cover the original on-page text. When forms differ, use **Copy defanged** or **Copy refanged** on the overlay header. |
@@ -47,7 +114,7 @@ See [Local mode — what runs where](docs/local-mode.md) for browser runtime and
 | **Enrichment errors** | Missing API key shows **Open settings** on the overlay; HTTP 429 shows per-source backoff and retry hints and starts a global cooldown that blocks further automatic enrichment until the window passes; invalid keys, timeouts, and other vendor errors include source attribution. Domain policy and internal asset gates show explicit block messages without sending the indicator to vendors. |
 | **Quota protection** | With manual-only enrichment off, rapid card opens debounce auto-fetch (~400 ms) to the last indicator selected. Before a bulk enrich queue starts, a confirmation summarizes estimated live vendor requests, vendor quota notes, and rate-limit backoff behavior. |
 | **Pivot recipes** | **Recommended next pivots** lists type-specific vendor links from the registry, each with a source badge and static workflow guidance. Order follows the applied analyst workflow preset when one is set. Guidance is authored copy only—it does not repeat live enrichment scores or vendor ratios. Vera5 does not proxy navigation. **Open live URL** on URL indicators is separate: it opens the refanged URL in a new tab only after you confirm. |
-| **Investigation session** | Named local case workspace in the popup: editable title, total and per-type IOC rollups from the **latest scan on the synced page** (for example `8 domains · 4 IPs · 2 hashes · 9 URLs`), enrich/export activity counts, **New session**, and **Recent sessions** (reopen, rename, archive, delete). **Archive** hides a session from the recent list; archived sessions cannot be reopened from the popup. First **Scan page** auto-creates a session when none is active. Sessions persist in local storage only—no cloud sync or shared team workspace. |
+| **Investigation session** | Named local case workspace in the popup: editable title, total and per-type IOC rollups from the **latest scan on the synced page** (for example `1 domain · 2 IPs · 4 hashes · 1 URL · 2 CVEs` on `sample-alert.html`), enrich/export activity counts, **New session**, and **Recent sessions** (reopen, rename, archive, delete). **Archive** hides a session from the recent list; archived sessions cannot be reopened from the popup. First **Scan page** auto-creates a session when none is active. Sessions persist in local storage only—no cloud sync or shared team workspace. |
 | **Session IOC memory** | On the overlay when a session is active: **Label** (Benign, Internal, Suppress false positive, Case important), **Pin** for triage priority (pinned rows rise in the workspace tray), and **Session timeline** (first seen, enrich events, export events per indicator). Labels persist locally per IOC value. |
 | **Session export** | From the popup when a session is active: **Copy** or **Download** **Markdown**, **JSON**, or **CSV** using session metadata plus IOC rows from the **active tab's current scan** (enrichment snippets when cached). JSON includes `schemaVersion` and session fields; CSV reuses the tray CSV row contract. Exports redact API keys and raw vendor secrets. Rescan the page before export if the tray is empty or stale. |
 | **IOC collections** | Named local indicator groupings separate from the active investigation session. **Save to collection…** on a popup tray row, workspace sidebar row, or overlay adds one indicator; **Add filtered to collection… (N)** in the popup or workspace sidebar bulk-adds the filtered tray subset. **Promote session to collection…** copies session IOC members into a new collection you name. The popup **IOC collections** section lists saved collections with member counts and last updated time; **View members**, **Rename**, **Delete**, **Remove** member, and member links jump to page highlights when the IOC is on the current tab. Duplicate type+value pairs dedupe. Collections persist in local storage across sessions and restarts. No team sharing or cloud sync. |
@@ -58,7 +125,7 @@ See [Local mode — what runs where](docs/local-mode.md) for browser runtime and
 | **Auto-scan** | Optional rescan after DOM changes (debounced). Off by default. Respects domain policy on the current tab hostname—denylisted origins do not schedule mutation rescans. |
 | **Background worker** | Message routing, scan and command-palette commands, selection context menu, tab scan-summary storage for the popup tray, investigation session persistence, IOC collection persistence, enrichment cache, global rate-limit cooldown, and parallel live-connector fetches (AbuseIPDB and OTX). |
 | **IOC detection** | Visible text nodes on demand; skips `script`, `style`, `textarea`, and metadata subtrees; does not scan attributes. Types: IPv4, domain, URL, MD5, SHA1, SHA256, CVE—with false-positive guards (including export-metadata and version-range decoys on SOC-style pages) and overlap deduplication. Disable individual types under **Indicator types** in settings. Private-space IPv4 (RFC1918, loopback, link-local) is omitted by default; enable **Include private-space IPv4 addresses** when needed. Stops after 2,500 text nodes per scan. |
-| **Build** | `npm run build` emits `dist/`, then runs `verify:dist` and `verify:security` (extension-page CSP, outbound fetch allowlist, no `eval`, production logging hygiene, redacted test fixtures, empty credential placeholders in root `.env.example`). `npm run check` runs lint and unit tests. `npm run audit:prod` checks production dependencies (same blocking policy as CI). |
+| **Build** | `npm run build` emits `dist/`, then runs `verify:dist` and `verify:security` (extension-page CSP, outbound fetch allowlist, no `eval`, production logging hygiene, redacted test fixtures, empty credential placeholders in root `.env.example`). `npm run check` runs lint and unit tests. `npm run audit:prod` checks production dependencies (same blocking policy as CI). Optional `npm run test:e2e:critical` runs browser smokes on unpacked `dist/` with mocked vendor HTTP (no live API calls in CI). |
 
 ## Configuration flow
 
@@ -185,7 +252,7 @@ Other templates (**TheHive case note**, **Obsidian note** with front matter, **M
 | `docs/local-mode.md` | Extension-only deployment. |
 | `docs/contributors/` | Contributor architecture, connectors, cache, scoring, and testing. |
 | `examples/` | Sample HTML (including SOC dashboard exports) and IOC strings for manual checks. |
-| `.github/workflows/` | Lint, tests, production dependency audit, and Gitleaks secret scan on pull requests and pushes to `main`. |
+| `.github/workflows/` | Lint, unit tests, production dependency audit, Gitleaks on pull requests and pushes to `main`, and browser E2E smokes on pull requests (`browser-e2e-smokes` in `extension-quality.yml`). |
 | [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), [LICENSE](LICENSE) | Security, contribution, license. |
 
 ## Code layout
@@ -244,7 +311,7 @@ python -m http.server 8080
 |---------------------|---------|
 | `storage` | Settings, masked API keys, enrichment cache, analyst notes, investigation sessions, IOC collections, IOC labels, toggles (`chrome.storage.local`); per-tab scan summaries for the popup tray (`chrome.storage.session`). |
 | `activeTab` | Tab-scoped extension actions. |
-| `scripting` | Declared in the manifest (see [docs/security-model.md](docs/security-model.md)). IOC detection and the overlay run through the registered content script on matched pages. |
+| `scripting` | Fallback injection of `content.js` when the registered content script is not loaded on the active tab (for example before **Open sidebar**); routine detection uses the manifest content script on matched pages. |
 | `contextMenus` | **Enrich with Vera5** on a text selection; the content script resolves the selection and runs the same enrich flow as **Enrich selection**. |
 | `host_permissions` (`http://*/*`, `https://*/*`) | Content scripts, visible-text reads for detection, and HTTPS enrichment calls (indicator values only). Pivot recipe links open in the browser like normal navigation. |
 
@@ -270,6 +337,7 @@ Security posture is local-first: your keys stay in browser storage, enrichment u
 |---------|----------------|
 | **`npm run verify:security`** | Runs after every production build. Checks extension-page CSP and packaged assets, blocks live `fetch()` outside declared connector modules and API hosts, rejects `eval` / remote dynamic import, scans production bundles for sensitive logging, enforces redacted test fixture placeholders, and verifies root `.env.example` credential variables are empty. |
 | **`npm run audit:prod`** | Fails on moderate-or-higher vulnerabilities in production dependencies (React runtime shipped in `dist/`). CI uses the same blocking policy; full `npm audit` warns only on devDependencies. |
+| **Browser E2E smokes (CI)** | Pull requests run `npm run test:e2e:critical` on unpacked `dist/` in headless Chromium with mocked enrichment HTTP—no live vendor API calls. |
 | **Gitleaks** | Repository secret scan on pull requests and pushes to `main` (`.github/gitleaks.toml`). Run locally from the repo root: `gitleaks detect --source . --config .github/gitleaks.toml`. |
 | **Outbound allowlist** | Live enrichment HTTPS calls go only to configured vendor connector endpoints; undeclared hosts are blocked before network I/O. |
 | **Trust gates** | Domain policy, internal asset lists, manual-only enrichment (default), and pre-query disclosure limit accidental vendor queries on sensitive pages. |
@@ -292,10 +360,21 @@ From `extension/` after `npm install`:
 | `npm run verify:dist` | Manifest path checks |
 | `npm run verify:security` | Bundle security checks (CSP, fetch allowlist, logging, fixtures, `.env.example`) |
 | `npm run audit:prod` | Production dependency audit (blocking policy) |
+| `npm run test:e2e:install` | One-time Playwright Chromium install for browser smokes |
+| `npm run test:e2e:critical` | PR-gate browser smokes against unpacked `dist/` (mocked vendors) |
+| `npm run test:e2e` | Full browser smoke suite (includes session pin and collection CSV export paths) |
+
+Pull request CI builds `extension/dist/`, installs Playwright Chromium, and runs `npm run test:e2e:critical`—scan, popup tray, overlay disclaimer and composite score, command palette, clipboard export, and bulk enrich queue—with fixture-backed AbuseIPDB/OTX responses and no live vendor calls. After `npm run build`:
+
+```bash
+cd extension
+npm run test:e2e:install   # first time only
+npm run test:e2e:critical
+```
+
+E2E scope, limits, and flake avoidance: [docs/contributors/testing.md](docs/contributors/testing.md). PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md). Contributor guides: [docs/contributors/README.md](docs/contributors/README.md).
 
 From the repository root: `.\scripts\check.ps1` (lint + unit tests in `extension/`), `.\scripts\dev.ps1` (Windows).
-
-[CONTRIBUTING.md](CONTRIBUTING.md). Contributor architecture and module guides: [docs/contributors/README.md](docs/contributors/README.md).
 
 ## License
 

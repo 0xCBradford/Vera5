@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
 import { STORAGE_KEY_API_KEYS } from "../lib/storage";
 import {
+  STORAGE_KEY_INSTALL_QUICK_START_COMPLETED,
   STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
   STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
   STORAGE_KEY_DOMAIN_ALLOWLIST,
@@ -383,7 +384,27 @@ describe("Options API key inputs", () => {
   });
 });
 
-describe("Options pre-query notice preference", () => {
+function clickQuickStartContinue(container: ParentNode): void {
+  const continueButton = Array.from(container.querySelectorAll("button")).find(
+    (button) =>
+      button.textContent === "Continue" ||
+      button.textContent === "Continue without keys"
+  );
+  continueButton?.click();
+}
+
+async function advanceQuickStartToTrustStep(
+  container: ParentNode
+): Promise<void> {
+  for (let step = 0; step < 3; step += 1) {
+    await act(async () => {
+      clickQuickStartContinue(container);
+      await Promise.resolve();
+    });
+  }
+}
+
+describe("Options install quick start", () => {
   let store: Record<string, unknown>;
   let mounted: { container: HTMLDivElement; root: Root } | null = null;
 
@@ -429,25 +450,27 @@ describe("Options pre-query notice preference", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders first-run pre-query notice choice when preference is unset", async () => {
+  it("renders install quick start welcome when preference is unset", async () => {
     mounted = renderOptions();
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(mounted.container.textContent).toContain("Pre-query notices");
-    expect(
-      mounted.container.querySelector('button[type="button"]')
-    ).not.toBeNull();
-    expect(mounted.container.textContent).toContain("Show pre-query notices");
-    expect(mounted.container.textContent).toContain("Skip pre-query notices");
+    expect(mounted.container.textContent).toContain("Install quick start");
+    expect(mounted.container.textContent).toContain("Welcome");
+    expect(mounted.container.textContent).toContain("Continue");
+    expect(mounted.container.textContent).not.toContain(
+      "Skip pre-query notices"
+    );
   });
 
-  it("persists first-run choice and hides the prompt", async () => {
+  it("persists trust choice and hides the quick start flow", async () => {
     mounted = renderOptions();
     await act(async () => {
       await Promise.resolve();
     });
+
+    await advanceQuickStartToTrustStep(mounted.container);
 
     const skipButton = Array.from(
       mounted.container.querySelectorAll("button")
@@ -462,6 +485,8 @@ describe("Options pre-query notice preference", () => {
 
     expect(store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]).toBe(false);
     expect(store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]).toBe(true);
+    expect(store[STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]).toBe(true);
+    expect(mounted.container.textContent).not.toContain("Install quick start");
     expect(mounted.container.textContent).not.toContain(
       "Skip pre-query notices"
     );
@@ -473,9 +498,10 @@ describe("Options pre-query notice preference", () => {
     expect(toggle.checked).toBe(false);
   });
 
-  it("renders trust section toggle when preference is already configured", async () => {
+  it("renders trust section toggle when quick start is already completed", async () => {
     store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES] = true;
     store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED] = true;
+    store[STORAGE_KEY_INSTALL_QUICK_START_COMPLETED] = true;
 
     mounted = renderOptions();
     await act(async () => {

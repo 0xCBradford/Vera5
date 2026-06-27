@@ -1,0 +1,109 @@
+name: Bug report
+description: Report incorrect detection, enrichment, UI, or extension behavior
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. **Do not paste API keys, live customer IOCs, or full alert content** you cannot share publicly.
+
+        For install and validation tips, see [README.md](https://github.com/0xCBradford/Vera5/blob/main/README.md) and [docs/soc-validation-fixtures.md](https://github.com/0xCBradford/Vera5/blob/main/docs/soc-validation-fixtures.md).
+
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Browser
+      description: Vera5 targets Chromium with Manifest V3 (Chrome, Edge, Brave, similar)
+      options:
+        - Google Chrome
+        - Microsoft Edge
+        - Brave
+        - Other Chromium
+    validations:
+      required: true
+
+  - type: input
+    id: browser-version
+    attributes:
+      label: Browser version
+      placeholder: "e.g. Chrome 131.0.6778.86"
+    validations:
+      required: true
+
+  - type: input
+    id: extension-version
+    attributes:
+      label: Vera5 version or commit
+      description: From `chrome://extensions`, `extension/public/manifest.json`, or the git SHA you built from
+      placeholder: "e.g. 0.0.0 / abc1234"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include whether you loaded unpacked from `extension/dist/`, which page type (fixture under `examples/` vs live site), and scan/enrich actions taken
+      placeholder: |
+        1. Build and load unpacked from extension/dist/
+        2. Open http://127.0.0.1:4173/examples/sample-alert.html
+        3. Scan page → click highlight → …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Primary surface involved
+      options:
+        - Page scan / highlights
+        - On-page overlay
+        - Toolbar popup / IOC tray
+        - Workspace sidebar
+        - Settings (options)
+        - Command palette
+        - Investigation session or IOC collections
+        - Enrichment / scoring
+        - Export / templates
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console or service worker errors (optional)
+      description: Redact hostnames, tokens, and indicator values you cannot share
+      render: shell
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or HTML sample (optional)
+      description: Redact API keys and sensitive IOCs. See docs/screenshots.md for capture guidance.
+
+  - type: checkboxes
+    id: hygiene
+    attributes:
+      label: Confirmation
+      options:
+        - label: I have removed API keys and sensitive customer data from this report
+          required: true
+        - label: I searched existing issues for a duplicate
+          required: true

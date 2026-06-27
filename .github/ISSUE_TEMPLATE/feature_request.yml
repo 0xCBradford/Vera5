@@ -1,0 +1,58 @@
+name: Feature request
+description: Suggest an improvement to analyst triage workflows
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Vera5 is **local-first**, **BYOK/BYOA**, and sends **indicator values only** to vendors you enable—not full pages or maintainer-operated enrichment backends.
+
+        Read [Product-Vision.md](https://github.com/0xCBradford/Vera5/blob/main/Product-Vision.md) and [docs/architecture.md](https://github.com/0xCBradford/Vera5/blob/main/docs/architecture.md) for current scope before proposing net-new connectors or cloud features.
+
+  - type: dropdown
+    id: persona
+    attributes:
+      label: Primary workflow
+      options:
+        - SOC alert triage
+        - CTI research
+        - DFIR investigation
+        - Threat hunting
+        - Extension development / contribution
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or gap
+      description: What is hard to do today with scan → tray → enrich → score → export → session workflows?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the user-visible outcome, not implementation details unless helpful
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds, manual steps, or smaller scope options
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Product constraints (check all that apply)
+      options:
+        - label: Must stay local-first (no required Vera5 cloud backend)
+        - label: Must preserve BYOK/BYOA (user-supplied vendor keys)
+        - label: Must not upload full page content for enrichment
+        - label: Acceptable to require new manifest permissions (explain in proposal)

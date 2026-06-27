@@ -21,6 +21,7 @@ import {
   ENRICHMENT_SOURCE_DESCRIPTIONS,
   ENRICHMENT_SOURCE_LABELS,
   ENRICHMENT_SOURCE_ORDER,
+  LIVE_ENRICHMENT_SOURCE_ORDER,
   OPTIONS_API_KEY_SLOTS,
   type EnrichmentSourceId,
 } from "../lib/enrichmentSourceRegistry";
@@ -38,6 +39,7 @@ import {
   getEnrichmentSourceCacheTtlSeconds,
   getEnrichmentSourceEnabled,
   getIncludePrivateIpv4,
+  getInstallQuickStartCompleted,
   getInternalAssetCidrRanges,
   getInternalAssetDomains,
   getInternalAssetEnrichGateEnabled,
@@ -48,6 +50,7 @@ import {
   getShowDisabledSourcesInWorkspace,
   getShowPreQueryNotices,
   hasApiKey,
+  completeInstallQuickStart,
   IOC_TYPE_SETTINGS_ORDER,
   isMaskedApiKeyDisplay,
   maskApiKeyForDisplay,
@@ -90,6 +93,19 @@ const API_KEY_FIELD_SLOTS: ApiKeySlot[] = [
   ...OPTIONS_API_KEY_SLOTS,
   CENSYS_SECRET_API_KEY_SLOT,
 ];
+
+const INSTALL_QUICK_START_KEY_SLOTS = LIVE_ENRICHMENT_SOURCE_ORDER.filter(
+  (sourceId): sourceId is ApiKeySlot => OPTIONS_API_KEY_SLOTS.includes(sourceId)
+);
+
+type InstallQuickStartStep = 0 | 1 | 2 | 3;
+
+const INSTALL_QUICK_START_STEP_LABELS = [
+  "Welcome",
+  "API keys",
+  "Enrichment control",
+  "Trust defaults",
+] as const;
 
 const IOC_TYPE_OPTION_LABELS: Record<IocType, string> = {
   ipv4: "IPv4 addresses",
@@ -703,6 +719,9 @@ export function Options() {
   const [showPreQueryNotices, setShowPreQueryNoticesState] = useState(true);
   const [preQueryNoticePreferenceConfigured, setPreQueryNoticePreferenceConfiguredState] =
     useState(false);
+  const [installQuickStartCompleted, setInstallQuickStartCompletedState] =
+    useState(true);
+  const [quickStartStep, setQuickStartStep] = useState<InstallQuickStartStep>(0);
   const [domainPolicyMode, setDomainPolicyModeState] = useState<DomainPolicyMode>(
     DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT
   );
@@ -761,6 +780,7 @@ export function Options() {
       getShowDisabledSourcesInWorkspace(),
       getShowPreQueryNotices(),
       getPreQueryNoticePreferenceConfigured(),
+      getInstallQuickStartCompleted(),
       getDomainPolicyMode(),
       getDomainAllowlist(),
       getDomainDenylist(),
@@ -800,6 +820,7 @@ export function Options() {
           showDisabledSourcesValue,
           showPreQueryNoticesValue,
           preQueryNoticePreferenceConfiguredValue,
+          installQuickStartCompletedValue,
           domainPolicyModeValue,
           domainAllowlistValue,
           domainDenylistValue,
@@ -823,6 +844,7 @@ export function Options() {
           setPreQueryNoticePreferenceConfiguredState(
             preQueryNoticePreferenceConfiguredValue
           );
+          setInstallQuickStartCompletedState(installQuickStartCompletedValue);
           setDomainPolicyModeState(domainPolicyModeValue);
           setDomainAllowlistState(domainAllowlistValue);
           setDomainDenylistState(domainDenylistValue);
@@ -1073,8 +1095,26 @@ export function Options() {
   const handlePreQueryNoticeFirstRunChoice = (showNotices: boolean) => {
     setShowPreQueryNoticesState(showNotices);
     setPreQueryNoticePreferenceConfiguredState(true);
-    void setPreQueryNoticePreference(showNotices);
+    setInstallQuickStartCompletedState(true);
+    void completeInstallQuickStart(showNotices);
   };
+
+  const handleQuickStartKeySaved = (slot: ApiKeySlot, value: string) => {
+    handleSaved(slot, value);
+    const trimmed = value.trim();
+    if (
+      trimmed.length > 0 &&
+      INSTALL_QUICK_START_KEY_SLOTS.includes(slot)
+    ) {
+      setEnrichmentSourceEnabledState((current) => ({
+        ...current,
+        [slot]: true,
+      }));
+      void setEnrichmentSourceEnabled(slot, true);
+    }
+  };
+
+  const showInstallQuickStart = ready && !installQuickStartCompleted;
 
   const handleGlobalCacheTtlBlur = () => {
     const parsed = readStoredCacheTtlSeconds(
@@ -1298,44 +1338,187 @@ export function Options() {
             </div>
           </header>
 
-          {ready && !preQueryNoticePreferenceConfigured ? (
+          {showInstallQuickStart ? (
             <section
               className="v5-card"
-              aria-labelledby="pre-query-first-run-heading"
+              aria-labelledby="install-quick-start-heading"
             >
               <div className="v5-card__head">
-                <h2 id="pre-query-first-run-heading" className="v5-card__title">
-                  Pre-query notices
-                </h2>
-                <p className="v5-card__desc">
-                  Before Vera5 sends an indicator value to a threat intelligence
-                  vendor you enabled, choose whether to show a notice in the
-                  browser. You can change this later under Trust &amp; consent.
+                <p className="v5-card__desc" style={{ marginBottom: 8 }}>
+                  Step {quickStartStep + 1} of {INSTALL_QUICK_START_STEP_LABELS.length}
+                  {" · "}
+                  {INSTALL_QUICK_START_STEP_LABELS[quickStartStep]}
                 </p>
+                <h2 id="install-quick-start-heading" className="v5-card__title">
+                  Install quick start
+                </h2>
+                {quickStartStep === 0 ? (
+                  <p className="v5-card__desc">
+                    Vera5 runs locally in your browser. Pin the toolbar action,
+                    open an <code>http://</code> or <code>https://</code> page,
+                    and use <strong>Scan page</strong> from the popup or{" "}
+                    <strong>Ctrl+Shift+Y</strong> / <strong>Cmd+Shift+Y</strong>.
+                    Serve the repository <code>examples/</code> folder over HTTP
+                    to try fixture pages without live data.
+                  </p>
+                ) : null}
+                {quickStartStep === 1 ? (
+                  <p className="v5-card__desc">
+                    Bring your own API keys for live enrichment. Keys stay in{" "}
+                    <code>chrome.storage.local</code> on this profile—Vera5 does
+                    not operate a shared enrichment backend. Only{" "}
+                    <strong>AbuseIPDB</strong> and <strong>OTX</strong> perform
+                    live HTTPS queries today; you can add keys later under{" "}
+                    <strong>API keys</strong>.
+                  </p>
+                ) : null}
+                {quickStartStep === 2 ? (
+                  <p className="v5-card__desc">
+                    <strong>Manual-only enrichment</strong> is the recommended
+                    default. When on, live threat intelligence runs only when you
+                    use the enrich control on a highlight—not every time you open
+                    an indicator card.
+                  </p>
+                ) : null}
+                {quickStartStep === 3 ? (
+                  <p className="v5-card__desc">
+                    Trust controls ship with conservative defaults. Review the
+                    summary below, then choose whether to show pre-query notices
+                    before vendor calls leave the browser.
+                  </p>
+                ) : null}
               </div>
               <div className="v5-card__body">
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: 12,
-                  }}
-                >
-                  <button
-                    type="button"
-                    className="v5-btn v5-btn--primary"
-                    onClick={() => handlePreQueryNoticeFirstRunChoice(true)}
+                {quickStartStep === 0 ? (
+                  <ul className="v5-domain-list" aria-label="Install checklist">
+                    <li className="v5-domain-list__item">
+                      Load unpacked from <code>extension/dist/</code>
+                    </li>
+                    <li className="v5-domain-list__item">
+                      Pin the Vera5 toolbar action
+                    </li>
+                    <li className="v5-domain-list__item">
+                      Open a page tab and run <strong>Scan page</strong>
+                    </li>
+                  </ul>
+                ) : null}
+                {quickStartStep === 1 ? (
+                  <div>
+                    {INSTALL_QUICK_START_KEY_SLOTS.map((slot) => (
+                      <ApiKeyField
+                        key={slot}
+                        slot={slot}
+                        label={ENRICHMENT_SOURCE_LABELS[slot]}
+                        ready={ready}
+                        fieldState={fieldStates[slot]}
+                        onDraftChange={handleDraftChange}
+                        onEditingChange={handleEditingChange}
+                        onPersist={handlePersist}
+                        onSaved={handleQuickStartKeySaved}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                {quickStartStep === 2 ? (
+                  <ToggleRow
+                    label="Manual-only enrichment"
+                    hint="Leave on for tighter control over vendor API usage. Turn off only when you want automatic enrichment each time you open an indicator card."
+                    ariaLabel="Manual-only enrichment"
+                    checked={manualOnlyMode}
+                    disabled={!ready}
+                    onChange={handleManualOnlyToggle}
+                  />
+                ) : null}
+                {quickStartStep === 3 ? (
+                  <div>
+                    <ul
+                      className="v5-domain-list"
+                      aria-label="Default trust settings"
+                    >
+                      <li className="v5-domain-list__item">
+                        Domain policy: allow by default with a sensitive webmail
+                        denylist ({domainDenylist.length} host patterns)
+                      </li>
+                      <li className="v5-domain-list__item">
+                        Domain enrich gate:{" "}
+                        {domainPolicyEnrichGateEnabled ? "on" : "off"}
+                      </li>
+                      <li className="v5-domain-list__item">
+                        Internal asset enrich gate:{" "}
+                        {internalAssetEnrichGateEnabled ? "on" : "off"}
+                      </li>
+                      <li className="v5-domain-list__item">
+                        Auto-scan on page changes:{" "}
+                        {autoScanEnabled ? "on" : "off (default)"}
+                      </li>
+                    </ul>
+                    <p className="v5-row__hint" style={{ marginTop: 16 }}>
+                      Pre-query notices name enabled vendors and the indicator
+                      value before a live fetch. You can change all trust settings
+                      later under <strong>Trust &amp; consent</strong>.
+                    </p>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexWrap: "wrap",
+                        gap: 12,
+                        marginTop: 12,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        className="v5-btn v5-btn--primary"
+                        onClick={() =>
+                          handlePreQueryNoticeFirstRunChoice(true)
+                        }
+                      >
+                        Show pre-query notices
+                      </button>
+                      <button
+                        type="button"
+                        className="v5-btn v5-btn--ghost"
+                        onClick={() =>
+                          handlePreQueryNoticeFirstRunChoice(false)
+                        }
+                      >
+                        Skip pre-query notices
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+                {quickStartStep < 3 ? (
+                  <div
+                    className="v5-actions"
+                    style={{ marginTop: quickStartStep === 0 ? 16 : 0 }}
                   >
-                    Show pre-query notices
-                  </button>
-                  <button
-                    type="button"
-                    className="v5-btn v5-btn--ghost"
-                    onClick={() => handlePreQueryNoticeFirstRunChoice(false)}
-                  >
-                    Skip pre-query notices
-                  </button>
-                </div>
+                    {quickStartStep > 0 ? (
+                      <button
+                        type="button"
+                        className="v5-btn v5-btn--ghost"
+                        onClick={() =>
+                          setQuickStartStep(
+                            (current) =>
+                              (current - 1) as InstallQuickStartStep
+                          )
+                        }
+                      >
+                        Back
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="v5-btn v5-btn--primary"
+                      onClick={() =>
+                        setQuickStartStep(
+                          (current) =>
+                            (current + 1) as InstallQuickStartStep
+                        )
+                      }
+                    >
+                      {quickStartStep === 1 ? "Continue without keys" : "Continue"}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             </section>
           ) : null}

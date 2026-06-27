@@ -57,8 +57,11 @@ async function sendEnrichSelectionToTab(tabId: number): Promise<void> {
   await sendMessageToTab(tabId, enrichSelectionMessage());
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   registerEnrichSelectionContextMenu();
+  if (details.reason === "install") {
+    void chrome.runtime.openOptionsPage();
+  }
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {

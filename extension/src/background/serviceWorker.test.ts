@@ -84,7 +84,9 @@ describe("enrich selection context menu manifest", () => {
 describe("service worker scan-page command routing", () => {
   let onCommandCallback: ((command: string) => void) | undefined;
   let onActionClickedCallback: (() => void) | undefined;
-  let onInstalledCallback: (() => void) | undefined;
+  let onInstalledCallback:
+    | ((details: { reason: string }) => void)
+    | undefined;
   let onContextMenuClickedCallback:
     | ((info: { menuItemId: string | number }, tab: { id?: number }) => void)
     | undefined;
@@ -94,6 +96,7 @@ describe("service worker scan-page command routing", () => {
   const contextMenusRemoveAll = vi.fn((callback?: () => void) => {
     callback?.();
   });
+  const openOptionsPage = vi.fn(async () => undefined);
 
   beforeEach(async () => {
     vi.resetModules();
@@ -115,10 +118,11 @@ describe("service worker scan-page command routing", () => {
       runtime: {
         onMessage: { addListener: vi.fn() },
         onInstalled: {
-          addListener: (callback: () => void) => {
+          addListener: (callback: (details: { reason: string }) => void) => {
             onInstalledCallback = callback;
           },
         },
+        openOptionsPage,
       },
       action: {
         onClicked: {
@@ -220,13 +224,22 @@ describe("service worker scan-page command routing", () => {
 
   it("registers the enrich selection context menu on install", () => {
     expect(onInstalledCallback).toBeDefined();
-    onInstalledCallback!();
+    onInstalledCallback!({ reason: "update" });
 
     expect(contextMenusRemoveAll).toHaveBeenCalledTimes(1);
     expect(contextMenusCreate).toHaveBeenCalledWith({
       id: "enrich-with-vera5",
       title: "Enrich with Vera5",
       contexts: ["selection"],
+    });
+    expect(openOptionsPage).not.toHaveBeenCalled();
+  });
+
+  it("opens the options page on first install", async () => {
+    expect(onInstalledCallback).toBeDefined();
+    onInstalledCallback!({ reason: "install" });
+    await vi.waitFor(() => {
+      expect(openOptionsPage).toHaveBeenCalledTimes(1);
     });
   });
 

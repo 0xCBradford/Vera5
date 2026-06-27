@@ -12,6 +12,8 @@ import {
   getDomainPolicyMode,
   getEnrichmentSourceEnabled,
   getManualOnlyMode,
+  completeInstallQuickStart,
+  getInstallQuickStartCompleted,
   getPreQueryNoticePreferenceConfigured,
   getShowPreQueryNotices,
   getExtensionEnabled,
@@ -62,6 +64,7 @@ import {
   STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE,
   STORAGE_KEY_SHOW_PRE_QUERY_NOTICES,
   STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
+  STORAGE_KEY_INSTALL_QUICK_START_COMPLETED,
   STORAGE_KEY_DOMAIN_POLICY_MODE,
   STORAGE_KEY_DOMAIN_ALLOWLIST,
   STORAGE_KEY_DOMAIN_DENYLIST,
@@ -534,6 +537,7 @@ describe("migrate-safe defaults", () => {
         [STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE]: false,
         [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: true,
         [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]: false,
+        [STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]: false,
         [STORAGE_KEY_DOMAIN_POLICY_MODE]: "allow_by_default",
         [STORAGE_KEY_DOMAIN_ALLOWLIST]: [],
         [STORAGE_KEY_DOMAIN_DENYLIST]: [
@@ -686,6 +690,36 @@ describe("pre-query notice preference storage", () => {
     await setPreQueryNoticePreference(false);
     expect(store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]).toBe(true);
     await expect(getShowPreQueryNotices()).resolves.toBe(false);
+  });
+});
+
+describe("install quick start storage", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults to incomplete quick start", async () => {
+    await expect(getInstallQuickStartCompleted()).resolves.toBe(false);
+  });
+
+  it("completes quick start and pre-query preference together", async () => {
+    await completeInstallQuickStart(false);
+    expect(store[STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]).toBe(true);
+    expect(store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]).toBe(true);
+    expect(store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]).toBe(false);
+    await expect(getInstallQuickStartCompleted()).resolves.toBe(true);
+  });
+
+  it("treats legacy pre-query configuration as completed quick start", async () => {
+    await setPreQueryNoticePreference(true);
+    await expect(getInstallQuickStartCompleted()).resolves.toBe(true);
   });
 });
 
