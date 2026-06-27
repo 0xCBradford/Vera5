@@ -79,8 +79,16 @@ vi.mock("../lib/storage", async (importOriginal) => {
       abuseipdb: true,
       otx: true,
     })),
+    getLocalBackendEnabled: vi.fn(async () => false),
   };
 });
+
+const requestLocalBackendEnrichment = vi.fn();
+
+vi.mock("../lib/localBackendEnrichment", () => ({
+  requestLocalBackendEnrichment: (...args: unknown[]) =>
+    requestLocalBackendEnrichment(...args),
+}));
 
 describe("enrichment handler", () => {
   const store: Record<string, unknown> = {};
@@ -90,6 +98,8 @@ describe("enrichment handler", () => {
     enrichWithOtx.mockReset();
     enrichWithUrlscan.mockReset();
     enrichWithGreynoise.mockReset();
+    requestLocalBackendEnrichment.mockReset();
+    vi.mocked(storage.getLocalBackendEnabled).mockResolvedValue(false);
     vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
       abuseipdb: true,
       otx: true,
@@ -776,6 +786,103 @@ describe("enrichment handler", () => {
       abuseipdb: {
         status: ENRICHMENT_SOURCE_STATUS.OK,
         at: "2026-01-01T00:00:00.000Z",
+      },
+    });
+  });
+
+  it("routes enrichment through the local backend when the toggle is enabled", async () => {
+    vi.mocked(storage.getLocalBackendEnabled).mockResolvedValue(true);
+    requestLocalBackendEnrichment.mockResolvedValue({
+      source: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: ENRICHMENT_SOURCE_STATUS.OK,
+        summary: "backend summary",
+      },
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "backend summary",
+        },
+      ],
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(requestLocalBackendEnrichment).toHaveBeenCalledWith({
+      value: "8.8.8.8",
+      iocType: "ipv4",
+      sourceId: "abuseipdb",
+      bypassCache: false,
+      enabledSources: {
+        abuseipdb: true,
+        otx: true,
+        urlscan: false,
+        greynoise: false,
+      },
+    });
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "backend summary",
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.OK,
+            summary: "backend summary",
+          },
+        ],
+      },
+    });
+  });
+
+  it("returns a local backend network error when the backend request fails", async () => {
+    vi.mocked(storage.getLocalBackendEnabled).mockResolvedValue(true);
+    requestLocalBackendEnrichment.mockResolvedValue(null);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.ERROR,
+          errorCode: "network_error",
+          errorMessage: "Local enrichment backend request failed.",
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.ERROR,
+            errorCode: "network_error",
+            errorMessage: "Local enrichment backend request failed.",
+          },
+        ],
       },
     });
   });

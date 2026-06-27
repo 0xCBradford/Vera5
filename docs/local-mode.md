@@ -38,6 +38,49 @@ flowchart TB
 
 Nothing in this diagram sends page HTML or browsing history to Vera5-maintained servers.
 
+## Optional localhost backend (127.0.0.1 only)
+
+Vera5 may optionally run a **user-operated** FastAPI enrichment aggregator on your machine. Traffic stays on **localhost** (`127.0.0.1`); the extension does not send indicators to Vera5-operated infrastructure. When the backend is running and the extension bridge is enabled, enrichment requests go to the local service; otherwise the background worker continues calling vendors directly as in the diagram above.
+
+```mermaid
+flowchart TB
+  subgraph Browser["Chromium browser (Manifest V3)"]
+    BG[Background worker]
+    Options[Options page]
+    ExtStore[(chrome.storage.local)]
+    BG <-->|messages| Options
+    BG --> ExtStore
+  end
+
+  subgraph Localhost["127.0.0.1 only — optional, user-operated"]
+    FastAPI[Local FastAPI aggregator]
+    SQLite[(SQLite enrichment cache)]
+    DotEnv[backend/.env BYOK keys]
+    FastAPI --> SQLite
+    FastAPI --> DotEnv
+  end
+
+  Vendors[Third-party threat-intel APIs]
+  Vera5Cloud[Vera5-operated services]
+
+  BG -->|default: direct HTTPS, indicator only| Vendors
+  BG -->|optional bridge: localhost enrich API, indicator only| FastAPI
+  FastAPI -->|HTTPS, indicator only| Vendors
+
+  BG -.->|no connection| Vera5Cloud
+  FastAPI -.->|no connection| Vera5Cloud
+```
+
+| Boundary | Behavior |
+|----------|----------|
+| **Listen address** | Backend binds to `127.0.0.1` only—not exposed on your LAN by default. |
+| **Default path** | Extension-only direct vendor calls; no local server required. |
+| **Optional path** | Extension → localhost aggregator → vendors; keys may live in `backend/.env` on your machine. |
+| **Vera5 infrastructure** | Neither path contacts Vera5-operated enrichment, telemetry, or credential relay services. |
+| **Data sent** | Indicator values you choose to enrich—not full pages or browsing history. |
+
+Scaffold defaults: local health and version routes on port **8765**; SQLite cache path configurable via `VERA5_SQLITE_PATH` in `backend/.env.example`. The extension **Use local backend** toggle (off by default) connects these paths when enabled.
+
 ## Capabilities in local mode
 
 ### On-page detection and UI
@@ -89,13 +132,13 @@ These are **out of scope** for the extension-only MVP unless a future product re
 
 | Exclusion | Implication |
 |-----------|-------------|
-| **Required Vera5 backend** | No FastAPI or other maintainer-hosted enrichment service to install. |
+| **Required Vera5 backend** | No maintainer-hosted enrichment service. An optional user-run FastAPI on `127.0.0.1` is separate, localhost-only, and off by default. |
 | **Cloud settings sync** | Settings and keys do not sync through Vera5 servers. |
 | **Maintainer telemetry** | No default usage analytics or crash reporting to Vera5. |
 | **Full-page upload** | Page HTML and tickets are not bulk-uploaded anywhere. |
 | **LLM summaries** | No bundled local or cloud model narrative generation in the MVP. |
 
-An **optional localhost or self-hosted backend** may be offered later for teams that want keys off the extension surface entirely. That path is additive: local mode remains valid without it.
+An **optional localhost backend** lets teams keep vendor API keys in a local `backend/.env` while the extension sends only indicator values to `127.0.0.1`. That path is additive: direct extension enrichment remains valid without it. See [Optional localhost backend (127.0.0.1 only)](#optional-localhost-backend-127001-only).
 
 ## Data boundaries summary
 

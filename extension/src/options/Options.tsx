@@ -40,6 +40,7 @@ import {
   getEnrichmentSourceEnabled,
   getIncludePrivateIpv4,
   getInstallQuickStartCompleted,
+  getLocalBackendEnabled,
   getInternalAssetCidrRanges,
   getInternalAssetDomains,
   getInternalAssetEnrichGateEnabled,
@@ -65,6 +66,7 @@ import {
   setEnrichmentSourceCacheTtlSeconds,
   setEnrichmentSourceEnabled,
   setIncludePrivateIpv4,
+  setLocalBackendEnabled,
   setInternalAssetCidrRanges,
   setInternalAssetDomains,
   setInternalAssetEnrichGateEnabled,
@@ -714,6 +716,7 @@ export function Options() {
   const [iocTypeEnabled, setIocTypeEnabledState] =
     useState<IocTypeEnabledRecord>(createDefaultIocTypeEnabledState());
   const [includePrivateIpv4, setIncludePrivateIpv4State] = useState(false);
+  const [localBackendEnabled, setLocalBackendEnabledState] = useState(false);
   const [showDisabledSourcesInWorkspace, setShowDisabledSourcesInWorkspaceState] =
     useState(false);
   const [showPreQueryNotices, setShowPreQueryNoticesState] = useState(true);
@@ -777,6 +780,7 @@ export function Options() {
       getEnrichmentSourceEnabled(),
       getIocTypeEnabled(),
       getIncludePrivateIpv4(),
+      getLocalBackendEnabled(),
       getShowDisabledSourcesInWorkspace(),
       getShowPreQueryNotices(),
       getPreQueryNoticePreferenceConfigured(),
@@ -817,6 +821,7 @@ export function Options() {
           sourceEnabledValue,
           iocTypeEnabledValue,
           includePrivateIpv4Value,
+          localBackendEnabledValue,
           showDisabledSourcesValue,
           showPreQueryNoticesValue,
           preQueryNoticePreferenceConfiguredValue,
@@ -839,6 +844,7 @@ export function Options() {
           setEnrichmentSourceEnabledState(sourceEnabledValue);
           setIocTypeEnabledState(iocTypeEnabledValue);
           setIncludePrivateIpv4State(includePrivateIpv4Value);
+          setLocalBackendEnabledState(localBackendEnabledValue);
           setShowDisabledSourcesInWorkspaceState(showDisabledSourcesValue);
           setShowPreQueryNoticesState(showPreQueryNoticesValue);
           setPreQueryNoticePreferenceConfiguredState(
@@ -932,6 +938,11 @@ export function Options() {
   const handleIncludePrivateIpv4Toggle = (checked: boolean) => {
     setIncludePrivateIpv4State(checked);
     void setIncludePrivateIpv4(checked);
+  };
+
+  const handleLocalBackendToggle = (checked: boolean) => {
+    setLocalBackendEnabledState(checked);
+    void setLocalBackendEnabled(checked);
   };
 
   const handleShowDisabledSourcesToggle = (checked: boolean) => {
@@ -1762,6 +1773,14 @@ export function Options() {
               </p>
             </div>
             <div className="v5-card__body">
+              <ToggleRow
+                label="Use local backend"
+                hint="When on, Vera5 routes enrichment through an optional FastAPI server on this machine (127.0.0.1). When off, enrichment runs inside the extension."
+                ariaLabel="Use local backend"
+                checked={localBackendEnabled}
+                disabled={!ready}
+                onChange={handleLocalBackendToggle}
+              />
               <ToggleRow
                 label="Manual-only enrichment"
                 hint="When on, threat intelligence loads only when you use the enrich control on a highlight. When off, Vera5 may request enrichment automatically when you open an indicator card."
