@@ -1,0 +1,16 @@
+{
+  "results": [
+    {
+      "page": {
+        "domain": "scanner.example",
+        "ip": "198.51.100.42"
+      },
+      "task": {
+        "tags": ["scanner"]
+      }
+    }
+  ],
+  "total": 4,
+  "took": 25,
+  "has_more": false
+}

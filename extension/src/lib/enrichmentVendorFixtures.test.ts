@@ -10,6 +10,10 @@ import {
   normalizeOtxIndicatorResponse,
   parseOtxPulseInfo,
 } from "./otxConnector";
+import {
+  normalizeUrlscanSearchResponse,
+  parseUrlscanSearchData,
+} from "./urlscanConnector";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 
@@ -89,5 +93,57 @@ describe("OTX vendor fixture JSON", () => {
     const payload = loadVendorFixture("otx/indicator-empty.json");
     expect(parseOtxPulseInfo(payload)).toBeNull();
     expect(normalizeOtxIndicatorResponse(payload)).toBeNull();
+  });
+});
+
+describe("URLScan.io vendor fixture JSON", () => {
+  it("parses search-domain-results.json", () => {
+    const payload = loadVendorFixture("urlscan/search-domain-results.json");
+    expect(parseUrlscanSearchData(payload)).toEqual({
+      total: 12,
+      results: [
+        {
+          pageDomain: "malware.testcategory.com",
+          pageCountry: "DE",
+          maliciousVerdict: true,
+          taskTags: ["phishing"],
+          verdictTags: ["malware", "phishing"],
+        },
+      ],
+    });
+    expect(normalizeUrlscanSearchResponse(payload)).toEqual({
+      summary: "12 urlscan results",
+      tags: ["DE", "malware.testcategory.com", "malicious", "malware", "phishing"],
+    });
+  });
+
+  it("parses search-url-results.json", () => {
+    const payload = loadVendorFixture("urlscan/search-url-results.json");
+    expect(normalizeUrlscanSearchResponse(payload)).toEqual({
+      summary: "1 urlscan result",
+      tags: ["evil.example", "suspicious"],
+    });
+  });
+
+  it("parses search-ipv4-results.json for response normalization", () => {
+    const payload = loadVendorFixture("urlscan/search-ipv4-results.json");
+    expect(normalizeUrlscanSearchResponse(payload)).toEqual({
+      summary: "4 urlscan results",
+      tags: ["scanner.example", "scanner"],
+    });
+  });
+
+  it("returns zero-result summaries for search-empty-total.json", () => {
+    const payload = loadVendorFixture("urlscan/search-empty-total.json");
+    expect(normalizeUrlscanSearchResponse(payload)).toEqual({
+      summary: "0 urlscan results",
+      tags: [],
+    });
+  });
+
+  it("returns null for search-malformed.json", () => {
+    const payload = loadVendorFixture("urlscan/search-malformed.json");
+    expect(parseUrlscanSearchData(payload)).toBeNull();
+    expect(normalizeUrlscanSearchResponse(payload)).toBeNull();
   });
 });

@@ -3,6 +3,8 @@ import { IOC_TYPE } from "./iocRegex";
 import {
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
+  LIVE_ENRICHMENT_SOURCE_ORDER,
+  OPTIONS_API_KEY_SLOTS,
   enrichmentSourceSupportsIocType,
   formatDisabledSourceMessage,
   formatMissingApiKeySourceMessage,
@@ -35,6 +37,15 @@ describe("enrichmentSourceRegistry", () => {
       "threatfox",
       "urlhaus",
     ]);
+  });
+
+  it("registers live connectors and options API key slots", () => {
+    expect(LIVE_ENRICHMENT_SOURCE_ORDER).toEqual([
+      "abuseipdb",
+      "otx",
+      "urlscan",
+    ]);
+    expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.URLSCAN);
   });
 
   it("formats workspace source messages", () => {
@@ -75,6 +86,24 @@ describe("enrichmentSourceRegistry", () => {
         IOC_TYPE.SHA256
       )
     ).toBe(true);
+    expect(
+      enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.URLSCAN, IOC_TYPE.URL)
+    ).toBe(true);
+    expect(
+      enrichmentSourceSupportsIocType(
+        ENRICHMENT_SOURCE.URLSCAN,
+        IOC_TYPE.DOMAIN
+      )
+    ).toBe(true);
+    expect(
+      enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.URLSCAN, IOC_TYPE.IPV4)
+    ).toBe(false);
+    expect(
+      enrichmentSourceSupportsIocType(
+        ENRICHMENT_SOURCE.URLSCAN,
+        IOC_TYPE.SHA256
+      )
+    ).toBe(false);
   });
 });
 

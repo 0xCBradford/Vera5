@@ -24,6 +24,7 @@ import {
   TEST_FIXTURE_ABUSEIPDB_API_KEY,
   TEST_FIXTURE_OTX_API_KEY,
   TEST_FIXTURE_STORED_API_KEY,
+  TEST_FIXTURE_URLSCAN_API_KEY,
 } from "../lib/fixtureSecrets";
 import { ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE } from "../lib/enrichmentSourceOps";
 import { maskApiKeyForDisplay } from "../lib/storage";
@@ -202,9 +203,14 @@ describe("Options API key inputs", () => {
         'input[aria-label="OTX cache lifetime in seconds"]'
       )
     ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="URLScan.io cache lifetime in seconds"]'
+      )
+    ).not.toBeNull();
   });
 
-  it("renders masked inputs for AbuseIPDB and OTX", async () => {
+  it("renders masked inputs for live enrichment API keys", async () => {
     mounted = renderOptions();
     await act(async () => {
       await Promise.resolve();
@@ -216,13 +222,90 @@ describe("Options API key inputs", () => {
     const otxInput = mounted.container.querySelector(
       'input[aria-label="OTX API key"]'
     );
+    const urlscanInput = mounted.container.querySelector(
+      'input[aria-label="URLScan.io API key"]'
+    );
 
     expect(abuseInput).not.toBeNull();
     expect(otxInput).not.toBeNull();
+    expect(urlscanInput).not.toBeNull();
     expect(abuseInput?.getAttribute("type")).toBe("password");
     expect(otxInput?.getAttribute("type")).toBe("password");
+    expect(urlscanInput?.getAttribute("type")).toBe("password");
     expect(abuseInput?.getAttribute("autocomplete")).toBe("off");
     expect(otxInput?.getAttribute("autocomplete")).toBe("off");
+    expect(urlscanInput?.getAttribute("autocomplete")).toBe("off");
+  });
+
+  it("persists a newly entered URLScan.io API key on blur", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const urlscanInput = mounted.container.querySelector(
+      'input[aria-label="URLScan.io API key"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      urlscanInput.focus();
+    });
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(urlscanInput, "fresh-urlscan-key");
+      urlscanInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      urlscanInput.blur();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      urlscan: "fresh-urlscan-key",
+    });
+  });
+
+  it("shows URLScan.io source status when enabled without a saved key", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const urlscanToggle = mounted.container.querySelector(
+      'input[aria-label="Enable URLScan.io"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      urlscanToggle.click();
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("No API key");
+  });
+
+  it("loads stored URLScan.io keys as masked previews only", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      urlscan: TEST_FIXTURE_URLSCAN_API_KEY,
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const urlscanInput = mounted.container.querySelector(
+      'input[aria-label="URLScan.io API key"]'
+    ) as HTMLInputElement;
+
+    expect(urlscanInput.value).toBe(
+      maskApiKeyForDisplay(TEST_FIXTURE_URLSCAN_API_KEY)
+    );
+    expect(urlscanInput.value).not.toBe(TEST_FIXTURE_URLSCAN_API_KEY);
   });
 
   it("persists a newly entered API key on blur", async () => {

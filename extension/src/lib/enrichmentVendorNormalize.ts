@@ -4,6 +4,7 @@ export const UNIFIED_SUMMARY_METRIC = {
   ABUSE_CONFIDENCE: "abuse_confidence",
   REPORT_COUNT: "report_count",
   PULSE_COUNT: "pulse_count",
+  SCAN_COUNT: "scan_count",
 } as const;
 
 export type UnifiedSummaryMetric =
@@ -53,6 +54,9 @@ export function buildUnifiedSummary(
   }
   if (metric === UNIFIED_SUMMARY_METRIC.REPORT_COUNT) {
     return `${rounded} reports`;
+  }
+  if (metric === UNIFIED_SUMMARY_METRIC.SCAN_COUNT) {
+    return rounded === 1 ? "1 urlscan result" : `${rounded} urlscan results`;
   }
   return rounded === 1 ? "1 threat pulse" : `${rounded} threat pulses`;
 }
@@ -160,4 +164,117 @@ export function mapOtxFieldsToUnifiedPresentation(
     summaryValue: input.pulseCount,
     threatTags: input.threatTags,
   });
+}
+
+export type UrlscanUnifiedInput = {
+  scanCount: number;
+  threatTags?: readonly string[];
+  topDomain?: string;
+  countryCode?: string;
+};
+
+export function collectUrlscanThreatTags(
+  results:
+    | readonly {
+        verdictTags?: readonly string[];
+        taskTags?: readonly string[];
+        maliciousVerdict?: boolean;
+      }[]
+    | undefined
+): readonly string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const result of results ?? []) {
+    if (result.maliciousVerdict === true) {
+      appendUniqueTag(tags, seen, "malicious");
+    }
+    for (const tag of [...(result.verdictTags ?? []), ...(result.taskTags ?? [])]) {
+      const trimmed = tag.trim();
+      if (!trimmed || seen.has(trimmed)) {
+        continue;
+      }
+      seen.add(trimmed);
+      tags.push(trimmed);
+      if (tags.length >= UNIFIED_TAG_LIMIT) {
+        return tags;
+      }
+    }
+  }
+  return tags;
+}
+
+export function mapUrlscanFieldsToUnifiedPresentation(
+  input: UrlscanUnifiedInput
+): UnifiedEnrichmentPresentation | null {
+  return mapVendorFieldsToUnifiedPresentation({
+    summaryMetric: UNIFIED_SUMMARY_METRIC.SCAN_COUNT,
+    summaryValue: input.scanCount,
+    threatTags: input.threatTags,
+    domain: input.topDomain,
+    countryCode: input.countryCode,
+  });
+}
+
+export type GreyNoiseUnifiedInput = {
+  noise: boolean;
+  riot: boolean;
+  classification?: string;
+  name?: string;
+};
+
+export function buildGreyNoiseUnifiedSummary(input: GreyNoiseUnifiedInput): string {
+  if (input.riot && input.classification === "benign") {
+    return "benign RIOT service";
+  }
+  if (input.noise && input.classification === "malicious") {
+    return "malicious internet noise";
+  }
+  if (input.noise && input.classification === "unknown") {
+    return "unknown internet noise";
+  }
+  if (input.noise && input.classification === "benign") {
+    return "benign internet noise";
+  }
+  if (input.noise && input.classification) {
+    return `${input.classification} internet noise`;
+  }
+  if (input.noise) {
+    return "unknown internet noise";
+  }
+  if (!input.noise && !input.riot) {
+    return "not observed in GreyNoise";
+  }
+  if (input.classification) {
+    return `${input.classification} classification`;
+  }
+  return "not observed in GreyNoise";
+}
+
+export function buildGreyNoiseUnifiedTags(
+  input: GreyNoiseUnifiedInput
+): readonly string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  if (input.classification) {
+    appendUniqueTag(tags, seen, input.classification.toLowerCase());
+  }
+  appendUniqueTag(tags, seen, input.name);
+  if (input.noise) {
+    appendUniqueTag(tags, seen, "noise");
+  }
+  if (input.riot) {
+    appendUniqueTag(tags, seen, "riot");
+  }
+
+  return tags;
+}
+
+export function mapGreyNoiseFieldsToUnifiedPresentation(
+  input: GreyNoiseUnifiedInput
+): UnifiedEnrichmentPresentation {
+  return {
+    summary: buildGreyNoiseUnifiedSummary(input),
+    tags: buildGreyNoiseUnifiedTags(input),
+  };
 }

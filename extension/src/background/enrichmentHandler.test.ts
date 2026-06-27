@@ -49,6 +49,7 @@ function stubChromeStorage(store: Record<string, unknown>): void {
 
 const enrichWithAbuseIpdb = vi.fn();
 const enrichWithOtx = vi.fn();
+const enrichWithUrlscan = vi.fn();
 
 vi.mock("../lib/abuseipdbConnector", () => ({
   ABUSEIPDB_SOURCE_ID: "abuseipdb",
@@ -57,6 +58,11 @@ vi.mock("../lib/abuseipdbConnector", () => ({
 
 vi.mock("../lib/otxConnector", () => ({
   enrichWithOtx: (...args: unknown[]) => enrichWithOtx(...args),
+}));
+
+vi.mock("../lib/urlscanConnector", () => ({
+  URLSCAN_SOURCE_ID: "urlscan",
+  enrichWithUrlscan: (...args: unknown[]) => enrichWithUrlscan(...args),
 }));
 
 vi.mock("../lib/storage", async (importOriginal) => {
@@ -76,9 +82,11 @@ describe("enrichment handler", () => {
   beforeEach(() => {
     enrichWithAbuseIpdb.mockReset();
     enrichWithOtx.mockReset();
+    enrichWithUrlscan.mockReset();
     vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
       abuseipdb: true,
       otx: true,
+      urlscan: false,
     });
     for (const key of Object.keys(store)) {
       delete store[key];
@@ -423,6 +431,143 @@ describe("enrichment handler", () => {
       type: "ipv4",
     });
     expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+  });
+
+  it("routes ENRICH_IOC through the URLScan.io connector when sourceId is urlscan", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+      urlscan: true,
+    });
+    enrichWithUrlscan.mockResolvedValue({
+      sourceId: "urlscan",
+      sourceLabel: "URLScan.io",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "3 urlscan results",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "urlscan",
+      })
+    );
+
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "urlscan",
+          sourceLabel: "URLScan.io",
+          status: "ok",
+          summary: "3 urlscan results",
+        },
+        sources: [
+          {
+            sourceId: "urlscan",
+            sourceLabel: "URLScan.io",
+            status: "ok",
+            summary: "3 urlscan results",
+          },
+        ],
+      },
+    });
+    expect(enrichWithUrlscan).toHaveBeenCalledWith({
+      value: "example.com",
+      type: "domain",
+    });
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(enrichWithOtx).not.toHaveBeenCalled();
+  });
+
+  it("returns skipped when URLScan.io is disabled even if sourceId is urlscan", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+      urlscan: false,
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "https://example.com/login",
+        iocType: "url",
+        sourceId: "urlscan",
+      })
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "urlscan",
+          status: "skipped",
+          errorCode: "disabled",
+        },
+      },
+    });
+    expect(enrichWithUrlscan).not.toHaveBeenCalled();
+  });
+
+  it("includes enabled URLScan.io in parallel domain enrichment", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: false,
+      otx: true,
+      urlscan: true,
+    });
+    enrichWithOtx.mockResolvedValue({
+      sourceId: "otx",
+      sourceLabel: "OTX",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "1 threat pulse",
+    });
+    enrichWithUrlscan.mockResolvedValue({
+      sourceId: "urlscan",
+      sourceLabel: "URLScan.io",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "2 urlscan results",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "example.com", iocType: "domain" })
+    );
+
+    expect(enrichWithOtx).toHaveBeenCalledOnce();
+    expect(enrichWithUrlscan).toHaveBeenCalledOnce();
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        sources: [
+          { sourceId: "otx", status: "ok" },
+          { sourceId: "urlscan", status: "ok" },
+        ],
+      },
+    });
+  });
+
+  it("does not call URLScan.io for IPv4 when only URLScan.io is enabled", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: false,
+      otx: false,
+      urlscan: true,
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(enrichWithUrlscan).not.toHaveBeenCalled();
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          status: "skipped",
+          errorCode: "disabled",
+        },
+      },
+    });
   });
 
   it("increments the active investigation session enrichment count", async () => {

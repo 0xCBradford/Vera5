@@ -1,0 +1,25 @@
+{
+  "results": [
+    {
+      "_id": "11111111-1111-1111-1111-111111111111",
+      "page": {
+        "domain": "malware.testcategory.com",
+        "country": "DE",
+        "url": "https://malware.testcategory.com/login"
+      },
+      "task": {
+        "domain": "malware.testcategory.com",
+        "tags": ["phishing"]
+      },
+      "verdicts": {
+        "overall": {
+          "malicious": true
+        },
+        "tags": ["malware", "phishing"]
+      }
+    }
+  ],
+  "total": 12,
+  "took": 42,
+  "has_more": false
+}

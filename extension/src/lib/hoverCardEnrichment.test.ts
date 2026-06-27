@@ -209,6 +209,60 @@ describe("hover card enrichment placeholders", () => {
     expect(entries[1]?.badgeText).toBe(formatSourceStatusBadge("ok"));
   });
 
+  it("surfaces URLScan.io connector error copy on source entries", () => {
+    const missingKey = buildHoverCardSourceEntries([
+      {
+        sourceId: "urlscan",
+        sourceLabel: "URLScan.io",
+        status: "skipped",
+        errorCode: "missing_key",
+        errorMessage:
+          "Add your URLScan.io API key in Vera5 Settings to load enrichment.",
+      },
+    ])[0];
+    expect(missingKey?.detail).toBe(
+      "Add your URLScan.io API key in Vera5 Settings to load enrichment."
+    );
+
+    const unauthorized = buildHoverCardSourceEntries([
+      {
+        sourceId: "urlscan",
+        sourceLabel: "URLScan.io",
+        status: "error",
+        errorCode: "unauthorized",
+        errorMessage: "URLScan.io rejected the API key.",
+      },
+    ])[0];
+    expect(unauthorized?.detail).toBe("URLScan.io rejected the API key.");
+
+    const rateLimited = buildHoverCardSourceEntries([
+      {
+        sourceId: "urlscan",
+        sourceLabel: "URLScan.io",
+        status: "error",
+        errorCode: "rate_limited",
+        errorMessage:
+          "URLScan.io rate limit reached. Back off before retrying.",
+        retryHint: "Retry after 45 seconds.",
+      },
+    ])[0];
+    expect(rateLimited?.detail).toBe(
+      "URLScan.io rate limit reached. Back off before retrying."
+    );
+    expect(rateLimited?.retryHint).toBe("Retry after 45 seconds.");
+
+    const timedOut = buildHoverCardSourceEntries([
+      {
+        sourceId: "urlscan",
+        sourceLabel: "URLScan.io",
+        status: "error",
+        errorCode: "timeout",
+        errorMessage: "URLScan.io request timed out.",
+      },
+    ])[0];
+    expect(timedOut?.detail).toBe("URLScan.io request timed out.");
+  });
+
   it("marks cached ok sources with Cached badge and last updated line", () => {
     const fetchedAt = "2026-05-22T10:00:00.000Z";
     const entries = buildHoverCardSourceEntries([
@@ -294,6 +348,33 @@ describe("hover card enrichment placeholders", () => {
     expect(view.enrichmentState).toBe("ready");
     expect(view.summary).toBe("42 abuse confidence");
     expect(view.tags).toEqual(["US"]);
+    expect(view.sourceResults).toHaveLength(2);
+    expect(shouldShowMultiSourceResults(view.sourceResults)).toBe(true);
+    expect(
+      shouldShowEnrichmentSourceAttribution("ready", view.sourceAttribution, view.sourceResults)
+    ).toBe(false);
+  });
+
+  it("resolves partial success when URLScan.io fails and OTX succeeds", () => {
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+        tags: ["phishing"],
+      },
+      {
+        sourceId: "urlscan",
+        sourceLabel: "URLScan.io",
+        status: "error",
+        errorMessage: "URLScan.io rate limit reached. Back off before retrying.",
+        errorCode: "rate_limited",
+      },
+    ]);
+    expect(view.enrichmentState).toBe("ready");
+    expect(view.summary).toBe("2 threat pulses");
+    expect(view.tags).toEqual(["phishing"]);
     expect(view.sourceResults).toHaveLength(2);
     expect(shouldShowMultiSourceResults(view.sourceResults)).toBe(true);
     expect(

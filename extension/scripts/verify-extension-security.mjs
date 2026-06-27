@@ -24,6 +24,7 @@ const iocRequestBoundariesPath = path.join(
 const FETCH_ALLOWED_SOURCE_BASENAMES = new Set([
   "abuseipdbConnector.ts",
   "otxConnector.ts",
+  "urlscanConnector.ts",
 ]);
 
 const FETCH_GUARD_SOURCE_BASENAMES = new Set([
@@ -389,6 +390,7 @@ function checkConnectorFetchUsesGetWithoutBody(filePath, source) {
   const connectorFiles = new Set([
     "abuseipdbConnector.ts",
     "otxConnector.ts",
+    "urlscanConnector.ts",
   ]);
   if (!connectorFiles.has(path.basename(filePath))) {
     return;

@@ -97,6 +97,7 @@ export function assertEnrichmentFetchHasNoBody(init?: RequestInit): boolean {
 export const DECLARED_ENRICHMENT_API_HOSTS = [
   "api.abuseipdb.com",
   "otx.alienvault.com",
+  "urlscan.io",
 ] as const;
 
 export type DeclaredEnrichmentApiHost =

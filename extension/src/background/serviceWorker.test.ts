@@ -9,12 +9,50 @@ import {
   toggleCommandPaletteMessage,
   toggleWorkspaceMessage,
 } from "../lib/messages";
+import { DECLARED_ENRICHMENT_API_HOSTS } from "../lib/iocRequestBoundaries";
 
 const extensionRoot = join(
   fileURLToPath(new URL(".", import.meta.url)),
   "..",
   ".."
 );
+
+describe("manifest host permissions for declared enrichment APIs", () => {
+  it("includes https host access that covers every declared enrichment API host", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(extensionRoot, "public", "manifest.json"), "utf8")
+    ) as { host_permissions?: string[] };
+
+    const hostPermissions = manifest.host_permissions ?? [];
+    expect(hostPermissions).toContain("https://*/*");
+
+    for (const hostname of DECLARED_ENRICHMENT_API_HOSTS) {
+      expect(
+        hostPermissions.some((pattern) =>
+          manifestHostPatternCoversHttpsHostname(pattern, hostname)
+        )
+      ).toBe(true);
+    }
+  });
+});
+
+function manifestHostPatternCoversHttpsHostname(
+  pattern: string,
+  hostname: string
+): boolean {
+  if (pattern === "https://*/*") {
+    return true;
+  }
+  if (!pattern.startsWith("https://") || !pattern.endsWith("/*")) {
+    return false;
+  }
+  const hostPattern = pattern.slice("https://".length, -2);
+  if (hostPattern.startsWith("*.")) {
+    const suffix = hostPattern.slice(2);
+    return hostname === suffix || hostname.endsWith(`.${suffix}`);
+  }
+  return hostname === hostPattern;
+}
 
 describe("scan-page keyboard shortcut manifest", () => {
   it("registers scan-page with Ctrl+Shift+Y and mac Command+Shift+Y", () => {

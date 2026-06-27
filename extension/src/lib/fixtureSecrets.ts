@@ -1,5 +1,7 @@
 export const TEST_FIXTURE_ABUSEIPDB_API_KEY = "test-fixture-abuseipdb-key";
 export const TEST_FIXTURE_OTX_API_KEY = "test-fixture-otx-key";
+export const TEST_FIXTURE_URLSCAN_API_KEY = "test-fixture-urlscan-key";
+export const TEST_FIXTURE_GREYNOISE_API_KEY = "test-fixture-greynoise-key";
 export const TEST_FIXTURE_GENERIC_API_KEY = "test-fixture-generic-key";
 export const TEST_FIXTURE_INVALID_API_KEY = "test-fixture-invalid-key";
 export const TEST_FIXTURE_CONFIGURED_API_KEY = "test-fixture-configured-key";
@@ -19,6 +21,8 @@ export const TEST_FIXTURE_IMPORTED_API_KEY = "test-fixture-imported-key";
 export const TEST_FIXTURE_API_KEY_LITERALS = [
   TEST_FIXTURE_ABUSEIPDB_API_KEY,
   TEST_FIXTURE_OTX_API_KEY,
+  TEST_FIXTURE_URLSCAN_API_KEY,
+  TEST_FIXTURE_GREYNOISE_API_KEY,
   TEST_FIXTURE_GENERIC_API_KEY,
   TEST_FIXTURE_INVALID_API_KEY,
   TEST_FIXTURE_CONFIGURED_API_KEY,

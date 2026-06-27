@@ -3,6 +3,7 @@ import { ABUSEIPDB_CHECK_API_URL } from "./abuseipdbConnector";
 import { IOC_TYPE } from "./iocRegex";
 import { enrichIocMessage, isEnrichIocMessage } from "./messages";
 import { OTX_INDICATORS_API_BASE } from "./otxConnector";
+import { URLSCAN_SEARCH_API_URL } from "./urlscanConnector";
 import {
   assertDeclaredEnrichmentApiUrl,
   assertEnrichmentFetchHasNoBody,
@@ -80,11 +81,15 @@ describe("enrichment IOC request boundaries", () => {
     expect(DECLARED_ENRICHMENT_API_HOSTS).toContain(
       new URL(OTX_INDICATORS_API_BASE).hostname
     );
+    expect(DECLARED_ENRICHMENT_API_HOSTS).toContain(
+      new URL(URLSCAN_SEARCH_API_URL).hostname
+    );
   });
 
   it("blocks enrichment fetch to undeclared HTTPS hosts", () => {
     expect(isDeclaredEnrichmentApiHostname("api.abuseipdb.com")).toBe(true);
     expect(isDeclaredEnrichmentApiHostname("OTX.alienvault.com")).toBe(true);
+    expect(isDeclaredEnrichmentApiHostname("urlscan.io")).toBe(true);
     expect(isDeclaredEnrichmentApiHostname("evil.example")).toBe(false);
 
     expect(() =>

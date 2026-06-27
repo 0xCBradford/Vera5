@@ -1,0 +1,16 @@
+{
+  "results": [
+    {
+      "page": {
+        "domain": "evil.example",
+        "url": "https://evil.example/path"
+      },
+      "verdicts": {
+        "tags": ["suspicious"]
+      }
+    }
+  ],
+  "total": 1,
+  "took": 18,
+  "has_more": false
+}

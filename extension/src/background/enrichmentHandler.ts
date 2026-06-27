@@ -10,6 +10,10 @@ import {
 import { enrichWithConnectorShell } from "../lib/enrichmentConnectorShell";
 import { enrichWithOtx } from "../lib/otxConnector";
 import {
+  URLSCAN_SOURCE_ID,
+  enrichWithUrlscan,
+} from "../lib/urlscanConnector";
+import {
   formatGlobalEnrichmentCooldownMessage,
   formatGlobalEnrichmentCooldownRetryHint,
   isGlobalEnrichmentCooldownActive,
@@ -66,6 +70,10 @@ async function fetchLiveSource(
 
   if (sourceId === ENRICHMENT_SOURCE.OTX) {
     return enrichWithOtx(ioc);
+  }
+
+  if (sourceId === URLSCAN_SOURCE_ID) {
+    return enrichWithUrlscan(ioc);
   }
 
   if (ENRICHMENT_SOURCE_DEFINITIONS[sourceId].liveConnector) {

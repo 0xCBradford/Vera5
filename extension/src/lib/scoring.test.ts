@@ -46,6 +46,11 @@ describe("unifiedSummaryToSignalStrength", () => {
     expect(unifiedSummaryToSignalStrength("12 threat pulses")).toBe(56);
   });
 
+  it("parses URLScan.io scan count summaries", () => {
+    expect(unifiedSummaryToSignalStrength("1 urlscan result")).toBe(22);
+    expect(unifiedSummaryToSignalStrength("12 urlscan results")).toBe(68);
+  });
+
   it("returns null for unrecognized summaries", () => {
     expect(unifiedSummaryToSignalStrength(undefined)).toBeNull();
     expect(unifiedSummaryToSignalStrength("")).toBeNull();

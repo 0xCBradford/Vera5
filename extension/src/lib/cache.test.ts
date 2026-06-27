@@ -260,6 +260,9 @@ describe("enrichment cache keys", () => {
     expect(buildEnrichmentCacheKey("example.com", "otx")).toBe(
       "example.com|otx"
     );
+    expect(buildEnrichmentCacheKey("example.com", "urlscan")).toBe(
+      "example.com|urlscan"
+    );
     expect(buildEnrichmentCacheKey("   ", "otx")).toBeNull();
   });
 
@@ -369,6 +372,9 @@ describe("enrichment cache TTL", () => {
       resolveEnrichmentCacheTtlSeconds("otx", 3600, { otx: 120 })
     ).toBe(120);
     expect(
+      resolveEnrichmentCacheTtlSeconds("urlscan", 3600, { urlscan: 900 })
+    ).toBe(900);
+    expect(
       resolveEnrichmentCacheTtlSeconds("abuseipdb", 3600, { otx: 120 })
     ).toBe(3600);
   });
@@ -476,6 +482,32 @@ describe("enrichment cache read/write with settings TTL", () => {
     ).resolves.toEqual({
       fetchedAt: nowMs - 90_000,
       payload: { summary: "fresh for otx override" },
+    });
+  });
+
+  it("uses a URLScan.io per-source TTL override when configured", async () => {
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 60;
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS] = { urlscan: 300 };
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "example.com|otx": {
+        fetchedAt: nowMs - 90_000,
+        payload: { summary: "stale for global ttl" },
+      },
+      "example.com|urlscan": {
+        fetchedAt: nowMs - 90_000,
+        payload: { summary: "fresh for urlscan override" },
+      },
+    };
+
+    await expect(
+      readValidEnrichmentCacheEntry("example.com", "otx", nowMs)
+    ).resolves.toBeNull();
+    await expect(
+      readValidEnrichmentCacheEntry("example.com", "urlscan", nowMs)
+    ).resolves.toEqual({
+      fetchedAt: nowMs - 90_000,
+      payload: { summary: "fresh for urlscan override" },
     });
   });
 
@@ -592,6 +624,25 @@ describe("enrichment cache read/write with settings TTL", () => {
       readCachedEnrichmentSourceResult("8.8.8.8", "otx")
     ).resolves.toMatchObject({
       summary: "2 threat pulses",
+      fromCache: true,
+    });
+  });
+
+  it("persists URLScan.io live results for later cache hits", async () => {
+    await cacheEnrichmentSourceResult("example.com", "urlscan", {
+      sourceId: "urlscan",
+      sourceLabel: "URLScan.io",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "4 urlscan results",
+      tags: ["phishing"],
+    });
+
+    await expect(
+      readCachedEnrichmentSourceResult("example.com", "urlscan")
+    ).resolves.toMatchObject({
+      sourceId: "urlscan",
+      summary: "4 urlscan results",
+      tags: ["phishing"],
       fromCache: true,
     });
   });

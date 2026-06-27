@@ -15,6 +15,7 @@ import { clearGlobalEnrichmentCooldown } from "../lib/enrichmentCooldown";
 import {
   TEST_FIXTURE_GENERIC_API_KEY,
   TEST_FIXTURE_OTX_API_KEY,
+  TEST_FIXTURE_URLSCAN_API_KEY,
 } from "../lib/fixtureSecrets";
 import { handleEnrichIocMessage } from "./enrichmentHandler";
 
@@ -699,6 +700,328 @@ describe("enrichment handler with mocked fetch", () => {
       errorMessage: "AbuseIPDB request timed out.",
     });
   });
+
+  it("surfaces URLScan.io missing-key with actionable settings copy", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      urlscan: true,
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "urlscan",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "urlscan",
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.MISSING_KEY,
+      errorMessage:
+        "Add your URLScan.io API key in Vera5 Settings to load enrichment.",
+    });
+  });
+
+  it("surfaces URLScan.io HTTP 401 as unauthorized through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      urlscan: true,
+    });
+    await storage.setApiKey("urlscan", TEST_FIXTURE_URLSCAN_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 401 }))
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "urlscan",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "urlscan",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.UNAUTHORIZED,
+      errorMessage: "URLScan.io rejected the API key.",
+    });
+  });
+
+  it("surfaces URLScan.io HTTP 403 as unauthorized through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      urlscan: true,
+    });
+    await storage.setApiKey("urlscan", TEST_FIXTURE_URLSCAN_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 403 }))
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "urlscan",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "urlscan",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.UNAUTHORIZED,
+      errorMessage: "URLScan.io rejected the API key.",
+    });
+  });
+
+  it("surfaces URLScan.io HTTP 429 with retry hint through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      urlscan: true,
+    });
+    await storage.setApiKey("urlscan", TEST_FIXTURE_URLSCAN_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("", {
+            status: 429,
+            headers: { "Retry-After": "90" },
+          })
+      )
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "urlscan",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "urlscan",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+      errorMessage:
+        "URLScan.io rate limit reached. Back off before retrying.",
+      retryHint: "Retry after 90 seconds.",
+    });
+  });
+
+  it("surfaces URLScan.io timeout through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      urlscan: true,
+    });
+    await storage.setApiKey("urlscan", TEST_FIXTURE_URLSCAN_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        const error = new Error("Aborted");
+        error.name = "AbortError";
+        throw error;
+      })
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "urlscan",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "urlscan",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.TIMEOUT,
+      errorMessage: "URLScan.io request timed out.",
+    });
+  });
+
+  it("returns cached URLScan.io enrichment without calling fetch on a valid cache hit", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      urlscan: true,
+    });
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 3600;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "example.com|urlscan": {
+        fetchedAt: nowMs - 10_000,
+        payload: {
+          sourceId: "urlscan",
+          sourceLabel: "URLScan.io",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "5 urlscan results",
+          tags: ["malicious"],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "urlscan",
+      })
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "urlscan",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "5 urlscan results",
+      fromCache: true,
+    });
+  });
+
+  it("refetches OTX when global TTL expires but keeps URLScan.io cached under per-source TTL", async () => {
+    const nowMs = Date.now();
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      otx: true,
+      urlscan: true,
+    });
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
+    await storage.setApiKey("urlscan", TEST_FIXTURE_URLSCAN_API_KEY);
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 60;
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS] = { urlscan: 300 };
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "example.com|otx": {
+        fetchedAt: nowMs - 90_000,
+        payload: {
+          sourceId: "otx",
+          sourceLabel: "OTX",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "stale pulses",
+        },
+      },
+      "example.com|urlscan": {
+        fetchedAt: nowMs - 90_000,
+        payload: {
+          sourceId: "urlscan",
+          sourceLabel: "URLScan.io",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "3 urlscan results",
+        },
+      },
+    };
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (!url.includes("otx.alienvault.com")) {
+        throw new Error(`unexpected fetch: ${url}`);
+      }
+      return Response.json(
+        {
+          indicator: "example.com",
+          pulse_info: { count: 2, pulses: [{ tags: ["phishing"] }] },
+        },
+        { status: 200 }
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "example.com", iocType: "domain" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(response.ok).toBe(true);
+    const payload = (response as {
+      ok: true;
+      payload: { sources: Record<string, unknown>[] };
+    }).payload;
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "otx",
+          summary: "2 threat pulses",
+        }),
+        expect.objectContaining({
+          sourceId: "urlscan",
+          summary: "3 urlscan results",
+          fromCache: true,
+        }),
+      ])
+    );
+    const otx = payload.sources.find((source) => source.sourceId === "otx");
+    expect(otx?.fromCache).toBeUndefined();
+  });
+
+  it("persists URLScan.io live results and serves them on a subsequent request", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      urlscan: true,
+    });
+    await storage.setApiKey("urlscan", TEST_FIXTURE_URLSCAN_API_KEY);
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 3600;
+
+    const fetchMock = vi.fn(async () =>
+      Response.json(
+        {
+          total: 2,
+          results: [{ verdicts: { tags: ["phishing"] } }],
+        },
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const first = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "urlscan",
+      })
+    );
+    expect(first.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(store[STORAGE_KEY_ENRICHMENT_CACHE]).toMatchObject({
+      "example.com|urlscan": expect.objectContaining({
+        payload: expect.objectContaining({
+          sourceId: "urlscan",
+          summary: "2 urlscan results",
+        }),
+      }),
+    });
+
+    fetchMock.mockClear();
+    const second = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "urlscan",
+      })
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(second.ok).toBe(true);
+    const source = (second as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "urlscan",
+      summary: "2 urlscan results",
+      fromCache: true,
+    });
+  });
 });
 
 describe("enrichment pipeline regression (service worker)", () => {
@@ -1003,6 +1326,134 @@ describe("disabled source and partial success regression", () => {
       expect.arrayContaining([
         expect.objectContaining({
           sourceId: "abuseipdb",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+        }),
+        expect.objectContaining({
+          sourceId: "otx",
+          status: ENRICHMENT_SOURCE_STATUS.ERROR,
+          errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+        }),
+      ])
+    );
+  });
+
+  it("returns partial success when OTX succeeds and URLScan.io rate limits on domain enrichment", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      otx: true,
+      urlscan: true,
+    });
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
+    await storage.setApiKey("urlscan", TEST_FIXTURE_URLSCAN_API_KEY);
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("otx.alienvault.com")) {
+        return Response.json(
+          {
+            indicator: "example.com",
+            pulse_info: { count: 2, pulses: [{ tags: ["phishing"] }] },
+          },
+          { status: 200 }
+        );
+      }
+      if (url.includes("urlscan.io")) {
+        return new Response("", {
+          status: 429,
+          headers: { "Retry-After": "60" },
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "example.com", iocType: "domain" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.ok).toBe(true);
+    const payload = (
+      response as {
+        ok: true;
+        payload: {
+          source: Record<string, unknown>;
+          sources: Record<string, unknown>[];
+        };
+      }
+    ).payload;
+    expect(payload.source).toMatchObject({
+      sourceId: "otx",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "2 threat pulses",
+    });
+    expect(payload.sources).toHaveLength(2);
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "otx",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+        }),
+        expect.objectContaining({
+          sourceId: "urlscan",
+          status: ENRICHMENT_SOURCE_STATUS.ERROR,
+          errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+        }),
+      ])
+    );
+  });
+
+  it("returns partial success when URLScan.io succeeds and OTX rate limits on domain enrichment", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      otx: true,
+      urlscan: true,
+    });
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
+    await storage.setApiKey("urlscan", TEST_FIXTURE_URLSCAN_API_KEY);
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("urlscan.io")) {
+        return Response.json(
+          {
+            total: 3,
+            results: [{ verdicts: { tags: ["malicious"] } }],
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (url.includes("otx.alienvault.com")) {
+        return new Response("", {
+          status: 429,
+          headers: { "Retry-After": "45" },
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "example.com", iocType: "domain" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.ok).toBe(true);
+    const payload = (
+      response as {
+        ok: true;
+        payload: {
+          source: Record<string, unknown>;
+          sources: Record<string, unknown>[];
+        };
+      }
+    ).payload;
+    expect(payload.source).toMatchObject({
+      sourceId: "urlscan",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "3 urlscan results",
+    });
+    expect(payload.sources).toHaveLength(2);
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "urlscan",
           status: ENRICHMENT_SOURCE_STATUS.OK,
         }),
         expect.objectContaining({

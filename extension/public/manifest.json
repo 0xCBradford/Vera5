@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Vera5",
-  "description": "IOC enrichment for analyst workflows. storage: local API keys and enrichment cache. activeTab: run only on the tab you are viewing. scripting: inject IOC detection on demand. host_permissions: read page text to find indicators on sites you visit (IOC values only are sent to sources you configure).",
+  "description": "IOC enrichment for analyst workflows. storage: local API keys and enrichment cache. activeTab: run only on the tab you are viewing. scripting: inject IOC detection on demand. host_permissions: read page text on sites you visit; live enrichment sends IOC values over HTTPS GET only to declared vendor API hosts you enable (AbuseIPDB, OTX, URLScan.io).",
   "version": "0.1.0",
   "permissions": ["storage", "activeTab", "scripting", "contextMenus"],
   "host_permissions": ["http://*/*", "https://*/*"],

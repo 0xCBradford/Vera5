@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   buildUnifiedSummary,
   buildUnifiedTags,
+  collectUrlscanThreatTags,
   mapAbuseIpdbFieldsToUnifiedPresentation,
   mapOtxFieldsToUnifiedPresentation,
+  mapUrlscanFieldsToUnifiedPresentation,
   UNIFIED_SUMMARY_METRIC,
 } from "./enrichmentVendorNormalize";
 
@@ -20,6 +22,12 @@ describe("unified enrichment vendor normalization", () => {
     );
     expect(buildUnifiedSummary(UNIFIED_SUMMARY_METRIC.PULSE_COUNT, 4)).toBe(
       "4 threat pulses"
+    );
+    expect(buildUnifiedSummary(UNIFIED_SUMMARY_METRIC.SCAN_COUNT, 1)).toBe(
+      "1 urlscan result"
+    );
+    expect(buildUnifiedSummary(UNIFIED_SUMMARY_METRIC.SCAN_COUNT, 12)).toBe(
+      "12 urlscan results"
     );
   });
 
@@ -70,6 +78,32 @@ describe("unified enrichment vendor normalization", () => {
     ).toEqual({
       summary: "3 threat pulses",
       tags: ["phishing", "c2", "scanner"],
+    });
+  });
+
+  it("collects URLScan threat tags with malicious verdict prefix", () => {
+    expect(
+      collectUrlscanThreatTags([
+        {
+          maliciousVerdict: true,
+          verdictTags: ["phishing"],
+          taskTags: ["c2"],
+        },
+      ])
+    ).toEqual(["malicious", "phishing", "c2"]);
+  });
+
+  it("maps URLScan search fields to unified presentation", () => {
+    expect(
+      mapUrlscanFieldsToUnifiedPresentation({
+        scanCount: 12,
+        countryCode: "de",
+        topDomain: "malware.testcategory.com",
+        threatTags: ["malicious", "phishing"],
+      })
+    ).toEqual({
+      summary: "12 urlscan results",
+      tags: ["DE", "malware.testcategory.com", "malicious", "phishing"],
     });
   });
 });

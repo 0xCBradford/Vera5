@@ -332,6 +332,8 @@ const ABUSE_CONFIDENCE_SUMMARY_RE = /^(\d+)\s+abuse\s+confidence$/;
 const REPORT_COUNT_SUMMARY_RE = /^(\d+)\s+reports$/;
 const PULSE_SINGLE_SUMMARY_RE = /^1\s+threat\s+pulse$/;
 const PULSE_PLURAL_SUMMARY_RE = /^(\d+)\s+threat\s+pulses$/;
+const URLSCAN_SINGLE_SUMMARY_RE = /^1\s+urlscan\s+result$/;
+const URLSCAN_PLURAL_SUMMARY_RE = /^(\d+)\s+urlscan\s+results$/;
 
 export const DEFAULT_SOURCE_SCORE_WEIGHTS: Readonly<
   Record<EnrichmentSourceId, number>
@@ -380,6 +382,16 @@ export function unifiedSummaryToSignalStrength(
     return clampSignal(pulseCountToSignal(count));
   }
 
+  if (URLSCAN_SINGLE_SUMMARY_RE.test(trimmed)) {
+    return clampSignal(scanCountToSignal(1));
+  }
+
+  match = URLSCAN_PLURAL_SUMMARY_RE.exec(trimmed);
+  if (match) {
+    const count = Number(match[1]);
+    return clampSignal(scanCountToSignal(count));
+  }
+
   return null;
 }
 
@@ -422,6 +434,10 @@ function pulseCountToSignal(count: number): number {
     return 71;
   }
   return Math.min(100, 78 + Math.min(22, Math.floor((count - 35) / 8)));
+}
+
+function scanCountToSignal(count: number): number {
+  return reportCountToSignal(count);
 }
 
 export function signalStrengthToBand(
