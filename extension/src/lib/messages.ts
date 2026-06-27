@@ -15,6 +15,7 @@ export const MESSAGE = {
   SCAN_PAGE: "SCAN_PAGE",
   SCAN_SELECTION: "SCAN_SELECTION",
   ENRICH_SELECTION: "ENRICH_SELECTION",
+  GET_SELECTION_ACTION_STATE: "GET_SELECTION_ACTION_STATE",
   NAVIGATE_TO_IOC_ANCHOR: "NAVIGATE_TO_IOC_ANCHOR",
   TOGGLE_WORKSPACE: "TOGGLE_WORKSPACE",
   OPEN_WORKSPACE: "OPEN_WORKSPACE",
@@ -51,6 +52,9 @@ export type ContentRegisterMessage = {
 export type ScanPageMessage = { type: typeof MESSAGE.SCAN_PAGE };
 export type ScanSelectionMessage = { type: typeof MESSAGE.SCAN_SELECTION };
 export type EnrichSelectionMessage = { type: typeof MESSAGE.ENRICH_SELECTION };
+export type GetSelectionActionStateMessage = {
+  type: typeof MESSAGE.GET_SELECTION_ACTION_STATE;
+};
 export type NavigateToIocAnchorMessage = {
   type: typeof MESSAGE.NAVIGATE_TO_IOC_ANCHOR;
   anchorId: string;
@@ -197,6 +201,10 @@ export function scanSelectionMessage(): ScanSelectionMessage {
 
 export function enrichSelectionMessage(): EnrichSelectionMessage {
   return { type: MESSAGE.ENRICH_SELECTION };
+}
+
+export function getSelectionActionStateMessage(): GetSelectionActionStateMessage {
+  return { type: MESSAGE.GET_SELECTION_ACTION_STATE };
 }
 
 export function navigateToIocAnchorMessage(
@@ -755,6 +763,17 @@ export function isEnrichSelectionMessage(raw: unknown): raw is EnrichSelectionMe
     typeof raw === "object" &&
     "type" in raw &&
     (raw as { type: unknown }).type === MESSAGE.ENRICH_SELECTION
+  );
+}
+
+export function isGetSelectionActionStateMessage(
+  raw: unknown
+): raw is GetSelectionActionStateMessage {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.GET_SELECTION_ACTION_STATE
   );
 }
 

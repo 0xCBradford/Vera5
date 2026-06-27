@@ -36,7 +36,7 @@ Public-facing images for README, store listings, and onboarding. Each asset belo
 | 7 | `popup-source-operations.svg` | Source operations | Popup **Source operations**: cache entry count, cooldown state if applicable, per-source last status rows. |
 | 8 | `workspace-sidebar.svg` | Page workspace sidebar | **Open sidebar** panel docked on the page: scan controls, filtered IOC list, **Why detected?** expanded on one row, **Save to collection…**. |
 | 9 | `overlay-export-templates.svg` | Export templates | Overlay **Template** row or export menu showing ticket templates (**Jira comment**, **TheHive case note**, **Analyst update**, etc.) and filtered-subset export actions. |
-| 10 | `options-keys-sources.svg` | Settings — keys | Options page **Enrichment sources** with masked key fields, enable toggles, **Manual-only enrichment**, and **Indicator types** checkboxes. |
+| 10 | `options-keys-sources.svg` | Settings — keys | Options page **Enrichment Sources** with **Use local backend** (off by default), masked key fields, per-source enable toggles, **Manual-only enrichment**, and **Indicator types** checkboxes. |
 | 11 | `options-trust-consent.svg` | Settings — trust | **Trust & consent**: pre-query toggle, domain policy mode, allow/deny lists or preset control, internal asset lists, analyst workflow preset selector. |
 | 12 | `bulk-enrich-selection.svg` | Bulk enrich | Workspace tray with multiple row checkboxes selected, **Enrich selected (N)** and quota confirmation or **Enriching X of N…** progress visible. |
 
@@ -90,7 +90,7 @@ Replace each image file under `assets/` and update the extension in the line bel
 
 ![Settings — API keys and enrichment sources (placeholder)](assets/options-keys-sources.svg)
 
-*Capture brief:* #10 — masked keys and source toggles.
+*Capture brief:* #10 — **Use local backend**, masked keys, and source toggles.
 
 ![Settings — trust and consent (placeholder)](assets/options-trust-consent.svg)
 

@@ -2,7 +2,7 @@
 
 Vera5’s initial release runs entirely in your browser. **Local mode** means indicator detection, settings, API keys, enrichment cache, and (when enabled) live vendor requests all execute inside the Manifest V3 extension—without a Vera5-operated backend, without cloud sync of your credentials, and without maintainer-hosted enrichment proxies.
 
-This document describes how that mode works, what it includes, and how it differs from optional future deployment patterns.
+This document describes how local mode works, what the extension includes by default, and how to optionally add a user-operated localhost enrichment backend.
 
 ## What local mode is
 
@@ -81,6 +81,98 @@ flowchart TB
 
 Scaffold defaults: local health and version routes on port **8765**; SQLite cache path configurable via `VERA5_SQLITE_PATH` in `backend/.env.example`. The extension **Use local backend** toggle (off by default) connects these paths when enabled.
 
+### Install the optional backend
+
+**Prerequisites**
+
+- **Python 3.11+** with `pip` (3.10 may work; match your OS Python install).
+- The Vera5 extension **built and loaded** in Chromium (`extension/dist/` unpacked). See [Getting started in local mode](#getting-started-in-local-mode).
+- **Bring-your-own API keys** for vendors you enable on the backend (AbuseIPDB is the first live backend connector).
+
+**1. Install Python dependencies**
+
+From the repository root:
+
+```bash
+cd backend
+pip install fastapi uvicorn
+```
+
+**2. Create and edit `backend/.env`**
+
+Copy the template (do not commit the populated file):
+
+| Platform | Command |
+|----------|---------|
+| macOS / Linux | `cp .env.example .env` |
+| Windows (PowerShell) | `Copy-Item .env.example .env` |
+
+Edit `backend/.env` on your machine. Minimum useful fields:
+
+| Variable | Purpose |
+|----------|---------|
+| `VERA5_ABUSEIPDB_API_KEY` | Your AbuseIPDB key when that source is enabled (live IPv4 enrichment on the backend today). |
+| `VERA5_CORS_ORIGINS` | Comma-separated allowed extension origins, e.g. `chrome-extension://YOUR_EXTENSION_ID`. Find the ID on `chrome://extensions` (Developer mode). |
+| `VERA5_SQLITE_PATH` | Optional SQLite cache file path (default `./data/vera5-enrichment.sqlite3` under `backend/`). |
+
+Other variables in `.env.example` (cache TTL, rate-limit cooldowns, optional debug logging) are documented in that file. **Never commit** `backend/.env`, real keys, or secret values to git.
+
+The backend reads **`VERA5_*` environment variables** at process start. After editing `.env`, load those variables into the shell you use to start the server—for example:
+
+```bash
+# macOS / Linux (bash)—run from backend/
+set -a
+source .env
+set +a
+```
+
+```powershell
+# Windows PowerShell—run from backend/
+Get-Content .env |
+  Where-Object { $_ -and $_ -notmatch '^\s*#' -and $_ -match '=' } |
+  ForEach-Object {
+    $name, $value = $_ -split '=', 2
+    Set-Item -Path "env:$name" -Value $value
+  }
+```
+
+**3. Start the server**
+
+From the `backend/` directory (with environment variables loaded):
+
+```bash
+python -m app.main
+```
+
+The process binds to **`127.0.0.1:8765`** (localhost only). Leave this terminal running while you use the extension bridge.
+
+**4. Verify the server**
+
+In another terminal:
+
+```bash
+curl http://127.0.0.1:8765/health
+curl http://127.0.0.1:8765/version
+```
+
+Expect `{"status":"ok"}` and a JSON version payload. If the connection fails, confirm the server is running, nothing else owns port **8765**, and your firewall allows loopback traffic.
+
+**5. Enable the extension toggle**
+
+1. Open **Vera5 Settings** (extension options page).
+2. Expand **Sources**.
+3. Turn on **Use local backend** (default **off**).
+4. Enable the enrichment sources you configured in `backend/.env` (for example AbuseIPDB for IPv4).
+5. On a page with indicators, scan and enrich as usual—the background worker POSTs indicator data to `http://127.0.0.1:8765/enrich` instead of calling vendors directly from the extension.
+
+When the toggle is **on** but the server is **down**, Vera5 falls back to in-extension connectors and shows an honest retry hint—it does not send data to Vera5-operated infrastructure.
+
+**CORS note:** If enrichment requests fail with a browser CORS error, add your unpacked extension origin (`chrome-extension://…`) to `VERA5_CORS_ORIGINS` in `backend/.env`, reload the environment variables, and restart the server. Localhost test origins (`http://127.0.0.1`, `http://localhost`) are also permitted for development.
+
+**Stop the server:** Press `Ctrl+C` in the server terminal.
+
+Security summary for the optional backend: [SECURITY.md](../SECURITY.md#optional-local-enrichment-backend).
+
 ## Capabilities in local mode
 
 ### On-page detection and UI
@@ -156,6 +248,7 @@ An **optional localhost backend** lets teams keep vendor API keys in a local `ba
 2. Load **`extension/dist/`** unpacked in Chrome (`chrome://extensions`, Developer mode).
 3. Open the options page to configure sources, keys, and privacy toggles when you are ready for live enrichment.
 4. Visit a page with indicators, scan from the popup, and use highlights and the hover card.
+5. **Optional:** run the [localhost enrichment backend](#install-the-optional-backend) and enable **Use local backend** in Settings when you want aggregation on `127.0.0.1`.
 
 Detailed install steps: [README.md](../README.md).
 

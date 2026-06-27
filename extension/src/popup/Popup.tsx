@@ -3,8 +3,10 @@ import {
   navigateToIocAnchorMessage,
   openWorkspaceMessage,
   enrichSelectionMessage,
+  getSelectionActionStateMessage,
   scanPageMessage,
   scanSelectionMessage,
+  type MessageResponse,
 } from "../lib/messages";
 import {
   getTabScanTrayFilter,
@@ -1382,6 +1384,8 @@ const primaryButtonStyle = {
   color: POPUP_THEME.onAccent,
   fontWeight: 600 as const,
   cursor: "pointer" as const,
+  margin: 0,
+  boxSizing: "border-box" as const,
 };
 
 /** Secondary / neutral action — surface fill, no accent. */
@@ -1394,7 +1398,60 @@ const buttonStyle = {
   color: POPUP_THEME.text,
   fontWeight: 600 as const,
   cursor: "pointer" as const,
+  margin: 0,
+  boxSizing: "border-box" as const,
 };
+
+const actionButtonGroupStyle = {
+  display: "flex",
+  flexDirection: "column" as const,
+  gap: 8,
+};
+
+type SelectionActionState = {
+  textSelectionAvailable: boolean;
+  selectionEnrichAvailable: boolean;
+};
+
+const EMPTY_SELECTION_ACTION_STATE: SelectionActionState = {
+  textSelectionAvailable: false,
+  selectionEnrichAvailable: false,
+};
+
+function parseSelectionActionStateResponse(
+  response: MessageResponse | undefined
+): SelectionActionState {
+  if (!response?.ok || typeof response.payload !== "object" || response.payload === null) {
+    return EMPTY_SELECTION_ACTION_STATE;
+  }
+
+  const payload = response.payload as Record<string, unknown>;
+  return {
+    textSelectionAvailable: payload.textSelectionAvailable === true,
+    selectionEnrichAvailable: payload.selectionEnrichAvailable === true,
+  };
+}
+
+async function requestSelectionActionStateForActiveTab(): Promise<SelectionActionState> {
+  if (typeof chrome === "undefined" || !chrome.tabs?.query) {
+    return EMPTY_SELECTION_ACTION_STATE;
+  }
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    return EMPTY_SELECTION_ACTION_STATE;
+  }
+
+  try {
+    const response = (await chrome.tabs.sendMessage(
+      tab.id,
+      getSelectionActionStateMessage()
+    )) as MessageResponse | undefined;
+    return parseSelectionActionStateResponse(response);
+  } catch {
+    return EMPTY_SELECTION_ACTION_STATE;
+  }
+}
 
 function filterChipStyle(active: boolean): CSSProperties {
   return {
@@ -1503,6 +1560,8 @@ export function Popup() {
   const [selectionEnrichMessage, setSelectionEnrichMessage] = useState<string | null>(
     null
   );
+  const [textSelectionAvailable, setTextSelectionAvailable] = useState(false);
+  const [selectionEnrichAvailable, setSelectionEnrichAvailable] = useState(false);
   const [sessionTitle, setSessionTitle] = useState(DEFAULT_INVESTIGATION_SESSION_TITLE);
   const [sessionTitleReady, setSessionTitleReady] = useState(false);
   const [activeSession, setActiveSession] = useState<InvestigationSession | null>(null);
@@ -1569,6 +1628,28 @@ export function Popup() {
     void refreshSourceOps().finally(() => {
       setSourceOpsReady(true);
     });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshSelectionActionState = () => {
+      void requestSelectionActionStateForActiveTab().then((state) => {
+        if (cancelled) {
+          return;
+        }
+        setTextSelectionAvailable(state.textSelectionAvailable);
+        setSelectionEnrichAvailable(state.selectionEnrichAvailable);
+      });
+    };
+
+    refreshSelectionActionState();
+    const intervalId = window.setInterval(refreshSelectionActionState, 400);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   useEffect(() => {
@@ -2066,6 +2147,10 @@ export function Popup() {
       });
   };
 
+  const scanSelectionDisabled =
+    !ready || !enabled || scanState === "scanning" || !textSelectionAvailable;
+  const enrichSelectionDisabled = !ready || !enabled || !selectionEnrichAvailable;
+
   return (
     <main
       style={{
@@ -2137,13 +2222,14 @@ export function Popup() {
         />
         Highlight indicators
       </label>
+      <div style={actionButtonGroupStyle}>
       <button
         type="button"
         disabled={!ready || !enabled || scanState === "scanning"}
+        className="v5-btn v5-btn--primary"
         onClick={handleScanPage}
         style={{
           ...primaryButtonStyle,
-          marginBottom: 8,
           cursor: !ready || !enabled ? "not-allowed" : "pointer",
           opacity: !ready || !enabled ? 0.65 : 1,
         }}
@@ -2152,26 +2238,26 @@ export function Popup() {
       </button>
       <button
         type="button"
-        disabled={!ready || !enabled || scanState === "scanning"}
+        disabled={scanSelectionDisabled}
+        className={scanSelectionDisabled ? "v5-btn" : "v5-btn v5-btn--primary"}
         onClick={handleScanSelection}
         style={{
-          ...buttonStyle,
-          marginBottom: 8,
-          cursor: !ready || !enabled ? "not-allowed" : "pointer",
-          opacity: !ready || !enabled ? 0.65 : 1,
+          ...(scanSelectionDisabled ? buttonStyle : primaryButtonStyle),
+          cursor: scanSelectionDisabled ? "not-allowed" : "pointer",
+          opacity: scanSelectionDisabled ? 0.65 : 1,
         }}
       >
         {scanState === "scanning" ? "Scanning…" : "Scan selection"}
       </button>
       <button
         type="button"
-        disabled={!ready || !enabled}
+        disabled={enrichSelectionDisabled}
+        className={enrichSelectionDisabled ? "v5-btn" : "v5-btn v5-btn--primary"}
         onClick={handleEnrichSelection}
         style={{
-          ...buttonStyle,
-          marginBottom: 8,
-          cursor: !ready || !enabled ? "not-allowed" : "pointer",
-          opacity: !ready || !enabled ? 0.65 : 1,
+          ...(enrichSelectionDisabled ? buttonStyle : primaryButtonStyle),
+          cursor: enrichSelectionDisabled ? "not-allowed" : "pointer",
+          opacity: enrichSelectionDisabled ? 0.65 : 1,
         }}
       >
         Enrich selection
@@ -2179,10 +2265,10 @@ export function Popup() {
       <button
         type="button"
         disabled={!ready}
+        className="v5-btn v5-btn--primary"
         onClick={handleOpenSettings}
         style={{
           ...primaryButtonStyle,
-          marginBottom: 8,
           cursor: ready ? "pointer" : "not-allowed",
           opacity: ready ? 1 : 0.65,
         }}
@@ -2192,6 +2278,7 @@ export function Popup() {
       <button
         type="button"
         disabled={!ready}
+        className="v5-btn v5-btn--primary"
         onClick={handleOpenPermissions}
         style={{
           ...primaryButtonStyle,
@@ -2204,16 +2291,17 @@ export function Popup() {
       <button
         type="button"
         disabled={!ready}
+        className="v5-btn"
         onClick={handleOpenSidebar}
         style={{
           ...buttonStyle,
-          marginBottom: 8,
           cursor: ready ? "pointer" : "not-allowed",
           opacity: ready ? 1 : 0.65,
         }}
       >
         Open sidebar
       </button>
+      </div>
       <section
         aria-label="Investigation session"
         style={{

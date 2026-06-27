@@ -1,4 +1,5 @@
 import type { MessageResponse } from "../lib/messages";
+import { MESSAGE } from "../lib/messages";
 import { extractExactIocValue } from "../lib/iocRequestBoundaries";
 import { IOC_TYPE, ruleIdForIocType, type IocMatch, type IocRegexOptions, type IocType } from "../lib/iocRegex";
 import {
@@ -39,6 +40,49 @@ export function isEnrichSelectionMessage(
     "type" in raw &&
     (raw as { type: unknown }).type === CONTENT_MESSAGE.ENRICH_SELECTION
   );
+}
+
+export type SelectionActionState = {
+  textSelectionAvailable: boolean;
+  selectionEnrichAvailable: boolean;
+};
+
+export function isGetSelectionActionStateMessage(
+  raw: unknown
+): raw is { type: typeof MESSAGE.GET_SELECTION_ACTION_STATE } {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === MESSAGE.GET_SELECTION_ACTION_STATE
+  );
+}
+
+export async function resolveSelectionActionState(
+  doc: Document = document
+): Promise<SelectionActionState> {
+  const textSelectionAvailable = resolveActiveSelectionRange(doc) !== null;
+  if (!textSelectionAvailable) {
+    return {
+      textSelectionAvailable: false,
+      selectionEnrichAvailable: false,
+    };
+  }
+
+  const resolved = await resolveIocFromActiveSelection(doc);
+  return {
+    textSelectionAvailable: true,
+    selectionEnrichAvailable: resolved !== null,
+  };
+}
+
+export async function handleGetSelectionActionStateRequest(
+  doc: Document = document
+): Promise<MessageResponse> {
+  return {
+    ok: true,
+    payload: await resolveSelectionActionState(doc),
+  };
 }
 
 function selectionIntersectsHighlight(range: Range, highlight: HTMLElement): boolean {
@@ -389,6 +433,15 @@ export async function handleEnrichSelectionRequest(
 
 export function setupEnrichSelectionListener(): void {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (isGetSelectionActionStateMessage(message)) {
+      void handleGetSelectionActionStateRequest()
+        .then(sendResponse)
+        .catch((error) => {
+          logUnlessBenignExtensionError(error);
+        });
+      return true;
+    }
+
     if (!isEnrichSelectionMessage(message)) {
       return false;
     }

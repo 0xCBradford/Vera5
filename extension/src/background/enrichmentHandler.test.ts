@@ -85,10 +85,14 @@ vi.mock("../lib/storage", async (importOriginal) => {
 
 const requestLocalBackendEnrichment = vi.fn();
 
-vi.mock("../lib/localBackendEnrichment", () => ({
-  requestLocalBackendEnrichment: (...args: unknown[]) =>
-    requestLocalBackendEnrichment(...args),
-}));
+vi.mock("../lib/localBackendEnrichment", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/localBackendEnrichment")>();
+  return {
+    ...actual,
+    requestLocalBackendEnrichment: (...args: unknown[]) =>
+      requestLocalBackendEnrichment(...args),
+  };
+});
 
 describe("enrichment handler", () => {
   const store: Record<string, unknown> = {};
@@ -828,6 +832,8 @@ describe("enrichment handler", () => {
         urlscan: false,
         greynoise: false,
       },
+      cacheTtlSeconds: DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
+      sourceCacheTtlSeconds: {},
     });
     expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
     expect(response).toEqual({
@@ -851,9 +857,26 @@ describe("enrichment handler", () => {
     });
   });
 
-  it("returns a local backend network error when the backend request fails", async () => {
+  it("surfaces backend cache hits with fromCache for cached vs live label parity", async () => {
     vi.mocked(storage.getLocalBackendEnabled).mockResolvedValue(true);
-    requestLocalBackendEnrichment.mockResolvedValue(null);
+    requestLocalBackendEnrichment.mockResolvedValue({
+      source: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: ENRICHMENT_SOURCE_STATUS.OK,
+        summary: "cached summary",
+        fromCache: true,
+      },
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+          fromCache: true,
+        },
+      ],
+    });
 
     const response = await handleEnrichIocMessage(
       enrichIocMessage({
@@ -863,24 +886,68 @@ describe("enrichment handler", () => {
       })
     );
 
-    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
     expect(response).toEqual({
       ok: true,
       payload: {
         source: {
           sourceId: "abuseipdb",
           sourceLabel: "AbuseIPDB",
-          status: ENRICHMENT_SOURCE_STATUS.ERROR,
-          errorCode: "network_error",
-          errorMessage: "Local enrichment backend request failed.",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+          fromCache: true,
         },
         sources: [
           {
             sourceId: "abuseipdb",
             sourceLabel: "AbuseIPDB",
-            status: ENRICHMENT_SOURCE_STATUS.ERROR,
-            errorCode: "network_error",
-            errorMessage: "Local enrichment backend request failed.",
+            status: ENRICHMENT_SOURCE_STATUS.OK,
+            summary: "cached summary",
+            fromCache: true,
+          },
+        ],
+      },
+    });
+  });
+
+  it("falls back to extension connectors when the local backend request fails", async () => {
+    vi.mocked(storage.getLocalBackendEnabled).mockResolvedValue(true);
+    requestLocalBackendEnrichment.mockResolvedValue(null);
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "fallback summary",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(requestLocalBackendEnrichment).toHaveBeenCalledOnce();
+    expect(enrichWithAbuseIpdb).toHaveBeenCalledOnce();
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "fallback summary",
+          retryHint:
+            "Local backend unreachable. Loaded through extension connectors instead.",
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.OK,
+            summary: "fallback summary",
+            retryHint:
+              "Local backend unreachable. Loaded through extension connectors instead.",
           },
         ],
       },

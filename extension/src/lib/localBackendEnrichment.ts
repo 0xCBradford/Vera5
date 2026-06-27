@@ -4,12 +4,14 @@ import {
 } from "./enrichment";
 import type { EnrichmentSourceId } from "./enrichmentSourceRegistry";
 import type { IocType } from "./iocRegex";
-import type { EnrichmentSourceEnabledRecord } from "./storage";
+import type { EnrichmentSourceCacheTtlRecord, EnrichmentSourceEnabledRecord } from "./storage";
 
 export const DEFAULT_LOCAL_BACKEND_HOST = "127.0.0.1";
 export const DEFAULT_LOCAL_BACKEND_PORT = 8765;
 export const DEFAULT_LOCAL_BACKEND_REQUEST_TIMEOUT_MS = 15_000;
 export const LOCAL_BACKEND_ENRICH_PATH = "/enrich";
+export const LOCAL_BACKEND_FALLBACK_HINT =
+  "Local backend unreachable. Loaded through extension connectors instead.";
 
 export type LocalBackendEnrichmentInput = {
   value: string;
@@ -17,12 +19,27 @@ export type LocalBackendEnrichmentInput = {
   sourceId?: EnrichmentSourceId;
   bypassCache?: boolean;
   enabledSources: EnrichmentSourceEnabledRecord;
+  cacheTtlSeconds?: number;
+  sourceCacheTtlSeconds?: EnrichmentSourceCacheTtlRecord;
 };
 
 export type LocalBackendEnrichmentResponse = {
   source: EnrichmentSourceResult;
   sources: EnrichmentSourceResult[];
 };
+
+export function applyLocalBackendFallbackHint(
+  bundle: LocalBackendEnrichmentResponse
+): LocalBackendEnrichmentResponse {
+  const source: EnrichmentSourceResult = {
+    ...bundle.source,
+    retryHint: LOCAL_BACKEND_FALLBACK_HINT,
+  };
+  const sources = bundle.sources.map((entry) =>
+    entry.sourceId === source.sourceId ? source : entry
+  );
+  return { source, sources };
+}
 
 export class LocalBackendOutboundBlockedError extends Error {
   constructor(message: string) {
@@ -134,6 +151,8 @@ export async function requestLocalBackendEnrichment(
         sourceId: input.sourceId,
         bypassCache: input.bypassCache === true,
         enabledSources: input.enabledSources,
+        cacheTtlSeconds: input.cacheTtlSeconds,
+        sourceCacheTtlSeconds: input.sourceCacheTtlSeconds,
       }),
       signal: controller.signal,
     });

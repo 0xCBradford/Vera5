@@ -1,10 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
-import {
+import {  applyLocalBackendFallbackHint,
   assertLocalBackendEnrichUrl,
   buildLocalBackendEnrichUrl,
   DEFAULT_LOCAL_BACKEND_PORT,
   LocalBackendOutboundBlockedError,
+  LOCAL_BACKEND_FALLBACK_HINT,
   parseLocalBackendEnrichmentResponse,
   requestLocalBackendEnrichment,
 } from "./localBackendEnrichment";
@@ -50,6 +51,29 @@ describe("local backend enrich response parsing", () => {
           sourceLabel: "AbuseIPDB",
           status: ENRICHMENT_SOURCE_STATUS.OK,
           summary: "12 abuse confidence",
+        },
+      ],
+    };
+
+    expect(parseLocalBackendEnrichmentResponse(payload)).toEqual(payload);
+  });
+
+  it("parses fromCache on cached backend responses", () => {
+    const payload = {
+      source: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: ENRICHMENT_SOURCE_STATUS.OK,
+        summary: "cached summary",
+        fromCache: true,
+      },
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+          fromCache: true,
         },
       ],
     };
@@ -118,6 +142,8 @@ describe("requestLocalBackendEnrichment", () => {
       sourceId: "abuseipdb",
       bypassCache: true,
       enabledSources: { abuseipdb: true },
+      cacheTtlSeconds: undefined,
+      sourceCacheTtlSeconds: undefined,
     });
     expect(result?.source.summary).toBe("5 abuse confidence");
   });
@@ -150,5 +176,36 @@ describe("requestLocalBackendEnrichment", () => {
     );
 
     expect(result).toBeNull();
+  });
+});
+
+describe("applyLocalBackendFallbackHint", () => {
+  it("adds a retry hint on the primary source result", () => {
+    const bundle = applyLocalBackendFallbackHint({
+      source: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: ENRICHMENT_SOURCE_STATUS.OK,
+        summary: "12 abuse confidence",
+      },
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "12 abuse confidence",
+        },
+        {
+          sourceId: "otx",
+          sourceLabel: "OTX",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "OTX pulse",
+        },
+      ],
+    });
+
+    expect(bundle.source.retryHint).toBe(LOCAL_BACKEND_FALLBACK_HINT);
+    expect(bundle.sources[0]?.retryHint).toBe(LOCAL_BACKEND_FALLBACK_HINT);
+    expect(bundle.sources[1]?.retryHint).toBeUndefined();
   });
 });

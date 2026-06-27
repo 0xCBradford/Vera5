@@ -21,8 +21,10 @@ import { scanTextNodesForIocs } from "./detector";
 import { HOVER_CARD_HOST_ID, HOVER_CARD_PANEL_CLASS } from "./hoverCardOverlay";
 import {
   handleEnrichSelectionRequest,
+  handleGetSelectionActionStateRequest,
   resolveHighlightFromSelection,
   resolveIocMatchFromSelectionText,
+  resolveSelectionActionState,
   setupEnrichSelectionListener,
 } from "./enrichSelection";
 
@@ -212,6 +214,50 @@ describe("handleEnrichSelectionRequest", () => {
       DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE
     );
     expect(enrichmentBackgroundFetch.runBackgroundEnrichment).not.toHaveBeenCalled();
+  });
+});
+
+describe("resolveSelectionActionState", () => {
+  afterEach(() => {
+    window.getSelection()?.removeAllRanges();
+  });
+
+  it("reports no selection when nothing is highlighted", async () => {
+    await expect(resolveSelectionActionState(document)).resolves.toEqual({
+      textSelectionAvailable: false,
+      selectionEnrichAvailable: false,
+    });
+  });
+
+  it("reports scan availability for plain text and enrich only for IOC text", async () => {
+    const textNode = document.createTextNode("Contact 192.0.2.1 today.");
+    document.body.replaceChildren(textNode);
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    await expect(resolveSelectionActionState(document)).resolves.toEqual({
+      textSelectionAvailable: true,
+      selectionEnrichAvailable: true,
+    });
+  });
+
+  it("handles GET_SELECTION_ACTION_STATE requests", async () => {
+    const textNode = document.createTextNode("plain text only");
+    document.body.replaceChildren(textNode);
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    await expect(handleGetSelectionActionStateRequest(document)).resolves.toEqual({
+      ok: true,
+      payload: {
+        textSelectionAvailable: true,
+        selectionEnrichAvailable: false,
+      },
+    });
   });
 });
 

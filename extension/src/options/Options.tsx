@@ -144,7 +144,7 @@ const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "scanning", label: "Scanning" },
   { id: "indicators", label: "Indicators" },
   { id: "sources", label: "Enrichment Sources" },
-  { id: "trust", label: "Trust & consent" },
+  { id: "trust", label: "Trust & Consent" },
   { id: "cache", label: "Cache" },
   { id: "backup", label: "Backup" },
   { id: "api-keys", label: "API Keys" },
@@ -708,6 +708,19 @@ export function Options() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [activeSection, setActiveSection] = useState("overview");
+  const [collapsedSections, setCollapsedSections] = useState<
+    Record<string, boolean>
+  >(() => ({
+    overview: true,
+    scanning: true,
+    indicators: true,
+    "private-ipv4": true,
+    sources: true,
+    trust: true,
+    cache: true,
+    backup: true,
+    "api-keys": true,
+  }));
   const [settingsReloadToken, setSettingsReloadToken] = useState(0);
   const [autoScanEnabled, setAutoScanEnabledState] = useState(false);
   const [manualOnlyMode, setManualOnlyModeState] = useState(true);
@@ -904,8 +917,13 @@ export function Options() {
     return () => observer.disconnect();
   }, []);
 
+  const toggleSection = (id: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   const handleNavClick = (id: string) => {
     setActiveSection(id);
+    setCollapsedSections((prev) => (id in prev ? { ...prev, [id]: false } : prev));
     scrollToSection(id);
   };
 
@@ -1306,7 +1324,9 @@ export function Options() {
           <div className="v5-brand">
             <span className="v5-brand__mark" aria-hidden="true" />
             <span>
-              <span className="v5-brand__name">VERA5</span>
+              <span className="v5-brand__name">
+                VERA<span className="v5-brand__five">5</span>
+              </span>
               <span className="v5-brand__sub">Threat intel settings</span>
             </span>
           </div>
@@ -1493,7 +1513,7 @@ export function Options() {
                       Pre-query notices name enabled vendors and the indicator
                       value before a live fetch. Adjust domain policy, internal
                       assets, and scanning under{" "}
-                      <strong>Trust &amp; consent</strong> and{" "}
+                      <strong>Trust &amp; Consent</strong> and{" "}
                       <strong>Scanning</strong>.
                     </p>
                     <div
@@ -1569,14 +1589,27 @@ export function Options() {
           >
             <div className="v5-card__head">
               <h2 id="overview-heading" className="v5-card__title">
-                Overview
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections.overview}
+                  aria-controls="overview-body"
+                  onClick={() => toggleSection("overview")}
+                >
+                  <span className="v5-card__toggle-text">Overview</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
               </h2>
               <p className="v5-card__desc">
                 A snapshot of how VERA5 is currently scanning and enriching this
                 browser.
               </p>
             </div>
-            <div className="v5-card__body">
+            <div
+              id="overview-body"
+              className="v5-card__body"
+              hidden={collapsedSections.overview}
+            >
               <div className="v5-overview-grid">
                 <div className="v5-stat">
                   <div className="v5-stat__label">Indicator types</div>
@@ -1649,13 +1682,26 @@ export function Options() {
           >
             <div className="v5-card__head">
               <h2 id="scanning-heading" className="v5-card__title">
-                Scanning
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections.scanning}
+                  aria-controls="scanning-body"
+                  onClick={() => toggleSection("scanning")}
+                >
+                  <span className="v5-card__toggle-text">Scanning</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
               </h2>
               <p className="v5-card__desc">
                 Control when VERA5 inspects pages for indicators.
               </p>
             </div>
-            <div className="v5-card__body">
+            <div
+              id="scanning-body"
+              className="v5-card__body"
+              hidden={collapsedSections.scanning}
+            >
               <ToggleRow
                 label="Automatically scan when the page changes"
                 hint="When off, scan only with Scan page in the popup or the keyboard shortcut."
@@ -1674,14 +1720,27 @@ export function Options() {
           >
             <div className="v5-card__head">
               <h2 id="indicators-heading" className="v5-card__title">
-                Indicator types
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections.indicators}
+                  aria-controls="indicators-body"
+                  onClick={() => toggleSection("indicators")}
+                >
+                  <span className="v5-card__toggle-text">Indicator Types</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
               </h2>
               <p className="v5-card__desc">
                 Choose which indicator types Vera5 detects during page scans.
                 Disabled types are omitted from highlights and scan counts.
               </p>
             </div>
-            <div className="v5-card__body">
+            <div
+              id="indicators-body"
+              className="v5-card__body"
+              hidden={collapsedSections.indicators}
+            >
               <div className="v5-ioc-grid">
                 {IOC_TYPE_SETTINGS_ORDER.map((iocType) => (
                   <label key={iocType} className="v5-ioc-card">
@@ -1722,7 +1781,18 @@ export function Options() {
                 className="v5-card__title"
                 style={{ fontSize: 18 }}
               >
-                Private-space IPv4 addresses
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections["private-ipv4"]}
+                  aria-controls="private-ipv4-body"
+                  onClick={() => toggleSection("private-ipv4")}
+                >
+                  <span className="v5-card__toggle-text">
+                    Private-Space IPv4 Addresses
+                  </span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
               </h2>
               <p className="v5-card__desc">
                 A core control for SOC and lab workflows. When off, RFC1918,
@@ -1730,7 +1800,11 @@ export function Options() {
                 so internal network addresses are never treated as indicators.
               </p>
             </div>
-            <div className="v5-card__body">
+            <div
+              id="private-ipv4-body"
+              className="v5-card__body"
+              hidden={collapsedSections["private-ipv4"]}
+            >
               <label
                 className="v5-row"
                 style={{
@@ -1764,7 +1838,16 @@ export function Options() {
           >
             <div className="v5-card__head">
               <h2 id="sources-heading" className="v5-card__title">
-                Enrichment sources
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections.sources}
+                  aria-controls="sources-body"
+                  onClick={() => toggleSection("sources")}
+                >
+                  <span className="v5-card__toggle-text">Enrichment Sources</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
               </h2>
               <p className="v5-card__desc">
                 Choose which threat intelligence sources Vera5 may use when
@@ -1772,7 +1855,11 @@ export function Options() {
                 and are not queried.
               </p>
             </div>
-            <div className="v5-card__body">
+            <div
+              id="sources-body"
+              className="v5-card__body"
+              hidden={collapsedSections.sources}
+            >
               <ToggleRow
                 label="Use local backend"
                 hint="When on, Vera5 routes enrichment through an optional FastAPI server on this machine (127.0.0.1). When off, enrichment runs inside the extension."
@@ -1892,14 +1979,27 @@ export function Options() {
           >
             <div className="v5-card__head">
               <h2 id="trust-heading" className="v5-card__title">
-                Trust &amp; consent
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections.trust}
+                  aria-controls="trust-body"
+                  onClick={() => toggleSection("trust")}
+                >
+                  <span className="v5-card__toggle-text">Trust &amp; Consent</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
               </h2>
               <p className="v5-card__desc">
                 Control transparency before live enrichment queries leave this
                 browser.
               </p>
             </div>
-            <div className="v5-card__body">
+            <div
+              id="trust-body"
+              className="v5-card__body"
+              hidden={collapsedSections.trust}
+            >
               <ToggleRow
                 label="Show pre-query notices"
                 hint="When on, Vera5 shows a notice before sending an indicator value to a vendor you enabled during live enrichment."
@@ -2142,7 +2242,16 @@ export function Options() {
           <section id="cache" className="v5-card" aria-labelledby="cache-heading">
             <div className="v5-card__head">
               <h2 id="cache-heading" className="v5-card__title">
-                Enrichment cache
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections.cache}
+                  aria-controls="cache-body"
+                  onClick={() => toggleSection("cache")}
+                >
+                  <span className="v5-card__toggle-text">Enrichment Cache</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
               </h2>
               <p className="v5-card__desc">
                 Vera5 stores recent threat intelligence responses locally to reduce
@@ -2150,7 +2259,11 @@ export function Options() {
                 and API keys are not affected.
               </p>
             </div>
-            <div className="v5-card__body">
+            <div
+              id="cache-body"
+              className="v5-card__body"
+              hidden={collapsedSections.cache}
+            >
               <div className="v5-field">
                 <span className="v5-field__label">Default cache lifetime</span>
                 <div className="v5-presets">
@@ -2219,7 +2332,16 @@ export function Options() {
           >
             <div className="v5-card__head">
               <h2 id="settings-backup-heading" className="v5-card__title">
-                Settings backup
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections.backup}
+                  aria-controls="backup-body"
+                  onClick={() => toggleSection("backup")}
+                >
+                  <span className="v5-card__toggle-text">Settings Backup</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
               </h2>
               <p className="v5-card__desc">
                 Export your preferences as JSON to move them between profiles or
@@ -2227,7 +2349,11 @@ export function Options() {
                 them.
               </p>
             </div>
-            <div className="v5-card__body">
+            <div
+              id="backup-body"
+              className="v5-card__body"
+              hidden={collapsedSections.backup}
+            >
               <ToggleRow
                 label="Include API keys in export"
                 hint="Off by default. Only enable when exporting to a trusted location."
@@ -2297,14 +2423,27 @@ export function Options() {
           >
             <div className="v5-card__head">
               <h2 id="api-keys-heading" className="v5-card__title">
-                API keys
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections["api-keys"]}
+                  aria-controls="api-keys-body"
+                  onClick={() => toggleSection("api-keys")}
+                >
+                  <span className="v5-card__toggle-text">API Keys</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
               </h2>
               <p className="v5-card__desc">
                 Keys are stored locally in your browser. Vera5 does not operate a
                 shared enrichment service or receive your credentials.
               </p>
             </div>
-            <div className="v5-card__body">
+            <div
+              id="api-keys-body"
+              className="v5-card__body"
+              hidden={collapsedSections["api-keys"]}
+            >
               {OPTIONS_API_KEY_SLOTS.map((slot) => (
                 <ApiKeyField
                   key={slot}

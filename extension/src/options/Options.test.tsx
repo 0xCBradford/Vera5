@@ -461,7 +461,7 @@ describe("Options API key inputs", () => {
     expect(
       mounted.container.querySelector('button[aria-label="Clear enrichment cache"]')
     ).not.toBeNull();
-    expect(mounted.container.textContent).toContain("Enrichment cache");
+    expect(mounted.container.textContent).toContain("Enrichment Cache");
   });
 
   it("clears enrichment cache when the button is clicked", async () => {
@@ -694,7 +694,7 @@ describe("Options install quick start", () => {
     expect(mounted.container.textContent).not.toContain(
       "Skip pre-query notices"
     );
-    expect(mounted.container.textContent).toContain("Trust & consent");
+    expect(mounted.container.textContent).toContain("Trust & Consent");
 
     const toggle = mounted.container.querySelector(
       'input[aria-label="Show pre-query notices"]'

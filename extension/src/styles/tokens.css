@@ -152,3 +152,39 @@
 
   color-scheme: dark;
 }
+
+/* ------------------------------------------------------------------
+ * Popup action buttons — amber Vera5 hover glow + focus ring.
+ * Fills are set inline in Popup.tsx; these rules add only the
+ * interactive layer (glow, lift, focus). Disabled buttons stay inert.
+ * The neutral/primary hovers share specificity, so the primary rule
+ * is declared last to win on shared properties.
+ * ------------------------------------------------------------------ */
+.v5-btn {
+  transition: box-shadow var(--t-hover) var(--ease-out),
+    transform var(--t-hover) var(--ease-out),
+    background-color var(--t-hover) var(--ease-out),
+    border-color var(--t-hover) var(--ease-out);
+}
+.v5-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: var(--border-accent) !important;
+  box-shadow: 0 0 0 1px rgba(255, 178, 36, 0.1), 0 6px 18px rgba(255, 178, 36, 0.14);
+}
+.v5-btn--primary:hover:not(:disabled) {
+  background-color: var(--accent-hover) !important;
+  border-color: transparent !important;
+  box-shadow: 0 6px 20px rgba(255, 178, 36, 0.3);
+}
+.v5-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .v5-btn {
+    transition: none;
+  }
+  .v5-btn:hover:not(:disabled) {
+    transform: none;
+  }
+}

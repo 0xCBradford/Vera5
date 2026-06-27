@@ -183,9 +183,62 @@ Vera5 is not designed to collect usage analytics, crash telemetry, or browsing h
 - Do not paste keys into screenshots, issues, or public discussions.
 - CI runs secret scanning (Gitleaks) on pull requests and on every push to `main`; treat any leaked key as compromised and rotate it at the vendor.
 
-## Local-first and optional backend
+## Optional local enrichment backend
 
-The extension is intended to work without a Vera5-hosted backend. An optional **localhost / self-hosted** backend may be used in future releases to keep keys off the extension surface; that mode remains under your control and is not required for the extension-only MVP.
+Vera5 ships as a **browser extension only** by default. You do **not** need to install or run a separate Vera5 server to use detection, settings, pivots, or direct vendor enrichment from the extension.
+
+An **optional**, **user-operated** FastAPI enrichment aggregator may run on **your machine** when you choose local aggregation (shared SQLite cache, per-source rate limits, or keeping vendor keys in a backend `.env` instead of extension storage). Vera5 does **not** operate this service for you, require it, or receive your backend credentials.
+
+| Property | Behavior |
+|----------|----------|
+| **Required?** | **No.** The extension **Use local backend** toggle is **off by default**. When off, enrichment follows the direct extension → vendor path described above. |
+| **Who runs it?** | **You.** You clone or build the backend, create `backend/.env` locally, start the process, and stop it when finished. |
+| **Network exposure** | The backend is intended to bind to **`127.0.0.1` only** (localhost)—not your LAN or the public internet by default. The extension bridge calls `http://127.0.0.1:<port>/enrich` when enabled. |
+| **Vera5 infrastructure** | Neither the extension-only path nor the optional localhost path sends indicators, keys, or page content to Vera5-operated enrichment, telemetry, or credential-relay services. |
+| **Data sent** | Indicator values you choose to enrich—not full page HTML or browsing history. |
+
+### Default path versus optional localhost path
+
+```mermaid
+flowchart LR
+  subgraph Browser[Browser extension]
+    BG[Background worker]
+  end
+  subgraph Localhost[127.0.0.1 optional user-operated]
+    API[Local FastAPI aggregator]
+    Cache[(SQLite cache)]
+    Env[backend/.env BYOK keys]
+    API --> Cache
+    API --> Env
+  end
+  Vendors[Third-party vendor APIs]
+
+  BG -->|default direct HTTPS indicator only| Vendors
+  BG -->|optional when toggle on indicator only| API
+  API -->|HTTPS indicator only| Vendors
+```
+
+When the optional backend is **unreachable** and the toggle is on, the extension falls back to in-extension connectors and surfaces an honest status— it does not silently fail or upload data to Vera5.
+
+### Keys, cache, and logging on the optional backend
+
+| Topic | Handling |
+|-------|----------|
+| **API keys** | **Bring-your-own.** Keys live in `backend/.env` on your machine (see `backend/.env.example`). Never commit real keys or populated `.env` files to git. Vera5 does not receive or store backend keys. |
+| **SQLite cache** | Enrichment responses cache locally under a path you configure (default under `backend/data/`). Cache holds normalized vendor payloads for indicators you queried—not full pages. |
+| **Rate limits** | Per-source cooldowns are enforced in the local aggregator to reduce accidental vendor quota burn. |
+| **Debug logging** | Optional request logging (`VERA5_DEBUG`) redacts API keys and full IOC values in log output. |
+
+Setup and architecture diagram: [docs/local-mode.md](docs/local-mode.md).
+
+### Your responsibilities when using the optional backend
+
+- Install and run the backend process only on systems you control.
+- Keep `backend/.env`, SQLite files, and debug logs on trusted local storage.
+- Restrict the listen address to localhost unless you explicitly accept broader exposure (not the shipped default).
+- Rotate vendor keys if logs, backups, or `.env` copies leave your control.
+
+The extension-only MVP security model above applies unchanged when the backend is not used.
 
 ## Trust and query checklist
 
@@ -263,5 +316,6 @@ We aim to acknowledge reports in a reasonable timeframe and coordinate fixes bef
 ## Related documents
 
 - [docs/security-model.md](docs/security-model.md) — manifest permissions, host access, domain policy, internal asset lists, and sensitive-domain guidance
+- [docs/local-mode.md](docs/local-mode.md) — extension-only versus optional localhost enrichment backend
 - [docs/architecture.md](docs/architecture.md) — IOC types, connector order, data boundaries
 - [README.md](README.md) — install, development, and capability summary
