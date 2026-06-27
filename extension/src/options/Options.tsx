@@ -717,7 +717,7 @@ export function Options() {
   const [showDisabledSourcesInWorkspace, setShowDisabledSourcesInWorkspaceState] =
     useState(false);
   const [showPreQueryNotices, setShowPreQueryNoticesState] = useState(true);
-  const [preQueryNoticePreferenceConfigured, setPreQueryNoticePreferenceConfiguredState] =
+  const [, setPreQueryNoticePreferenceConfiguredState] =
     useState(false);
   const [installQuickStartCompleted, setInstallQuickStartCompletedState] =
     useState(true);
@@ -1354,37 +1354,46 @@ export function Options() {
                 </h2>
                 {quickStartStep === 0 ? (
                   <p className="v5-card__desc">
-                    Vera5 runs locally in your browser. Pin the toolbar action,
+                    Vera5 runs locally in your browser—no Vera5-operated
+                    telemetry and no full-page upload. Pin the toolbar action,
                     open an <code>http://</code> or <code>https://</code> page,
                     and use <strong>Scan page</strong> from the popup or{" "}
                     <strong>Ctrl+Shift+Y</strong> / <strong>Cmd+Shift+Y</strong>.
-                    Serve the repository <code>examples/</code> folder over HTTP
-                    to try fixture pages without live data.
+                    Detection and highlighting work without API keys; live
+                    enrichment is optional. Serve the repository{" "}
+                    <code>examples/</code> folder over HTTP to try fixture pages.
                   </p>
                 ) : null}
                 {quickStartStep === 1 ? (
                   <p className="v5-card__desc">
                     Bring your own API keys for live enrichment. Keys stay in{" "}
                     <code>chrome.storage.local</code> on this profile—Vera5 does
-                    not operate a shared enrichment backend. Only{" "}
-                    <strong>AbuseIPDB</strong> and <strong>OTX</strong> perform
-                    live HTTPS queries today; you can add keys later under{" "}
-                    <strong>API keys</strong>.
+                    not operate a shared enrichment backend. Only detected
+                    indicator values are sent to vendors you enable—not full page
+                    content. Only <strong>AbuseIPDB</strong> and{" "}
+                    <strong>OTX</strong> perform live HTTPS queries today; add
+                    keys later under <strong>API keys</strong> if you skip this
+                    step.
                   </p>
                 ) : null}
                 {quickStartStep === 2 ? (
                   <p className="v5-card__desc">
                     <strong>Manual-only enrichment</strong> is the recommended
-                    default. When on, live threat intelligence runs only when you
-                    use the enrich control on a highlight—not every time you open
-                    an indicator card.
+                    default and stays on unless you turn it off below. Live threat
+                    intelligence runs only when you use the enrich control on a
+                    highlight—not when you open a card or scan a page.
+                    Auto-scan on page load stays off until you enable it under{" "}
+                    <strong>Scanning</strong>.
                   </p>
                 ) : null}
                 {quickStartStep === 3 ? (
                   <p className="v5-card__desc">
-                    Trust controls ship with conservative defaults. Review the
-                    summary below, then choose whether to show pre-query notices
-                    before vendor calls leave the browser.
+                    Trust controls ship with conservative defaults: domain and
+                    internal-asset enrich gates on, sensitive webmail patterns
+                    blocked, and auto-scan off. Choose whether to show a short
+                    notice before each live vendor query. With manual-only
+                    enrichment, queries still require your enrich action even
+                    when notices are dismissed.
                   </p>
                 ) : null}
               </div>
@@ -1420,14 +1429,30 @@ export function Options() {
                   </div>
                 ) : null}
                 {quickStartStep === 2 ? (
-                  <ToggleRow
-                    label="Manual-only enrichment"
-                    hint="Leave on for tighter control over vendor API usage. Turn off only when you want automatic enrichment each time you open an indicator card."
-                    ariaLabel="Manual-only enrichment"
-                    checked={manualOnlyMode}
-                    disabled={!ready}
-                    onChange={handleManualOnlyToggle}
-                  />
+                  <div>
+                    <ToggleRow
+                      label="Manual-only enrichment"
+                      hint="Leave on to avoid automatic vendor calls when triaging. Turn off only when you want live enrichment each time you open an indicator card."
+                      ariaLabel="Manual-only enrichment"
+                      checked={manualOnlyMode}
+                      disabled={!ready}
+                      onChange={handleManualOnlyToggle}
+                    />
+                    <ul
+                      className="v5-domain-list"
+                      aria-label="Safe scanning defaults"
+                      style={{ marginTop: 16 }}
+                    >
+                      <li className="v5-domain-list__item">
+                        Auto-scan on page changes:{" "}
+                        {autoScanEnabled ? "on" : "off (recommended)"}
+                      </li>
+                      <li className="v5-domain-list__item">
+                        Live enrichment sources: none enabled until you save a
+                        key and turn a source on
+                      </li>
+                    </ul>
+                  </div>
                 ) : null}
                 {quickStartStep === 3 ? (
                   <div>
@@ -1454,8 +1479,10 @@ export function Options() {
                     </ul>
                     <p className="v5-row__hint" style={{ marginTop: 16 }}>
                       Pre-query notices name enabled vendors and the indicator
-                      value before a live fetch. You can change all trust settings
-                      later under <strong>Trust &amp; consent</strong>.
+                      value before a live fetch. Adjust domain policy, internal
+                      assets, and scanning under{" "}
+                      <strong>Trust &amp; consent</strong> and{" "}
+                      <strong>Scanning</strong>.
                     </p>
                     <div
                       style={{
@@ -1472,7 +1499,7 @@ export function Options() {
                           handlePreQueryNoticeFirstRunChoice(true)
                         }
                       >
-                        Show pre-query notices
+                        Show pre-query notices (recommended)
                       </button>
                       <button
                         type="button"

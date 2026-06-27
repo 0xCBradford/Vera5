@@ -817,6 +817,7 @@ export async function completeInstallQuickStart(
     [STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]: true,
     [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: showPreQueryNotices,
     [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]: true,
+    [STORAGE_KEY_AUTO_SCAN_ENABLED]: false,
   });
 }
 

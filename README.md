@@ -1,6 +1,6 @@
 # Vera5
 
-Browser extension for on-demand indicator detection on pages you browse. After a scan, matching indicators can be highlighted; clicking a highlight opens an overlay with copy, export, **Recommended next pivots**, and—when configured—live threat intelligence from sources you enable. **Investigation sessions** give you a named local case workspace with IOC rollups, enrich/export activity, per-indicator labels and timelines, and session export (Markdown, JSON, CSV). **IOC collections** are separate persistent named groupings where you save indicators from the tray, overlay, or workspace sidebar, promote session members into a new collection, and export for ticket handoff. Pre-query disclosure, hostname domain policy, and optional internal-asset lists gate vendor queries before they leave the browser. Settings, keys, cache, sessions, and collections stay in local storage; Vera5 does not operate a shared enrichment backend.
+Browser extension for on-demand IOC detection and triage on `http://` and `https://` pages you browse. Scans, enrichment, scoring, export, investigation sessions, and IOC collections run locally in Chromium—you bring your own API keys; Vera5 does not operate a shared enrichment backend.
 
 ## Quick start (install and keys)
 
@@ -12,10 +12,9 @@ npm install
 npm run build
 ```
 
-1. Open `chrome://extensions`, enable **Developer mode**, **Load unpacked**, select **`extension/dist`** (must contain `manifest.json`).
-2. Pin the Vera5 toolbar action. After code changes, run `npm run build` and **Reload** the extension.
+Load **`extension/dist/`** in Chrome (manifest **0.1.0**). See [Load unpacked (Chrome)](#load-unpacked-chrome) for load steps, packaging, and a manual walkthrough.
 
-See [Load unpacked (Chrome)](#load-unpacked-chrome) for fixture pages and a full manual walkthrough.
+On **first install**, Vera5 opens **Settings** once for a four-step **Install quick start** wizard (Welcome → optional AbuseIPDB/OTX keys → enrichment control → trust defaults). Completing the wizard keeps **manual-only enrichment** on and **auto-scan** off unless you change them in the wizard or under **Scanning**.
 
 **Bring your own API keys (BYOK/BYOA)**
 
@@ -37,35 +36,21 @@ The extension does not read API keys from a repository `.env` file. Optional roo
 
 Details: [Privacy and keys (BYOK/BYOA)](#privacy-and-keys-byokbyoa), [SECURITY.md](SECURITY.md), [docs/security-model.md](docs/security-model.md).
 
-## Core capabilities
-
-End-to-end analyst triage on `http://` and `https://` tabs—scan, review, enrich with consent, score, export, and track a case locally.
-
-| Area | What you get |
-|------|----------------|
-| **Scoring** | Locally computed composite **Risk score** (advisory band and optional **/100**) from per-source summaries; **How this score was computed** reasoning chain; **Sources disagree** callout when bands diverge. Requires parseable results from enabled sources—see [Composite risk score](#what-works-today). |
-| **IOC tray** | Popup **Detected indicators** list and optional page **workspace sidebar**: type filters, row navigation to highlights, **Why detected?**, save-to-collection actions, and bulk enrich selection. |
-| **Export templates** | Per-indicator and filtered-subset ticket templates (**Jira comment**, **TheHive case note**, **Analyst update**, **Obsidian note**, **Markdown report**, **CSV rows**); session and collection exports (Markdown, JSON, CSV). |
-| **Trust & consent** | Pre-query disclosure before vendor calls; hostname **domain policy** (allow/deny lists and presets); **internal asset lists** that block enrichment for matching IOC values; analyst workflow presets. |
-| **Command palette** | **Ctrl+Shift+K** / **Cmd+Shift+K** — filterable commands for scan, enrich selection, tray copy/export, clear highlights, and **Open options**. |
-| **Investigation sessions** | Named local case workspace in the popup: IOC rollups, **Pin**/**Label**/timeline on the overlay, session export, **Promote session to collection…**, and **Recent sessions** (local storage only). |
-
-Keyboard: **Ctrl+Shift+Y** / **Cmd+Shift+Y** runs **Scan page**. Operator surfaces, configuration order, and examples: [Operator surfaces](#operator-surfaces), [Configuration flow](#configuration-flow), [Try detection and enrichment locally](#try-detection-and-enrichment-locally).
-
 ## Limitations
 
-Honest MVP boundaries—what Vera5 does **not** do today:
+What Vera5 does **not** do today:
 
 | Limitation | Detail |
 |------------|--------|
 | **Browser support** | Chromium with Manifest V3 (Chrome, Edge, Brave, similar). No Firefox extension build in this repository. |
-| **Install path** | Unpacked load from `extension/dist/` for development and evaluation; store packaging is separate release work. |
+| **Install path** | Unpacked load from `extension/dist/` (manifest **0.1.0**). Package a zip with `.\scripts\package-extension.ps1` at the repository root (`release/vera5-0.1.0.zip`). Chrome Web Store listing draft: [docs/store-listing.md](docs/store-listing.md)—submission is separate operator work. |
 | **Live enrichment** | HTTPS enrichment runs only for **AbuseIPDB** (IPv4) and **OTX** (IPv4, domain, URL, hashes, CVE). Other registered sources show status rows and pivot links—not live vendor queries. |
 | **Backend** | No Vera5-operated enrichment relay, shared team workspace, or cloud sync for sessions, collections, or keys. |
 | **Page coverage** | Content scripts on `http://` and `https://` only. Detection reads visible text nodes (not attributes, scripts, or hidden fields); stops after 2,500 text nodes per scan. |
 | **Data sent to vendors** | Indicator values you choose to enrich—not full pages, attachments, or clipboard dumps. |
 | **Scoring** | Advisory labels computed locally; not a vendor verdict. Blended **/100** needs at least two parseable OK source results. |
 | **Automation** | Pull request CI runs browser smokes on Playwright Chromium with mocked vendors—it does not replace manual unpacked Chrome checks before you rely on the extension in production triage. |
+| **README images** | No PNG or WebP screenshots are embedded here yet. Capture guide and SVG placeholders: [docs/screenshots.md](docs/screenshots.md). |
 
 More detail: [docs/architecture.md](docs/architecture.md), [docs/api-integrations.md](docs/api-integrations.md), [docs/contributors/testing.md](docs/contributors/testing.md) (E2E scope and limits).
 
@@ -81,7 +66,7 @@ On `http://` and `https://` tabs, day-to-day triage runs through the **content-s
 | **Toolbar popup** | Extension action popup | Extension on/off, scan and selection actions, **Investigation session** (title, rollups, recent sessions, session export, **Promote session to collection…**), **Detected indicators** tray (**Save to collection…**, **Add filtered to collection…**), **IOC collections** (view members, rename, delete, export), **Source operations** (cache, cooldown, per-source status), **Open sidebar**, **Settings**, **Permissions**. |
 | **Page workspace sidebar** | Content script panel on the active page | Docked tray with scan, selection, enrich, and IOC list controls; row checkboxes for bulk enrich; **Save to collection…** and **Add filtered to collection…** per tray; pinned session indicators sort first. Selecting an indicator opens the same overlay model. Collapsible **Why detected?** per row. |
 | **Settings (options) page** | Dedicated options tab | Masked API keys, per-source enable toggles, indicator-type toggles, private-space IPv4 detection, cache lifetime fields, manual-only mode, auto-scan, **Trust & consent** (pre-query notices, domain allow/deny lists and presets, internal asset lists, analyst workflow presets), **Clear cache**, settings export/import. Per-source source-health details are shown in the popup **Source operations** section. |
-| **React hover card** | Unit tests only | **Not injected into page tabs.** Shared scoring logic with the on-page overlay; unit tests may show per-source contribution chips the overlay does not render. |
+| **React hover card** | Unit tests only | **Not injected into page tabs.** Shared scoring logic with the on-page overlay. |
 
 Keyboard shortcuts: **Ctrl+Shift+Y** / **Cmd+Shift+Y** triggers **Scan page**; **Ctrl+Shift+K** / **Cmd+Shift+K** opens the **command palette**. After **Scan page** (shortcut or palette), reopen the popup to refresh the **Detected indicators** tray for that tab.
 
@@ -92,6 +77,7 @@ See [Local mode — what runs where](docs/local-mode.md) for browser runtime and
 | Capability | Behavior |
 |------------|----------|
 | **Install** | `npm run build` in `extension/`, then load `extension/dist/` in Chrome. |
+| **Install quick start** | First-run wizard in **Settings**: install checklist, optional live-source API keys (saving a key can auto-enable that source), **Manual-only enrichment** (recommended on), auto-scan summary, and pre-query notice choice (**Show pre-query notices (recommended)** or skip). Finishing the wizard persists safe defaults (manual-only on, auto-scan off). |
 | **Command palette** | **Ctrl+Shift+K** / **Cmd+Shift+K** on a page tab opens a filterable command list. Commands include **Scan page**, **Enrich selection** (when text is selected), **Copy filtered Markdown**, **Export tray subset**, **Clear highlights**, and **Open options**. **Enter** runs the highlighted command; **Esc** closes the palette. |
 | **Context-menu enrich** | With indicator text selected, right-click → **Enrich with Vera5** detects the IOC, opens the overlay, and starts manual enrichment when resolved. Domain policy, internal asset lists, and pre-query disclosure apply before any vendor fetch—same as **Enrich selection**. |
 | **Bulk enrich queue** | In the workspace tray, check one or more IOC rows, then **Enrich selected (N)**. A quota and rate-limit confirmation appears before the queue runs. Indicators enrich sequentially with progress (**Enriching X of N…**); **Cancel enrich queue** stops after the current item. Pre-query **Cancel** on an item also stops the queue. Each step respects domain policy, internal asset lists, and pre-query disclosure. |
@@ -129,21 +115,12 @@ See [Local mode — what runs where](docs/local-mode.md) for browser runtime and
 
 ## Configuration flow
 
-1. Build and load the extension (see below).
-2. Open **Vera5 Settings** and enter API keys for **AbuseIPDB** and/or **OTX** when you want live enrichment. The extension does not read API keys from a `.env` file.
-3. Enable sources under **Enrichment sources**. Expect live HTTPS responses only from AbuseIPDB and OTX; other enabled sources show registry shell status rows and pivot links where supported.
-4. Under **Trust & consent**, set pre-query notices, domain policy mode and allow/deny lists (or apply a preset), internal asset lists if needed, and an analyst workflow preset when useful.
-5. Under **Scanning**, choose which **Indicator types** to detect and whether to **Include private-space IPv4 addresses**.
-6. Under **Enrichment cache**, set the default cache lifetime (seconds) and optional per-source overrides.
-7. Choose **Manual-only enrichment** (default on) or allow automatic fetch when opening the card (debounced across quick clicks).
-8. Enable **Automatically scan when the page changes** if you want mutation rescans (subject to domain policy).
-9. Use **Clear cache** to drop stored vendor responses.
-10. Use **Export settings** to back up preferences (API keys omitted unless you opt in).
-11. Add **Analyst notes** on the overlay when triaging an indicator; notes persist locally.
-12. On dense pages, scan once and use the popup **IOC tray** or workspace sidebar to filter and jump to highlights; on table-heavy exports, use **Scan selection** on a highlighted row before opening the tray. Select multiple tray rows in the workspace for bulk enrich when needed.
-13. Name an **Investigation session** in the popup (or let the first scan create one), review rollups and **Source operations**, then **Export session** Markdown/JSON/CSV when the case is ready for handoff. See [Investigation Session workflows](docs/analyst-workflows.md#investigation-session-local-case-workspace) for phishing and MDR paths.
-14. Build **IOC collections** from tray or overlay **Save to collection…**, **Add filtered to collection…**, or **Promote session to collection…**; manage collections under **IOC collections** and **Export CSV** (or Markdown/JSON) for ticket handoff. Collections accumulate across investigation sessions and stay separate from session-scoped export.
-15. Use keyboard triage (**ArrowDown** / **ArrowUp**, **Enter**, **Escape**) when reviewing many highlights on one page, or **Ctrl+Shift+K** / **Cmd+Shift+K** for palette commands.
+1. Build and load the extension ([Load unpacked (Chrome)](#load-unpacked-chrome)). On first install, complete the **Install quick start** wizard in **Settings** (four steps: Welcome checklist, optional API keys, enrichment control, trust defaults).
+2. Open **Vera5 Settings**, enter **AbuseIPDB** and/or **OTX** keys when you want live enrichment, and enable those sources. Live HTTPS responses come only from AbuseIPDB and OTX.
+3. Under **Trust & consent**, set pre-query notices, domain policy, internal asset lists if needed, and an analyst workflow preset when useful.
+4. Under **Scanning** and **Enrichment cache**, choose indicator types, optional private-space IPv4, cache lifetime, **Manual-only enrichment** (default on), and optional auto-scan.
+5. Triage on page tabs via the overlay, popup tray, workspace sidebar, or command palette—see [Operator surfaces](#operator-surfaces) and [Try detection and enrichment locally](#try-detection-and-enrichment-locally).
+6. Use **Investigation session** and **IOC collections** for case tracking and ticket handoff exports.
 
 More detail: [docs/architecture.md](docs/architecture.md), [docs/api-integrations.md](docs/api-integrations.md), [docs/analyst-workflows.md](docs/analyst-workflows.md), [docs/export-artifacts.md](docs/export-artifacts.md), [docs/security-model.md](docs/security-model.md), [docs/soc-validation-fixtures.md](docs/soc-validation-fixtures.md).
 
@@ -252,8 +229,12 @@ Other templates (**TheHive case note**, **Obsidian note** with front matter, **M
 | `docs/local-mode.md` | Extension-only deployment. |
 | `docs/contributors/` | Contributor architecture, connectors, cache, scoring, and testing. |
 | `examples/` | Sample HTML (including SOC dashboard exports) and IOC strings for manual checks. |
+| `docs/screenshots.md` | Screenshot capture guide; SVG placeholders only until PNG/WebP captures replace them. |
+| `docs/store-listing.md` | Chrome Web Store listing draft (descriptions, single purpose, permission justifications). |
+| `docs/release-notes-v0.1.0.md` | Draft GitHub release notes for tag `v0.1.0`. |
+| `scripts/` | Windows helpers: `check.ps1`, `build.ps1`, `dev.ps1`, `package-extension.ps1` (build + zip to `release/`). |
 | `.github/workflows/` | Lint, unit tests, production dependency audit, Gitleaks on pull requests and pushes to `main`, and browser E2E smokes on pull requests (`browser-e2e-smokes` in `extension-quality.yml`). |
-| [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), [LICENSE](LICENSE) | Security, contribution, license. |
+| [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [LICENSE](LICENSE) | Security, contribution, version history, bundled dependency notices, license. |
 
 ## Code layout
 
@@ -278,9 +259,17 @@ npm install
 npm run build
 ```
 
-1. Open `chrome://extensions`, enable **Developer mode**, **Load unpacked**, select **`extension/dist`** (must contain `manifest.json`).
-2. Pin the toolbar action if needed.
+1. Open `chrome://extensions`, enable **Developer mode**, **Load unpacked**, select **`extension/dist`** (must contain `manifest.json`, version **0.1.0**).
+2. Pin the toolbar action if needed. On **first install**, **Settings** opens for the **Install quick start** wizard—complete all four steps or use **Continue without keys** on step 2 when you want detection-only triage first.
 3. After code changes: `npm run build`, then **Reload** the extension.
+
+**Package for store upload or offline handoff** (from repository root on Windows):
+
+```powershell
+.\scripts\package-extension.ps1
+```
+
+Writes `release/vera5-0.1.0.zip` with `manifest.json` at the zip root. See [docs/store-listing.md](docs/store-listing.md) and [docs/release-notes-v0.1.0.md](docs/release-notes-v0.1.0.md) before publishing.
 
 ### Try detection and enrichment locally
 
@@ -326,6 +315,7 @@ python -m http.server 8080
 - Pre-query disclosure runs before the first vendor call when notices are enabled; domain policy and internal asset lists can block enrichment without sending indicator values. Bulk enrich and context-menu enrich use the same gates.
 - No maintainer telemetry, crash reporting, or Vera5-operated network endpoints by default.
 - Scans and detection run locally. Enrichment sends only the selected indicator value to declared vendor API hosts you enable. Composite risk labels and reasoning chains are computed locally from vendor summaries. Raw JSON panels redact sensitive key fields before display. Production bundles omit sensitive `console` output. **Open live URL** uses your browser only after you confirm; Vera5 does not fetch or proxy that navigation.
+- Review vendor terms and privacy policies before enabling sources: [docs/api-integrations.md — Vendor terms](docs/api-integrations.md#vendor-terms-privacy-and-acceptable-use).
 
 [SECURITY.md](SECURITY.md), [docs/local-mode.md](docs/local-mode.md).
 
@@ -364,7 +354,7 @@ From `extension/` after `npm install`:
 | `npm run test:e2e:critical` | PR-gate browser smokes against unpacked `dist/` (mocked vendors) |
 | `npm run test:e2e` | Full browser smoke suite (includes session pin and collection CSV export paths) |
 
-Pull request CI builds `extension/dist/`, installs Playwright Chromium, and runs `npm run test:e2e:critical`—scan, popup tray, overlay disclaimer and composite score, command palette, clipboard export, and bulk enrich queue—with fixture-backed AbuseIPDB/OTX responses and no live vendor calls. After `npm run build`:
+Pull request CI runs `npm run test:e2e:critical` after building `extension/dist/` (mocked AbuseIPDB/OTX; no live vendor calls). After `npm run build`:
 
 ```bash
 cd extension
@@ -374,8 +364,15 @@ npm run test:e2e:critical
 
 E2E scope, limits, and flake avoidance: [docs/contributors/testing.md](docs/contributors/testing.md). PR workflow: [CONTRIBUTING.md](CONTRIBUTING.md). Contributor guides: [docs/contributors/README.md](docs/contributors/README.md).
 
-From the repository root: `.\scripts\check.ps1` (lint + unit tests in `extension/`), `.\scripts\dev.ps1` (Windows).
+From the repository root on Windows:
+
+| Script | Purpose |
+|--------|---------|
+| `.\scripts\check.ps1` | Lint + unit tests in `extension/` |
+| `.\scripts\build.ps1` | `npm install` + `npm run build` in `extension/` |
+| `.\scripts\package-extension.ps1` | Build and zip `extension/dist/` to `release/vera5-0.1.0.zip` |
+| `.\scripts\dev.ps1` | Vite dev server in `extension/` (UI shells only) |
 
 ## License
 
-[MIT License](LICENSE).
+[MIT License](LICENSE). Bundled open-source components: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Version history: [CHANGELOG.md](CHANGELOG.md).

@@ -714,6 +714,7 @@ describe("install quick start storage", () => {
     expect(store[STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]).toBe(true);
     expect(store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]).toBe(true);
     expect(store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]).toBe(false);
+    expect(store[STORAGE_KEY_AUTO_SCAN_ENABLED]).toBe(false);
     await expect(getInstallQuickStartCompleted()).resolves.toBe(true);
   });
 

@@ -114,6 +114,7 @@ export async function seedExportSmokeStorage(
   context: BrowserContext,
   extensionId: string
 ): Promise<void> {
+  await seedE2eInstallQuickStart(context, extensionId);
   const serviceWorker = context
     .serviceWorkers()
     .find((worker) => worker.url().includes(extensionId));
@@ -136,10 +137,31 @@ export async function seedExportSmokeStorage(
   });
 }
 
+export async function seedE2eInstallQuickStart(
+  context: BrowserContext,
+  extensionId: string
+): Promise<void> {
+  const serviceWorker = context
+    .serviceWorkers()
+    .find((worker) => worker.url().includes(extensionId));
+  if (!serviceWorker) {
+    throw new Error("Extension service worker not available for storage seed");
+  }
+
+  await serviceWorker.evaluate(async () => {
+    await chrome.storage.local.set({
+      installQuickStartCompleted: true,
+      preQueryNoticePreferenceConfigured: true,
+      showPreQueryNotices: true,
+    });
+  });
+}
+
 export async function seedEnrichmentMockStorage(
   context: BrowserContext,
   extensionId: string
 ): Promise<void> {
+  await seedE2eInstallQuickStart(context, extensionId);
   const serviceWorker = context
     .serviceWorkers()
     .find((worker) => worker.url().includes(extensionId));

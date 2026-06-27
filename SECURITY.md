@@ -74,7 +74,7 @@ Runtime component layout: [docs/local-mode.md](docs/local-mode.md). Enrichment m
 
 ### Controls that reduce unintended leakage
 
-- **Manual-only enrichment** (default on): Threat-intelligence fetch runs only when you use the enrich control, not automatically when a hover card opens.
+- **Manual-only enrichment** (default on): Threat-intelligence fetch runs only when you use the enrich control, not automatically when you open the on-page triage overlay.
 - **Per-source enable flags**: Disabled sources are not queried and are omitted from automatic enrichment paths.
 - **Pre-query disclosure** (default on until you choose in Settings): When live enrichment is allowed, the overlay shows an inline notice naming enabled vendors and the indicator value before any HTTPS vendor call. **Send query** proceeds; **Cancel** aborts; **Don't show this notice again** turns off future notices (same as the **Trust & consent** toggle).
 - **Domain policy** (default allow-by-default with sensitive webmail denylist): Hostname allow/deny lists gate auto-scan and live enrichment. Denylisted origins skip mutation rescans and block vendor calls before pre-query disclosure when the domain enrich gate is on (default). Manage under **Trust & consent** in Vera5 Settings.
@@ -93,9 +93,9 @@ Vera5 does not operate a default enrichment proxy, telemetry ingest, or page-con
 
 You create API keys in each vendor’s portal and enter them in the Vera5 options page. Keys are stored locally in extension storage. Vera5 does not supply shared maintainer keys or require routing enrichment through a Vera5-hosted backend.
 
-### Supported enrichment sources (MVP scope)
+### Registered enrichment sources (MVP scope)
 
-When live connectors are enabled, the initial release targets these sources in fixed product order: **AbuseIPDB**, **OTX**, **URLScan.io**, and **GreyNoise**. Options toggles and storage slots align with that list.
+Twelve sources appear in Vera5 Settings and the on-page overlay registry: **AbuseIPDB**, **OTX**, **VirusTotal**, **URLScan.io**, **GreyNoise**, **Shodan**, **Google Safe Browsing**, **Pulsedive**, **MalwareBazaar**, **Censys**, **ThreatFox**, and **URLhaus**. Only **AbuseIPDB** and **OTX** perform live HTTPS enrichment in this release. Other enabled sources may show missing-key, unsupported-type, or not-implemented status rows; pivot links still appear where the registry defines them for the indicator type. Saved API keys for non-live sources stay in local storage and are not sent to those vendors.
 
 ### How vendor requests work
 
@@ -118,6 +118,8 @@ When live connectors are enabled, the initial release targets these sources in f
 - Avoid sending highly sensitive or classified indicators to vendors your organization has not approved.
 - Monitor API quota, rate limits, and audit logs on the vendor side where available.
 
+Per-vendor terms and privacy links for all registered enrichment sources: [docs/api-integrations.md — Vendor terms, privacy, and acceptable use](docs/api-integrations.md#vendor-terms-privacy-and-acceptable-use).
+
 Vera5 surfaces source attribution on enrichment results so you can see which connector produced each field.
 
 ## Data retained locally
@@ -133,7 +135,7 @@ All Vera5-controlled persistence uses the browser’s **local extension storage*
 | Auto-scan enabled | Whether DOM changes trigger rescans. | Off. |
 | Manual-only mode | When on, enrichment fetch requires explicit user action. | On. |
 | Include private IPv4 | Whether private-space IPv4 literals are detected. | Off (default). Options checkbox persists the flag; the scan path reads it on each scan. |
-| Enrichment source enabled | Per-vendor on/off (AbuseIPDB, OTX, URLScan.io, GreyNoise). | All off until you enable. |
+| Enrichment source enabled | Per-vendor on/off for all twelve registered sources listed above. | All off until you enable. |
 | IOC type enabled | Per-type detection toggles (IPv4, domain, URL, hashes, CVE). | Defaults all MVP types **on**. Options checkboxes persist flags; the scan path omits disabled types. |
 | Enrichment cache TTL | Seconds cached responses remain valid (used when cache is populated). | Default 3600. Options exposes a global seconds field and optional per-source overrides. |
 | Settings schema version | Migration marker for stored preferences. | Managed by the extension. |
@@ -253,7 +255,7 @@ Manage mode, lists, enrich gate, and presets under **Trust & consent** in Vera5 
 If you believe you have found a security issue in Vera5:
 
 1. **Do not** open a public issue with exploit details or live secrets.
-2. Report privately to the repository maintainers (contact method listed in [README.md](README.md) when published).
+2. Report privately via [GitHub Security Advisories](https://github.com/0xCBradford/Vera5/security/advisories/new) or through the repository maintainer contact on GitHub.
 3. Include reproduction steps, affected version, and impact assessment.
 
 We aim to acknowledge reports in a reasonable timeframe and coordinate fixes before public disclosure when appropriate.

@@ -5,7 +5,6 @@ import {
   addIocsToCollectionMessage,
   createIocCollectionMessage,
   deleteIocCollectionMessage,
-  listIocCollectionsMessage,
   removeIocFromCollectionMessage,
   renameIocCollectionMessage,
 } from "../lib/messages";

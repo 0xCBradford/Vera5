@@ -2,7 +2,7 @@
 
 All notable user-facing changes to the Vera5 browser extension are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for public releases. Version numbers describe shipped analyst capabilities; the unpacked build may still report `0.0.0` in `extension/public/manifest.json` until a tagged release or store package bumps the manifest.
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html) for public releases. Version numbers in this file match tagged GitHub releases and `extension/public/manifest.json` (**0.1.0** for the public MVP snapshot).
 
 ## [Unreleased]
 
@@ -12,13 +12,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [0.1.0] — 2026-06-26
 
-First public MVP snapshot: local-first Chromium extension for IOC triage on pages you browse—scan, tray, enrich with consent, score, export, sessions, and collections. No Vera5-operated enrichment backend; bring your own AbuseIPDB and/or OTX API keys.
+First **public MVP** release: **Investigation Mode** for local-first IOC triage in Chromium—scan → tray → enrich with your keys → score → export → sessions and collections—without Vera5-operated enrichment backends.
 
 ### Added
 
-- **Install quick start** — Settings opens on first install; four-step wizard covers install checklist, optional live-source API keys (auto-enables source when saved), manual-only enrichment default, trust summary, and pre-query notice choice.
-- **Documentation and community** — README launch sections (quick start, core capabilities, limitations), `docs/screenshots.md` capture guide with placeholders, `CONTRIBUTING.md` accuracy pass, GitHub issue/PR templates under `.github/`.
+- **Investigation Mode flow** — On-demand page scan with highlights and on-page overlay; popup **Detected indicators** tray and workspace sidebar; manual and bulk enrich queue; composite risk score with **How this score was computed** reasoning chain; ticket export templates; named investigation sessions; persistent IOC collections.
+- **Live enrichment (BYOK/BYOA)** — Parallel **AbuseIPDB** (IPv4) and **OTX** (multi-type) HTTPS queries when you enable sources and save API keys; indicator values only, never full page content; TTL cache, manual refresh, and rate-limit cooldown handling.
+- **Trust and consent** — Pre-query disclosure before vendor calls; hostname domain policy with sensitive webmail denylist; internal asset lists and enrich gates; analyst workflow presets (SOC, CTI, DFIR); **manual-only enrichment** and **auto-scan off** by default.
+- **Operator workflows** — Command palette (**Ctrl+Shift+K** / **Cmd+Shift+K**); keyboard scan (**Ctrl+Shift+Y** / **Cmd+Shift+Y**) and highlight triage; **Enrich with Vera5** context menu; defang/refang and **Why detected?** provenance; **Recommended next pivots** with source attribution.
+- **Install quick start** — Settings opens on first install; wizard covers install checklist, optional live-source API keys (auto-enables source when saved), manual-only default, trust summary, and pre-query notice choice.
+- **Open-source release** — README, [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), analyst docs under `docs/`, GitHub issue/PR templates, Chrome Web Store listing draft (`docs/store-listing.md`), packaging script (`scripts/package-extension.ps1` → `release/vera5-0.1.0.zip`), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled dependencies.
 - **Quality gates** — Pull request CI: lint, unit tests, production dependency audit, Gitleaks secret scan, and Playwright critical browser smokes on unpacked `extension/dist/` with mocked vendor HTTP (no live API calls in CI).
+
+### Security
+
+- Documented local-first posture: no maintainer API keys, no Vera5 enrichment proxy, no default telemetry; outbound fetch allowlist for declared vendor hosts only.
+
+### Changed
+
+- Manifest and packaged release version set to **0.1.0** (`extension/public/manifest.json`; attach `release/vera5-0.1.0.zip` at GitHub release `v0.1.0`).
 
 ## [0.0.9] — 2026-06-20
 

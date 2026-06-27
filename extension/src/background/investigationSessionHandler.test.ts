@@ -3,7 +3,6 @@ import {
   archiveInvestigationSessionMessage,
   createInvestigationSessionMessage,
   deleteInvestigationSessionMessage,
-  listInvestigationSessionsMessage,
   renameInvestigationSessionMessage,
   reopenInvestigationSessionMessage,
   updateInvestigationSessionTitleMessage,

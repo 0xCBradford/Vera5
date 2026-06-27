@@ -25,8 +25,8 @@ import {
 } from "./highlighter";
 import {
   HOVER_CARD_ANALYST_NOTES_INPUT_CLASS,
-  HOVER_CARD_COPY_BUTTON_CLASS,
   HOVER_CARD_HOST_ID,
+  HOVER_CARD_IOC_PIN_BUTTON_CLASS,
   HOVER_CARD_PANEL_CLASS,
 } from "./hoverCardOverlay";
 import {
@@ -274,11 +274,11 @@ describe("hover card manual enrich trigger", () => {
 
     await flushAsyncWork();
 
-    const copyButton = document.querySelector<HTMLElement>(
-      `.${HOVER_CARD_COPY_BUTTON_CLASS}`
+    const pinButton = document.querySelector<HTMLElement>(
+      `.${HOVER_CARD_IOC_PIN_BUTTON_CLASS}`
     );
-    expect(copyButton).not.toBeNull();
-    expect(document.activeElement).toBe(copyButton);
+    expect(pinButton).not.toBeNull();
+    expect(document.activeElement).toBe(pinButton);
   });
 
   it("opens the hover card when Space is pressed on a highlight", async () => {
@@ -632,7 +632,7 @@ describe("keyboard navigation paths", () => {
 
     expect(document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)).not.toBeNull();
     expect(
-      document.querySelector(`.${HOVER_CARD_COPY_BUTTON_CLASS}`)
+      document.querySelector(`.${HOVER_CARD_IOC_PIN_BUTTON_CLASS}`)
     ).toBe(document.activeElement);
 
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));

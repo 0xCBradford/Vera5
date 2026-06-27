@@ -7,6 +7,7 @@ import {
 import fs from "node:fs";
 import {
   expectNoLiveEnrichmentNetworkRequests,
+  seedE2eInstallQuickStart,
   setupCiEnrichmentMocks,
   type LiveEnrichmentNetworkGuard,
 } from "./enrichmentMockRoutes";
@@ -39,6 +40,39 @@ async function waitForExtensionServiceWorker(
   return worker;
 }
 
+async function dismissInstallQuickStartOptionsTab(
+  context: BrowserContext,
+  extensionId: string
+): Promise<void> {
+  const optionsUrlPrefix = `chrome-extension://${extensionId}/options.html`;
+
+  const closeOptionsPages = async (): Promise<void> => {
+    await Promise.all(
+      context.pages().map(async (page) => {
+        if (page.url().startsWith(optionsUrlPrefix)) {
+          await page.close();
+        }
+      })
+    );
+  };
+
+  await closeOptionsPages();
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    await closeOptionsPages();
+    const hasOptionsTab = context.pages().some((page) =>
+      page.url().startsWith(optionsUrlPrefix)
+    );
+    if (!hasOptionsTab) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(
+    "Install quick-start options tab remained open and blocked E2E navigation"
+  );
+}
+
 let activeEnrichmentNetworkGuard: LiveEnrichmentNetworkGuard | null = null;
 
 export const test = base.extend<{
@@ -61,6 +95,10 @@ export const test = base.extend<{
     });
 
     activeEnrichmentNetworkGuard = await setupCiEnrichmentMocks(context);
+    const serviceWorker = await waitForExtensionServiceWorker(context);
+    const extensionId = resolveExtensionId(serviceWorker);
+    await seedE2eInstallQuickStart(context, extensionId);
+    await dismissInstallQuickStartOptionsTab(context, extensionId);
 
     try {
       await use(context);

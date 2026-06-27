@@ -34,6 +34,7 @@ import {
   hideHoverCard,
   HOVER_CARD_COPY_BUTTON_CLASS,
   HOVER_CARD_HOST_ID,
+  HOVER_CARD_IOC_PIN_BUTTON_CLASS,
   HOVER_CARD_PANEL_CLASS,
   HOVER_CARD_ENRICHMENT_CLASS,
   HOVER_CARD_PIVOT_LINK_CLASS,
@@ -2492,21 +2493,21 @@ describe("hover card keyboard focus", () => {
     document.body.replaceChildren();
   });
 
-  it("focusFirstHoverCardControl focuses the copy indicator button", () => {
+  it("focusFirstHoverCardControl focuses the pin control in the header", () => {
     const panel = buildHoverCardPanel({
       value: "8.8.8.8",
       type: IOC_TYPE.IPV4,
     });
     document.body.appendChild(panel);
 
-    const copyButton = panel.querySelector<HTMLElement>(
-      `.${HOVER_CARD_COPY_BUTTON_CLASS}`
+    const pinButton = panel.querySelector<HTMLElement>(
+      `.${HOVER_CARD_IOC_PIN_BUTTON_CLASS}`
     );
-    expect(copyButton).not.toBeNull();
+    expect(pinButton).not.toBeNull();
 
     const focused = focusFirstHoverCardControl(panel);
     expect(focused).toBe(true);
-    expect(document.activeElement).toBe(copyButton);
+    expect(document.activeElement).toBe(pinButton);
   });
 
   it("showHoverCardNearAnchor moves focus when moveFocus is set", () => {
@@ -2533,10 +2534,10 @@ describe("hover card keyboard focus", () => {
       { moveFocus: true }
     );
 
-    const copyButton = panel.querySelector<HTMLElement>(
-      `.${HOVER_CARD_COPY_BUTTON_CLASS}`
+    const pinButton = panel.querySelector<HTMLElement>(
+      `.${HOVER_CARD_IOC_PIN_BUTTON_CLASS}`
     );
-    expect(document.activeElement).toBe(copyButton);
+    expect(document.activeElement).toBe(pinButton);
   });
 });
 

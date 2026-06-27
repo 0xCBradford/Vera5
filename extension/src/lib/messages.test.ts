@@ -11,8 +11,6 @@ import {
   renameInvestigationSessionMessage,
   reopenInvestigationSessionMessage,
   isEnrichIocMessage,
-  isCreateInvestigationSessionMessage,
-  isGetActiveInvestigationSessionMessage,
   isGetTabScanSummaryMessage,
   isNavigateToIocAnchorMessage,
   isScanPageMessage,

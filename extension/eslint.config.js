@@ -33,5 +33,12 @@ export default tseslint.config(
   },
   {
     ignores: ["dist/**", "node_modules/**", "scripts/**"],
+  },
+  {
+    files: ["e2e/**/*.ts"],
+    rules: {
+      "no-empty-pattern": "off",
+      "react-hooks/rules-of-hooks": "off",
+    },
   }
 );

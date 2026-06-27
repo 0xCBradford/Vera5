@@ -112,6 +112,7 @@ Link to this guide from README or CONTRIBUTING when real captures land; keep gal
 
 ## Related docs
 
+- [Chrome Web Store listing draft](store-listing.md) — copy-paste descriptions, single purpose, and permission justifications
 - [Operator surfaces](../README.md#operator-surfaces)
 - [Analyst workflows](analyst-workflows.md)
 - [SOC validation fixtures](soc-validation-fixtures.md)

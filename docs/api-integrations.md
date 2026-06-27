@@ -92,6 +92,33 @@ Connectors send only the sanitized indicator value required by the vendor endpoi
 
 To validate Vera5 backoff messaging locally, enable a source, trigger enrichment until the vendor returns 429, and confirm the hover card shows the rate-limit message and retry hint for that source without affecting unrelated pivot links or disabled sources. Confirm subsequent automatic enrichment shows the global cooldown message until the countdown expires; **›** manual refresh should still attempt a live fetch.
 
+## Vendor terms, privacy, and acceptable use
+
+Vera5 does not operate threat-intelligence vendors. When you enable a source, save an API key, trigger live enrichment, or click a **Recommended next pivots** link, you interact with that vendor under **your** account and **their** policies—not Vera5’s. Review terms, privacy notices, data retention, subprocessors, export controls, and organizational approval requirements **before** sending production or classified indicators.
+
+| Source | Live HTTPS enrichment in Vera5 | How you may interact | Terms of service / acceptable use | Privacy / data policy |
+|--------|-------------------------------|----------------------|-----------------------------------|------------------------|
+| **AbuseIPDB** | Yes (IPv4) | Live API from the extension service worker; pivot links open in your browser | [AbuseIPDB Terms of Use](https://www.abuseipdb.com/legal) | [AbuseIPDB Privacy Policy](https://www.abuseipdb.com/privacy) |
+| **AlienVault OTX** | Yes (IPv4, domain, URL, hashes, CVE) | Live API; pivot links | [OTX End-User Agreement (LevelBlue)](https://www.levelblue.com/legal/otx-eula-terms) | [LevelBlue Privacy Policy](https://www.levelblue.com/legal/privacy-policy) |
+| **VirusTotal** | No (registry shell; pivots only today) | Pivot links; future live API would use your API key per vendor rules | [VirusTotal Terms of Service](https://support.virustotal.com/hc/en-us/articles/360016879500-Terms-of-Service) | [VirusTotal Privacy Policy](https://support.virustotal.com/hc/en-us/articles/360016879480-Privacy-Policy) |
+| **URLScan.io** | No (settings slot and pivots; live API not shipped) | Pivot links; future live API per [urlscan.io API docs](https://docs.urlscan.io/) | [urlscan.io Terms of Service](https://urlscan.io/about/terms/) | [urlscan.io Privacy Policy](https://urlscan.io/about/privacy/) |
+| **GreyNoise** | No (settings slot and pivots; live API not shipped) | Pivot links; future community/enterprise API per GreyNoise docs | [GreyNoise Terms of Use](https://www.greynoise.io/company/legal) | [GreyNoise Privacy Policy](https://www.greynoise.io/company/legal/privacy-policy) |
+| **Shodan** | No (registry shell; pivots only today) | Pivot links | [Shodan Terms of Service](https://account.shodan.io/terms) | [Shodan Privacy Policy](https://account.shodan.io/privacy) |
+| **Google Safe Browsing** | No (registry shell; no live API shipped) | Future live API would use Google Cloud credentials under Google API terms | [Google Safe Browsing API Terms](https://developers.google.com/safe-browsing/v4/terms) · [Google APIs Terms of Service](https://developers.google.com/terms) | [Google Privacy Policy](https://policies.google.com/privacy) |
+| **Pulsedive** | No (registry shell; pivots only today) | Pivot links | [Pulsedive Terms of Use](https://pulsedive.com/terms_of_use) | [Pulsedive Privacy Policy](https://pulsedive.com/privacy) |
+| **MalwareBazaar** | No (registry shell; pivots only today) | Pivot links to abuse.ch | [MalwareBazaar Terms of Service](https://bazaar.abuse.ch/faq/#tos) (abuse.ch project) | [MalwareBazaar FAQ](https://bazaar.abuse.ch/faq/) (CC0 dataset terms) |
+| **Censys** | No (registry shell; pivots only today) | Pivot links; API ID + secret fields in Settings for future live use | [Censys Terms of Service](https://censys.io/terms-of-service) | [Censys Privacy Policy](https://censys.io/privacy-policy) |
+| **ThreatFox** | No (registry shell; pivots only today) | Pivot links to abuse.ch | [ThreatFox API Terms of Use](https://threatfox.abuse.ch/api/) (includes abuse.ch fair-use terms) | [ThreatFox FAQ](https://threatfox.abuse.ch/faq/) |
+| **URLHaus** | No (registry shell; pivots only today) | Pivot links to abuse.ch | [URLhaus API Terms of Use](https://urlhaus.abuse.ch/api/) (includes abuse.ch fair-use terms) | [URLhaus About](https://urlhaus.abuse.ch/about/) |
+
+**Live enrichment today:** only **AbuseIPDB** and **OTX** perform HTTPS API calls from the extension when enabled with your keys. Other rows apply to pivot navigation, saved keys that are not sent until live connectors ship, and organizational review before you enable future integrations.
+
+**Pivot links:** opening a vendor URL sends the indicator in the query string or path under normal browser navigation. Vera5 does not proxy pivot traffic; vendor sites apply their own cookies, logging, and terms.
+
+**Organizational use:** employers and clients may restrict which vendors may receive IOCs. Domain policy, internal asset lists, manual-only enrichment, and pre-query disclosure in Vera5 reduce accidental queries but do not replace vendor contract review. See [SECURITY.md](../SECURITY.md#third-party-apis) and [security-model.md](security-model.md).
+
+Vendor URLs and policies change without notice. If a link breaks, search the vendor’s legal or documentation site and update this table in the same change set when you confirm the new URL.
+
 ## Related documentation
 
 - [architecture.md](architecture.md) — MVP connector order, BYOK, parallel fetch, deferred sources

@@ -61,6 +61,8 @@ URLScan.io and GreyNoise have settings slots and static pivots (`pivots.ts`) but
 
 Vendor quotas and 429 behavior: [docs/api-integrations.md](../api-integrations.md).
 
+Vendor terms of service, privacy policies, and acceptable use (all registered sources): [docs/api-integrations.md — Vendor terms, privacy, and acceptable use](../api-integrations.md#vendor-terms-privacy-and-acceptable-use).
+
 ## Adding a connector (maintainer notes)
 
 1. Implement client under `extension/src/lib/`.
