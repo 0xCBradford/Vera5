@@ -459,6 +459,52 @@ describe("HoverCard enrichment states", () => {
     expect(contributionChip?.getAttribute("title")).toContain("AbuseIPDB:");
   });
 
+  it("shows GreyNoise per-source row alongside AbuseIPDB and OTX in multi-source enrichment", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "42 abuse confidence",
+      tags: ["US"],
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "42 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "ok",
+          badgeText: "Cached",
+          detail: "2 threat pulses",
+          fromCache: true,
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.GREYNOISE,
+          label: "GreyNoise",
+          status: "ok",
+          badgeText: "Live",
+          detail: "malicious internet noise",
+          tags: ["malicious", "noise"],
+        },
+      ],
+    });
+
+    expect(mounted.container.textContent).toContain("AbuseIPDB · Live");
+    expect(mounted.container.textContent).toContain("OTX · Cached");
+    expect(mounted.container.textContent).toContain("GreyNoise · Live");
+    expect(mounted.container.textContent).toContain("malicious internet noise");
+    expect(mounted.container.textContent).toContain("noise");
+    expect(
+      mounted.container.querySelector(".vera5-hover-card-attribution")
+    ).toBeNull();
+    expect(
+      mounted.container.querySelectorAll(".vera5-hover-card-source-badge")
+    ).toHaveLength(3);
+  });
+
   it("shows expandable redacted raw JSON for a single source", () => {
     mounted = renderHoverCard({
       ...baseProps,

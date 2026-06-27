@@ -334,6 +334,10 @@ const PULSE_SINGLE_SUMMARY_RE = /^1\s+threat\s+pulse$/;
 const PULSE_PLURAL_SUMMARY_RE = /^(\d+)\s+threat\s+pulses$/;
 const URLSCAN_SINGLE_SUMMARY_RE = /^1\s+urlscan\s+result$/;
 const URLSCAN_PLURAL_SUMMARY_RE = /^(\d+)\s+urlscan\s+results$/;
+const GREYNOISE_INTERNET_NOISE_SUMMARY_RE = /^(\w+)\s+internet\s+noise$/;
+const GREYNOISE_CLASSIFICATION_SUMMARY_RE = /^(\w+)\s+classification$/;
+const GREYNOISE_NOT_OBSERVED_SUMMARY = "not observed in GreyNoise";
+const GREYNOISE_BENIGN_RIOT_SUMMARY = "benign RIOT service";
 
 export const DEFAULT_SOURCE_SCORE_WEIGHTS: Readonly<
   Record<EnrichmentSourceId, number>
@@ -392,6 +396,24 @@ export function unifiedSummaryToSignalStrength(
     return clampSignal(scanCountToSignal(count));
   }
 
+  if (trimmed === GREYNOISE_BENIGN_RIOT_SUMMARY) {
+    return clampSignal(8);
+  }
+
+  if (trimmed === GREYNOISE_NOT_OBSERVED_SUMMARY) {
+    return clampSignal(5);
+  }
+
+  match = GREYNOISE_INTERNET_NOISE_SUMMARY_RE.exec(trimmed);
+  if (match) {
+    return clampSignal(greynoiseClassificationToSignal(match[1]!));
+  }
+
+  match = GREYNOISE_CLASSIFICATION_SUMMARY_RE.exec(trimmed);
+  if (match) {
+    return clampSignal(greynoiseClassificationToSignal(match[1]!));
+  }
+
   return null;
 }
 
@@ -438,6 +460,20 @@ function pulseCountToSignal(count: number): number {
 
 function scanCountToSignal(count: number): number {
   return reportCountToSignal(count);
+}
+
+function greynoiseClassificationToSignal(classification: string): number {
+  const normalized = classification.trim().toLowerCase();
+  if (normalized === "malicious") {
+    return 72;
+  }
+  if (normalized === "benign") {
+    return 12;
+  }
+  if (normalized === "unknown") {
+    return 45;
+  }
+  return 35;
 }
 
 export function signalStrengthToBand(

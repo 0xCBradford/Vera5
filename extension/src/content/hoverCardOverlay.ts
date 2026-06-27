@@ -236,6 +236,7 @@ export const HOVER_CARD_SOURCES_CLASS = "vera5-hover-card-sources";
 export const HOVER_CARD_SOURCE_ITEM_CLASS = "vera5-hover-card-source-item";
 export const HOVER_CARD_SOURCE_BADGE_CLASS = "vera5-hover-card-source-badge";
 export const HOVER_CARD_SOURCE_DETAIL_CLASS = "vera5-hover-card-source-detail";
+export const HOVER_CARD_SOURCE_TAGS_CLASS = "vera5-hover-card-source-tags";
 export const HOVER_CARD_RAW_JSON_CLASS = "vera5-hover-card-raw-json";
 export const HOVER_CARD_RAW_JSON_BODY_CLASS = "vera5-hover-card-raw-json-body";
 export const HOVER_CARD_RISK_SCORE_CLASS = "vera5-hover-card-risk-score";
@@ -538,6 +539,14 @@ function createSourceResultsSection(
     detail.className = HOVER_CARD_SOURCE_DETAIL_CLASS;
     detail.textContent = entry.detail;
     item.appendChild(detail);
+
+    if (entry.tags && entry.tags.length > 0) {
+      const tagsRow = createEnrichmentTagsSection(entry.tags, doc);
+      if (tagsRow) {
+        tagsRow.classList.add(HOVER_CARD_SOURCE_TAGS_CLASS);
+        item.appendChild(tagsRow);
+      }
+    }
 
     if (entry.lastUpdatedLine) {
       const lastUpdated = doc.createElement("span");

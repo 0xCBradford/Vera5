@@ -61,6 +61,7 @@ import {
   HOVER_CARD_ACTION_CLASS,
   HOVER_CARD_RETRY_HINT_CLASS,
   HOVER_CARD_SOURCE_DETAIL_CLASS,
+  HOVER_CARD_SOURCE_TAGS_CLASS,
   HOVER_CARD_SOURCE_ITEM_CLASS,
   HOVER_CARD_ANALYST_NOTES_CLASS,
   HOVER_CARD_ANALYST_NOTES_INPUT_CLASS,
@@ -1017,6 +1018,144 @@ describe("hover card overlay", () => {
     const tagsRow = panel.querySelector(`.${HOVER_CARD_TAGS_CLASS}`);
     expect(tagsRow).not.toBeNull();
     expect(panel.querySelectorAll(`.${HOVER_CARD_TAG_CLASS}`)).toHaveLength(2);
+  });
+
+  it("shows GreyNoise benign and noise context in summary and tags when enrichment is ready", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "malicious internet noise",
+      tags: ["malicious", "noise"],
+      sourceAttribution: { sourceLabel: "GreyNoise", fromCache: false },
+    });
+
+    expect(panel.textContent).toContain("malicious internet noise");
+    expect(panel.textContent).toContain("malicious");
+    expect(panel.textContent).toContain("noise");
+    expect(panel.querySelector(`.${HOVER_CARD_TAGS_CLASS}`)).not.toBeNull();
+  });
+
+  it("shows GreyNoise per-source tags on multi-source enrichment rows", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "84 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "84 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.GREYNOISE,
+          sourceLabel: "GreyNoise",
+          status: "ok",
+          summary: "benign RIOT service",
+          tags: ["benign", "Google Public DNS", "riot"],
+        },
+      ]),
+    });
+
+    const greynoiseItem = panel.querySelectorAll(`.${HOVER_CARD_SOURCE_ITEM_CLASS}`)[1];
+    expect(greynoiseItem?.textContent).toContain("benign RIOT service");
+    expect(
+      greynoiseItem?.querySelector(`.${HOVER_CARD_SOURCE_TAGS_CLASS}`)
+    ).not.toBeNull();
+    expect(
+      greynoiseItem?.querySelectorAll(`.${HOVER_CARD_TAG_CLASS}`)
+    ).toHaveLength(3);
+  });
+
+  it("shows GreyNoise attribution on multi-source rows alongside AbuseIPDB and OTX", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "84 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "84 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          status: "ok",
+          summary: "4 threat pulses",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.GREYNOISE,
+          sourceLabel: "GreyNoise",
+          status: "ok",
+          summary: "malicious internet noise",
+          tags: ["malicious", "noise"],
+        },
+      ]),
+    });
+
+    const sourceItems = panel.querySelectorAll(`.${HOVER_CARD_SOURCE_ITEM_CLASS}`);
+    expect(sourceItems).toHaveLength(3);
+    expect(panel.textContent).toContain("AbuseIPDB · Live");
+    expect(panel.textContent).toContain("OTX · Live");
+    expect(panel.textContent).toContain("GreyNoise · Live");
+    expect(panel.textContent).toContain("malicious internet noise");
+    expect(
+      panel.querySelector(".vera5-hover-card-attribution")
+    ).toBeNull();
+    expect(panel.textContent).toContain("GreyNoise:");
   });
 
   it("shows source attribution footer when enrichment is ready", () => {

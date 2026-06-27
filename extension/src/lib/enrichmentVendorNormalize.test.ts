@@ -4,6 +4,7 @@ import {
   buildUnifiedTags,
   collectUrlscanThreatTags,
   mapAbuseIpdbFieldsToUnifiedPresentation,
+  mapGreyNoiseFieldsToUnifiedPresentation,
   mapOtxFieldsToUnifiedPresentation,
   mapUrlscanFieldsToUnifiedPresentation,
   UNIFIED_SUMMARY_METRIC,
@@ -104,6 +105,41 @@ describe("unified enrichment vendor normalization", () => {
     ).toEqual({
       summary: "12 urlscan results",
       tags: ["DE", "malware.testcategory.com", "malicious", "phishing"],
+    });
+  });
+
+  it("maps GreyNoise noise and classification fields to unified presentation", () => {
+    expect(
+      mapGreyNoiseFieldsToUnifiedPresentation({
+        noise: false,
+        riot: true,
+        classification: "benign",
+        name: "Google Public DNS",
+      })
+    ).toEqual({
+      summary: "benign RIOT service",
+      tags: ["benign", "Google Public DNS", "riot"],
+    });
+
+    expect(
+      mapGreyNoiseFieldsToUnifiedPresentation({
+        noise: true,
+        riot: false,
+        classification: "malicious",
+      })
+    ).toEqual({
+      summary: "malicious internet noise",
+      tags: ["malicious", "noise"],
+    });
+
+    expect(
+      mapGreyNoiseFieldsToUnifiedPresentation({
+        noise: false,
+        riot: false,
+      })
+    ).toEqual({
+      summary: "not observed in GreyNoise",
+      tags: [],
     });
   });
 });

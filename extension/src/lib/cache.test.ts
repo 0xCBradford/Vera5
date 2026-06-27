@@ -263,6 +263,9 @@ describe("enrichment cache keys", () => {
     expect(buildEnrichmentCacheKey("example.com", "urlscan")).toBe(
       "example.com|urlscan"
     );
+    expect(buildEnrichmentCacheKey("8.8.8.8", "greynoise")).toBe(
+      "8.8.8.8|greynoise"
+    );
     expect(buildEnrichmentCacheKey("   ", "otx")).toBeNull();
   });
 
@@ -508,6 +511,32 @@ describe("enrichment cache read/write with settings TTL", () => {
     ).resolves.toEqual({
       fetchedAt: nowMs - 90_000,
       payload: { summary: "fresh for urlscan override" },
+    });
+  });
+
+  it("uses a GreyNoise per-source TTL override when configured", async () => {
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 60;
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS] = { greynoise: 300 };
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|otx": {
+        fetchedAt: nowMs - 90_000,
+        payload: { summary: "stale for global ttl" },
+      },
+      "8.8.8.8|greynoise": {
+        fetchedAt: nowMs - 90_000,
+        payload: { summary: "fresh for greynoise override" },
+      },
+    };
+
+    await expect(
+      readValidEnrichmentCacheEntry("8.8.8.8", "otx", nowMs)
+    ).resolves.toBeNull();
+    await expect(
+      readValidEnrichmentCacheEntry("8.8.8.8", "greynoise", nowMs)
+    ).resolves.toEqual({
+      fetchedAt: nowMs - 90_000,
+      payload: { summary: "fresh for greynoise override" },
     });
   });
 

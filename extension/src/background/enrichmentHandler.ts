@@ -10,6 +10,10 @@ import {
 import { enrichWithConnectorShell } from "../lib/enrichmentConnectorShell";
 import { enrichWithOtx } from "../lib/otxConnector";
 import {
+  GREYNOISE_SOURCE_ID,
+  enrichWithGreynoise,
+} from "../lib/greynoiseConnector";
+import {
   URLSCAN_SOURCE_ID,
   enrichWithUrlscan,
 } from "../lib/urlscanConnector";
@@ -74,6 +78,10 @@ async function fetchLiveSource(
 
   if (sourceId === URLSCAN_SOURCE_ID) {
     return enrichWithUrlscan(ioc);
+  }
+
+  if (sourceId === GREYNOISE_SOURCE_ID) {
+    return enrichWithGreynoise(ioc);
   }
 
   if (ENRICHMENT_SOURCE_DEFINITIONS[sourceId].liveConnector) {

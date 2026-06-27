@@ -51,6 +51,14 @@ describe("unifiedSummaryToSignalStrength", () => {
     expect(unifiedSummaryToSignalStrength("12 urlscan results")).toBe(68);
   });
 
+  it("parses GreyNoise unified summaries", () => {
+    expect(unifiedSummaryToSignalStrength("benign RIOT service")).toBe(8);
+    expect(unifiedSummaryToSignalStrength("malicious internet noise")).toBe(72);
+    expect(unifiedSummaryToSignalStrength("unknown internet noise")).toBe(45);
+    expect(unifiedSummaryToSignalStrength("benign internet noise")).toBe(12);
+    expect(unifiedSummaryToSignalStrength("not observed in GreyNoise")).toBe(5);
+  });
+
   it("returns null for unrecognized summaries", () => {
     expect(unifiedSummaryToSignalStrength(undefined)).toBeNull();
     expect(unifiedSummaryToSignalStrength("")).toBeNull();

@@ -14,6 +14,7 @@ import {
 import { clearGlobalEnrichmentCooldown } from "../lib/enrichmentCooldown";
 import {
   TEST_FIXTURE_GENERIC_API_KEY,
+  TEST_FIXTURE_GREYNOISE_API_KEY,
   TEST_FIXTURE_OTX_API_KEY,
   TEST_FIXTURE_URLSCAN_API_KEY,
 } from "../lib/fixtureSecrets";
@@ -1460,6 +1461,483 @@ describe("disabled source and partial success regression", () => {
           sourceId: "otx",
           status: ENRICHMENT_SOURCE_STATUS.ERROR,
           errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+        }),
+      ])
+    );
+  });
+
+  it("surfaces GreyNoise missing-key with actionable settings copy", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      greynoise: true,
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "greynoise",
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.MISSING_KEY,
+      errorMessage:
+        "Add your GreyNoise API key in Vera5 Settings to load enrichment.",
+    });
+  });
+
+  it("surfaces GreyNoise HTTP 401 as unauthorized through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      greynoise: true,
+    });
+    await storage.setApiKey("greynoise", TEST_FIXTURE_GREYNOISE_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 401 }))
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "greynoise",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.UNAUTHORIZED,
+      errorMessage: "GreyNoise rejected the API key.",
+    });
+  });
+
+  it("surfaces GreyNoise HTTP 403 as unauthorized through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      greynoise: true,
+    });
+    await storage.setApiKey("greynoise", TEST_FIXTURE_GREYNOISE_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 403 }))
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "greynoise",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.UNAUTHORIZED,
+      errorMessage: "GreyNoise rejected the API key.",
+    });
+  });
+
+  it("surfaces GreyNoise HTTP 429 with retry hint through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      greynoise: true,
+    });
+    await storage.setApiKey("greynoise", TEST_FIXTURE_GREYNOISE_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response("", {
+            status: 429,
+            headers: { "Retry-After": "90" },
+          })
+      )
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "greynoise",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+      errorMessage: "GreyNoise rate limit reached. Back off before retrying.",
+      retryHint: "Retry after 90 seconds.",
+    });
+  });
+
+  it("surfaces GreyNoise timeout through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      greynoise: true,
+    });
+    await storage.setApiKey("greynoise", TEST_FIXTURE_GREYNOISE_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        const error = new Error("Aborted");
+        error.name = "AbortError";
+        throw error;
+      })
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "greynoise",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.TIMEOUT,
+      errorMessage: "GreyNoise request timed out.",
+    });
+  });
+
+  it("returns skipped when GreyNoise is disabled even if sourceId is greynoise", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      greynoise: false,
+    });
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "greynoise",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.DISABLED,
+        },
+      },
+    });
+  });
+
+  it("returns cached GreyNoise enrichment without calling fetch on a valid cache hit", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      greynoise: true,
+    });
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 3600;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|greynoise": {
+        fetchedAt: nowMs - 10_000,
+        payload: {
+          sourceId: "greynoise",
+          sourceLabel: "GreyNoise",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "benign RIOT service",
+          tags: ["benign", "riot"],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "greynoise",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "benign RIOT service",
+      fromCache: true,
+    });
+  });
+
+  it("fetches GreyNoise community data when enabled with a configured API key", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      greynoise: true,
+    });
+    await storage.setApiKey("greynoise", TEST_FIXTURE_GREYNOISE_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toBe("https://api.greynoise.io/v3/community/8.8.8.8");
+        expect(init).toMatchObject({
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            key: TEST_FIXTURE_GREYNOISE_API_KEY,
+          },
+        });
+        return Response.json(
+          {
+            ip: "8.8.8.8",
+            noise: false,
+            riot: true,
+            classification: "benign",
+            name: "Google Public DNS",
+            message: "Success",
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "greynoise",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "benign RIOT service",
+    });
+    expect(source.rawVendorJson).not.toContain(TEST_FIXTURE_GREYNOISE_API_KEY);
+  });
+
+  it("surfaces malicious internet noise from mocked GreyNoise community response through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      greynoise: true,
+    });
+    await storage.setApiKey("greynoise", TEST_FIXTURE_GREYNOISE_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toBe("https://api.greynoise.io/v3/community/51.91.185.74");
+        expect(init).toMatchObject({
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+            key: TEST_FIXTURE_GREYNOISE_API_KEY,
+          },
+        });
+        return Response.json(
+          {
+            ip: "51.91.185.74",
+            noise: true,
+            riot: false,
+            classification: "malicious",
+            name: "unknown",
+            link: "https://viz.greynoise.io/ip/51.91.185.74",
+            last_seen: "2026-03-18",
+            message: "Success",
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "51.91.185.74",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "greynoise",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "malicious internet noise",
+      tags: ["malicious", "noise"],
+    });
+    expect(source.rawVendorJson).not.toContain(TEST_FIXTURE_GREYNOISE_API_KEY);
+  });
+
+  it("fetches AbuseIPDB, OTX, and GreyNoise in parallel with per-source attribution", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+      greynoise: true,
+    });
+    await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
+    await storage.setApiKey("greynoise", TEST_FIXTURE_GREYNOISE_API_KEY);
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("api.abuseipdb.com")) {
+        return Response.json(successPayload(), { status: 200 });
+      }
+      if (url.includes("otx.alienvault.com")) {
+        return Response.json(
+          {
+            pulse_info: { count: 2, pulses: [{ tags: ["scanner"] }] },
+          },
+          { status: 200 }
+        );
+      }
+      if (url.includes("api.greynoise.io/v3/community/8.8.8.8")) {
+        return Response.json(
+          {
+            ip: "8.8.8.8",
+            noise: true,
+            riot: false,
+            classification: "malicious",
+            name: "unknown",
+            message: "Success",
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(response.ok).toBe(true);
+    const payload = (
+      response as { ok: true; payload: { sources: Record<string, unknown>[] } }
+    ).payload;
+    expect(payload.sources).toHaveLength(3);
+    expect(payload.sources.map((source) => source.sourceId)).toEqual([
+      "abuseipdb",
+      "otx",
+      "greynoise",
+    ]);
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "42 abuse confidence",
+        }),
+        expect.objectContaining({
+          sourceId: "otx",
+          sourceLabel: "OTX",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "2 threat pulses",
+        }),
+        expect.objectContaining({
+          sourceId: "greynoise",
+          sourceLabel: "GreyNoise",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "malicious internet noise",
+          tags: ["malicious", "noise"],
+        }),
+      ])
+    );
+  });
+
+  it("refetches AbuseIPDB when global TTL expires but keeps GreyNoise cached under per-source TTL", async () => {
+    const nowMs = Date.now();
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      greynoise: true,
+    });
+    await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("greynoise", TEST_FIXTURE_GREYNOISE_API_KEY);
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 60;
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS] = { greynoise: 300 };
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: nowMs - 90_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "stale abuse confidence",
+        },
+      },
+      "8.8.8.8|greynoise": {
+        fetchedAt: nowMs - 90_000,
+        payload: {
+          sourceId: "greynoise",
+          sourceLabel: "GreyNoise",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "benign RIOT service",
+        },
+      },
+    };
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("api.abuseipdb.com")) {
+        return Response.json(successPayload(), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(response.ok).toBe(true);
+    const payload = (
+      response as {
+        ok: true;
+        payload: {
+          source: Record<string, unknown>;
+          sources: Record<string, unknown>[];
+        };
+      }
+    ).payload;
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "abuseipdb",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "42 abuse confidence",
+        }),
+        expect.objectContaining({
+          sourceId: "greynoise",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "benign RIOT service",
+          fromCache: true,
         }),
       ])
     );

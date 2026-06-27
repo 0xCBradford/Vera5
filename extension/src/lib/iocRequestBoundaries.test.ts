@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { ABUSEIPDB_CHECK_API_URL } from "./abuseipdbConnector";
+import { GREYNOISE_COMMUNITY_API_BASE_URL } from "./greynoiseConnector";
 import { IOC_TYPE } from "./iocRegex";
 import { enrichIocMessage, isEnrichIocMessage } from "./messages";
 import { OTX_INDICATORS_API_BASE } from "./otxConnector";
@@ -84,12 +85,16 @@ describe("enrichment IOC request boundaries", () => {
     expect(DECLARED_ENRICHMENT_API_HOSTS).toContain(
       new URL(URLSCAN_SEARCH_API_URL).hostname
     );
+    expect(DECLARED_ENRICHMENT_API_HOSTS).toContain(
+      new URL(GREYNOISE_COMMUNITY_API_BASE_URL).hostname
+    );
   });
 
   it("blocks enrichment fetch to undeclared HTTPS hosts", () => {
     expect(isDeclaredEnrichmentApiHostname("api.abuseipdb.com")).toBe(true);
     expect(isDeclaredEnrichmentApiHostname("OTX.alienvault.com")).toBe(true);
     expect(isDeclaredEnrichmentApiHostname("urlscan.io")).toBe(true);
+    expect(isDeclaredEnrichmentApiHostname("api.greynoise.io")).toBe(true);
     expect(isDeclaredEnrichmentApiHostname("evil.example")).toBe(false);
 
     expect(() =>

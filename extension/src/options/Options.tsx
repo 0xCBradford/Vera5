@@ -1371,9 +1371,10 @@ export function Options() {
                     not operate a shared enrichment backend. Only detected
                     indicator values are sent to vendors you enable—not full page
                     content. Only <strong>AbuseIPDB</strong>,{" "}
-                    <strong>OTX</strong>, and <strong>URLScan.io</strong>{" "}
-                    perform live HTTPS queries today; add keys later under{" "}
-                    <strong>API keys</strong> if you skip this step.
+                    <strong>OTX</strong>, <strong>URLScan.io</strong>, and{" "}
+                    <strong>GreyNoise</strong> perform live HTTPS queries today;
+                    add keys later under <strong>API keys</strong> if you skip
+                    this step.
                   </p>
                 ) : null}
                 {quickStartStep === 2 ? (

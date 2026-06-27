@@ -98,6 +98,7 @@ export const DECLARED_ENRICHMENT_API_HOSTS = [
   "api.abuseipdb.com",
   "otx.alienvault.com",
   "urlscan.io",
+  "api.greynoise.io",
 ] as const;
 
 export type DeclaredEnrichmentApiHost =

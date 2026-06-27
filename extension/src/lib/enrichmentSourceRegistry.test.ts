@@ -44,8 +44,10 @@ describe("enrichmentSourceRegistry", () => {
       "abuseipdb",
       "otx",
       "urlscan",
+      "greynoise",
     ]);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.URLSCAN);
+    expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.GREYNOISE);
   });
 
   it("formats workspace source messages", () => {
@@ -101,6 +103,24 @@ describe("enrichmentSourceRegistry", () => {
     expect(
       enrichmentSourceSupportsIocType(
         ENRICHMENT_SOURCE.URLSCAN,
+        IOC_TYPE.SHA256
+      )
+    ).toBe(false);
+    expect(
+      enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.GREYNOISE, IOC_TYPE.IPV4)
+    ).toBe(true);
+    expect(
+      enrichmentSourceSupportsIocType(
+        ENRICHMENT_SOURCE.GREYNOISE,
+        IOC_TYPE.DOMAIN
+      )
+    ).toBe(false);
+    expect(
+      enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.GREYNOISE, IOC_TYPE.URL)
+    ).toBe(false);
+    expect(
+      enrichmentSourceSupportsIocType(
+        ENRICHMENT_SOURCE.GREYNOISE,
         IOC_TYPE.SHA256
       )
     ).toBe(false);

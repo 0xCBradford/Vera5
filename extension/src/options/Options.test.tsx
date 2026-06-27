@@ -22,6 +22,7 @@ import { IOC_TYPE_SETTINGS_ORDER } from "../lib/storage";
 import { DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES } from "../lib/domainPolicy";
 import {
   TEST_FIXTURE_ABUSEIPDB_API_KEY,
+  TEST_FIXTURE_GREYNOISE_API_KEY,
   TEST_FIXTURE_OTX_API_KEY,
   TEST_FIXTURE_STORED_API_KEY,
   TEST_FIXTURE_URLSCAN_API_KEY,
@@ -208,6 +209,11 @@ describe("Options API key inputs", () => {
         'input[aria-label="URLScan.io cache lifetime in seconds"]'
       )
     ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="GreyNoise cache lifetime in seconds"]'
+      )
+    ).not.toBeNull();
   });
 
   it("renders masked inputs for live enrichment API keys", async () => {
@@ -225,16 +231,22 @@ describe("Options API key inputs", () => {
     const urlscanInput = mounted.container.querySelector(
       'input[aria-label="URLScan.io API key"]'
     );
+    const greynoiseInput = mounted.container.querySelector(
+      'input[aria-label="GreyNoise API key"]'
+    );
 
     expect(abuseInput).not.toBeNull();
     expect(otxInput).not.toBeNull();
     expect(urlscanInput).not.toBeNull();
+    expect(greynoiseInput).not.toBeNull();
     expect(abuseInput?.getAttribute("type")).toBe("password");
     expect(otxInput?.getAttribute("type")).toBe("password");
     expect(urlscanInput?.getAttribute("type")).toBe("password");
+    expect(greynoiseInput?.getAttribute("type")).toBe("password");
     expect(abuseInput?.getAttribute("autocomplete")).toBe("off");
     expect(otxInput?.getAttribute("autocomplete")).toBe("off");
     expect(urlscanInput?.getAttribute("autocomplete")).toBe("off");
+    expect(greynoiseInput?.getAttribute("autocomplete")).toBe("off");
   });
 
   it("persists a newly entered URLScan.io API key on blur", async () => {
@@ -306,6 +318,77 @@ describe("Options API key inputs", () => {
       maskApiKeyForDisplay(TEST_FIXTURE_URLSCAN_API_KEY)
     );
     expect(urlscanInput.value).not.toBe(TEST_FIXTURE_URLSCAN_API_KEY);
+  });
+
+  it("persists a newly entered GreyNoise API key on blur", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const greynoiseInput = mounted.container.querySelector(
+      'input[aria-label="GreyNoise API key"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      greynoiseInput.focus();
+    });
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(greynoiseInput, "fresh-greynoise-key");
+      greynoiseInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      greynoiseInput.blur();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      greynoise: "fresh-greynoise-key",
+    });
+  });
+
+  it("shows GreyNoise source status when enabled without a saved key", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const greynoiseToggle = mounted.container.querySelector(
+      'input[aria-label="Enable GreyNoise"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      greynoiseToggle.click();
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("No API key");
+  });
+
+  it("loads stored GreyNoise keys as masked previews only", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      greynoise: TEST_FIXTURE_GREYNOISE_API_KEY,
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const greynoiseInput = mounted.container.querySelector(
+      'input[aria-label="GreyNoise API key"]'
+    ) as HTMLInputElement;
+
+    expect(greynoiseInput.value).toBe(
+      maskApiKeyForDisplay(TEST_FIXTURE_GREYNOISE_API_KEY)
+    );
+    expect(greynoiseInput.value).not.toBe(TEST_FIXTURE_GREYNOISE_API_KEY);
   });
 
   it("persists a newly entered API key on blur", async () => {
@@ -545,6 +628,23 @@ describe("Options install quick start", () => {
     expect(mounted.container.textContent).not.toContain(
       "Skip pre-query notices"
     );
+  });
+
+  it("renders GreyNoise in install quick start API key step", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      clickQuickStartContinue(mounted!.container);
+      await Promise.resolve();
+    });
+
+    expect(mounted!.container.textContent).toContain("GreyNoise");
+    expect(
+      mounted!.container.querySelector('input[aria-label="GreyNoise API key"]')
+    ).not.toBeNull();
   });
 
   it("persists trust choice and hides the quick start flow", async () => {

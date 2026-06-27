@@ -50,6 +50,7 @@ function stubChromeStorage(store: Record<string, unknown>): void {
 const enrichWithAbuseIpdb = vi.fn();
 const enrichWithOtx = vi.fn();
 const enrichWithUrlscan = vi.fn();
+const enrichWithGreynoise = vi.fn();
 
 vi.mock("../lib/abuseipdbConnector", () => ({
   ABUSEIPDB_SOURCE_ID: "abuseipdb",
@@ -63,6 +64,11 @@ vi.mock("../lib/otxConnector", () => ({
 vi.mock("../lib/urlscanConnector", () => ({
   URLSCAN_SOURCE_ID: "urlscan",
   enrichWithUrlscan: (...args: unknown[]) => enrichWithUrlscan(...args),
+}));
+
+vi.mock("../lib/greynoiseConnector", () => ({
+  GREYNOISE_SOURCE_ID: "greynoise",
+  enrichWithGreynoise: (...args: unknown[]) => enrichWithGreynoise(...args),
 }));
 
 vi.mock("../lib/storage", async (importOriginal) => {
@@ -83,10 +89,12 @@ describe("enrichment handler", () => {
     enrichWithAbuseIpdb.mockReset();
     enrichWithOtx.mockReset();
     enrichWithUrlscan.mockReset();
+    enrichWithGreynoise.mockReset();
     vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
       abuseipdb: true,
       otx: true,
       urlscan: false,
+      greynoise: false,
     });
     for (const key of Object.keys(store)) {
       delete store[key];
@@ -558,6 +566,143 @@ describe("enrichment handler", () => {
     );
 
     expect(enrichWithUrlscan).not.toHaveBeenCalled();
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          status: "skipped",
+          errorCode: "disabled",
+        },
+      },
+    });
+  });
+
+  it("routes ENRICH_IOC through the GreyNoise connector when sourceId is greynoise", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+      greynoise: true,
+    });
+    enrichWithGreynoise.mockResolvedValue({
+      sourceId: "greynoise",
+      sourceLabel: "GreyNoise",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "benign RIOT service",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "greynoise",
+          sourceLabel: "GreyNoise",
+          status: "ok",
+          summary: "benign RIOT service",
+        },
+        sources: [
+          {
+            sourceId: "greynoise",
+            sourceLabel: "GreyNoise",
+            status: "ok",
+            summary: "benign RIOT service",
+          },
+        ],
+      },
+    });
+    expect(enrichWithGreynoise).toHaveBeenCalledWith({
+      value: "8.8.8.8",
+      type: "ipv4",
+    });
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(enrichWithOtx).not.toHaveBeenCalled();
+  });
+
+  it("returns skipped when GreyNoise is disabled even if sourceId is greynoise", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+      greynoise: false,
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "greynoise",
+      })
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "greynoise",
+          status: "skipped",
+          errorCode: "disabled",
+        },
+      },
+    });
+    expect(enrichWithGreynoise).not.toHaveBeenCalled();
+  });
+
+  it("includes enabled GreyNoise in parallel IPv4 enrichment", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: false,
+      otx: true,
+      greynoise: true,
+    });
+    enrichWithOtx.mockResolvedValue({
+      sourceId: "otx",
+      sourceLabel: "OTX",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "1 threat pulse",
+    });
+    enrichWithGreynoise.mockResolvedValue({
+      sourceId: "greynoise",
+      sourceLabel: "GreyNoise",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "benign RIOT service",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(enrichWithOtx).toHaveBeenCalledOnce();
+    expect(enrichWithGreynoise).toHaveBeenCalledOnce();
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        sources: [
+          { sourceId: "otx", status: "ok" },
+          { sourceId: "greynoise", status: "ok" },
+        ],
+      },
+    });
+  });
+
+  it("does not call GreyNoise for domain indicators when only GreyNoise is enabled", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: false,
+      otx: false,
+      greynoise: true,
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "example.com", iocType: "domain" })
+    );
+
+    expect(enrichWithGreynoise).not.toHaveBeenCalled();
     expect(response).toMatchObject({
       ok: true,
       payload: {

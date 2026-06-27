@@ -209,6 +209,81 @@ describe("hover card enrichment placeholders", () => {
     expect(entries[1]?.badgeText).toBe(formatSourceStatusBadge("ok"));
   });
 
+  it("orders AbuseIPDB, OTX, and GreyNoise source rows in connector order with labels", () => {
+    const entries = buildHoverCardSourceEntries([
+      {
+        sourceId: "greynoise",
+        sourceLabel: "GreyNoise",
+        status: "ok",
+        summary: "malicious internet noise",
+        tags: ["malicious", "noise"],
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+      },
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "42 abuse confidence",
+      },
+    ]);
+
+    expect(entries.map((entry) => entry.sourceId)).toEqual([
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.OTX,
+      ENRICHMENT_SOURCE.GREYNOISE,
+    ]);
+    expect(entries.map((entry) => entry.label)).toEqual([
+      "AbuseIPDB",
+      "OTX",
+      "GreyNoise",
+    ]);
+    expect(entries[2]?.detail).toBe("malicious internet noise");
+    expect(entries[2]?.tags).toEqual(["malicious", "noise"]);
+  });
+
+  it("resolves multi-source enrichment with GreyNoise attribution alongside AbuseIPDB and OTX", () => {
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "42 abuse confidence",
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+        tags: ["scanner"],
+      },
+      {
+        sourceId: "greynoise",
+        sourceLabel: "GreyNoise",
+        status: "ok",
+        summary: "benign RIOT service",
+        tags: ["benign", "Google Public DNS", "riot"],
+      },
+    ]);
+
+    expect(view.enrichmentState).toBe("ready");
+    expect(view.sourceResults).toHaveLength(3);
+    expect(view.sourceResults.map((entry) => entry.label)).toEqual([
+      "AbuseIPDB",
+      "OTX",
+      "GreyNoise",
+    ]);
+    expect(shouldShowMultiSourceResults(view.sourceResults)).toBe(true);
+    expect(
+      shouldShowEnrichmentSourceAttribution("ready", view.sourceAttribution, view.sourceResults)
+    ).toBe(false);
+    expect(view.sourceResults[2]?.detail).toBe("benign RIOT service");
+  });
+
   it("surfaces URLScan.io connector error copy on source entries", () => {
     const missingKey = buildHoverCardSourceEntries([
       {
@@ -261,6 +336,85 @@ describe("hover card enrichment placeholders", () => {
       },
     ])[0];
     expect(timedOut?.detail).toBe("URLScan.io request timed out.");
+  });
+
+  it("surfaces GreyNoise connector error copy on source entries", () => {
+    const missingKey = buildHoverCardSourceEntries([
+      {
+        sourceId: "greynoise",
+        sourceLabel: "GreyNoise",
+        status: "skipped",
+        errorCode: "missing_key",
+        errorMessage:
+          "Add your GreyNoise API key in Vera5 Settings to load enrichment.",
+      },
+    ])[0];
+    expect(missingKey?.detail).toBe(
+      "Add your GreyNoise API key in Vera5 Settings to load enrichment."
+    );
+
+    const unauthorized = buildHoverCardSourceEntries([
+      {
+        sourceId: "greynoise",
+        sourceLabel: "GreyNoise",
+        status: "error",
+        errorCode: "unauthorized",
+        errorMessage: "GreyNoise rejected the API key.",
+      },
+    ])[0];
+    expect(unauthorized?.detail).toBe("GreyNoise rejected the API key.");
+
+    const rateLimited = buildHoverCardSourceEntries([
+      {
+        sourceId: "greynoise",
+        sourceLabel: "GreyNoise",
+        status: "error",
+        errorCode: "rate_limited",
+        errorMessage: "GreyNoise rate limit reached. Back off before retrying.",
+        retryHint: "Retry after 45 seconds.",
+      },
+    ])[0];
+    expect(rateLimited?.detail).toBe(
+      "GreyNoise rate limit reached. Back off before retrying."
+    );
+    expect(rateLimited?.retryHint).toBe("Retry after 45 seconds.");
+
+    const timedOut = buildHoverCardSourceEntries([
+      {
+        sourceId: "greynoise",
+        sourceLabel: "GreyNoise",
+        status: "error",
+        errorCode: "timeout",
+        errorMessage: "GreyNoise request timed out.",
+      },
+    ])[0];
+    expect(timedOut?.detail).toBe("GreyNoise request timed out.");
+  });
+
+  it("surfaces GreyNoise noise and benign context on source entries", () => {
+    const benignRiot = buildHoverCardSourceEntries([
+      {
+        sourceId: "greynoise",
+        sourceLabel: "GreyNoise",
+        status: "ok",
+        summary: "benign RIOT service",
+        tags: ["benign", "Google Public DNS", "riot"],
+      },
+    ])[0];
+    expect(benignRiot?.detail).toBe("benign RIOT service");
+    expect(benignRiot?.tags).toEqual(["benign", "Google Public DNS", "riot"]);
+
+    const maliciousNoise = buildHoverCardSourceEntries([
+      {
+        sourceId: "greynoise",
+        sourceLabel: "GreyNoise",
+        status: "ok",
+        summary: "malicious internet noise",
+        tags: ["malicious", "noise"],
+      },
+    ])[0];
+    expect(maliciousNoise?.detail).toBe("malicious internet noise");
+    expect(maliciousNoise?.tags).toEqual(["malicious", "noise"]);
   });
 
   it("marks cached ok sources with Cached badge and last updated line", () => {
@@ -353,6 +507,31 @@ describe("hover card enrichment placeholders", () => {
     expect(
       shouldShowEnrichmentSourceAttribution("ready", view.sourceAttribution, view.sourceResults)
     ).toBe(false);
+  });
+
+  it("resolves partial success when GreyNoise succeeds alongside a failing source", () => {
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "error",
+        errorMessage: "AbuseIPDB rejected the API key.",
+      },
+      {
+        sourceId: "greynoise",
+        sourceLabel: "GreyNoise",
+        status: "ok",
+        summary: "malicious internet noise",
+        tags: ["malicious", "noise"],
+      },
+    ]);
+
+    expect(view.enrichmentState).toBe("ready");
+    expect(view.summary).toBe("malicious internet noise");
+    expect(view.tags).toEqual(["malicious", "noise"]);
+    expect(view.sourceResults).toHaveLength(2);
+    expect(view.sourceResults[1]?.detail).toBe("malicious internet noise");
+    expect(view.sourceResults[1]?.tags).toEqual(["malicious", "noise"]);
   });
 
   it("resolves partial success when URLScan.io fails and OTX succeeds", () => {

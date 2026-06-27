@@ -34,6 +34,17 @@ describe("manifest host permissions for declared enrichment APIs", () => {
       ).toBe(true);
     }
   });
+
+  it("documents live enrichment vendors in the manifest description", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(extensionRoot, "public", "manifest.json"), "utf8")
+    ) as { description?: string };
+
+    expect(manifest.description).toContain("AbuseIPDB");
+    expect(manifest.description).toContain("OTX");
+    expect(manifest.description).toContain("URLScan.io");
+    expect(manifest.description).toContain("GreyNoise");
+  });
 });
 
 function manifestHostPatternCoversHttpsHostname(

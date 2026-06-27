@@ -279,7 +279,7 @@ export const ENRICHMENT_SOURCE_DEFINITIONS: Record<
     settingsKeyName: "GREYNOISE_API_KEY",
     cacheKeyNamespace: "greynoise",
     enabledDefault: false,
-    liveConnector: false,
+    liveConnector: true,
     buildPivotUrl: buildGreyNoisePivotUrl,
   },
   [ENRICHMENT_SOURCE.SHODAN]: {
