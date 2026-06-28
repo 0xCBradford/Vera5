@@ -7,8 +7,13 @@ import {
   mapGreyNoiseFieldsToUnifiedPresentation,
   mapOtxFieldsToUnifiedPresentation,
   mapUrlscanFieldsToUnifiedPresentation,
+  mapVirustotalFieldsToUnifiedPresentation,
   UNIFIED_SUMMARY_METRIC,
 } from "./enrichmentVendorNormalize";
+import {
+  normalizeVirustotalResponse,
+  parseVirustotalUnifiedInput,
+} from "./virustotalConnector";
 
 describe("unified enrichment vendor normalization", () => {
   it("formats summary metrics with shared vocabulary", () => {
@@ -140,6 +145,62 @@ describe("unified enrichment vendor normalization", () => {
     ).toEqual({
       summary: "not observed in GreyNoise",
       tags: [],
+    });
+  });
+
+  it("maps VirusTotal detection counts to explicit summaries without reputation", () => {
+    expect(
+      mapVirustotalFieldsToUnifiedPresentation({
+        maliciousDetections: 5,
+        suspiciousDetections: 2,
+        countryCode: "us",
+        networkOwner: "Example ISP",
+      })
+    ).toEqual({
+      summary: "5 malicious detections",
+      tags: ["US", "Example ISP"],
+    });
+  });
+
+  it("prefers suspicious counts when malicious is zero", () => {
+    expect(
+      mapVirustotalFieldsToUnifiedPresentation({
+        suspiciousDetections: 1,
+      })
+    ).toEqual({
+      summary: "1 suspicious detection",
+      tags: [],
+    });
+  });
+
+  it("ignores VirusTotal reputation when building unified presentation", () => {
+    const payload = {
+      data: {
+        attributes: {
+          reputation: -42,
+          total_votes: { harmless: 1, malicious: 99 },
+          last_analysis_stats: {
+            malicious: 0,
+            suspicious: 0,
+            harmless: 60,
+            undetected: 8,
+          },
+          country: "DE",
+          as_owner: "Example Network",
+        },
+      },
+    };
+
+    expect(parseVirustotalUnifiedInput(payload)).toEqual({
+      maliciousDetections: 0,
+      suspiciousDetections: 0,
+      harmlessDetections: 60,
+      countryCode: "DE",
+      networkOwner: "Example Network",
+    });
+    expect(normalizeVirustotalResponse(payload)).toEqual({
+      summary: "60 harmless detections",
+      tags: ["DE", "Example Network"],
     });
   });
 });

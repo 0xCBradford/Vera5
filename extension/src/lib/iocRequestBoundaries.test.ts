@@ -5,6 +5,8 @@ import { IOC_TYPE } from "./iocRegex";
 import { enrichIocMessage, isEnrichIocMessage } from "./messages";
 import { OTX_INDICATORS_API_BASE } from "./otxConnector";
 import { URLSCAN_SEARCH_API_URL } from "./urlscanConnector";
+import { SHODAN_API_BASE_URL } from "./shodanConnector";
+import { VIRUSTOTAL_API_V3_BASE } from "./virustotalConnector";
 import {
   assertDeclaredEnrichmentApiUrl,
   assertEnrichmentFetchHasNoBody,
@@ -88,6 +90,12 @@ describe("enrichment IOC request boundaries", () => {
     expect(DECLARED_ENRICHMENT_API_HOSTS).toContain(
       new URL(GREYNOISE_COMMUNITY_API_BASE_URL).hostname
     );
+    expect(DECLARED_ENRICHMENT_API_HOSTS).toContain(
+      new URL(VIRUSTOTAL_API_V3_BASE).hostname
+    );
+    expect(DECLARED_ENRICHMENT_API_HOSTS).toContain(
+      new URL(SHODAN_API_BASE_URL).hostname
+    );
   });
 
   it("blocks enrichment fetch to undeclared HTTPS hosts", () => {
@@ -95,6 +103,8 @@ describe("enrichment IOC request boundaries", () => {
     expect(isDeclaredEnrichmentApiHostname("OTX.alienvault.com")).toBe(true);
     expect(isDeclaredEnrichmentApiHostname("urlscan.io")).toBe(true);
     expect(isDeclaredEnrichmentApiHostname("api.greynoise.io")).toBe(true);
+    expect(isDeclaredEnrichmentApiHostname("www.virustotal.com")).toBe(true);
+    expect(isDeclaredEnrichmentApiHostname("api.shodan.io")).toBe(true);
     expect(isDeclaredEnrichmentApiHostname("evil.example")).toBe(false);
 
     expect(() =>

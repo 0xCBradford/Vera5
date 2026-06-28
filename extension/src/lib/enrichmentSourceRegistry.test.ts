@@ -9,6 +9,7 @@ import {
   formatDisabledSourceMessage,
   formatMissingApiKeySourceMessage,
   formatUnsupportedIndicatorTypeMessage,
+  getEnrichmentSourceDefinition,
   listEnrichmentSourcesWithPivotSupport,
 } from "./enrichmentSourceRegistry";
 import { enrichWithConnectorShell } from "./enrichmentConnectorShell";
@@ -45,9 +46,27 @@ describe("enrichmentSourceRegistry", () => {
       "otx",
       "urlscan",
       "greynoise",
+      "shodan",
     ]);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.URLSCAN);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.GREYNOISE);
+    expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.SHODAN);
+  });
+
+  it("registers Shodan as a live connector with default disabled", () => {
+    const definition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.SHODAN);
+    expect(definition.enabledDefault).toBe(false);
+    expect(definition.liveConnector).toBe(true);
+    expect(LIVE_ENRICHMENT_SOURCE_ORDER).toContain(ENRICHMENT_SOURCE.SHODAN);
+  });
+
+  it("keeps VirusTotal disabled by default and outside live connector order", () => {
+    const definition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.VIRUSTOTAL);
+    expect(definition.enabledDefault).toBe(false);
+    expect(definition.liveConnector).toBe(false);
+    expect(LIVE_ENRICHMENT_SOURCE_ORDER).not.toContain(
+      ENRICHMENT_SOURCE.VIRUSTOTAL
+    );
   });
 
   it("formats workspace source messages", () => {

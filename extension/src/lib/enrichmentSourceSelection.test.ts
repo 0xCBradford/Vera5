@@ -42,6 +42,30 @@ describe("enrichment source selection", () => {
     ).toEqual([ENRICHMENT_SOURCE.ABUSEIPDB, ENRICHMENT_SOURCE.OTX]);
   });
 
+  it("excludes shell-only connectors from live enrichment when user-enabled", () => {
+    expect(
+      listEnabledLiveEnrichmentSourceIds(
+        { virustotal: true, censys: true, abuseipdb: true },
+        IOC_TYPE.IPV4
+      )
+    ).toEqual([ENRICHMENT_SOURCE.ABUSEIPDB]);
+    expect(
+      liveEnrichmentSupportsIocType(ENRICHMENT_SOURCE.VIRUSTOTAL, IOC_TYPE.IPV4)
+    ).toBe(false);
+  });
+
+  it("includes Shodan when enabled for supported indicator types", () => {
+    expect(
+      listEnabledLiveEnrichmentSourceIds(
+        { shodan: true, abuseipdb: false },
+        IOC_TYPE.IPV4
+      )
+    ).toEqual([ENRICHMENT_SOURCE.SHODAN]);
+    expect(
+      listEnabledLiveEnrichmentSourceIds({ shodan: true }, IOC_TYPE.URL)
+    ).toEqual([]);
+  });
+
   it("prefers AbuseIPDB when both live sources are enabled for IPv4", () => {
     expect(
       resolveEnabledLiveEnrichmentSourceId(

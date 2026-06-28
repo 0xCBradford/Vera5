@@ -291,7 +291,7 @@ export const ENRICHMENT_SOURCE_DEFINITIONS: Record<
     settingsKeyName: "SHODAN_API_KEY",
     cacheKeyNamespace: "shodan",
     enabledDefault: false,
-    liveConnector: false,
+    liveConnector: true,
     buildPivotUrl: buildShodanPivotUrl,
   },
   [ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING]: {

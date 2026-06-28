@@ -1942,4 +1942,181 @@ describe("disabled source and partial success regression", () => {
       ])
     );
   });
+
+  it("surfaces Shodan missing-key with actionable settings copy", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      shodan: true,
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "shodan",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "shodan",
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.MISSING_KEY,
+      errorMessage:
+        "Add your Shodan API key in Vera5 Settings to load enrichment.",
+    });
+  });
+
+  it("returns skipped when Shodan is disabled even if sourceId is shodan", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      shodan: false,
+    });
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "shodan",
+      })
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "shodan",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.DISABLED,
+        },
+      },
+    });
+  });
+
+  it("returns cached Shodan enrichment without calling fetch on a valid cache hit", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      shodan: true,
+    });
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 3600;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|shodan": {
+        fetchedAt: nowMs - 10_000,
+        payload: {
+          sourceId: "shodan",
+          sourceLabel: "Shodan",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "2 open services",
+          tags: ["US", "Google LLC"],
+        },
+      },
+    };
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "shodan",
+      })
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "shodan",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "2 open services",
+      fromCache: true,
+    });
+  });
+
+  it("fetches Shodan host data when enabled with a configured API key", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      shodan: true,
+    });
+    await storage.setApiKey("shodan", TEST_FIXTURE_GENERIC_API_KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init?: RequestInit) => {
+        expect(url).toBe(
+          `https://api.shodan.io/shodan/host/8.8.8.8?key=${encodeURIComponent(TEST_FIXTURE_GENERIC_API_KEY)}`
+        );
+        expect(init).toMatchObject({
+          method: "GET",
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        return Response.json(
+          {
+            ip_str: "8.8.8.8",
+            country_code: "US",
+            org: "Google LLC",
+            data: [
+              { port: 443, transport: "tcp", product: "nginx" },
+              { port: 53, transport: "udp", product: "DNS" },
+            ],
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      })
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "shodan",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "shodan",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "2 open services",
+      tags: ["US", "Google LLC", "nginx", "443/tcp", "DNS"],
+    });
+    expect(source.rawVendorJson).not.toContain(TEST_FIXTURE_GENERIC_API_KEY);
+  });
+
+  it("skips unsupported Shodan indicator types without calling fetch", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      shodan: true,
+    });
+    await storage.setApiKey("shodan", TEST_FIXTURE_GENERIC_API_KEY);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "https://example.com/path",
+        iocType: "url",
+        sourceId: "shodan",
+      })
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "shodan",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE,
+        },
+      },
+    });
+  });
 });

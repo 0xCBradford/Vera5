@@ -14,6 +14,10 @@ import {
   enrichWithGreynoise,
 } from "../lib/greynoiseConnector";
 import {
+  SHODAN_SOURCE_ID,
+  enrichWithShodan,
+} from "../lib/shodanConnector";
+import {
   URLSCAN_SOURCE_ID,
   enrichWithUrlscan,
 } from "../lib/urlscanConnector";
@@ -91,6 +95,10 @@ async function fetchLiveSource(
 
   if (sourceId === GREYNOISE_SOURCE_ID) {
     return enrichWithGreynoise(ioc);
+  }
+
+  if (sourceId === SHODAN_SOURCE_ID) {
+    return enrichWithShodan(ioc);
   }
 
   if (ENRICHMENT_SOURCE_DEFINITIONS[sourceId].liveConnector) {

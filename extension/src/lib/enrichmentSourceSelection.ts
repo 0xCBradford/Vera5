@@ -3,6 +3,7 @@ import {
   ENRICHMENT_SOURCE_ORDER,
   LIVE_ENRICHMENT_SOURCE_ORDER,
   enrichmentSourceSupportsIocType,
+  getEnrichmentSourceDefinition,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
 import type { IocType } from "./iocRegex";
@@ -25,14 +26,18 @@ export function liveEnrichmentSupportsIocType(
   sourceId: EnrichmentSourceId,
   iocType: IocType
 ): boolean {
-  return enrichmentSourceSupportsIocType(sourceId, iocType);
+  const definition = getEnrichmentSourceDefinition(sourceId);
+  return (
+    definition.liveConnector &&
+    enrichmentSourceSupportsIocType(sourceId, iocType)
+  );
 }
 
 export function listEnabledLiveEnrichmentSourceIds(
   enabled: EnrichmentSourceEnabledRecord,
   iocType: IocType
 ): EnrichmentSourceId[] {
-  return ENRICHMENT_SOURCE_ORDER.filter(
+  return LIVE_ENRICHMENT_SOURCE_ORDER.filter(
     (sourceId) =>
       isEnrichmentSourceEnabled(enabled, sourceId) &&
       liveEnrichmentSupportsIocType(sourceId, iocType)

@@ -26,6 +26,8 @@ const FETCH_ALLOWED_SOURCE_BASENAMES = new Set([
   "otxConnector.ts",
   "urlscanConnector.ts",
   "greynoiseConnector.ts",
+  "virustotalConnector.ts",
+  "shodanConnector.ts",
 ]);
 
 const FETCH_GUARD_SOURCE_BASENAMES = new Set([
@@ -393,6 +395,7 @@ function checkConnectorFetchUsesGetWithoutBody(filePath, source) {
     "otxConnector.ts",
     "urlscanConnector.ts",
     "greynoiseConnector.ts",
+    "virustotalConnector.ts",
   ]);
   if (!connectorFiles.has(path.basename(filePath))) {
     return;

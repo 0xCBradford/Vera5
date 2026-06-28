@@ -1,5 +1,6 @@
 import type { EnrichmentSourceId } from "../lib/hoverCardEnrichment";
 import {
+  ENRICHMENT_SOURCE_DEFINITIONS,
   ENRICHMENT_SOURCE_ORDER,
   isEnrichmentSourceId,
 } from "../lib/enrichmentSourceRegistry";
@@ -19,7 +20,10 @@ export type EnrichmentSourceEnabledMap = Record<EnrichmentSourceId, boolean>;
 
 export function createDefaultEnrichmentSourceEnabledMap(): EnrichmentSourceEnabledMap {
   return Object.fromEntries(
-    ENRICHMENT_SOURCE_ORDER.map((sourceId) => [sourceId, false])
+    ENRICHMENT_SOURCE_ORDER.map((sourceId) => [
+      sourceId,
+      ENRICHMENT_SOURCE_DEFINITIONS[sourceId].enabledDefault,
+    ])
   ) as EnrichmentSourceEnabledMap;
 }
 

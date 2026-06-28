@@ -278,3 +278,99 @@ export function mapGreyNoiseFieldsToUnifiedPresentation(
     tags: buildGreyNoiseUnifiedTags(input),
   };
 }
+
+export type VirustotalUnifiedInput = {
+  maliciousDetections?: number;
+  suspiciousDetections?: number;
+  harmlessDetections?: number;
+  countryCode?: string;
+  networkOwner?: string;
+};
+
+export function buildVirustotalUnifiedSummary(
+  input: VirustotalUnifiedInput
+): string {
+  const malicious = input.maliciousDetections ?? 0;
+  const suspicious = input.suspiciousDetections ?? 0;
+  if (malicious > 0) {
+    return malicious === 1 ? "1 malicious detection" : `${malicious} malicious detections`;
+  }
+  if (suspicious > 0) {
+    return suspicious === 1 ? "1 suspicious detection" : `${suspicious} suspicious detections`;
+  }
+  const harmless = input.harmlessDetections ?? 0;
+  if (harmless > 0) {
+    return harmless === 1 ? "1 harmless detection" : `${harmless} harmless detections`;
+  }
+  return "No vendor detections recorded";
+}
+
+export function mapVirustotalFieldsToUnifiedPresentation(
+  input: VirustotalUnifiedInput
+): UnifiedEnrichmentPresentation {
+  return {
+    summary: buildVirustotalUnifiedSummary(input),
+    tags: buildUnifiedTags({
+      countryCode: input.countryCode,
+      isp: input.networkOwner,
+    }),
+  };
+}
+
+export type ShodanUnifiedInput = {
+  openServiceCount?: number;
+  subdomainCount?: number;
+  dnsRecordCount?: number;
+  countryCode?: string;
+  organization?: string;
+  serviceTags?: readonly string[];
+};
+
+export function buildShodanUnifiedSummary(input: ShodanUnifiedInput): string {
+  const openServices = input.openServiceCount ?? 0;
+  if (openServices > 0) {
+    return openServices === 1 ? "1 open service" : `${openServices} open services`;
+  }
+
+  const subdomains = input.subdomainCount ?? 0;
+  if (subdomains > 0) {
+    return subdomains === 1 ? "1 subdomain" : `${subdomains} subdomains`;
+  }
+
+  const dnsRecords = input.dnsRecordCount ?? 0;
+  if (dnsRecords > 0) {
+    return dnsRecords === 1 ? "1 DNS record" : `${dnsRecords} DNS records`;
+  }
+
+  return "No Shodan exposure data";
+}
+
+export function buildShodanUnifiedTags(
+  input: ShodanUnifiedInput
+): readonly string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  if (input.countryCode) {
+    appendUniqueTag(tags, seen, input.countryCode.toUpperCase());
+  }
+  appendUniqueTag(tags, seen, input.organization);
+
+  for (const serviceTag of input.serviceTags ?? []) {
+    appendUniqueTag(tags, seen, serviceTag);
+    if (tags.length >= UNIFIED_TAG_LIMIT) {
+      break;
+    }
+  }
+
+  return tags;
+}
+
+export function mapShodanFieldsToUnifiedPresentation(
+  input: ShodanUnifiedInput
+): UnifiedEnrichmentPresentation {
+  return {
+    summary: buildShodanUnifiedSummary(input),
+    tags: buildShodanUnifiedTags(input),
+  };
+}

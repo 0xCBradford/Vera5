@@ -26,6 +26,7 @@ import {
 import type { IocType } from "./iocRegex";
 import {
   API_KEY_STORAGE_SLOTS,
+  ENRICHMENT_SOURCE_DEFINITIONS,
   ENRICHMENT_SOURCE_ORDER,
   isApiKeyStorageSlot,
   type ApiKeyStorageSlot,
@@ -290,7 +291,7 @@ export function createDefaultApiKeysRecord(): ApiKeysRecord {
 export function createDefaultEnrichmentSourceEnabledRecord(): EnrichmentSourceEnabledRecord {
   const record: EnrichmentSourceEnabledRecord = {};
   for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
-    record[sourceId] = false;
+    record[sourceId] = ENRICHMENT_SOURCE_DEFINITIONS[sourceId].enabledDefault;
   }
   return record;
 }

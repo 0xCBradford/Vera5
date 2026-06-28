@@ -266,6 +266,12 @@ describe("enrichment cache keys", () => {
     expect(buildEnrichmentCacheKey("8.8.8.8", "greynoise")).toBe(
       "8.8.8.8|greynoise"
     );
+    expect(buildEnrichmentCacheKey("8.8.8.8", "shodan")).toBe(
+      "8.8.8.8|shodan"
+    );
+    expect(buildEnrichmentCacheKey("example.com", "shodan")).toBe(
+      "example.com|shodan"
+    );
     expect(buildEnrichmentCacheKey("   ", "otx")).toBeNull();
   });
 
@@ -537,6 +543,32 @@ describe("enrichment cache read/write with settings TTL", () => {
     ).resolves.toEqual({
       fetchedAt: nowMs - 90_000,
       payload: { summary: "fresh for greynoise override" },
+    });
+  });
+
+  it("uses a Shodan per-source TTL override when configured", async () => {
+    const nowMs = Date.now();
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = 60;
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS] = { shodan: 300 };
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|otx": {
+        fetchedAt: nowMs - 90_000,
+        payload: { summary: "stale for global ttl" },
+      },
+      "8.8.8.8|shodan": {
+        fetchedAt: nowMs - 90_000,
+        payload: { summary: "fresh for shodan override" },
+      },
+    };
+
+    await expect(
+      readValidEnrichmentCacheEntry("8.8.8.8", "otx", nowMs)
+    ).resolves.toBeNull();
+    await expect(
+      readValidEnrichmentCacheEntry("8.8.8.8", "shodan", nowMs)
+    ).resolves.toEqual({
+      fetchedAt: nowMs - 90_000,
+      payload: { summary: "fresh for shodan override" },
     });
   });
 

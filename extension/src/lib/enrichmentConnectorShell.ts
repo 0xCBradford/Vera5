@@ -6,6 +6,7 @@ import {
   type EnrichmentSourceResult,
 } from "./enrichment";
 import {
+  ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_DEFINITIONS,
   ENRICHMENT_SOURCE_LABELS,
   formatMissingApiKeySourceMessage,
@@ -15,6 +16,7 @@ import {
   type EnrichmentSourceId,
   enrichmentSourceSupportsIocType,
 } from "./enrichmentSourceRegistry";
+import { formatMissingCensysCredentialsMessage } from "./censysCredentials";
 import { getApiKey } from "./storage";
 
 async function sourceHasRequiredApiKeys(
@@ -56,10 +58,14 @@ export async function enrichWithConnectorShell(
   }
 
   if (definition.requiresApiKey && !(await sourceHasRequiredApiKeys(sourceId))) {
+    const missingKeyMessage =
+      sourceId === ENRICHMENT_SOURCE.CENSYS
+        ? formatMissingCensysCredentialsMessage()
+        : formatMissingApiKeySourceMessage(displayName);
     return createSkippedSourceResult(
       sourceId,
       ENRICHMENT_ERROR_CODE.MISSING_KEY,
-      formatMissingApiKeySourceMessage(displayName)
+      missingKeyMessage
     );
   }
 
