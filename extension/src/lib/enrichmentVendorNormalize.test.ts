@@ -4,6 +4,7 @@ import {
   buildUnifiedTags,
   collectUrlscanThreatTags,
   mapAbuseIpdbFieldsToUnifiedPresentation,
+  mapCensysFieldsToUnifiedPresentation,
   mapGreyNoiseFieldsToUnifiedPresentation,
   mapOtxFieldsToUnifiedPresentation,
   mapUrlscanFieldsToUnifiedPresentation,
@@ -201,6 +202,21 @@ describe("unified enrichment vendor normalization", () => {
     expect(normalizeVirustotalResponse(payload)).toEqual({
       summary: "60 harmless detections",
       tags: ["DE", "Example Network"],
+    });
+  });
+
+  it("maps Censys host and certificate fields to unified presentation", () => {
+    expect(
+      mapCensysFieldsToUnifiedPresentation({
+        serviceCount: 3,
+        countryCode: "de",
+        autonomousSystemName: "Example AS",
+        serviceTags: ["HTTPS", "443/tcp"],
+        certificateTags: ["portal.example.com"],
+      })
+    ).toEqual({
+      summary: "3 observed services",
+      tags: ["DE", "Example AS", "HTTPS", "443/tcp", "portal.example.com"],
     });
   });
 });

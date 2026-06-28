@@ -374,3 +374,77 @@ export function mapShodanFieldsToUnifiedPresentation(
     tags: buildShodanUnifiedTags(input),
   };
 }
+
+export type CensysUnifiedInput = {
+  serviceCount?: number;
+  certificateCount?: number;
+  dnsNameCount?: number;
+  countryCode?: string;
+  autonomousSystemName?: string;
+  serviceTags?: readonly string[];
+  certificateTags?: readonly string[];
+  dnsNames?: readonly string[];
+};
+
+export function buildCensysUnifiedSummary(input: CensysUnifiedInput): string {
+  const services = input.serviceCount ?? 0;
+  if (services > 0) {
+    return services === 1 ? "1 observed service" : `${services} observed services`;
+  }
+
+  const certificates = input.certificateCount ?? 0;
+  if (certificates > 0) {
+    return certificates === 1 ? "1 TLS certificate" : `${certificates} TLS certificates`;
+  }
+
+  const dnsNames = input.dnsNameCount ?? 0;
+  if (dnsNames > 0) {
+    return dnsNames === 1 ? "1 DNS name" : `${dnsNames} DNS names`;
+  }
+
+  return "No Censys host data";
+}
+
+export function buildCensysUnifiedTags(
+  input: CensysUnifiedInput
+): readonly string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  if (input.countryCode) {
+    appendUniqueTag(tags, seen, input.countryCode.toUpperCase());
+  }
+  appendUniqueTag(tags, seen, input.autonomousSystemName);
+
+  for (const serviceTag of input.serviceTags ?? []) {
+    appendUniqueTag(tags, seen, serviceTag);
+    if (tags.length >= UNIFIED_TAG_LIMIT) {
+      return tags;
+    }
+  }
+
+  for (const certificateTag of input.certificateTags ?? []) {
+    appendUniqueTag(tags, seen, certificateTag);
+    if (tags.length >= UNIFIED_TAG_LIMIT) {
+      return tags;
+    }
+  }
+
+  for (const dnsName of input.dnsNames ?? []) {
+    appendUniqueTag(tags, seen, dnsName);
+    if (tags.length >= UNIFIED_TAG_LIMIT) {
+      break;
+    }
+  }
+
+  return tags;
+}
+
+export function mapCensysFieldsToUnifiedPresentation(
+  input: CensysUnifiedInput
+): UnifiedEnrichmentPresentation {
+  return {
+    summary: buildCensysUnifiedSummary(input),
+    tags: buildCensysUnifiedTags(input),
+  };
+}

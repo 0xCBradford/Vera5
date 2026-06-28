@@ -47,6 +47,7 @@ describe("enrichmentSourceRegistry", () => {
       "urlscan",
       "greynoise",
       "shodan",
+      "censys",
     ]);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.URLSCAN);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.GREYNOISE);
@@ -58,6 +59,13 @@ describe("enrichmentSourceRegistry", () => {
     expect(definition.enabledDefault).toBe(false);
     expect(definition.liveConnector).toBe(true);
     expect(LIVE_ENRICHMENT_SOURCE_ORDER).toContain(ENRICHMENT_SOURCE.SHODAN);
+  });
+
+  it("registers Censys as a live IPv4 connector with default disabled", () => {
+    const definition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.CENSYS);
+    expect(definition.enabledDefault).toBe(false);
+    expect(definition.liveConnector).toBe(true);
+    expect(LIVE_ENRICHMENT_SOURCE_ORDER).toContain(ENRICHMENT_SOURCE.CENSYS);
   });
 
   it("keeps VirusTotal disabled by default and outside live connector order", () => {

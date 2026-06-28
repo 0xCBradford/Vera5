@@ -101,6 +101,7 @@ export const DECLARED_ENRICHMENT_API_HOSTS = [
   "api.greynoise.io",
   "www.virustotal.com",
   "api.shodan.io",
+  "search.censys.io",
 ] as const;
 
 export type DeclaredEnrichmentApiHost =

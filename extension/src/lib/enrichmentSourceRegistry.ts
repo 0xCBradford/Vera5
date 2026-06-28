@@ -340,7 +340,7 @@ export const ENRICHMENT_SOURCE_DEFINITIONS: Record<
     secondarySettingsKeyName: "CENSYS_SECRET",
     cacheKeyNamespace: "censys",
     enabledDefault: false,
-    liveConnector: false,
+    liveConnector: true,
     buildPivotUrl: buildCensysPivotUrl,
   },
   [ENRICHMENT_SOURCE.THREATFOX]: {

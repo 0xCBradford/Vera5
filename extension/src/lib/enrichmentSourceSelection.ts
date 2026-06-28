@@ -6,6 +6,7 @@ import {
   getEnrichmentSourceDefinition,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
+import { censysLiveSupportsIocType } from "./censysConnector";
 import type { IocType } from "./iocRegex";
 import type { EnrichmentSourceEnabledRecord } from "./storage";
 import {
@@ -27,10 +28,13 @@ export function liveEnrichmentSupportsIocType(
   iocType: IocType
 ): boolean {
   const definition = getEnrichmentSourceDefinition(sourceId);
-  return (
-    definition.liveConnector &&
-    enrichmentSourceSupportsIocType(sourceId, iocType)
-  );
+  if (!definition.liveConnector) {
+    return false;
+  }
+  if (sourceId === ENRICHMENT_SOURCE.CENSYS) {
+    return censysLiveSupportsIocType(iocType);
+  }
+  return enrichmentSourceSupportsIocType(sourceId, iocType);
 }
 
 export function listEnabledLiveEnrichmentSourceIds(

@@ -28,6 +28,7 @@ const FETCH_ALLOWED_SOURCE_BASENAMES = new Set([
   "greynoiseConnector.ts",
   "virustotalConnector.ts",
   "shodanConnector.ts",
+  "censysConnector.ts",
 ]);
 
 const FETCH_GUARD_SOURCE_BASENAMES = new Set([

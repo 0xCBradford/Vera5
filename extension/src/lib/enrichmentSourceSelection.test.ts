@@ -42,13 +42,22 @@ describe("enrichment source selection", () => {
     ).toEqual([ENRICHMENT_SOURCE.ABUSEIPDB, ENRICHMENT_SOURCE.OTX]);
   });
 
-  it("excludes shell-only connectors from live enrichment when user-enabled", () => {
+  it("includes Censys for IPv4 but not for domain live enrichment", () => {
     expect(
       listEnabledLiveEnrichmentSourceIds(
         { virustotal: true, censys: true, abuseipdb: true },
         IOC_TYPE.IPV4
       )
-    ).toEqual([ENRICHMENT_SOURCE.ABUSEIPDB]);
+    ).toEqual([ENRICHMENT_SOURCE.ABUSEIPDB, ENRICHMENT_SOURCE.CENSYS]);
+    expect(
+      listEnabledLiveEnrichmentSourceIds({ censys: true }, IOC_TYPE.DOMAIN)
+    ).toEqual([]);
+    expect(
+      liveEnrichmentSupportsIocType(ENRICHMENT_SOURCE.CENSYS, IOC_TYPE.IPV4)
+    ).toBe(true);
+    expect(
+      liveEnrichmentSupportsIocType(ENRICHMENT_SOURCE.CENSYS, IOC_TYPE.DOMAIN)
+    ).toBe(false);
     expect(
       liveEnrichmentSupportsIocType(ENRICHMENT_SOURCE.VIRUSTOTAL, IOC_TYPE.IPV4)
     ).toBe(false);

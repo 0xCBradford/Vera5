@@ -14,6 +14,10 @@ import {
   enrichWithGreynoise,
 } from "../lib/greynoiseConnector";
 import {
+  CENSYS_SOURCE_ID,
+  enrichWithCensys,
+} from "../lib/censysConnector";
+import {
   SHODAN_SOURCE_ID,
   enrichWithShodan,
 } from "../lib/shodanConnector";
@@ -99,6 +103,10 @@ async function fetchLiveSource(
 
   if (sourceId === SHODAN_SOURCE_ID) {
     return enrichWithShodan(ioc);
+  }
+
+  if (sourceId === CENSYS_SOURCE_ID) {
+    return enrichWithCensys(ioc);
   }
 
   if (ENRICHMENT_SOURCE_DEFINITIONS[sourceId].liveConnector) {
