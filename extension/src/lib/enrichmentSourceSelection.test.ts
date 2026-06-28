@@ -4,6 +4,8 @@ import { IOC_TYPE } from "./iocRegex";
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
 import {
   isEnrichmentSourceEnabled,
+  buildSkippedLiveEnrichmentUnsupportedTypeResults,
+  hasAnyEnabledLiveEnrichmentSource,
   listEnabledLiveEnrichmentSourceIds,
   liveEnrichmentSupportsIocType,
   pickPrimaryEnrichmentSource,
@@ -133,5 +135,40 @@ describe("enrichment source selection", () => {
         IOC_TYPE.DOMAIN
       )
     ).toBeNull();
+  });
+
+  it("returns no live targets for Phase 2 indicator types when only MVP sources are enabled", () => {
+    const enabled = { abuseipdb: true, otx: true, urlscan: true, shodan: true };
+    expect(listEnabledLiveEnrichmentSourceIds(enabled, IOC_TYPE.EMAIL)).toEqual([]);
+    expect(listEnabledLiveEnrichmentSourceIds(enabled, IOC_TYPE.ASN)).toEqual([]);
+    expect(listEnabledLiveEnrichmentSourceIds(enabled, IOC_TYPE.CIDR)).toEqual([]);
+    expect(listEnabledLiveEnrichmentSourceIds(enabled, IOC_TYPE.FILEPATH)).toEqual([]);
+    expect(listEnabledLiveEnrichmentSourceIds(enabled, IOC_TYPE.ONION)).toEqual([]);
+    expect(hasAnyEnabledLiveEnrichmentSource(enabled)).toBe(true);
+  });
+
+  it("builds explicit unsupported-type skipped rows for enabled live sources", () => {
+    const results = buildSkippedLiveEnrichmentUnsupportedTypeResults({
+      abuseipdb: true,
+      otx: true,
+      urlscan: false,
+    });
+
+    expect(results).toEqual([
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+        errorCode: "unsupported_type",
+        errorMessage: "AbuseIPDB does not support this indicator type.",
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.OTX,
+        sourceLabel: "OTX",
+        status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+        errorCode: "unsupported_type",
+        errorMessage: "OTX does not support this indicator type.",
+      },
+    ]);
   });
 });

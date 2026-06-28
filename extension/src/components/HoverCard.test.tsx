@@ -93,6 +93,24 @@ describe("HoverCard", () => {
     expect(mounted.container.textContent).toContain("Ignored overlaps: none");
   });
 
+  it("renders Why detected panel with Phase 2 email provenance", () => {
+    mounted = renderHoverCard({
+      value: "analyst@corp.example.com",
+      type: IOC_TYPE.EMAIL,
+      ruleId: "ioc.regex.email",
+      sourceTextHint: "Contact analyst@corp.example.com today",
+    });
+
+    expect(mounted.container.querySelector(".vera5-why-detected")).not.toBeNull();
+    expect(mounted.container.textContent).toContain("Type: Email address");
+    expect(mounted.container.textContent).toContain(
+      "Matched an email address in visible text."
+    );
+    expect(mounted.container.textContent).toContain(
+      "Source context: Contact analyst@corp.example.com today"
+    );
+  });
+
   it("renders on-page and refanged values when displayValue differs", () => {
     mounted = renderHoverCard({
       value: "https://example.com/evil",
@@ -121,6 +139,14 @@ describe("HoverCard", () => {
   it("maps IOC types to readable labels", () => {
     expect(formatHoverCardTypeLabel(IOC_TYPE.URL)).toBe("URL");
     expect(formatHoverCardTypeLabel(IOC_TYPE.SHA256)).toBe("SHA256 hash");
+  });
+
+  it("maps Phase 2 IOC types to readable hover card labels", () => {
+    expect(formatHoverCardTypeLabel(IOC_TYPE.EMAIL)).toBe("Email address");
+    expect(formatHoverCardTypeLabel(IOC_TYPE.ASN)).toBe("ASN");
+    expect(formatHoverCardTypeLabel(IOC_TYPE.CIDR)).toBe("IPv4 CIDR");
+    expect(formatHoverCardTypeLabel(IOC_TYPE.FILEPATH)).toBe("File path");
+    expect(formatHoverCardTypeLabel(IOC_TYPE.ONION)).toBe("Onion domain");
   });
 
   it("renders external pivot links for the indicator", () => {

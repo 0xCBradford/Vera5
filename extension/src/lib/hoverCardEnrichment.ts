@@ -647,6 +647,11 @@ const DETECTION_TYPE_LABEL: Record<IocType, string> = {
   [IOC_TYPE.SHA1]: "SHA1 hash",
   [IOC_TYPE.SHA256]: "SHA256 hash",
   [IOC_TYPE.CVE]: "CVE ID",
+  [IOC_TYPE.EMAIL]: "Email address",
+  [IOC_TYPE.ASN]: "ASN",
+  [IOC_TYPE.CIDR]: "IPv4 CIDR",
+  [IOC_TYPE.FILEPATH]: "File path",
+  [IOC_TYPE.ONION]: "Onion domain",
 };
 
 export function formatDetectionTypeLabel(type: IocType): string {

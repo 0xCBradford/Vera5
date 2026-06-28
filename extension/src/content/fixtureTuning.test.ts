@@ -6,6 +6,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { IOC_TYPE } from "../lib/iocRegex";
+import { DEFAULT_MAX_IOCS_PER_SCAN } from "./detector";
 import { DEFAULT_MAX_TEXT_NODES_PER_SCAN } from "./textWalker";
 import { scanTextNodesForIocs, scanTextNodesForIocsWithProfile } from "./detector";
 
@@ -40,6 +41,22 @@ function findMatch<
   return matches.find((match) => match.type === type && match.value === value);
 }
 
+const EXTENDED_IOC_TYPES = [
+  IOC_TYPE.EMAIL,
+  IOC_TYPE.ASN,
+  IOC_TYPE.CIDR,
+  IOC_TYPE.FILEPATH,
+  IOC_TYPE.ONION,
+] as const;
+
+function assertNoExtendedIocTypes(
+  matches: ReadonlyArray<{ type: string }>
+): void {
+  for (const type of EXTENDED_IOC_TYPES) {
+    expect(matches.some((match) => match.type === type)).toBe(false);
+  }
+}
+
 describe("fixture tuning against sample HTML", () => {
   it("sample-alert.html visible text matches documented IOCs and suppresses decoys", () => {
     const html = loadFixture("sample-alert.html");
@@ -67,6 +84,7 @@ describe("fixture tuning against sample HTML", () => {
     );
     expect(values).toContain(`${IOC_TYPE.CVE}:CVE-2021-44228`);
     expect(values).toContain(`${IOC_TYPE.CVE}:CVE-2017-0144`);
+    expect(values).toContain(`${IOC_TYPE.EMAIL}:analyst@example.com`);
 
     expect(values.some((v) => v.includes("1.2.3.4"))).toBe(false);
     expect(values.some((v) => v.includes("chart.png"))).toBe(false);
@@ -134,10 +152,13 @@ describe("fixture tuning against sample HTML", () => {
     expect(values.some((v) => v.includes("dashboard.png"))).toBe(false);
     expect(values.some((v) => v.includes("splunkd.log"))).toBe(false);
     expect(values.some((v) => v.includes("10.0.0.1"))).toBe(false);
+    assertNoExtendedIocTypes(matches);
 
     const profile = scanTextNodesForIocsWithProfile(document.body).profile;
     expect(profile.textNodeCap).toBe(DEFAULT_MAX_TEXT_NODES_PER_SCAN);
     expect(profile.capReached).toBe(false);
+    expect(profile.iocCap).toBe(DEFAULT_MAX_IOCS_PER_SCAN);
+    expect(profile.iocCapReached).toBe(false);
     expect(profile.textNodesScanned).toBeGreaterThan(0);
     expect(profile.textNodesScanned).toBeLessThan(DEFAULT_MAX_TEXT_NODES_PER_SCAN);
     expect(profile.durationMs).toBeGreaterThanOrEqual(0);
@@ -183,5 +204,40 @@ describe("fixture tuning against sample HTML", () => {
     expect(values.some((v) => v.includes("zeek-export.csv"))).toBe(false);
     expect(values.some((v) => v.includes("1.2.3.4"))).toBe(false);
     expect(values.some((v) => v.includes("10.0.0.1"))).toBe(false);
+    assertNoExtendedIocTypes(matches);
+  });
+
+  it("sample-extended-ioc-alert.html detects mixed extended and MVP IOCs and suppresses decoys", () => {
+    const html = loadFixture("sample-extended-ioc-alert.html");
+    mountFixture(html);
+    const matches = scanTextNodesForIocs(document.body);
+    const values = uniqueMatchValues(matches);
+    const onion = `${"a".repeat(56)}.onion`;
+    const onionUrl = `http://${onion}/wiki`;
+
+    expect(values).toContain(`${IOC_TYPE.EMAIL}:analyst@corp.example.com`);
+    expect(values).toContain(`${IOC_TYPE.EMAIL}:security+alerts@bank.co.uk`);
+    expect(values).toContain(`${IOC_TYPE.ASN}:AS15169`);
+    expect(values).toContain(`${IOC_TYPE.ASN}:AS64512`);
+    expect(values).toContain(`${IOC_TYPE.CIDR}:203.0.113.0/24`);
+    expect(values).toContain(`${IOC_TYPE.FILEPATH}:/var/log/auth.log`);
+    expect(values).toContain(
+      `${IOC_TYPE.FILEPATH}:C:\\Users\\Public\\malware.exe`
+    );
+    expect(values).toContain(`${IOC_TYPE.ONION}:${onion}`);
+    expect(values).toContain(`${IOC_TYPE.URL}:${onionUrl}`);
+    expect(values).toContain(`${IOC_TYPE.IPV4}:192.0.2.1`);
+    expect(values).toContain(`${IOC_TYPE.URL}:https://example.com/login`);
+    expect(values).toContain(
+      `${IOC_TYPE.SHA256}:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
+    );
+    expect(values).toContain(`${IOC_TYPE.CVE}:CVE-2021-44228`);
+
+    expect(values.some((v) => v.includes("1.2.3.4"))).toBe(false);
+    expect(values.some((v) => v.includes("Windows\\System32"))).toBe(false);
+    expect(values.some((v) => v.includes("foo.onion"))).toBe(false);
+    expect(values.some((v) => v.includes("bulletin-export.csv"))).toBe(false);
+    expect(values.some((v) => v.includes("10.0.0.1"))).toBe(false);
+    expect(matches.some((match) => match.type === IOC_TYPE.DOMAIN)).toBe(false);
   });
 });

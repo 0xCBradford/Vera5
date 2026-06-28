@@ -1,9 +1,14 @@
 import type { IocMatch, IocRegexOptions, IocType } from "../lib/iocRegex";
 import {
+  findAsnsInText,
+  findCidrsInText,
   findCvesInText,
   findDomainsInText,
+  findEmailsInText,
+  findFilepathsInText,
   findHashesInText,
   findIpv4InText,
+  findOnionsInText,
   findUrlsInText,
 } from "../lib/iocRegex";
 import type { TextWalkerSkipOptions } from "./textWalker";
@@ -24,12 +29,18 @@ export type DetectedIocInTextNode = DetectedIoc & {
 export type IocDetectorScanOptions = {
   ioc?: IocRegexOptions;
   walker?: TextWalkerSkipOptions;
+  maxIocs?: number;
 };
+
+export const DEFAULT_MAX_IOCS_PER_SCAN = 500;
 
 export type IocScanProfile = {
   textNodesScanned: number;
   textNodeCap: number;
   capReached: boolean;
+  iocCount: number;
+  iocCap: number;
+  iocCapReached: boolean;
   durationMs: number;
 };
 
@@ -52,13 +63,32 @@ function isIocTypeEnabledForDetection(
 
 const TYPE_PRIORITY: Record<IocType, number> = {
   url: 0,
-  sha256: 1,
-  sha1: 2,
-  md5: 3,
-  cve: 4,
-  ipv4: 5,
-  domain: 6,
+  email: 1,
+  filepath: 2,
+  onion: 3,
+  sha256: 4,
+  sha1: 5,
+  md5: 6,
+  cve: 7,
+  cidr: 8,
+  ipv4: 9,
+  asn: 10,
+  domain: 11,
 };
+
+function pushMatchesIfClear(
+  matches: ReadonlyArray<DetectedIoc>,
+  results: DetectedIoc[],
+  occupied: TextSpan[]
+): void {
+  for (const match of matches) {
+    if (overlapsSpan(match.start, match.end, occupied)) {
+      continue;
+    }
+    results.push(match);
+    occupied.push({ start: match.start, end: match.end });
+  }
+}
 
 function spansOverlap(a: TextSpan, b: TextSpan): boolean {
   return a.start < b.end && a.end > b.start;
@@ -136,6 +166,10 @@ export function detectIocsInText(
     occupied.push({ start: match.start, end: match.end });
   }
 
+  pushMatchesIfClear(findEmailsInText(text), results, occupied);
+  pushMatchesIfClear(findFilepathsInText(text), results, occupied);
+  pushMatchesIfClear(findOnionsInText(text), results, occupied);
+
   for (const match of findHashesInText(text, occupied)) {
     results.push(match);
     occupied.push({ start: match.start, end: match.end });
@@ -146,12 +180,16 @@ export function detectIocsInText(
     occupied.push({ start: match.start, end: match.end });
   }
 
+  pushMatchesIfClear(findCidrsInText(text, options), results, occupied);
+
   for (const match of findIpv4InText(text, options)) {
     if (!overlapsSpan(match.start, match.end, occupied)) {
       results.push(match);
       occupied.push({ start: match.start, end: match.end });
     }
   }
+
+  pushMatchesIfClear(findAsnsInText(text), results, occupied);
 
   for (const match of findDomainsInText(text, occupied)) {
     results.push(match);
@@ -165,6 +203,34 @@ export function detectIocsInText(
   return deduped.filter((match) =>
     isIocTypeEnabledForDetection(match.type, options.enabledTypes)
   );
+}
+
+export function resolveMaxIocsPerScan(
+  options: IocDetectorScanOptions = {}
+): number {
+  const limit = options.maxIocs ?? DEFAULT_MAX_IOCS_PER_SCAN;
+  if (!Number.isFinite(limit) || limit < 1) {
+    return DEFAULT_MAX_IOCS_PER_SCAN;
+  }
+  return Math.floor(limit);
+}
+
+function collectDetectedMatchesUpToCap(
+  detected: DetectedIocInTextNode[],
+  matches: ReadonlyArray<DetectedIoc>,
+  textNode: Text,
+  maxIocs: number
+): boolean {
+  for (const match of matches) {
+    if (detected.length >= maxIocs) {
+      return true;
+    }
+    detected.push({
+      ...match,
+      textNode,
+    });
+  }
+  return false;
 }
 
 export function scanTextNodesForIocs(
@@ -181,16 +247,16 @@ export function scanTextNodesForIocsWithProfile(
   const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
   const iocOptions = options.ioc ?? {};
   const walkerOptions = options.walker ?? {};
+  const maxIocs = resolveMaxIocsPerScan(options);
   const collection = collectIocScanTextBlocksWithProfile(root, walkerOptions);
   const detected: DetectedIocInTextNode[] = [];
+  let iocCapReached = false;
 
   for (const block of collection.blocks) {
     const matches = detectIocsInText(block.text, iocOptions);
-    for (const match of matches) {
-      detected.push({
-        ...match,
-        textNode: block.node,
-      });
+    if (collectDetectedMatchesUpToCap(detected, matches, block.node, maxIocs)) {
+      iocCapReached = true;
+      break;
     }
   }
 
@@ -201,6 +267,9 @@ export function scanTextNodesForIocsWithProfile(
       textNodesScanned: collection.textNodesScanned,
       textNodeCap: collection.textNodeCap,
       capReached: collection.capReached,
+      iocCount: detected.length,
+      iocCap: maxIocs,
+      iocCapReached,
       durationMs: Math.max(0, finishedAt - startedAt),
     },
   };
@@ -230,11 +299,13 @@ export function scanTextNodesForIocsInRangeWithProfile(
   const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
   const iocOptions = options.ioc ?? {};
   const walkerOptions = options.walker ?? {};
+  const maxIocs = resolveMaxIocsPerScan(options);
   const resolvedWalkerOptions = resolveTextWalkerSkipOptions(walkerOptions);
   const scanRoot = resolveRangeScanRoot(range, boundary);
   const collection = collectIocScanTextBlocksWithProfile(scanRoot, walkerOptions);
   const detected: DetectedIocInTextNode[] = [];
   let textNodesScanned = 0;
+  let iocCapReached = false;
 
   for (const block of collection.blocks) {
     if (!textNodeIntersectsRange(block.node, range)) {
@@ -248,11 +319,9 @@ export function scanTextNodesForIocsInRangeWithProfile(
     }
     textNodesScanned += 1;
     const matches = detectIocsInText(block.text, iocOptions);
-    for (const match of matches) {
-      detected.push({
-        ...match,
-        textNode: block.node,
-      });
+    if (collectDetectedMatchesUpToCap(detected, matches, block.node, maxIocs)) {
+      iocCapReached = true;
+      break;
     }
   }
 
@@ -263,6 +332,9 @@ export function scanTextNodesForIocsInRangeWithProfile(
       textNodesScanned,
       textNodeCap: collection.textNodeCap,
       capReached: false,
+      iocCount: detected.length,
+      iocCap: maxIocs,
+      iocCapReached,
       durationMs: Math.max(0, finishedAt - startedAt),
     },
   };

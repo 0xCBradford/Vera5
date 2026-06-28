@@ -15,6 +15,7 @@ Guides for developers working on the Vera5 browser extension. These documents de
 | Document | Topics |
 |----------|--------|
 | [detection-engine.md](detection-engine.md) | Regex, text walker, scan triggers, false-positive controls |
+| [phase2-ioc-detector-spec.md](../phase2-ioc-detector-spec.md) | Phase 2 IOC grammar, examples, and decoy tables |
 | [hover-overlay-architecture.md](hover-overlay-architecture.md) | Production overlay vs React test card, shared enrichment view-model |
 | [settings-and-storage.md](settings-and-storage.md) | `chrome.storage.local` schema, export/import, keys |
 | [enrichment-connectors.md](enrichment-connectors.md) | AbuseIPDB, OTX, parallel fetch, attribution |

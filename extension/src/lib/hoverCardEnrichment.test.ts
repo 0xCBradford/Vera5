@@ -449,6 +449,33 @@ describe("hover card enrichment placeholders", () => {
     expect(timedOut?.detail).toBe("URLScan.io request timed out.");
   });
 
+  it("surfaces unsupported indicator type copy for Phase 2 enrichment rows", () => {
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "skipped",
+        errorCode: "unsupported_type",
+        errorMessage: "AbuseIPDB does not support this indicator type.",
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "skipped",
+        errorCode: "unsupported_type",
+        errorMessage: "OTX does not support this indicator type.",
+      },
+    ]);
+
+    expect(view.enrichmentState).toBe("error");
+    expect(view.sourceResults[0]?.detail).toBe(
+      "AbuseIPDB does not support this indicator type."
+    );
+    expect(view.sourceResults[1]?.detail).toBe(
+      "OTX does not support this indicator type."
+    );
+  });
+
   it("surfaces GreyNoise connector error copy on source entries", () => {
     const missingKey = buildHoverCardSourceEntries([
       {
@@ -940,6 +967,28 @@ describe("why detected view model", () => {
         },
       ],
     });
+  });
+
+  it("builds Why detected rows for Phase 2 indicator types", () => {
+    const emailView = buildWhyDetectedView({
+      type: IOC_TYPE.EMAIL,
+      ruleId: IOC_RULE_ID.EMAIL,
+      sourceTextHint: "Contact analyst@corp.example.com today",
+    });
+    expect(emailView).toEqual({
+      typeLabel: "Email address",
+      reason: "Matched an email address in visible text.",
+      sourceTextHint: "Contact analyst@corp.example.com today",
+      ignoredOverlaps: [],
+    });
+
+    const cidrView = buildWhyDetectedView({
+      type: IOC_TYPE.CIDR,
+      ruleId: IOC_RULE_ID.CIDR,
+      sourceTextHint: "Route 203.0.113.0/24 listed",
+    });
+    expect(cidrView?.typeLabel).toBe("IPv4 CIDR");
+    expect(cidrView?.reason).toBe("Matched an IPv4 CIDR network block.");
   });
 });
 

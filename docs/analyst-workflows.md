@@ -59,10 +59,32 @@ flowchart TD
 4. **Enrich when needed:**
    - With **manual-only** on, click the **›** icon on the highlight to request live threat intelligence.
    - With manual-only off, opening the card schedules enrichment automatically (see [Rapid clicks and quota protection](#rapid-clicks-and-quota-protection)).
-5. **Copy** the indicator or use **pivot links** to open VirusTotal, OTX, AbuseIPDB, or URLScan in a new tab for deeper review.
+5. **Copy** the indicator or use **pivot links** on the hover card (**Recommended next pivots**) to open vendor search or indicator pages in a new tab. Core types commonly pivot to VirusTotal, OTX, AbuseIPDB, or URLScan.io; email addresses, ASN, IPv4 CIDR, file paths, and onion domains have type-specific pivot rows (see [Recommended next pivots for extended indicator types](#recommended-next-pivots-for-extended-indicator-types)).
 6. **Dismiss** the card with Escape or by clicking outside it. After a keyboard-opened card, **Escape** also returns focus to the highlight you opened from.
 
 Use [examples/sample-blog.html](../examples/sample-blog.html) or [examples/sample-alert.html](../examples/sample-alert.html) for local practice after a build. For Splunk-export and Security Onion-style dashboard pages, see [soc-validation-fixtures.md](soc-validation-fixtures.md).
+
+## Recommended next pivots for extended indicator types
+
+Vera5 detects **email addresses**, **ASN**, **IPv4 CIDR**, **conservative file paths**, and **Tor v3 onion domains** in visible page text when those types are enabled under **Scanning → Indicator types** in settings. Grammar, overlap rules, and negative fixtures are documented in [phase2-ioc-detector-spec.md](phase2-ioc-detector-spec.md).
+
+On the hover card, **Recommended next pivots** lists **attributed static links**: each row names the vendor, opens that vendor’s search or indicator page in a new tab, and includes short workflow guidance. Guidance describes what to review on the vendor site—it does **not** echo live enrichment scores, vendor ratios, or cache state.
+
+**Live enrichment** is not available for these indicator types in the current release. When you click **›** or open auto-enrichment, enabled live connectors return an explicit skipped row such as `{Vendor} does not support this indicator type.` Pivot links remain available regardless of enrichment API keys.
+
+**Composite risk score:** These types cannot produce a blended **/100** label today because live connectors do not return parseable OK summaries. After enrichment, expect **Unknown risk** with an insufficient-data notice—not a fabricated severity band. See [Indicator types without enrichment-backed scores](#indicator-types-without-enrichment-backed-scores).
+
+| Indicator type | Recommended pivot sources | Workflow focus |
+|----------------|---------------------------|----------------|
+| **Email address** | VirusTotal, OTX, Pulsedive, ThreatFox | Search multi-vendor reports; review OTX pulses for the address; explore shared campaign context. |
+| **ASN** | VirusTotal, Shodan, Pulsedive, ThreatFox | Search vendor coverage for the autonomous system; review Shodan hosts and services announced by the ASN. |
+| **IPv4 CIDR** | VirusTotal, Shodan, Pulsedive | Search vendor coverage for the network block; use Shodan to find exposed hosts within the range. |
+| **File path** | VirusTotal, Pulsedive, ThreatFox | Search for files or reports referencing the path string; explore related threat context for the token (path text only—Vera5 never uploads file contents). |
+| **Onion domain** | VirusTotal, OTX, URLScan.io, Pulsedive, ThreatFox | Review domain reputation for the v3 onion host; check OTX passive DNS and pulses; find URLScan.io scans referencing the hostname. |
+
+Pivot URLs are built locally from the indicator value you clicked—no Vera5-operated relay. Disabled enrichment sources still show pivot links when the vendor supports that type; analyst workflow presets may reorder emphasized vendors without changing the link set.
+
+For phishing and MDR triage, prioritize **email address** and **URL** pivots on sender and landing-page indicators; use **IPv4 CIDR** or **ASN** pivots when routing or infrastructure context appears in alert prose.
 
 ## Investigation Session (local case workspace)
 
@@ -109,8 +131,8 @@ flowchart TD
 
 1. **Open the message or alert** in a tab Vera5 is allowed to read. If the site is on the default sensitive webmail denylist, adjust domain policy in settings before live enrich (see [Before you start](#before-you-start)).
 2. **Name the session** (for example **Phishing Investigation — vendor impersonation**).
-3. **Scan the page** from the popup or keyboard shortcut. Expect domains, URLs, IPv4 addresses, and file hashes from links, headers, and body text.
-4. **Read rollups** in the popup: total indicators and lines such as **8 domains · 4 IPs · 2 hashes · 9 URLs**. Use **Detected indicators** filters to focus on URLs or domains first.
+3. **Scan the page** from the popup or keyboard shortcut. Expect domains, URLs, IPv4 addresses, email addresses, and file hashes from links, headers, and body text.
+4. **Read rollups** in the popup: total indicators and lines such as **8 domains · 4 IPs · 2 emails · 2 hashes · 9 URLs**. Use **Detected indicators** filters to focus on URLs, domains, or email addresses first.
 5. **Open the workspace sidebar** (**Open sidebar**) if you want a persistent on-page list while scrolling a long thread.
 6. **Enrich** high-value IOCs (landing domains, redirect URLs, sender-related IPs, attachment hashes) using **›** on highlights or the hover card.
 7. **Label** indicators on the hover card (**Benign**, **Internal**, **Suppress false positive**, **Case important**) to record triage decisions locally.
@@ -125,7 +147,7 @@ Use the same session model when pivoting from an alert queue page, SOC dashboard
 
 1. **Name the session** after the alert or ticket ID so **Recent sessions** stays searchable after browser restarts.
 2. **Scan the visible alert body** (not the entire mailbox). Rollups show what Vera5 extracted from on-screen text—useful for quick type counts before deep enrichment.
-3. **Prioritize by type** using popup filters: URLs and domains for phish/MDR pivots; IPv4 for C2 or scanning noise; hashes for malware family checks.
+3. **Prioritize by type** using popup filters: URLs, domains, and email addresses for phish/MDR pivots; IPv4 for C2 or scanning noise; ASN and IPv4 CIDR when routing context appears; hashes for malware family checks.
 4. **Record activity** as you enrich and export—popup **Activity** lines reflect enrich/export counts tied to the session.
 5. **Reopen** a saved session from **Recent sessions** after closing the browser; rollups and timelines persist locally.
 6. For dashboard-style validation pages (Splunk export layouts, Security Onion views), see fixture guidance in [soc-validation-fixtures.md](soc-validation-fixtures.md).
@@ -298,6 +320,20 @@ Disable sources you do not need for a case to save quota and simplify the card.
 
 When enrichment returns per-source results, the on-page overlay shows a **Risk score** section. Vera5 computes the label **on your machine** from normalized vendor summaries (AbuseIPDB abuse-confidence text, OTX pulse counts, report-count summaries, and similar parseable OK lines). It is **not** an LLM verdict and does not call Vera5-operated infrastructure.
 
+### Indicator types without enrichment-backed scores
+
+**Email address**, **ASN**, **IPv4 CIDR**, **file path**, and **Tor v3 onion domain** indicators are detected and pivotable, but live connectors in the current release skip them with an explicit **Skipped** row (`{Vendor} does not support this indicator type.`). Skipped rows do not supply parseable OK summaries, so they never contribute to the weighted composite.
+
+| Stage | What you see on the hover card |
+|-------|--------------------------------|
+| Before enrichment | No **Risk score** section (same as other types until source rows exist). |
+| After enrichment on an extended-type indicator | Per-source **Skipped** rows; **Risk score: Unknown risk**; insufficient-data notice; empty **How this score was computed** note. |
+| All enrichment sources disabled in settings | **Risk score unavailable** (settings guidance)—not the same as unsupported type. |
+
+Vera5 does **not** assign Low/High/Critical bands from indicator type alone or from pivot links. Use **Recommended next pivots** and vendor pages for triage; do not treat **Unknown risk** as confirmation that an indicator is benign.
+
+Session and case exports mirror overlay rules: JSON `score.mode` is **`insufficient`** with label **`unknown`** when enrichment ran but no blend was possible; markdown includes **Risk score: Unknown risk** plus the insufficient-data detail—not a numeric **/100** headline.
+
 ## Explain-this-IOC chain vs composite score
 
 The hover card shows **two related outputs**. They answer different questions; neither is an AI judgment.
@@ -339,7 +375,7 @@ Footer disclaimers on the card reinforce this: enrichment sends only the indicat
 | Empty reasoning note | Shown instead of a numbered list when a blended composite cannot be built—for example, only one source returned parseable data. The notice explains that blended steps need at least two parseable sources. |
 | **Sources disagree: …** | Appears only when a blended score exists **and** sources materially diverge (see below). |
 | **Risk score unavailable** | All enrichment sources are disabled in settings. The card still shows guidance to enable at least one source; there is no numeric label. |
-| Insufficient-data notice (above reasoning) | At least one source responded, but fewer than two parseable OK signals exist for blending. The label may read **Unknown risk**; read per-source rows and vendor pivots before acting. |
+| Insufficient-data notice (above reasoning) | At least one source responded, but fewer than two parseable OK signals exist for blending. The label may read **Unknown risk**; read per-source rows and vendor pivots before acting. Typical after enriching **email**, **ASN**, **CIDR**, **file path**, or **onion** indicators where every connector skipped the type. |
 | Footer disclaimers | **Enrichment** reminds you that only the indicator value is sent to vendors you enable. **Risk score** reminds you the label is advisory and computed locally. The risk disclaimer appears when a scored result is shown, not when the score is unavailable. |
 
 If enrichment is still loading, failed for every source, or no source results are attached to the card, the **Risk score** section is omitted entirely.
@@ -349,7 +385,7 @@ If enrichment is still loading, failed for every source, or no source results ar
 | Label | How to read it |
 |-------|----------------|
 | **Low** / **Suspicious** / **High** / **Critical** (with **/100**) | Weighted blend of at least two parseable per-source signals. Treat as a **hint** for prioritization, not a block/allow decision. |
-| **Unknown risk** (no **/100**) | Not enough parseable evidence to blend—often one OK source, errors on others, or summaries Vera5 cannot map to a numeric signal. Use per-source badges, raw JSON, and pivot links. |
+| **Unknown risk** (no **/100**) | Not enough parseable evidence to blend—often one OK source, errors on others, unrecognized OK summaries, or **all connectors skipped for the indicator type** (email, ASN, CIDR, file path, onion). Use per-source badges, pivots, and vendor research—not the headline band alone. |
 | **Risk score unavailable** | Every configured enrichment source is toggled off. Enable at least one source in settings if you want a local score. |
 
 Numeric signals are derived only from recognized summary patterns (for example `84 abuse confidence`, `4 threat pulses`, `9 reports`). Unrecognized OK text still appears in enrichment rows but does not contribute a weighted line.
@@ -400,6 +436,7 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | Symptom | Likely cause | What to try |
 |---------|--------------|-------------|
 | No enrichment, only pivots | Source disabled or no API key | Enable source and save key in settings. |
+| “{Vendor} does not support this indicator type.” | Live enrichment requested for email, ASN, CIDR, file path, or onion | Expected for those types—use **Recommended next pivots** instead of live enrich. |
 | “Add your … API key” | Missing key for that source | Open settings from the card action. |
 | Cached summary but you need live data | Valid cache entry | Use **›** manual refresh. |
 | All sources show rate-limit backoff | Global cooldown after 429 | Wait for the countdown hint; reduce hover churn. |

@@ -144,6 +144,65 @@ const PIVOT_GOLDEN_CASES: PivotGoldenCase[] = [
   },
 ];
 
+const PHASE2_EMAIL = "analyst@corp.example.com";
+const PHASE2_ASN = "AS15169";
+const PHASE2_CIDR = "203.0.113.0/24";
+const PHASE2_FILEPATH = "/var/log/auth.log";
+const TOR_V3_ONION = `${"a".repeat(56)}.onion`;
+
+const PHASE2_PIVOT_GOLDEN_CASES: PivotGoldenCase[] = [
+  {
+    type: IOC_TYPE.EMAIL,
+    value: PHASE2_EMAIL,
+    expected: {
+      virustotal: `https://www.virustotal.com/gui/search/${encodeURIComponent(PHASE2_EMAIL)}`,
+      otx: `https://otx.alienvault.com/indicator/email/${encodeURIComponent(PHASE2_EMAIL)}`,
+      abuseipdb: null,
+      urlscan: null,
+    },
+  },
+  {
+    type: IOC_TYPE.ASN,
+    value: PHASE2_ASN,
+    expected: {
+      virustotal: `https://www.virustotal.com/gui/search/${encodeURIComponent(PHASE2_ASN)}`,
+      otx: null,
+      abuseipdb: null,
+      urlscan: null,
+    },
+  },
+  {
+    type: IOC_TYPE.CIDR,
+    value: PHASE2_CIDR,
+    expected: {
+      virustotal: `https://www.virustotal.com/gui/search/${encodeURIComponent(PHASE2_CIDR)}`,
+      otx: null,
+      abuseipdb: null,
+      urlscan: null,
+    },
+  },
+  {
+    type: IOC_TYPE.FILEPATH,
+    value: PHASE2_FILEPATH,
+    expected: {
+      virustotal: `https://www.virustotal.com/gui/search/${encodeURIComponent(PHASE2_FILEPATH)}`,
+      otx: null,
+      abuseipdb: null,
+      urlscan: null,
+    },
+  },
+  {
+    type: IOC_TYPE.ONION,
+    value: TOR_V3_ONION,
+    expected: {
+      virustotal: `https://www.virustotal.com/gui/domain/${encodeURIComponent(TOR_V3_ONION)}`,
+      otx: `https://otx.alienvault.com/indicator/domain/${encodeURIComponent(TOR_V3_ONION)}`,
+      abuseipdb: null,
+      urlscan: `https://urlscan.io/search/#domain:${encodeURIComponent(TOR_V3_ONION)}`,
+    },
+  },
+];
+
 const LEGACY_PIVOT_PROVIDERS: PivotProvider[] = [
   PIVOT_PROVIDER.VIRUSTOTAL,
   PIVOT_PROVIDER.OTX,
@@ -199,6 +258,33 @@ describe("pivot link templates", () => {
     expect(
       buildPivotUrl(PIVOT_PROVIDER.VIRUSTOTAL, IOC_TYPE.SHA256, mixedCase)
     ).toBe(`https://www.virustotal.com/gui/file/${canonical}`);
+  });
+
+  describe.each(PHASE2_PIVOT_GOLDEN_CASES)(
+    "Phase 2 $type pivot URLs for $value",
+    ({ type, value, expected }) => {
+      it.each(LEGACY_PIVOT_PROVIDERS)("buildPivotUrl for %s", (provider) => {
+        const href = buildPivotUrl(provider, type, value);
+        const want = expected[provider] ?? null;
+        expect(href).toBe(want);
+      });
+
+      it("getPivotLinks includes only supported providers in order", () => {
+        const links = getPivotLinks(type, value);
+        expect(links.map((link) => link.provider)).toEqual(
+          expectedPivotLinkProviders(type, value)
+        );
+      });
+    }
+  );
+
+  it("builds Shodan ASN and CIDR search pivots", () => {
+    expect(buildPivotUrl(PIVOT_PROVIDER.SHODAN, IOC_TYPE.ASN, PHASE2_ASN)).toBe(
+      "https://www.shodan.io/search?query=asn%3A15169"
+    );
+    expect(buildPivotUrl(PIVOT_PROVIDER.SHODAN, IOC_TYPE.CIDR, PHASE2_CIDR)).toBe(
+      "https://www.shodan.io/search?query=net%3A203.0.113.0%2F24"
+    );
   });
 });
 
@@ -259,6 +345,34 @@ describe("pivot recipes", () => {
 
     expect(recipes[0]?.provider).toBe(PIVOT_PROVIDER.URLSCAN);
   });
+
+  it("returns attributed Phase 2 email pivot recipes", () => {
+    const recipes = getPivotRecipes(IOC_TYPE.EMAIL, PHASE2_EMAIL);
+
+    expect(recipes.map((recipe) => recipe.provider)).toEqual([
+      PIVOT_PROVIDER.VIRUSTOTAL,
+      PIVOT_PROVIDER.OTX,
+      PIVOT_PROVIDER.PULSEDIVE,
+      PIVOT_PROVIDER.THREATFOX,
+    ]);
+    for (const recipe of recipes) {
+      expect(recipe.sourceLabel).toBe(recipe.label);
+      expect(recipe.href).toBe(buildPivotUrl(recipe.provider, IOC_TYPE.EMAIL, PHASE2_EMAIL));
+      expect(recipe.guidance.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("returns attributed Phase 2 onion pivot recipes with URLScan", () => {
+    const recipes = getPivotRecipes(IOC_TYPE.ONION, TOR_V3_ONION);
+
+    expect(recipes.map((recipe) => recipe.provider)).toEqual([
+      PIVOT_PROVIDER.VIRUSTOTAL,
+      PIVOT_PROVIDER.OTX,
+      PIVOT_PROVIDER.URLSCAN,
+      PIVOT_PROVIDER.PULSEDIVE,
+      PIVOT_PROVIDER.THREATFOX,
+    ]);
+  });
 });
 
 const ENRICHMENT_CLAIM_GUIDANCE_PATTERNS: RegExp[] = [
@@ -304,6 +418,11 @@ const STATIC_RULE_VALUE_PAIRS: ReadonlyArray<{
     ],
   },
   { type: IOC_TYPE.CVE, values: ["CVE-2021-44228", "CVE-2017-0144"] },
+  { type: IOC_TYPE.EMAIL, values: [PHASE2_EMAIL, "security@example.org"] },
+  { type: IOC_TYPE.ASN, values: [PHASE2_ASN, "AS64512"] },
+  { type: IOC_TYPE.CIDR, values: [PHASE2_CIDR, "10.0.0.0/8"] },
+  { type: IOC_TYPE.FILEPATH, values: [PHASE2_FILEPATH, "C:\\Temp\\payload.exe"] },
+  { type: IOC_TYPE.ONION, values: [TOR_V3_ONION, `${"b".repeat(56)}.onion`] },
 ];
 
 function guidanceByProvider(
@@ -334,7 +453,7 @@ describe("pivot recipe static rules", () => {
     }
   );
 
-  it.each(PIVOT_GOLDEN_CASES)(
+  it.each([...PIVOT_GOLDEN_CASES, ...PHASE2_PIVOT_GOLDEN_CASES])(
     "never embeds the indicator value in guidance for $type $value",
     ({ type, value }) => {
       for (const recipe of getPivotRecipes(type, value)) {
@@ -344,7 +463,7 @@ describe("pivot recipe static rules", () => {
     }
   );
 
-  it.each(PIVOT_GOLDEN_CASES)(
+  it.each([...PIVOT_GOLDEN_CASES, ...PHASE2_PIVOT_GOLDEN_CASES])(
     "avoids enrichment-style vendor score or detection claims for $type $value",
     ({ type, value }) => {
       for (const recipe of getPivotRecipes(type, value)) {

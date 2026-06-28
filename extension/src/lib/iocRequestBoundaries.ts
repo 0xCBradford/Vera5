@@ -1,8 +1,13 @@
 import {
+  findAsnsInText,
+  findCidrsInText,
   findCvesInText,
   findDomainsInText,
+  findEmailsInText,
+  findFilepathsInText,
   findHashesInText,
   findIpv4InText,
+  findOnionsInText,
   findUrlsInText,
   IOC_TYPE,
   type IocMatch,
@@ -37,6 +42,16 @@ function findMatchesForType(text: string, type: IocType): IocMatch[] {
       return findHashesInText(text).filter((match) => match.type === type);
     case IOC_TYPE.CVE:
       return findCvesInText(text);
+    case IOC_TYPE.EMAIL:
+      return findEmailsInText(text);
+    case IOC_TYPE.ASN:
+      return findAsnsInText(text);
+    case IOC_TYPE.CIDR:
+      return findCidrsInText(text);
+    case IOC_TYPE.FILEPATH:
+      return findFilepathsInText(text);
+    case IOC_TYPE.ONION:
+      return findOnionsInText(text);
     default:
       return [];
   }

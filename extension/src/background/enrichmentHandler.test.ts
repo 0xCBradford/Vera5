@@ -362,6 +362,44 @@ describe("enrichment handler", () => {
     expect(enrichWithOtx).not.toHaveBeenCalled();
   });
 
+  it("returns explicit unsupported-type skipped rows for Phase 2 indicators", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+      urlscan: false,
+      greynoise: false,
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "analyst@corp.example.com",
+        iocType: "email",
+      })
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      payload: {
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            status: "skipped",
+            errorCode: "unsupported_type",
+            errorMessage: "AbuseIPDB does not support this indicator type.",
+          },
+          {
+            sourceId: "otx",
+            status: "skipped",
+            errorCode: "unsupported_type",
+            errorMessage: "OTX does not support this indicator type.",
+          },
+        ],
+      },
+    });
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(enrichWithOtx).not.toHaveBeenCalled();
+  });
+
   it("fetches all enabled live sources in parallel when sourceId is omitted", async () => {
     enrichWithAbuseIpdb.mockResolvedValue({
       sourceId: "abuseipdb",
@@ -584,9 +622,10 @@ describe("enrichment handler", () => {
       ok: true,
       payload: {
         source: {
-          sourceId: "abuseipdb",
+          sourceId: "urlscan",
           status: "skipped",
-          errorCode: "disabled",
+          errorCode: "unsupported_type",
+          errorMessage: "URLScan.io does not support this indicator type.",
         },
       },
     });
@@ -721,9 +760,10 @@ describe("enrichment handler", () => {
       ok: true,
       payload: {
         source: {
-          sourceId: "abuseipdb",
+          sourceId: "greynoise",
           status: "skipped",
-          errorCode: "disabled",
+          errorCode: "unsupported_type",
+          errorMessage: "GreyNoise does not support this indicator type.",
         },
       },
     });

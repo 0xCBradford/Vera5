@@ -44,6 +44,11 @@ const IOC_TYPE_OPTION_LABELS: Record<
   sha1: "SHA1 hashes",
   sha256: "SHA256 hashes",
   cve: "CVE identifiers",
+  email: "Email addresses",
+  asn: "ASNs",
+  cidr: "IPv4 CIDR ranges",
+  filepath: "File paths",
+  onion: "Onion domains",
 };
 
 function renderOptions(): { container: HTMLDivElement; root: Root } {

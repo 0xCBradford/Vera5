@@ -7,7 +7,10 @@ import {
 } from "../lib/enrichmentPolicy";
 import { isExtensionContextInvalidated } from "../lib/extensionContext";
 import type { IocType } from "../lib/iocRegex";
-import { listEnabledLiveEnrichmentSourceIds } from "../lib/enrichmentSourceSelection";
+import {
+  hasAnyEnabledLiveEnrichmentSource,
+  listEnabledLiveEnrichmentSourceIds,
+} from "../lib/enrichmentSourceSelection";
 import type { EnrichmentSourceId } from "../lib/enrichmentSourceRegistry";
 import { resolveMultiSourceEnrichmentView } from "../lib/hoverCardEnrichment";
 import {
@@ -257,11 +260,7 @@ export async function runBackgroundEnrichment(
   }
 
   const enabledSources = await getEnrichmentSourceEnabledForContent();
-  const enabledLiveSourceIds = listEnabledLiveEnrichmentSourceIds(
-    enabledSources,
-    payload.type
-  );
-  if (enabledLiveSourceIds.length === 0) {
+  if (!hasAnyEnabledLiveEnrichmentSource(enabledSources)) {
     applyIndicatorDetailPayload(
       {
         ...payload,
@@ -274,6 +273,11 @@ export async function runBackgroundEnrichment(
     );
     return "blocked";
   }
+
+  const enabledLiveSourceIds = listEnabledLiveEnrichmentSourceIds(
+    enabledSources,
+    payload.type
+  );
 
   const pageGate = await resolvePageEnrichmentTrustGate(doc);
   if (!pageGate.allowed) {

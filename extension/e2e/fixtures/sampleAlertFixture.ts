@@ -45,7 +45,7 @@ export const COMMAND_PALETTE_DIALOG_ARIA_LABEL = "Vera5 command palette";
 export const COMMAND_PALETTE_FILTER_ARIA_LABEL = "Filter commands";
 export const COMMAND_PALETTE_SCAN_COMMAND_LABEL = "Scan page";
 
-export const EXPECTED_SAMPLE_ALERT_DETECTED_IOC_COUNT = 10;
+export const EXPECTED_SAMPLE_ALERT_DETECTED_IOC_COUNT = 11;
 
 export const EXPECTED_SAMPLE_ALERT_IOC_VALUES = [
   "192.0.2.1",
@@ -58,6 +58,7 @@ export const EXPECTED_SAMPLE_ALERT_IOC_VALUES = [
   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "CVE-2021-44228",
   "CVE-2017-0144",
+  "analyst@example.com",
 ] as const;
 
 export const EXPECTED_SAMPLE_ALERT_SCAN_CLIPBOARD_ORDER = [
@@ -71,6 +72,7 @@ export const EXPECTED_SAMPLE_ALERT_SCAN_CLIPBOARD_ORDER = [
   "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "098f6bcd4621d373cade4e832627b4f6",
   "CVE-2017-0144",
+  "analyst@example.com",
 ] as const;
 
 export const EXPECTED_SAMPLE_ALERT_COPY_ALL_CLIPBOARD_TEXT =
@@ -385,7 +387,7 @@ export async function expectWorkspaceTrayReady(page: Page): Promise<void> {
     { timeout: 15_000 }
   );
   await expect(page.locator(E2E_SELECTORS.workspaceTraySummary)).toContainText(
-    "10 indicators"
+    "11 indicators"
   );
 }
 

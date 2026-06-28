@@ -61,7 +61,7 @@ describe("EnrichmentResult shape", () => {
   it("rejects results missing required fields", () => {
     expect(isEnrichmentResult(null)).toBe(false);
     expect(isEnrichmentResult({ ...sampleResult, ioc: "" })).toBe(false);
-    expect(isEnrichmentResult({ ...sampleResult, type: "email" })).toBe(false);
+    expect(isEnrichmentResult({ ...sampleResult, type: "wallet" })).toBe(false);
     expect(
       isEnrichmentResult({ ...sampleResult, lastUpdated: "not-a-date" })
     ).toBe(false);

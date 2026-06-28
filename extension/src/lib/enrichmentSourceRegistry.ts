@@ -105,6 +105,13 @@ function buildVirusTotalPivotUrl(type: IocType, value: string): string | null {
       return `https://www.virustotal.com/gui/file/${trimmed.toLowerCase()}`;
     case IOC_TYPE.CVE:
       return `https://www.virustotal.com/gui/search/${encodePathSegment(trimmed)}`;
+    case IOC_TYPE.EMAIL:
+    case IOC_TYPE.ASN:
+    case IOC_TYPE.CIDR:
+    case IOC_TYPE.FILEPATH:
+      return `https://www.virustotal.com/gui/search/${encodePathSegment(trimmed)}`;
+    case IOC_TYPE.ONION:
+      return `https://www.virustotal.com/gui/domain/${encodePathSegment(trimmed)}`;
     default:
       return null;
   }
@@ -125,6 +132,10 @@ function buildOtxPivotUrl(type: IocType, value: string): string | null {
       return `https://otx.alienvault.com/indicator/file/${trimmed.toLowerCase()}`;
     case IOC_TYPE.CVE:
       return `https://otx.alienvault.com/indicator/cve/${encodePathSegment(trimmed)}`;
+    case IOC_TYPE.EMAIL:
+      return `https://otx.alienvault.com/indicator/email/${encodePathSegment(trimmed)}`;
+    case IOC_TYPE.ONION:
+      return `https://otx.alienvault.com/indicator/domain/${encodePathSegment(trimmed)}`;
     default:
       return null;
   }
@@ -150,6 +161,8 @@ function buildUrlscanPivotUrl(type: IocType, value: string): string | null {
     case IOC_TYPE.SHA1:
     case IOC_TYPE.SHA256:
       return `https://urlscan.io/search/#hash:${encodeURIComponent(trimmed.toLowerCase())}`;
+    case IOC_TYPE.ONION:
+      return `https://urlscan.io/search/#domain:${encodeURIComponent(trimmed)}`;
     default:
       return null;
   }
@@ -169,6 +182,12 @@ function buildShodanPivotUrl(type: IocType, value: string): string | null {
       return `https://www.shodan.io/host/${encodePathSegment(trimmed)}`;
     case IOC_TYPE.DOMAIN:
       return `https://www.shodan.io/search?query=${encodeURIComponent(trimmed)}`;
+    case IOC_TYPE.ASN: {
+      const asnNumber = trimmed.replace(/^AS/i, "");
+      return `https://www.shodan.io/search?query=${encodeURIComponent(`asn:${asnNumber}`)}`;
+    }
+    case IOC_TYPE.CIDR:
+      return `https://www.shodan.io/search?query=${encodeURIComponent(`net:${trimmed}`)}`;
     default:
       return null;
   }

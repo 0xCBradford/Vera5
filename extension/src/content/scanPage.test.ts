@@ -92,6 +92,9 @@ describe("handleScanPageRequest", () => {
             capReached: false,
             textNodeCap: expect.any(Number),
             textNodesScanned: expect.any(Number),
+            iocCount: 2,
+            iocCap: expect.any(Number),
+            iocCapReached: false,
             durationMs: expect.any(Number),
           }),
         }),
@@ -218,6 +221,7 @@ describe("handleScanPageRequest", () => {
         textNodesScanned: 5,
         textNodeCap: 5,
         capReached: true,
+        iocCapReached: false,
       })
     );
     expect(result.matches.length).toBeGreaterThan(0);

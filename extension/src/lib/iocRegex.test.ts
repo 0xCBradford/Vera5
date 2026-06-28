@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  findAsnsInText,
+  findCidrsInText,
   findCvesInText,
   findDomainsInText,
+  findEmailsInText,
+  findFilepathsInText,
   findHashesInText,
   findIpv4InText,
   findMd5InText,
+  findOnionsInText,
   findSha1InText,
   findSha256InText,
   findUrlsInText,
+  formatDetectionRuleReason,
+  IOC_RULE_ID,
   IOC_TYPE,
   refangIndicatorText,
 } from "./iocRegex";
@@ -247,5 +254,164 @@ describe("iocRegex match provenance", () => {
       ruleId: "ioc.regex.url",
       sourceTextHint: expect.stringContaining("hxxps://example[.]com/evil"),
     });
+  });
+});
+
+describe("formatDetectionRuleReason", () => {
+  it("describes Phase 2 detection rule identifiers", () => {
+    expect(formatDetectionRuleReason(IOC_RULE_ID.EMAIL)).toBe(
+      "Matched an email address in visible text."
+    );
+    expect(formatDetectionRuleReason(IOC_RULE_ID.ASN)).toBe(
+      "Matched an autonomous system number (AS/ASN prefix)."
+    );
+    expect(formatDetectionRuleReason(IOC_RULE_ID.CIDR)).toBe(
+      "Matched an IPv4 CIDR network block."
+    );
+    expect(formatDetectionRuleReason(IOC_RULE_ID.FILEPATH)).toBe(
+      "Matched a conservative file path in visible text."
+    );
+    expect(formatDetectionRuleReason(IOC_RULE_ID.ONION)).toBe(
+      "Matched a Tor v3 onion service hostname."
+    );
+  });
+});
+
+const TOR_V3_ONION = `${"a".repeat(56)}.onion`;
+
+describe("phase 2 email detector", () => {
+  it("detects standard and tagged email addresses", () => {
+    const text =
+      "Contact analyst@corp.example.com or security+alerts@bank.co.uk and user.name@sub.domain.org";
+    const values = valuesOfType(findEmailsInText(text), IOC_TYPE.EMAIL);
+    expect(values).toEqual([
+      "analyst@corp.example.com",
+      "security+alerts@bank.co.uk",
+      "user.name@sub.domain.org",
+    ]);
+    expect(findEmailsInText(text)[0]?.ruleId).toBe("ioc.regex.email");
+  });
+
+  it("detects lab single-label and IPv4 domain literals", () => {
+    const text = "noreply@phish-c2.example soc-team@192.0.2.10";
+    const values = valuesOfType(findEmailsInText(text), IOC_TYPE.EMAIL);
+    expect(values).toContain("noreply@phish-c2.example");
+    expect(values).toContain("soc-team@192.0.2.10");
+  });
+
+  it("rejects incomplete and localhost email tokens", () => {
+    const text = "user@ @example.com name@localhost analyst(at)corp.example.com";
+    expect(findEmailsInText(text)).toHaveLength(0);
+  });
+});
+
+describe("phase 2 ASN detector", () => {
+  it("detects ASN tokens with normalized AS prefix", () => {
+    const text = "AS15169 ASN 64512 as32934 Seen from ASN 20473 (AS13335)";
+    const values = valuesOfType(findAsnsInText(text), IOC_TYPE.ASN);
+    expect(values).toEqual([
+      "AS15169",
+      "AS64512",
+      "AS32934",
+      "AS20473",
+      "AS13335",
+    ]);
+    expect(findAsnsInText(text)[0]?.ruleId).toBe("ioc.regex.asn");
+  });
+
+  it("rejects prose collisions and invalid ASN numbers", () => {
+    const text = "as well as AS IS ASAP AS0 AS4294967296 AS15169.0";
+    expect(findAsnsInText(text)).toHaveLength(0);
+  });
+});
+
+describe("phase 2 CIDR detector", () => {
+  it("detects public and private CIDR blocks when allowed", () => {
+    const text = "Range 203.0.113.0/24 and 10.0.0.0/8";
+    const publicOnly = valuesOfType(findCidrsInText(text), IOC_TYPE.CIDR);
+    expect(publicOnly).toEqual(["203.0.113.0/24"]);
+    const withPrivate = valuesOfType(
+      findCidrsInText(text, { includePrivateIpv4: true }),
+      IOC_TYPE.CIDR
+    );
+    expect(withPrivate).toEqual(["203.0.113.0/24", "10.0.0.0/8"]);
+  });
+
+  it("rejects invalid prefix lengths and semver decoys", () => {
+    const text = "10.0.0.0/33 256.0.0.0/8 version 1.2.3.4/32";
+    expect(findCidrsInText(text, { includePrivateIpv4: true })).toHaveLength(0);
+  });
+
+  it("does not classify bare IPv4 literals as CIDR", () => {
+    expect(findCidrsInText("192.168.1.10")).toHaveLength(0);
+    expect(
+      valuesOfType(findIpv4InText("192.168.1.10", { includePrivateIpv4: true }), IOC_TYPE.IPV4)
+    ).toEqual(["192.168.1.10"]);
+  });
+});
+
+describe("phase 2 onion detector", () => {
+  it("detects Tor v3 onion hostnames", () => {
+    const text = `Contact ${TOR_V3_ONION} for details`;
+    const match = findOnionsInText(text)[0];
+    expect(match).toMatchObject({
+      value: TOR_V3_ONION,
+      type: IOC_TYPE.ONION,
+      ruleId: "ioc.regex.onion",
+    });
+  });
+
+  it("rejects short, invalid alphabet, and wrong-length onion tokens", () => {
+    const text =
+      "foo.onion ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ.onion aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.onion";
+    expect(findOnionsInText(text)).toHaveLength(0);
+  });
+
+  it("does not classify v3 onion hostnames as generic domains", () => {
+    const values = valuesOfType(findDomainsInText(TOR_V3_ONION), IOC_TYPE.DOMAIN);
+    expect(values).toHaveLength(0);
+  });
+
+  it("does not classify invalid onion hostnames as generic domains", () => {
+    const values = valuesOfType(findDomainsInText("foo.onion"), IOC_TYPE.DOMAIN);
+    expect(values).toHaveLength(0);
+  });
+});
+
+describe("phase 2 filepath detector", () => {
+  it("detects analyst-relevant Windows, UNC, and Unix paths", () => {
+    const text = [
+      "C:\\Users\\Public\\malware.exe",
+      "C:\\ProgramData\\Updater\\stage2.dll",
+      "\\\\fileserver\\share\\payload.ps1",
+      "/tmp/.X11-unix/exploit",
+      "/var/www/html/shell.php",
+      '"C:\\Users\\Public\\dropper.exe"',
+    ].join(" ");
+    const values = valuesOfType(findFilepathsInText(text), IOC_TYPE.FILEPATH);
+    expect(values).toContain("C:\\Users\\Public\\malware.exe");
+    expect(values).toContain("C:\\ProgramData\\Updater\\stage2.dll");
+    expect(values).toContain("\\\\fileserver\\share\\payload.ps1");
+    expect(values).toContain("/tmp/.X11-unix/exploit");
+    expect(values).toContain("/var/www/html/shell.php");
+    expect(values).toContain("C:\\Users\\Public\\dropper.exe");
+    expect(findFilepathsInText(text)[0]?.ruleId).toBe("ioc.regex.filepath");
+  });
+
+  it("rejects Windows and Unix system-path denylist families", () => {
+    const text = [
+      "C:\\Windows\\System32\\cmd.exe",
+      "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+      "C:\\ProgramData\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\",
+      "\\\\server\\C$\\Windows\\temp\\evil.exe",
+      "/usr/bin/python",
+      "/etc/passwd",
+    ].join(" ");
+    expect(findFilepathsInText(text)).toHaveLength(0);
+  });
+
+  it("rejects relative paths, env-var prefixes, and bare filenames", () => {
+    const text = ".\\relative\\path.exe %TEMP%\\dropper.exe chart.png /tmp";
+    expect(findFilepathsInText(text)).toHaveLength(0);
   });
 });

@@ -17,7 +17,7 @@ Both formats derive from `buildNormalizedEnrichmentRecord()` so score, disagreem
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schemaVersion` | `number` | Export contract version. **Current value: `1`**. Consumers must reject unknown versions they cannot parse. Increment when required fields or score-mode semantics change incompatibly. |
+| `schemaVersion` | `number` | Export contract version. **Current value: `1`**. Consumers must reject unknown versions they cannot parse. Increment when required fields or score-mode semantics change incompatibly. Additional `iocType` string values (for example email, ASN, CIDR, file path, onion) do **not** require a version bump when the document shape is unchanged. |
 
 Implementation constant: `ENRICHMENT_EXPORT_SCHEMA_VERSION` in `enrichmentExport.ts`.
 
@@ -30,8 +30,8 @@ Top-level object returned by `buildEnrichmentExportDocument()`.
 | `schemaVersion` | `number` | yes | Always `1` for this contract. |
 | `exportedAt` | `string` | yes | ISO-8601 timestamp when the record was built. |
 | `ioc` | `string` | yes | Indicator value (trimmed). |
-| `iocType` | `string` | yes | Machine type: `ipv4`, `domain`, `url`, `md5`, `sha1`, `sha256`, `cve`. |
-| `iocTypeLabel` | `string` | yes | Human label (for example `IPv4 address`). |
+| `iocType` | `string` | yes | Machine type: `ipv4`, `domain`, `url`, `md5`, `sha1`, `sha256`, `cve`, `email`, `asn`, `cidr`, `filepath`, `onion`. |
+| `iocTypeLabel` | `string` | yes | Human label (for example `IPv4 address`, `Email address`, `IPv4 CIDR`). |
 | `enrichmentState` | `string` | yes | `empty`, `loading`, `error`, or `ready`. |
 | `summary` | `string` | no | Primary enrichment summary when present. |
 | `tags` | `string[]` | yes | Tag chips from enrichment (may be empty). |
@@ -63,7 +63,7 @@ The `score.mode` field selects which additional properties are present.
 | `score.mode` | When | Key fields |
 |--------------|------|------------|
 | `available` | Two or more parseable OK signals produced a blended composite | `label`, `summaryText`, `compositeSignal`, `reasoningLines`, optional `reasoningEmptyDetail` |
-| `insufficient` | Enrichment ran but blending requirements were not met | Same as `available`, plus `insufficientDetail` |
+| `insufficient` | Enrichment ran but blending requirements were not met (for example one OK source, unrecognized summaries, or all live connectors skipped for the indicator type) | Same as `available`, plus `insufficientDetail` |
 | `unavailable` | Every enrichment source is disabled in settings | `headline`, `detail` |
 | `none` | No enrichment source results on the record yet | `headline`, `detail` |
 

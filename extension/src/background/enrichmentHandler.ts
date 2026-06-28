@@ -55,6 +55,8 @@ import { recordEnrichmentSourceLastStatuses } from "../lib/enrichmentSourceOps";
 import type { EnrichIocMessage, MessageResponse } from "../lib/messages";
 import { isEnrichIocMessage } from "../lib/messages";
 import {
+  buildSkippedLiveEnrichmentUnsupportedTypeResults,
+  hasAnyEnabledLiveEnrichmentSource,
   listEnabledLiveEnrichmentSourceIds,
   pickPrimaryEnrichmentSource,
 } from "../lib/enrichmentSourceSelection";
@@ -184,13 +186,16 @@ async function enrichEnabledSourcesParallel(
 ): Promise<EnrichmentSourceResult[]> {
   const sourceIds = listEnabledLiveEnrichmentSourceIds(enabled, ioc.type);
   if (sourceIds.length === 0) {
-    return [
-      createSkippedSourceResult(
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_ERROR_CODE.DISABLED,
-        "No enrichment sources are enabled in extension settings."
-      ),
-    ];
+    if (!hasAnyEnabledLiveEnrichmentSource(enabled)) {
+      return [
+        createSkippedSourceResult(
+          ENRICHMENT_SOURCE.ABUSEIPDB,
+          ENRICHMENT_ERROR_CODE.DISABLED,
+          "No enrichment sources are enabled in extension settings."
+        ),
+      ];
+    }
+    return buildSkippedLiveEnrichmentUnsupportedTypeResults(enabled);
   }
 
   const settled = await Promise.allSettled(
@@ -366,12 +371,17 @@ async function enrichFromMessage(
 
     const sourceIds = listEnabledLiveEnrichmentSourceIds(enabled, sanitized.type);
     if (sourceIds.length === 0) {
-      const skipped = createSkippedSourceResult(
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        ENRICHMENT_ERROR_CODE.DISABLED,
-        "No enrichment sources are enabled in extension settings."
-      );
-      return { source: skipped, sources: [skipped] };
+      if (!hasAnyEnabledLiveEnrichmentSource(enabled)) {
+        const skipped = createSkippedSourceResult(
+          ENRICHMENT_SOURCE.ABUSEIPDB,
+          ENRICHMENT_ERROR_CODE.DISABLED,
+          "No enrichment sources are enabled in extension settings."
+        );
+        return { source: skipped, sources: [skipped] };
+      }
+      const sources = buildSkippedLiveEnrichmentUnsupportedTypeResults(enabled);
+      const source = pickPrimaryEnrichmentSource(sources) ?? sources[0]!;
+      return { source, sources };
     }
 
     const sources = sourceIds.map((sourceId) =>

@@ -6,6 +6,11 @@ export const IOC_TYPE = {
   SHA1: "sha1",
   SHA256: "sha256",
   CVE: "cve",
+  EMAIL: "email",
+  ASN: "asn",
+  CIDR: "cidr",
+  FILEPATH: "filepath",
+  ONION: "onion",
 } as const;
 
 export type IocType = (typeof IOC_TYPE)[keyof typeof IOC_TYPE];
@@ -18,6 +23,11 @@ export const IOC_RULE_ID = {
   CVE: "ioc.regex.cve",
   IPV4: "ioc.regex.ipv4",
   DOMAIN: "ioc.regex.domain",
+  EMAIL: "ioc.regex.email",
+  ASN: "ioc.regex.asn",
+  CIDR: "ioc.regex.cidr",
+  FILEPATH: "ioc.regex.filepath",
+  ONION: "ioc.regex.onion",
 } as const;
 
 export type IocRuleId = (typeof IOC_RULE_ID)[keyof typeof IOC_RULE_ID];
@@ -64,6 +74,16 @@ export function formatDetectionRuleReason(ruleId: IocRuleId): string {
       return "Matched an IPv4 address in visible text, including bracket-dot defanged forms.";
     case IOC_RULE_ID.DOMAIN:
       return "Matched a domain name in visible text, including bracket-dot defanged forms.";
+    case IOC_RULE_ID.EMAIL:
+      return "Matched an email address in visible text.";
+    case IOC_RULE_ID.ASN:
+      return "Matched an autonomous system number (AS/ASN prefix).";
+    case IOC_RULE_ID.CIDR:
+      return "Matched an IPv4 CIDR network block.";
+    case IOC_RULE_ID.FILEPATH:
+      return "Matched a conservative file path in visible text.";
+    case IOC_RULE_ID.ONION:
+      return "Matched a Tor v3 onion service hostname.";
     default: {
       const exhaustive: never = ruleId;
       return exhaustive;
@@ -87,6 +107,16 @@ export function ruleIdForIocType(type: IocType): IocRuleId {
       return IOC_RULE_ID.IPV4;
     case IOC_TYPE.DOMAIN:
       return IOC_RULE_ID.DOMAIN;
+    case IOC_TYPE.EMAIL:
+      return IOC_RULE_ID.EMAIL;
+    case IOC_TYPE.ASN:
+      return IOC_RULE_ID.ASN;
+    case IOC_TYPE.CIDR:
+      return IOC_RULE_ID.CIDR;
+    case IOC_TYPE.FILEPATH:
+      return IOC_RULE_ID.FILEPATH;
+    case IOC_TYPE.ONION:
+      return IOC_RULE_ID.ONION;
     default: {
       const exhaustive: never = type;
       return exhaustive;
@@ -554,6 +584,9 @@ export function findIpv4InText(
       if (isSemverUpgradeRangeContext(text, start, end, value)) {
         return false;
       }
+      if (isCidrSuffix(text, end)) {
+        return false;
+      }
       return true;
     },
     refangIndicatorText
@@ -606,6 +639,9 @@ export function findDomainsInText(
       if (isEmailLocalPartContext(text, start)) {
         return false;
       }
+      if (hasOnionTld(value)) {
+        return false;
+      }
       if (overlapsSpan(start, end, excludeSpans)) {
         return false;
       }
@@ -613,6 +649,365 @@ export function findDomainsInText(
     },
     (value) => refangIndicatorText(value).toLowerCase()
   );
+}
+
+const EMAIL_LOCAL_PART = "[a-zA-Z0-9][a-zA-Z0-9._%+-]{0,62}";
+const EMAIL_IPV4_DOMAIN = `${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}`;
+const EMAIL_DOMAIN_PART = `(?:(?:${DOMAIN_LABEL}${DOMAIN_SEPARATOR})+[a-zA-Z]{2,63}|${DOMAIN_LABEL}|${EMAIL_IPV4_DOMAIN})`;
+const EMAIL_PATTERN = new RegExp(
+  `(?<![\\w.%+-])(${EMAIL_LOCAL_PART}@${EMAIL_DOMAIN_PART})(?![\\w.%+-@])`,
+  "gi"
+);
+
+const ASN_PATTERN =
+  /(?<![A-Za-z0-9])(?:AS(?:N)?\s{0,3}(\d{1,10}))(?![A-Za-z0-9.])/gi;
+
+const CIDR_PATTERN = new RegExp(
+  `(?<![\\d.])((${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET})/(3[0-2]|[12]?\\d))(?![\\d/])`,
+  "gi"
+);
+
+const ONION_V3_PATTERN =
+  /(?<![a-z2-7])([a-z2-7]{56}\.onion)(?![a-z2-7.])/gi;
+
+const WINDOWS_DRIVE_PATH_PATTERN =
+  /(?<![A-Za-z0-9])("?)([A-Za-z]:\\(?:[^\\/:*?"<>|\r\n\s]+\\)*[^\\/:*?"<>|\r\n\s]+)\1(?![A-Za-z0-9\\])/g;
+
+const UNC_PATH_PATTERN =
+  /(?<![A-Za-z0-9])("?)(\\\\(?:[^\\/:*?"<>|\r\n\s]+\\)+[^\\/:*?"<>|\r\n\s]+)\1(?![A-Za-z0-9\\])/g;
+
+const UNIX_ABSOLUTE_PATH_PATTERN =
+  /(?<![A-Za-z0-9/])("?)(\/(?:[^/:*?"<>|\r\n\s]+\/)+[^/:*?"<>|\r\n\s]+)\1(?![A-Za-z0-9/])/g;
+
+const WINDOWS_PATH_DENYLIST_PREFIXES = [
+  "\\windows\\",
+  "\\program files\\",
+  "\\program files (x86)\\",
+  "\\programdata\\microsoft\\",
+  "\\programdata\\package cache\\",
+  "\\$recycle.bin\\",
+  "\\system volume information\\",
+  "\\recovery\\",
+  "\\windows\\system32\\",
+  "\\windows\\syswow64\\",
+  "\\windows\\servicing\\",
+  "\\windows\\installer\\",
+  "\\windows\\fonts\\",
+  "\\windows\\microsoft.net\\",
+];
+
+const UNIX_PATH_DENYLIST_PREFIXES = [
+  "/bin/",
+  "/sbin/",
+  "/usr/bin/",
+  "/usr/sbin/",
+  "/usr/lib/",
+  "/usr/lib64/",
+  "/lib/",
+  "/lib64/",
+  "/etc/",
+  "/sys/",
+  "/proc/",
+  "/dev/",
+  "/boot/",
+  "/run/systemd/",
+  "/var/lib/dpkg/",
+  "/var/lib/rpm/",
+  "/var/lib/systemd/",
+];
+
+const UNC_ADMIN_SHARES = new Set(["c$", "admin$", "ipc$"]);
+
+function isCidrSuffix(text: string, end: number): boolean {
+  return /^\/(?:3[0-2]|[12]?\d)\b/.test(text.slice(end));
+}
+
+function isOnionHostname(value: string): boolean {
+  return /^[a-z2-7]{56}\.onion$/i.test(value.toLowerCase());
+}
+
+function hasOnionTld(value: string): boolean {
+  return /\.onion$/i.test(value);
+}
+
+function parseEmailAddress(value: string): { local: string; domain: string } | null {
+  const at = value.lastIndexOf("@");
+  if (at <= 0 || at >= value.length - 1) {
+    return null;
+  }
+  const local = value.slice(0, at);
+  const domain = refangIndicatorText(value.slice(at + 1)).toLowerCase();
+  if (local.length > 64 || /\s/.test(local)) {
+    return null;
+  }
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._%+-]*$/.test(local)) {
+    return null;
+  }
+  if (!domainHasValidLabels(domain) && !/^[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(domain) && !parseIpv4(domain)) {
+    return null;
+  }
+  if (isLocalhostDomain(domain)) {
+    return null;
+  }
+  return { local, domain };
+}
+
+function normalizeAsn(value: string): string {
+  return `AS${value}`;
+}
+
+function isValidAsnNumber(value: string): boolean {
+  if (!/^\d{1,10}$/.test(value)) {
+    return false;
+  }
+  const asn = Number(value);
+  return Number.isInteger(asn) && asn >= 1 && asn <= 4294967295;
+}
+
+function isValidCidr(value: string, options: IocRegexOptions): boolean {
+  const slash = value.indexOf("/");
+  if (slash === -1) {
+    return false;
+  }
+  const network = value.slice(0, slash);
+  const prefix = Number(value.slice(slash + 1));
+  if (!Number.isInteger(prefix) || prefix < 0 || prefix > 32) {
+    return false;
+  }
+  const octets = parseIpv4(network);
+  if (!octets) {
+    return false;
+  }
+  const includePrivate = options.includePrivateIpv4 ?? false;
+  if (!includePrivate && isPrivateIpv4(octets)) {
+    return false;
+  }
+  return true;
+}
+
+function stripOptionalQuotes(value: string): string {
+  if (value.startsWith('"') && value.endsWith('"') && value.length >= 2) {
+    return value.slice(1, -1);
+  }
+  return value;
+}
+
+function normalizeWindowsPathForDenylist(value: string): string {
+  return stripOptionalQuotes(value).replace(/\//g, "\\").toLowerCase();
+}
+
+function normalizeUnixPathForDenylist(value: string): string {
+  return stripOptionalQuotes(value).toLowerCase();
+}
+
+function hasInvalidPathCharacters(value: string): boolean {
+  return /[\r\n\t<>|*]/.test(value) || /\s/.test(value);
+}
+
+function hasEnvironmentVariablePrefix(value: string): boolean {
+  return /^[%$]/.test(value) || /\$\{/.test(value);
+}
+
+function isRelativePathCandidate(value: string): boolean {
+  const trimmed = stripOptionalQuotes(value);
+  return trimmed.startsWith(".") || trimmed.startsWith("./") || trimmed.startsWith(".\\");
+}
+
+function isDeniedUncPath(value: string): boolean {
+  const normalized = normalizeWindowsPathForDenylist(value);
+  const match = /^\\\\([^\\]+)\\([^\\]+)(?:\\|$)/.exec(normalized);
+  if (!match) {
+    return false;
+  }
+  return UNC_ADMIN_SHARES.has(match[2]!.toLowerCase());
+}
+
+function isDeniedWindowsPath(value: string): boolean {
+  const normalized = normalizeWindowsPathForDenylist(value);
+  if (normalized.startsWith("\\\\?\\") || normalized.startsWith("\\\\.\\")) {
+    return true;
+  }
+  if (isDeniedUncPath(value)) {
+    return true;
+  }
+  let pathBody = normalized;
+  if (/^[a-z]:\\/.test(normalized)) {
+    pathBody = normalized.slice(2);
+  }
+  if (!pathBody.startsWith("\\")) {
+    pathBody = `\\${pathBody}`;
+  }
+  for (const prefix of WINDOWS_PATH_DENYLIST_PREFIXES) {
+    if (pathBody.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isDeniedUnixPath(value: string): boolean {
+  const normalized = normalizeUnixPathForDenylist(value);
+  if (!normalized.startsWith("/")) {
+    return true;
+  }
+  const segments = normalized.split("/").filter(Boolean);
+  if (segments.length < 2) {
+    return true;
+  }
+  for (const prefix of UNIX_PATH_DENYLIST_PREFIXES) {
+    if (normalized.startsWith(prefix)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isConservativeFilePath(value: string): boolean {
+  const trimmed = stripOptionalQuotes(value);
+  if (trimmed.length === 0 || trimmed.length > 260) {
+    return false;
+  }
+  if (hasInvalidPathCharacters(trimmed) || hasEnvironmentVariablePrefix(trimmed)) {
+    return false;
+  }
+  if (isRelativePathCandidate(trimmed)) {
+    return false;
+  }
+  if (/^(?:https?|hxxps?|ftp|file):/i.test(trimmed)) {
+    return false;
+  }
+  if (trimmed.includes("://")) {
+    return false;
+  }
+  if (/^[A-Za-z]:\\/.test(trimmed)) {
+    const segments = trimmed.slice(3).split(/[\\/]/).filter(Boolean);
+    if (segments.length < 2) {
+      return false;
+    }
+    return !isDeniedWindowsPath(trimmed);
+  }
+  if (trimmed.startsWith("\\\\")) {
+    const segments = trimmed.replace(/^\\\\+/, "").split(/[\\/]/).filter(Boolean);
+    if (segments.length < 3) {
+      return false;
+    }
+    return !isDeniedWindowsPath(trimmed);
+  }
+  if (trimmed.startsWith("/")) {
+    return !isDeniedUnixPath(trimmed);
+  }
+  return false;
+}
+
+function collectFilepathMatches(text: string): IocMatch[] {
+  const patterns = [
+    WINDOWS_DRIVE_PATH_PATTERN,
+    UNC_PATH_PATTERN,
+    UNIX_ABSOLUTE_PATH_PATTERN,
+  ];
+  const matches: IocMatch[] = [];
+  const occupied: Array<{ start: number; end: number }> = [];
+
+  for (const pattern of patterns) {
+    const re = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+    let result = re.exec(text);
+    while (result !== null) {
+      const raw = result[2] ?? result[0];
+      const start = result.index + result[0].indexOf(raw);
+      const end = start + raw.length;
+      const normalized = stripOptionalQuotes(raw);
+      if (
+        isConservativeFilePath(normalized) &&
+        !overlapsSpan(start, end, occupied)
+      ) {
+        matches.push(
+          buildIocMatch(
+            text,
+            IOC_TYPE.FILEPATH,
+            IOC_RULE_ID.FILEPATH,
+            start,
+            end,
+            normalized,
+            raw !== normalized ? raw : undefined
+          )
+        );
+        occupied.push({ start, end });
+      }
+      result = re.exec(text);
+    }
+  }
+
+  return matches.sort((a, b) => a.start - b.start);
+}
+
+export function findEmailsInText(text: string): IocMatch[] {
+  return collectPatternMatches(
+    text,
+    EMAIL_PATTERN,
+    IOC_TYPE.EMAIL,
+    IOC_RULE_ID.EMAIL,
+    (value) => {
+      const parsed = parseEmailAddress(refangIndicatorText(value));
+      return parsed !== null;
+    },
+    (value) => {
+      const parsed = parseEmailAddress(refangIndicatorText(value));
+      if (!parsed) {
+        return value;
+      }
+      return `${parsed.local}@${parsed.domain}`;
+    }
+  );
+}
+
+export function findAsnsInText(text: string): IocMatch[] {
+  return collectPatternMatches(
+    text,
+    ASN_PATTERN,
+    IOC_TYPE.ASN,
+    IOC_RULE_ID.ASN,
+    (value) => isValidAsnNumber(value.replace(/^AS/i, "")),
+    normalizeAsn
+  );
+}
+
+export function findCidrsInText(
+  text: string,
+  options: IocRegexOptions = {}
+): IocMatch[] {
+  return collectPatternMatches(
+    text,
+    CIDR_PATTERN,
+    IOC_TYPE.CIDR,
+    IOC_RULE_ID.CIDR,
+    (value, start, end) => {
+      if (!isValidCidr(value, options)) {
+        return false;
+      }
+      if (isVersionLikePrefix(text, start)) {
+        return false;
+      }
+      if (isSemverUpgradeRangeContext(text, start, end, value.split("/")[0]!)) {
+        return false;
+      }
+      return true;
+    }
+  );
+}
+
+export function findOnionsInText(text: string): IocMatch[] {
+  return collectPatternMatches(
+    text,
+    ONION_V3_PATTERN,
+    IOC_TYPE.ONION,
+    IOC_RULE_ID.ONION,
+    (value) => isOnionHostname(value),
+    (value) => value.toLowerCase()
+  );
+}
+
+export function findFilepathsInText(text: string): IocMatch[] {
+  return collectFilepathMatches(text);
 }
 
 export function findIpv4DomainUrlInText(

@@ -402,7 +402,7 @@ describe("Vera5 settings schema", () => {
     ]);
   });
 
-  it("covers all MVP IOC types for toggle records", () => {
+  it("covers all IOC types for toggle records", () => {
     expect(IOC_TYPE_SETTINGS_ORDER).toEqual([
       "ipv4",
       "domain",
@@ -411,6 +411,11 @@ describe("Vera5 settings schema", () => {
       "sha1",
       "sha256",
       "cve",
+      "email",
+      "asn",
+      "cidr",
+      "filepath",
+      "onion",
     ]);
   });
 
@@ -443,7 +448,8 @@ describe("Vera5 settings schema", () => {
     expect(isIocTypeEnabledRecord({ ipv4: true, cve: false })).toBe(true);
     expect(isIocTypeEnabledRecord({})).toBe(true);
     expect(isIocTypeEnabledRecord({ ipv4: 1 })).toBe(false);
-    expect(isIocTypeEnabledRecord({ email: true })).toBe(false);
+    expect(isIocTypeEnabledRecord({ email: true, asn: false })).toBe(true);
+    expect(isIocTypeEnabledRecord({ unknown_type: true })).toBe(false);
   });
 
   it("validates optional per-source cache TTL records", () => {
@@ -501,6 +507,11 @@ describe("migrate-safe defaults", () => {
       sha1: true,
       sha256: true,
       cve: true,
+      email: true,
+      asn: true,
+      cidr: true,
+      filepath: true,
+      onion: true,
     });
   });
 
@@ -546,6 +557,28 @@ describe("migrate-safe defaults", () => {
       ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
     ]);
     expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+  });
+
+  it("merges Phase 2 IOC type toggles when upgrading from schema version 2", () => {
+    const migrated = migrateVera5StorageRaw({
+      [STORAGE_KEY_SCHEMA_VERSION]: 2,
+      [STORAGE_KEY_IOC_TYPE_ENABLED]: { ipv4: false, domain: true },
+    });
+    expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(migrated[STORAGE_KEY_IOC_TYPE_ENABLED]).toEqual({
+      ipv4: false,
+      domain: true,
+      url: true,
+      md5: true,
+      sha1: true,
+      sha256: true,
+      cve: true,
+      email: true,
+      asn: true,
+      cidr: true,
+      filepath: true,
+      onion: true,
+    });
   });
 
   it("detects when storage migration is required", () => {

@@ -10,6 +10,7 @@ import {
 } from "../lib/iocRegex";
 import {
   dedupeOverlappingMatches,
+  DEFAULT_MAX_IOCS_PER_SCAN,
   detectIocsInText,
   scanTextNodesForIocs,
   scanTextNodesForIocsWithProfile,
@@ -191,6 +192,97 @@ describe("detectIocsInText", () => {
     ).toBe(false);
     expect(hasMatch(matches, IOC_TYPE.DOMAIN, "example.com")).toBe(false);
   });
+
+  it("detects Phase 2 IOC types in combined scan text", () => {
+    const onion = `${"b".repeat(56)}.onion`;
+    const text = [
+      "analyst@corp.example.com",
+      "AS15169",
+      "203.0.113.0/24",
+      onion,
+      "C:\\Users\\Public\\malware.exe",
+    ].join(" ");
+    const matches = detectIocsInText(text);
+    expect(hasMatch(matches, IOC_TYPE.EMAIL, "analyst@corp.example.com")).toBe(
+      true
+    );
+    expect(hasMatch(matches, IOC_TYPE.ASN, "AS15169")).toBe(true);
+    expect(hasMatch(matches, IOC_TYPE.CIDR, "203.0.113.0/24")).toBe(true);
+    expect(hasMatch(matches, IOC_TYPE.ONION, onion)).toBe(true);
+    expect(
+      hasMatch(matches, IOC_TYPE.FILEPATH, "C:\\Users\\Public\\malware.exe")
+    ).toBe(true);
+  });
+
+  it("classifies CIDR notation ahead of bare IPv4 for the same prefix", () => {
+    const text = "Network 10.0.0.0/8 listed";
+    const matches = detectIocsInText(text, { includePrivateIpv4: true });
+    expect(hasMatch(matches, IOC_TYPE.CIDR, "10.0.0.0/8")).toBe(true);
+    expect(matches.some((match) => match.type === IOC_TYPE.IPV4)).toBe(false);
+  });
+});
+
+describe("Phase 2 overlap resolution with MVP detectors", () => {
+  const torV3Onion = `${"a".repeat(56)}.onion`;
+
+  it("prefers email over embedded domain and hash local-part spans", () => {
+    const email = "analyst@corp.example.com";
+    const hashEmail = "deadbeefdeadbeefdeadbeefdeadbeef@example.com";
+    const matches = detectIocsInText(`Contact ${email} and ${hashEmail}`);
+
+    expect(hasMatch(matches, IOC_TYPE.EMAIL, email)).toBe(true);
+    expect(hasMatch(matches, IOC_TYPE.EMAIL, hashEmail)).toBe(true);
+    expect(matches.some((match) => match.type === IOC_TYPE.DOMAIN)).toBe(false);
+    expect(matches.some((match) => match.type === IOC_TYPE.MD5)).toBe(false);
+  });
+
+  it("prefers email over IPv4 domain literals without a standalone IPv4 match", () => {
+    const text = "Reporter soc-team@192.0.2.10 confirmed";
+    const matches = detectIocsInText(text);
+
+    expect(hasMatch(matches, IOC_TYPE.EMAIL, "soc-team@192.0.2.10")).toBe(true);
+    expect(matches.some((match) => match.type === IOC_TYPE.IPV4)).toBe(false);
+  });
+
+  it("prefers URL over overlapping email and filepath tokens", () => {
+    const url = "https://example.com/path/file.exe";
+    const queryUrl = "https://login.example.com?user=analyst@corp.example.com";
+    const matches = detectIocsInText(`Link ${url} and ${queryUrl}`);
+
+    expect(hasMatch(matches, IOC_TYPE.URL, url)).toBe(true);
+    expect(hasMatch(matches, IOC_TYPE.URL, queryUrl)).toBe(true);
+    expect(matches.some((match) => match.type === IOC_TYPE.EMAIL)).toBe(false);
+    expect(matches.some((match) => match.type === IOC_TYPE.FILEPATH)).toBe(false);
+  });
+
+  it("prefers onion hostname over generic domain classification", () => {
+    const matches = detectIocsInText(`Hidden service ${torV3Onion}`);
+    expect(hasMatch(matches, IOC_TYPE.ONION, torV3Onion)).toBe(true);
+    expect(matches.some((match) => match.type === IOC_TYPE.DOMAIN)).toBe(false);
+  });
+
+  it("prefers URL over onion host when the page text is a full URL", () => {
+    const url = `http://${torV3Onion}/wiki`;
+    const matches = detectIocsInText(`Browse ${url}`);
+    expect(hasMatch(matches, IOC_TYPE.URL, url)).toBe(true);
+    expect(matches.some((match) => match.type === IOC_TYPE.ONION)).toBe(false);
+  });
+
+  it("prefers conservative filepath over embedded IPv4 in UNC host segments", () => {
+    const path = "\\\\192.168.1.1\\share\\payload.exe";
+    const matches = detectIocsInText(`Dropped at ${path}`, {
+      includePrivateIpv4: true,
+    });
+    expect(hasMatch(matches, IOC_TYPE.FILEPATH, path)).toBe(true);
+    expect(matches.some((match) => match.type === IOC_TYPE.IPV4)).toBe(false);
+  });
+
+  it("keeps ASN and CVE matches when spans do not overlap", () => {
+    const text = "CVE-2024-1234 from AS15169";
+    const matches = detectIocsInText(text);
+    expect(hasMatch(matches, IOC_TYPE.CVE, "CVE-2024-1234")).toBe(true);
+    expect(hasMatch(matches, IOC_TYPE.ASN, "AS15169")).toBe(true);
+  });
 });
 
 function mountPage(html: string): HTMLDivElement {
@@ -260,8 +352,23 @@ describe("scanTextNodesForIocs", () => {
     expect(result.profile.textNodesScanned).toBe(3);
     expect(result.profile.textNodeCap).toBe(3);
     expect(result.profile.capReached).toBe(true);
+    expect(result.profile.iocCap).toBe(DEFAULT_MAX_IOCS_PER_SCAN);
+    expect(result.profile.iocCapReached).toBe(false);
     expect(result.profile.durationMs).toBeGreaterThanOrEqual(0);
     expect(result.matches.length).toBeGreaterThan(0);
+  });
+
+  it("bails out when the IOC count threshold is exceeded", () => {
+    const paragraphs = Array.from(
+      { length: 12 },
+      (_, index) => `<p>Host ${index} 192.0.2.${index + 1}</p>`
+    ).join("");
+    const root = mountPage(paragraphs);
+    const result = scanTextNodesForIocsWithProfile(root, { maxIocs: 4 });
+    expect(result.matches).toHaveLength(4);
+    expect(result.profile.iocCount).toBe(4);
+    expect(result.profile.iocCap).toBe(4);
+    expect(result.profile.iocCapReached).toBe(true);
   });
 
   it("honors includePrivateIpv4 through page scan options", () => {
@@ -335,5 +442,128 @@ describe("dedupeOverlappingMatches", () => {
       sourceTextHint: buildSourceTextHint("CVE-2021-44228", 20, 34),
     };
     expect(dedupeOverlappingMatches([a, b])).toHaveLength(2);
+  });
+
+  it("keeps email over overlapping domain span", () => {
+    const pageText = "Contact analyst@corp.example.com";
+    const email = {
+      value: "analyst@corp.example.com",
+      type: IOC_TYPE.EMAIL,
+      start: 8,
+      end: 32,
+      ruleId: IOC_RULE_ID.EMAIL,
+      sourceTextHint: buildSourceTextHint(pageText, 8, 32),
+    };
+    const domain = {
+      value: "corp.example.com",
+      type: IOC_TYPE.DOMAIN,
+      start: 16,
+      end: 32,
+      ruleId: IOC_RULE_ID.DOMAIN,
+      sourceTextHint: buildSourceTextHint(pageText, 16, 32),
+    };
+    const deduped = dedupeOverlappingMatches([domain, email]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0]?.type).toBe(IOC_TYPE.EMAIL);
+    expect(deduped[0]?.ignoredOverlaps).toEqual([
+      {
+        type: IOC_TYPE.DOMAIN,
+        value: "corp.example.com",
+        ruleId: IOC_RULE_ID.DOMAIN,
+      },
+    ]);
+  });
+
+  it("keeps CIDR over overlapping IPv4 prefix span", () => {
+    const pageText = "Route 203.0.113.0/24";
+    const cidr = {
+      value: "203.0.113.0/24",
+      type: IOC_TYPE.CIDR,
+      start: 6,
+      end: 20,
+      ruleId: IOC_RULE_ID.CIDR,
+      sourceTextHint: buildSourceTextHint(pageText, 6, 20),
+    };
+    const ipv4 = {
+      value: "203.0.113.0",
+      type: IOC_TYPE.IPV4,
+      start: 6,
+      end: 17,
+      ruleId: IOC_RULE_ID.IPV4,
+      sourceTextHint: buildSourceTextHint(pageText, 6, 17),
+    };
+    const deduped = dedupeOverlappingMatches([ipv4, cidr]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0]?.type).toBe(IOC_TYPE.CIDR);
+    expect(deduped[0]?.ignoredOverlaps).toEqual([
+      {
+        type: IOC_TYPE.IPV4,
+        value: "203.0.113.0",
+        ruleId: IOC_RULE_ID.IPV4,
+      },
+    ]);
+  });
+
+  it("keeps onion over overlapping domain span", () => {
+    const onion = `${"c".repeat(56)}.onion`;
+    const pageText = `Host ${onion}`;
+    const onionMatch = {
+      value: onion,
+      type: IOC_TYPE.ONION,
+      start: 5,
+      end: 5 + onion.length,
+      ruleId: IOC_RULE_ID.ONION,
+      sourceTextHint: buildSourceTextHint(pageText, 5, 5 + onion.length),
+    };
+    const domain = {
+      value: onion,
+      type: IOC_TYPE.DOMAIN,
+      start: 5,
+      end: 5 + onion.length,
+      ruleId: IOC_RULE_ID.DOMAIN,
+      sourceTextHint: buildSourceTextHint(pageText, 5, 5 + onion.length),
+    };
+    const deduped = dedupeOverlappingMatches([domain, onionMatch]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0]?.type).toBe(IOC_TYPE.ONION);
+    expect(deduped[0]?.ignoredOverlaps).toEqual([
+      {
+        type: IOC_TYPE.DOMAIN,
+        value: onion,
+        ruleId: IOC_RULE_ID.DOMAIN,
+      },
+    ]);
+  });
+
+  it("keeps longest hash match within the same priority tier", () => {
+    const digest =
+      "2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117";
+    const pageText = `Digest ${digest}`;
+    const sha256 = {
+      value: digest,
+      type: IOC_TYPE.SHA256,
+      start: 7,
+      end: 7 + digest.length,
+      ruleId: IOC_RULE_ID.SHA256,
+      sourceTextHint: buildSourceTextHint(pageText, 7, 7 + digest.length),
+    };
+    const md5 = {
+      value: digest.slice(0, 32),
+      type: IOC_TYPE.MD5,
+      start: 7,
+      end: 39,
+      ruleId: IOC_RULE_ID.MD5,
+      sourceTextHint: buildSourceTextHint(pageText, 7, 39),
+    };
+    const deduped = dedupeOverlappingMatches([md5, sha256]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0]?.type).toBe(IOC_TYPE.SHA256);
+    expect(deduped[0]?.ignoredOverlaps).toEqual([
+      {
+        type: IOC_TYPE.MD5,
+        value: digest.slice(0, 32),
+        ruleId: IOC_RULE_ID.MD5,
+      },
+    ]);
   });
 });

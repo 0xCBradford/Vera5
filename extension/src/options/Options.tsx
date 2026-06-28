@@ -117,6 +117,11 @@ const IOC_TYPE_OPTION_LABELS: Record<IocType, string> = {
   sha1: "SHA1 hashes",
   sha256: "SHA256 hashes",
   cve: "CVE identifiers",
+  email: "Email addresses",
+  asn: "ASNs",
+  cidr: "IPv4 CIDR ranges",
+  filepath: "File paths",
+  onion: "Onion domains",
 };
 
 const IOC_TYPE_SHORT_LABELS: Record<IocType, string> = {
@@ -127,6 +132,11 @@ const IOC_TYPE_SHORT_LABELS: Record<IocType, string> = {
   sha1: "SHA1",
   sha256: "SHA256",
   cve: "CVE",
+  email: "Email",
+  asn: "ASN",
+  cidr: "CIDR",
+  filepath: "Path",
+  onion: "Onion",
 };
 
 const IOC_TYPE_CODES: Record<IocType, string> = {
@@ -137,6 +147,11 @@ const IOC_TYPE_CODES: Record<IocType, string> = {
   sha1: "SHA1",
   sha256: "256",
   cve: "CVE",
+  email: "EML",
+  asn: "ASN",
+  cidr: "CIDR",
+  filepath: "PATH",
+  onion: "ONION",
 };
 
 const NAV_SECTIONS: { id: string; label: string }[] = [

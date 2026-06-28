@@ -254,6 +254,92 @@ const PIVOT_RECIPE_RULES: Record<IocType, readonly PivotRecipeRule[]> = {
       guidance: "Explore CVE threat context and related IOCs.",
     },
   ],
+  [IOC_TYPE.EMAIL]: [
+    {
+      provider: PIVOT_PROVIDER.VIRUSTOTAL,
+      guidance: "Search multi-vendor reports for the address.",
+    },
+    {
+      provider: PIVOT_PROVIDER.OTX,
+      guidance: "Review pulses and related indicators for the email.",
+    },
+    {
+      provider: PIVOT_PROVIDER.PULSEDIVE,
+      guidance: "Explore threat context for the address.",
+    },
+    {
+      provider: PIVOT_PROVIDER.THREATFOX,
+      guidance: "Review shared campaign IOC context.",
+    },
+  ],
+  [IOC_TYPE.ASN]: [
+    {
+      provider: PIVOT_PROVIDER.VIRUSTOTAL,
+      guidance: "Search vendor coverage and network context for the ASN.",
+    },
+    {
+      provider: PIVOT_PROVIDER.SHODAN,
+      guidance: "Review hosts and services announced by the ASN.",
+    },
+    {
+      provider: PIVOT_PROVIDER.PULSEDIVE,
+      guidance: "Explore ASN threat context and related assets.",
+    },
+    {
+      provider: PIVOT_PROVIDER.THREATFOX,
+      guidance: "Review shared campaign IOC context.",
+    },
+  ],
+  [IOC_TYPE.CIDR]: [
+    {
+      provider: PIVOT_PROVIDER.VIRUSTOTAL,
+      guidance: "Search vendor coverage for the network block.",
+    },
+    {
+      provider: PIVOT_PROVIDER.SHODAN,
+      guidance: "Find exposed hosts within the CIDR range.",
+    },
+    {
+      provider: PIVOT_PROVIDER.PULSEDIVE,
+      guidance: "Explore network threat context for the block.",
+    },
+  ],
+  [IOC_TYPE.FILEPATH]: [
+    {
+      provider: PIVOT_PROVIDER.VIRUSTOTAL,
+      guidance: "Search for files or reports referencing the path string.",
+    },
+    {
+      provider: PIVOT_PROVIDER.PULSEDIVE,
+      guidance: "Explore related threat context for the path token.",
+    },
+    {
+      provider: PIVOT_PROVIDER.THREATFOX,
+      guidance: "Review shared campaign IOC context.",
+    },
+  ],
+  [IOC_TYPE.ONION]: [
+    {
+      provider: PIVOT_PROVIDER.VIRUSTOTAL,
+      guidance: "Review domain reputation and related files for the onion host.",
+    },
+    {
+      provider: PIVOT_PROVIDER.OTX,
+      guidance: "Check passive DNS and threat pulses for the hostname.",
+    },
+    {
+      provider: PIVOT_PROVIDER.URLSCAN,
+      guidance: "Find scans referencing the onion hostname.",
+    },
+    {
+      provider: PIVOT_PROVIDER.PULSEDIVE,
+      guidance: "Explore threat context for the onion service.",
+    },
+    {
+      provider: PIVOT_PROVIDER.THREATFOX,
+      guidance: "Review shared campaign IOC context.",
+    },
+  ],
 };
 
 export function getPivotRecipes(

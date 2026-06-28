@@ -89,6 +89,11 @@ const TYPE_LABELS: Record<IocType, string> = {
   sha1: "SHA1 hash",
   sha256: "SHA256 hash",
   cve: "CVE ID",
+  email: "Email address",
+  asn: "ASN",
+  cidr: "IPv4 CIDR",
+  filepath: "File path",
+  onion: "Onion domain",
 };
 
 export type HoverCardProps = {

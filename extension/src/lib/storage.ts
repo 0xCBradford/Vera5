@@ -32,7 +32,7 @@ import {
   type ApiKeyStorageSlot,
 } from "./enrichmentSourceRegistry";
 
-export const SETTINGS_SCHEMA_VERSION = 2;
+export const SETTINGS_SCHEMA_VERSION = 3;
 
 export const DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS = 3600;
 
@@ -227,6 +227,11 @@ export const IOC_TYPE_SETTINGS_ORDER: readonly IocType[] = [
   "sha1",
   "sha256",
   "cve",
+  "email",
+  "asn",
+  "cidr",
+  "filepath",
+  "onion",
 ];
 
 const IOC_TYPE_SET = new Set<string>(IOC_TYPE_SETTINGS_ORDER);
@@ -551,6 +556,13 @@ export function migrateVera5StorageRaw(raw: Vera5StorageRaw): Vera5StorageRaw {
       ];
     }
     migrated[STORAGE_KEY_SCHEMA_VERSION] = 2;
+  }
+
+  if (readStoredSchemaVersion(migrated[STORAGE_KEY_SCHEMA_VERSION], 0) < 3) {
+    migrated[STORAGE_KEY_IOC_TYPE_ENABLED] = normalizeIocTypeEnabledRecord(
+      migrated[STORAGE_KEY_IOC_TYPE_ENABLED]
+    );
+    migrated[STORAGE_KEY_SCHEMA_VERSION] = 3;
   }
 
   if (

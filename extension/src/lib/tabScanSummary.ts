@@ -54,15 +54,25 @@ export const IOC_TYPE_TRAY_LABEL: Record<IocType, string> = {
   sha1: "SHA1",
   sha256: "SHA256",
   cve: "CVE",
+  email: "EML",
+  asn: "ASN",
+  cidr: "CIDR",
+  filepath: "PATH",
+  onion: "ONION",
 };
 
 const TRAY_FILTER_TYPE_ORDER: IocType[] = [
   IOC_TYPE.URL,
+  IOC_TYPE.EMAIL,
+  IOC_TYPE.FILEPATH,
+  IOC_TYPE.ONION,
   IOC_TYPE.SHA256,
   IOC_TYPE.SHA1,
   IOC_TYPE.MD5,
   IOC_TYPE.CVE,
+  IOC_TYPE.CIDR,
   IOC_TYPE.IPV4,
+  IOC_TYPE.ASN,
   IOC_TYPE.DOMAIN,
 ];
 

@@ -34,6 +34,7 @@ For triage flow context, see [analyst-workflows.md](analyst-workflows.md). For d
 | [`sample-blog.html`](../examples/sample-blog.html) | Blog / prose page | Paragraphs with semver and asset-name noise | Suppress filename and version decoys while still finding embedded IOCs |
 | [`sample-splunk-export.html`](../examples/sample-splunk-export.html) | Saved Splunk search export | Dark table with 32 result rows, raw JSON event panel | Detection on repeated IOCs in table cells; performance on heavier DOM text volume |
 | [`sample-security-onion-alert.html`](../examples/sample-security-onion-alert.html) | Security Onion alert detail | Field grid, Zeek conn.log excerpt, Suricata summary | Detection in monospace log blocks and labeled indicator fields |
+| [`sample-extended-ioc-alert.html`](../examples/sample-extended-ioc-alert.html) | CTI bulletin with extended indicator types | Ticket-style article plus indicator table | Email, ASN, CIDR, file path, onion, and MVP types with decoys (not a SOC dashboard fixture) |
 
 ---
 
@@ -48,8 +49,13 @@ All fixtures embed a subset of [`sample-iocs.txt`](../examples/sample-iocs.txt).
 | IPv4 | `192.0.2.1`, `8.8.8.8` |
 | Domain | `malware.testcategory.com` |
 | URL | `https://example.com/login`, `https://example.com/login?ref=analyst` (also appears defanged as `hxxps://example.com/login?ref=analyst` in the expanded indicator list) |
-| MD5 | `d41d8cd98f00b204e9800998ecf8427e` |
+| MD5 | `d41d8cd98f00b204e9800998ecf8427e`, `098f6bcd4621d373cade4e832627b4f6` |
+| SHA1 | `aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8` |
+| SHA256 | `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` |
+| Email | `analyst@example.com` |
 | CVE | `CVE-2021-44228`, `CVE-2017-0144` |
+
+Automated scan highlights expect **11** distinct indicators on this page (defanged URL text may match in the detector but shares highlight space with the canonical login URL).
 
 ### `sample-blog.html`
 
@@ -103,6 +109,30 @@ Automated regression in `fixtureTuning.test.ts` asserts these decoys stay unhigh
 
 ---
 
+## Extended indicator regression (SOC dashboard fixtures)
+
+After email, ASN, CIDR, file path, and onion detectors ship, **`sample-splunk-export.html`** and **`sample-security-onion-alert.html`** remain **MVP-only** pages: they embed no extended-type tokens in visible text. Automated regression re-runs the SOC fixture tests and asserts:
+
+- Documented IPv4, URL, hash, domain, and CVE expectations are unchanged.
+- Listed decoys stay suppressed.
+- **No** email, ASN, CIDR, file path, or onion matches appear on either SOC page (guards against new false positives on dense dashboard exports).
+
+Extended-type positive and negative coverage lives in [`sample-extended-ioc-alert.html`](../examples/sample-extended-ioc-alert.html) and `fixtureTuning.test.ts` (separate test case).
+
+**Regression gate:** from `extension/`, run:
+
+```bash
+npm run check
+```
+
+Or run only fixture regression:
+
+```bash
+npx vitest run src/content/fixtureTuning.test.ts
+```
+
+---
+
 ## Repeatable validation checklist
 
 Use the same order for manual SOC checks and pre-release smoke:
@@ -111,7 +141,8 @@ Use the same order for manual SOC checks and pre-release smoke:
 2. **Prose decoys** — `http://localhost:8080/sample-blog.html`: confirm semver and `.png` filenames stay unhighlighted.
 3. **Dense table** — `http://localhost:8080/sample-splunk-export.html`: scan completes without hanging; tray shows elevated IOC count; spot-check IPv4, URL, and CVE highlights in table cells.
 4. **SOC grid + logs** — `http://localhost:8080/sample-security-onion-alert.html`: confirm IOCs in field grid and Zeek excerpt; open overlay on one IPv4 and one hash row.
-5. **Regression gate** — from `extension/`, run `npm run check` (includes `fixtureTuning.test.ts`).
+5. **Extended detector regression** — confirm SOC dashboard fixtures (`sample-splunk-export.html`, `sample-security-onion-alert.html`) still highlight the same MVP types and do not surface new email, ASN, CIDR, file path, or onion highlights.
+6. **Regression gate** — from `extension/`, run `npm run check` (includes `fixtureTuning.test.ts`).
 
 When adding or changing fixture HTML, update this document, `fixtureTuning.test.ts`, and the fixture tables in [architecture.md](architecture.md) and [contributors/detection-engine.md](contributors/detection-engine.md).
 

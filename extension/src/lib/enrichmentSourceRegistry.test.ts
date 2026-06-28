@@ -154,6 +154,38 @@ describe("enrichmentSourceRegistry", () => {
       )
     ).toBe(false);
   });
+
+  it("lists pivot-capable sources for Phase 2 indicator types", () => {
+    expect(
+      listEnrichmentSourcesWithPivotSupport(
+        IOC_TYPE.EMAIL,
+        "analyst@corp.example.com"
+      )
+    ).toEqual(
+      expect.arrayContaining([
+        ENRICHMENT_SOURCE.VIRUSTOTAL,
+        ENRICHMENT_SOURCE.OTX,
+        ENRICHMENT_SOURCE.PULSEDIVE,
+        ENRICHMENT_SOURCE.THREATFOX,
+      ])
+    );
+  });
+
+  it("does not treat live connectors as supporting Phase 2 indicator types", () => {
+    const phase2Types = [
+      IOC_TYPE.EMAIL,
+      IOC_TYPE.ASN,
+      IOC_TYPE.CIDR,
+      IOC_TYPE.FILEPATH,
+      IOC_TYPE.ONION,
+    ] as const;
+
+    for (const sourceId of LIVE_ENRICHMENT_SOURCE_ORDER) {
+      for (const iocType of phase2Types) {
+        expect(enrichmentSourceSupportsIocType(sourceId, iocType)).toBe(false);
+      }
+    }
+  });
 });
 
 describe("enrichmentConnectorShell", () => {
@@ -177,5 +209,15 @@ describe("enrichmentConnectorShell", () => {
     expect(result.status).toBe(ENRICHMENT_SOURCE_STATUS.SKIPPED);
     expect(result.errorCode).toBe(ENRICHMENT_ERROR_CODE.MISSING_KEY);
     expect(result.errorMessage).toBe("VirusTotal API key is not configured.");
+  });
+
+  it("returns unsupported type for Phase 2 indicators without querying vendors", async () => {
+    const result = await enrichWithConnectorShell(ENRICHMENT_SOURCE.OTX, {
+      value: "analyst@corp.example.com",
+      type: IOC_TYPE.EMAIL,
+    });
+    expect(result.status).toBe(ENRICHMENT_SOURCE_STATUS.SKIPPED);
+    expect(result.errorCode).toBe(ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE);
+    expect(result.errorMessage).toBe("OTX does not support this indicator type.");
   });
 });

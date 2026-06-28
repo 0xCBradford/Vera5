@@ -1,8 +1,10 @@
 import {
   ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_LABELS,
   ENRICHMENT_SOURCE_ORDER,
   LIVE_ENRICHMENT_SOURCE_ORDER,
   enrichmentSourceSupportsIocType,
+  formatUnsupportedIndicatorTypeMessage,
   getEnrichmentSourceDefinition,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
@@ -10,7 +12,9 @@ import { censysLiveSupportsIocType } from "./censysConnector";
 import type { IocType } from "./iocRegex";
 import type { EnrichmentSourceEnabledRecord } from "./storage";
 import {
+  ENRICHMENT_ERROR_CODE,
   ENRICHMENT_SOURCE_STATUS,
+  createSkippedSourceResult,
   type EnrichmentSourceResult,
 } from "./enrichment";
 
@@ -45,6 +49,28 @@ export function listEnabledLiveEnrichmentSourceIds(
     (sourceId) =>
       isEnrichmentSourceEnabled(enabled, sourceId) &&
       liveEnrichmentSupportsIocType(sourceId, iocType)
+  );
+}
+
+export function hasAnyEnabledLiveEnrichmentSource(
+  enabled: EnrichmentSourceEnabledRecord
+): boolean {
+  return LIVE_ENRICHMENT_SOURCE_ORDER.some((sourceId) =>
+    isEnrichmentSourceEnabled(enabled, sourceId)
+  );
+}
+
+export function buildSkippedLiveEnrichmentUnsupportedTypeResults(
+  enabled: EnrichmentSourceEnabledRecord
+): EnrichmentSourceResult[] {
+  return LIVE_ENRICHMENT_SOURCE_ORDER.filter((sourceId) =>
+    isEnrichmentSourceEnabled(enabled, sourceId)
+  ).map((sourceId) =>
+    createSkippedSourceResult(
+      sourceId,
+      ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE,
+      formatUnsupportedIndicatorTypeMessage(ENRICHMENT_SOURCE_LABELS[sourceId])
+    )
   );
 }
 

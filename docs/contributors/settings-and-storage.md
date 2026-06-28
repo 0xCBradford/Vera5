@@ -18,7 +18,7 @@ Vera5 persists analyst configuration in **`chrome.storage.local`** via `extensio
 | Domain policy presets | Shipped **Sensitive sites denylist** preset merges banking, health-portal, and HR SaaS patterns beyond the default webmail denylist. Options **Trust & consent** applies presets via `applyDomainPolicyPresetToLists()`. Storage schema version 2 backfills webmail defaults when upgrading from an empty denylist. |
 | Internal asset lists | Optional indicator-level blocks for internal domains, IPv4 CIDR ranges, and labeled vendor/SaaS hostname patterns (`internalAssetDomains`, `internalAssetCidrRanges`, `internalAssetVendorLabels`). Default gate on (`internalAssetEnrichGateEnabled`); empty lists impose no block. Gate in `enrichmentBackgroundFetch.ts` via `isOutboundEnrichmentAllowedForIndicator()` in `internalAssetPolicyStorage.ts`; matcher in `internalAssetPolicy.ts`. Options **Trust & consent** editors. |
 | Analyst workflow presets | SOC, CTI, and DFIR presets in Options **Trust & consent** apply default toggles (manual-only, auto-scan, pre-query notices, private IPv4, workspace source display, live enrichment sources), `defaultExportTemplateId`, and `pivotEmphasisProviders` via `applyAnalystModePreset()` in `storage.ts`. Definitions in `analystModePresets.ts`; content sync in `analystModeStorage.ts`; pivot ordering in `pivots.ts`. |
-| Per-IOC-type flags | Options checkboxes; defaults all MVP types on; scan omits disabled types |
+| Per-IOC-type flags | Options checkboxes; defaults all MVP and Phase 2 types on; scan omits disabled types |
 | `includePrivateIpv4` | Options checkbox; private-space IPv4 omitted in detector when off (default) |
 | Enrichment cache TTL | Global seconds field on Options; optional per-source overrides |
 | Analyst notes | Per-IOC notes in overlay card; stored under `analystNotes` in `chrome.storage.local` via `extension/src/lib/analystNotesStorage.ts` |
@@ -26,6 +26,27 @@ Vera5 persists analyst configuration in **`chrome.storage.local`** via `extensio
 | Tab scan summaries | Stable consumer view (`TabScanSummary`: total count, per-type counts, entries) fetched via `GET_TAB_SCAN_SUMMARY` in `extension/src/lib/tabScanSummaryClient.ts` |
 
 Never commit storage dumps or API keys to git.
+
+## Per-IOC-type toggles (`iocTypeEnabled`)
+
+Storage schema version **3** stores one boolean per indicator type under `iocTypeEnabled`. Options **Scanning → Indicator types** renders a checkbox for each entry in `IOC_TYPE_SETTINGS_ORDER` (`storage.ts`).
+
+| Key | Options label |
+|-----|---------------|
+| `ipv4` | IPv4 addresses |
+| `domain` | Domain names |
+| `url` | URLs |
+| `md5` | MD5 hashes |
+| `sha1` | SHA1 hashes |
+| `sha256` | SHA256 hashes |
+| `cve` | CVE identifiers |
+| `email` | Email addresses |
+| `asn` | ASNs |
+| `cidr` | IPv4 CIDR ranges |
+| `filepath` | File paths |
+| `onion` | Onion domains |
+
+Defaults are **on** for every type. Upgrading from schema version 2 merges missing Phase 2 keys with default **on** via `migrateVera5StorageRaw()`. Content scripts read toggles through `iocTypeEnabledStorage.ts`; disabled types are omitted after deduplication in `detector.ts`. Phase 2 regex matchers land in a separate change set—toggles are wired first.
 
 ## Options page
 

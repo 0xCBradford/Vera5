@@ -27,6 +27,11 @@ const TYPE_BADGE_LABEL: Record<IocType, string> = {
   sha1: "SHA1",
   sha256: "SHA256",
   cve: "CVE",
+  email: "EML",
+  asn: "ASN",
+  cidr: "CIDR",
+  filepath: "PATH",
+  onion: "ONION",
 };
 
 export type HighlightAnchorLink = {

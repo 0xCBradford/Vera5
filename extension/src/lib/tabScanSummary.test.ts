@@ -12,6 +12,7 @@ import {
   filterTabScanSummaryEntries,
   findTabScanSummaryEntryForCollectionMember,
   formatTrayRowEnrichmentHint,
+  IOC_TYPE_TRAY_LABEL,
   isTabScanSummary,
   listIocTypesPresentInSummary,
   loadTrayEntryEnrichmentStatuses,
@@ -101,6 +102,61 @@ describe("tabScanSummary", () => {
       "3 indicators · 1 CVE · 2 IP"
     );
     expect(listIocTypesPresentInSummary(summary)).toEqual(["cve", "ipv4"]);
+  });
+
+  it("includes Phase 2 tray badge labels in count summary text", () => {
+    const phase2Snapshot = buildTabScanSummary({
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/phase2",
+        entries: [
+          {
+            type: IOC_TYPE.EMAIL,
+            value: "analyst@corp.example.com",
+            anchorId: "vera5-hl-email",
+            ruleId: IOC_RULE_ID.EMAIL,
+            sourceTextHint: "analyst@corp.example.com",
+          },
+          {
+            type: IOC_TYPE.ASN,
+            value: "AS15169",
+            anchorId: "vera5-hl-asn",
+            ruleId: IOC_RULE_ID.ASN,
+            sourceTextHint: "AS15169",
+          },
+          {
+            type: IOC_TYPE.CIDR,
+            value: "203.0.113.0/24",
+            anchorId: "vera5-hl-cidr",
+            ruleId: IOC_RULE_ID.CIDR,
+            sourceTextHint: "203.0.113.0/24",
+          },
+          {
+            type: IOC_TYPE.FILEPATH,
+            value: "C:\\Users\\Public\\malware.exe",
+            anchorId: "vera5-hl-path",
+            ruleId: IOC_RULE_ID.FILEPATH,
+            sourceTextHint: "C:\\Users\\Public\\malware.exe",
+          },
+          {
+            type: IOC_TYPE.ONION,
+            value: `${"b".repeat(56)}.onion`,
+            anchorId: "vera5-hl-onion",
+            ruleId: IOC_RULE_ID.ONION,
+            sourceTextHint: `${"b".repeat(56)}.onion`,
+          },
+        ],
+      }),
+      tabId: 7,
+    });
+
+    expect(buildTabScanCountSummaryText(phase2Snapshot)).toBe(
+      "5 indicators · 1 EML · 1 PATH · 1 ONION · 1 CIDR · 1 ASN"
+    );
+    expect(IOC_TYPE_TRAY_LABEL[IOC_TYPE.EMAIL]).toBe("EML");
+    expect(IOC_TYPE_TRAY_LABEL[IOC_TYPE.FILEPATH]).toBe("PATH");
+    expect(IOC_TYPE_TRAY_LABEL[IOC_TYPE.ONION]).toBe("ONION");
+    expect(IOC_TYPE_TRAY_LABEL[IOC_TYPE.CIDR]).toBe("CIDR");
+    expect(IOC_TYPE_TRAY_LABEL[IOC_TYPE.ASN]).toBe("ASN");
   });
 
   it("builds newline-separated IOC values for clipboard copy", () => {

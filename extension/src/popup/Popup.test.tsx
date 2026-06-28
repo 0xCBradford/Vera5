@@ -96,6 +96,30 @@ const sampleSummary = buildTabScanSummary({
   tabId: 7,
 });
 
+const phase2TraySummary = buildTabScanSummary({
+  ...buildTabScanSnapshotPayload({
+    pageUrl: "https://example.com/phase2",
+    scannedAt: 1_700_000_000_000,
+    entries: [
+      {
+        type: IOC_TYPE.EMAIL,
+        value: "analyst@corp.example.com",
+        anchorId: "vera5-hl-email",
+        ruleId: IOC_RULE_ID.EMAIL,
+        sourceTextHint: "analyst@corp.example.com",
+      },
+      {
+        type: IOC_TYPE.ASN,
+        value: "AS15169",
+        anchorId: "vera5-hl-asn",
+        ruleId: IOC_RULE_ID.ASN,
+        sourceTextHint: "AS15169",
+      },
+    ],
+  }),
+  tabId: 7,
+});
+
 const emptySummary = buildTabScanSummary({
   ...buildTabScanSnapshotPayload({
     pageUrl: "https://example.com/blank",
@@ -528,6 +552,26 @@ describe("Popup IOC tray", () => {
     expect(firstRow?.dataset.vera5SourceTextHint).toBe(
       "Contact 8.8.8.8 for details."
     );
+  });
+
+  it("shows Phase 2 type badges in tray rows and filter chips", async () => {
+    stubChrome({ initialSummary: phase2TraySummary });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "2 indicators · 1 EML · 1 ASN"
+      );
+    });
+    expect(mounted?.container.textContent).toContain("EML (1)");
+    expect(mounted?.container.textContent).toContain("ASN (1)");
+    expect(mounted?.container.textContent).toContain("analyst@corp.example.com");
+    expect(mounted?.container.textContent).toContain("AS15169");
+
+    const emailRow = Array.from(
+      mounted!.container.querySelectorAll<HTMLElement>("[data-vera5-tray-entry='true']")
+    ).find((row) => row.dataset.vera5Type === IOC_TYPE.EMAIL);
+    expect(emailRow?.textContent).toContain("EML");
   });
 
   it("shows source-attributed enrichment hints without blocking tray navigation", async () => {

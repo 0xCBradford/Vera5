@@ -219,6 +219,66 @@ describe("background enrichment with mocked service worker fetch results", () =>
     );
   });
 
+  it("loads explicit unsupported-type copy for Phase 2 indicators when live sources are enabled", async () => {
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockResolvedValue({
+      abuseipdb: true,
+      otx: true,
+      urlscan: false,
+      greynoise: false,
+    });
+    vi.mocked(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).mockResolvedValue({
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: "skipped",
+          errorCode: "unsupported_type",
+          errorMessage: "AbuseIPDB does not support this indicator type.",
+        },
+        {
+          sourceId: "otx",
+          sourceLabel: "OTX",
+          status: "skipped",
+          errorCode: "unsupported_type",
+          errorMessage: "OTX does not support this indicator type.",
+        },
+      ],
+      primary: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "skipped",
+        errorCode: "unsupported_type",
+        errorMessage: "AbuseIPDB does not support this indicator type.",
+      },
+    });
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "analyst@corp.example.com",
+      type: IOC_TYPE.EMAIL,
+    });
+
+    await runBackgroundEnrichment({
+      value: "analyst@corp.example.com",
+      type: IOC_TYPE.EMAIL,
+    });
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).toHaveBeenCalledWith({
+      value: "analyst@corp.example.com",
+      iocType: "email",
+    });
+    const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(panel?.textContent).toContain(
+      "AbuseIPDB does not support this indicator type."
+    );
+    expect(panel?.textContent).toContain("OTX does not support this indicator type.");
+  });
+
   it("passes bypassCache when manual refresh requests live enrichment", async () => {
     const anchor = document.createElement("span");
     document.body.appendChild(anchor);

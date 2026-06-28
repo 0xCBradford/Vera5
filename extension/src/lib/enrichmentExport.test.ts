@@ -62,6 +62,48 @@ describe("formatEnrichmentExportTypeLabel", () => {
     expect(formatEnrichmentExportTypeLabel(IOC_TYPE.IPV4)).toBe("IPv4 address");
     expect(formatEnrichmentExportTypeLabel(IOC_TYPE.SHA256)).toBe("SHA256 hash");
   });
+
+  it("maps Phase 2 IOC types to export labels", () => {
+    expect(formatEnrichmentExportTypeLabel(IOC_TYPE.EMAIL)).toBe("Email address");
+    expect(formatEnrichmentExportTypeLabel(IOC_TYPE.ASN)).toBe("ASN");
+    expect(formatEnrichmentExportTypeLabel(IOC_TYPE.CIDR)).toBe("IPv4 CIDR");
+    expect(formatEnrichmentExportTypeLabel(IOC_TYPE.FILEPATH)).toBe("File path");
+    expect(formatEnrichmentExportTypeLabel(IOC_TYPE.ONION)).toBe("Onion domain");
+  });
+});
+
+describe("Phase 2 export schema contract", () => {
+  const EXPORTED_AT = "2026-06-28T12:00:00.000Z";
+
+  it.each([
+    [IOC_TYPE.EMAIL, "analyst@corp.example.com", "Email address"],
+    [IOC_TYPE.ASN, "AS15169", "ASN"],
+    [IOC_TYPE.CIDR, "203.0.113.0/24", "IPv4 CIDR"],
+    [IOC_TYPE.FILEPATH, "/var/log/auth.log", "File path"],
+    [IOC_TYPE.ONION, `${"a".repeat(56)}.onion`, "Onion domain"],
+  ] as const)(
+    "serializes %s exports at schemaVersion 1 with type labels",
+    (iocType, value, iocTypeLabel) => {
+      const record = buildNormalizedEnrichmentRecord({
+        value,
+        iocType,
+        exportedAt: EXPORTED_AT,
+      });
+      const document = buildEnrichmentExportDocument(record);
+      const parsed = JSON.parse(serializeEnrichmentExportJson(record)) as {
+        schemaVersion: number;
+        iocType: string;
+        iocTypeLabel: string;
+      };
+
+      expect(document.schemaVersion).toBe(ENRICHMENT_EXPORT_SCHEMA_VERSION);
+      expect(document.iocType).toBe(iocType);
+      expect(document.iocTypeLabel).toBe(iocTypeLabel);
+      expect(parsed.schemaVersion).toBe(1);
+      expect(parsed.iocType).toBe(iocType);
+      expect(parsed.iocTypeLabel).toBe(iocTypeLabel);
+    }
+  );
 });
 
 describe("buildNormalizedEnrichmentRecord", () => {

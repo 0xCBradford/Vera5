@@ -17,7 +17,7 @@ import {
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK,
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY,
 } from "../lib/hoverCardEnrichment";
-import { IOC_TYPE, type IocType } from "../lib/iocRegex";
+import { IOC_TYPE, IOC_RULE_ID, type IocType } from "../lib/iocRegex";
 import { getPivotRecipes } from "../lib/pivots";
 import * as copyText from "../lib/copyText";
 import { REDACTED_VALUE_PLACEHOLDER } from "../lib/enrichmentRawResponse";
@@ -135,6 +135,11 @@ const PIVOT_PANEL_GOLDEN_CASES: ReadonlyArray<{
     value: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   },
   { type: IOC_TYPE.CVE, value: "CVE-2021-44228" },
+  { type: IOC_TYPE.EMAIL, value: "analyst@corp.example.com" },
+  { type: IOC_TYPE.ASN, value: "AS15169" },
+  { type: IOC_TYPE.CIDR, value: "203.0.113.0/24" },
+  { type: IOC_TYPE.FILEPATH, value: "/var/log/auth.log" },
+  { type: IOC_TYPE.ONION, value: `${"a".repeat(56)}.onion` },
 ];
 
 describe("match provenance exposure", () => {
@@ -148,6 +153,48 @@ describe("match provenance exposure", () => {
     expect(panel.dataset.vera5RuleId).toBe("ioc.regex.ipv4");
     expect(panel.dataset.vera5SourceTextHint).toBe(
       "Contact 8.8.8.8 for details."
+    );
+  });
+
+  it("renders Phase 2 type badge labels in the hover card header", () => {
+    const cases: Array<{ type: IocType; label: string; value: string }> = [
+      { type: IOC_TYPE.EMAIL, label: "Email address", value: "analyst@corp.example.com" },
+      { type: IOC_TYPE.ASN, label: "ASN", value: "AS15169" },
+      { type: IOC_TYPE.CIDR, label: "IPv4 CIDR", value: "203.0.113.0/24" },
+      { type: IOC_TYPE.FILEPATH, label: "File path", value: "C:\\Users\\Public\\malware.exe" },
+      { type: IOC_TYPE.ONION, label: "Onion domain", value: `${"a".repeat(56)}.onion` },
+    ];
+
+    for (const { type, label, value } of cases) {
+      const panel = buildHoverCardPanel({ value, type });
+      expect(panel.querySelector(".vera5-hover-card-type")?.textContent).toBe(label);
+    }
+  });
+
+  it("renders Why detected panel with Phase 2 provenance", () => {
+    const panel = buildHoverCardPanel({
+      value: "analyst@corp.example.com",
+      type: IOC_TYPE.EMAIL,
+      ruleId: IOC_RULE_ID.EMAIL,
+      sourceTextHint: "Contact analyst@corp.example.com today",
+      ignoredOverlaps: [
+        {
+          type: IOC_TYPE.DOMAIN,
+          value: "corp.example.com",
+          ruleId: IOC_RULE_ID.DOMAIN,
+        },
+      ],
+    });
+
+    expect(panel.querySelector(".vera5-why-detected")).not.toBeNull();
+    expect(panel.textContent).toContain("Type: Email address");
+    expect(panel.textContent).toContain("Matched an email address in visible text.");
+    expect(panel.textContent).toContain(
+      "Source context: Contact analyst@corp.example.com today"
+    );
+    expect(panel.textContent).toContain("corp.example.com");
+    expect(panel.textContent).toContain(
+      "Matched a domain name in visible text, including bracket-dot defanged forms."
     );
   });
 
