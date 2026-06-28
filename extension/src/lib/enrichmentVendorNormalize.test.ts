@@ -7,10 +7,15 @@ import {
   mapCensysFieldsToUnifiedPresentation,
   mapGreyNoiseFieldsToUnifiedPresentation,
   mapOtxFieldsToUnifiedPresentation,
+  mapShodanFieldsToUnifiedPresentation,
   mapUrlscanFieldsToUnifiedPresentation,
   mapVirustotalFieldsToUnifiedPresentation,
   UNIFIED_SUMMARY_METRIC,
 } from "./enrichmentVendorNormalize";
+import {
+  buildHoverCardSourceEntries,
+  ENRICHMENT_SOURCE,
+} from "./hoverCardEnrichment";
 import {
   normalizeVirustotalResponse,
   parseVirustotalUnifiedInput,
@@ -218,5 +223,83 @@ describe("unified enrichment vendor normalization", () => {
       summary: "3 observed services",
       tags: ["DE", "Example AS", "HTTPS", "443/tcp", "portal.example.com"],
     });
+  });
+
+  it("maps Shodan exposure fields to unified presentation", () => {
+    expect(
+      mapShodanFieldsToUnifiedPresentation({
+        openServiceCount: 2,
+        countryCode: "us",
+        organization: "Google LLC",
+        serviceTags: ["nginx", "https", "443/tcp"],
+      })
+    ).toEqual({
+      summary: "2 open services",
+      tags: ["US", "Google LLC", "nginx", "https", "443/tcp"],
+    });
+  });
+});
+
+describe("multi-source normalization regression", () => {
+  it("preserves connector order and unified summaries for VT, Shodan, and Censys", () => {
+    const virustotal = mapVirustotalFieldsToUnifiedPresentation({
+      maliciousDetections: 5,
+      countryCode: "us",
+      networkOwner: "GOOGLE",
+    });
+    const shodan = mapShodanFieldsToUnifiedPresentation({
+      openServiceCount: 1,
+      countryCode: "us",
+      organization: "Google LLC",
+      serviceTags: ["nginx", "443/tcp"],
+    });
+    const censys = mapCensysFieldsToUnifiedPresentation({
+      serviceCount: 2,
+      countryCode: "us",
+      autonomousSystemName: "GOOGLE",
+      serviceTags: ["HTTP", "443/tcp", "DNS"],
+    });
+
+    const entries = buildHoverCardSourceEntries([
+      {
+        sourceId: "censys",
+        sourceLabel: "Censys",
+        status: "ok",
+        summary: censys.summary,
+        tags: [...censys.tags],
+      },
+      {
+        sourceId: "shodan",
+        sourceLabel: "Shodan",
+        status: "ok",
+        summary: shodan.summary,
+        tags: [...shodan.tags],
+      },
+      {
+        sourceId: "virustotal",
+        sourceLabel: "VirusTotal",
+        status: "ok",
+        summary: virustotal.summary,
+        tags: [...virustotal.tags],
+      },
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "42 abuse confidence",
+      },
+    ]);
+
+    expect(entries.map((entry) => entry.sourceId)).toEqual([
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.SHODAN,
+      ENRICHMENT_SOURCE.CENSYS,
+    ]);
+    expect(entries[1]?.detail).toBe("5 malicious detections");
+    expect(entries[1]?.tags).toEqual(["US", "GOOGLE"]);
+    expect(entries[2]?.detail).toBe("1 open service");
+    expect(entries[3]?.detail).toBe("2 observed services");
+    expect(entries[3]?.tags).toEqual(["US", "GOOGLE", "HTTP", "443/tcp", "DNS"]);
   });
 });

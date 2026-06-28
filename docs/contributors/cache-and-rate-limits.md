@@ -60,7 +60,7 @@ With manual-only off, rapid hover opens coalesce (~400 ms) to the last indicator
 
 ## Timeouts
 
-Connectors use a 15-second abort window (see `DEFAULT_ABUSEIPDB_REQUEST_TIMEOUT_MS` / OTX equivalent in connector modules).
+Connectors use a 15-second abort window (`DEFAULT_*_REQUEST_TIMEOUT_MS` in each live connector module, including AbuseIPDB, OTX, URLScan.io, GreyNoise, Shodan, Censys, and VirusTotal).
 
 ## Tests
 

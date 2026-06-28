@@ -58,15 +58,15 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
   width: 30px;
   height: 30px;
-  border-radius: var(--v5-radius-md);
-  background: linear-gradient(135deg, var(--v5-accent-strong), var(--v5-accent));
-  color: #0b0e11;
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 0.02em;
-  box-shadow: var(--v5-shadow-sm);
+}
+
+.v5-brand__logo {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .v5-brand__name {

@@ -459,6 +459,50 @@ describe("HoverCard enrichment states", () => {
     expect(contributionChip?.getAttribute("title")).toContain("AbuseIPDB:");
   });
 
+  it("shows Shodan and Censys per-source badges when one succeeds and the other fails", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "4 open services",
+      tags: ["US", "Google"],
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.SHODAN,
+          label: "Shodan",
+          status: "ok",
+          badgeText: "Live",
+          detail: "4 open services",
+          tags: ["US", "Google"],
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.CENSYS,
+          label: "Censys",
+          status: "error",
+          badgeText: "Error",
+          detail: "Censys rate limit reached.",
+          retryHint: "Retry after 60 seconds.",
+        },
+      ],
+    });
+
+    expect(mounted.container.textContent).toContain("4 open services");
+    expect(mounted.container.textContent).toContain("Shodan · Live");
+    expect(mounted.container.textContent).toContain("Censys · Error");
+    expect(mounted.container.textContent).toContain("Censys rate limit reached");
+    expect(
+      mounted.container.querySelector(".vera5-hover-card-attribution")
+    ).toBeNull();
+    expect(
+      mounted.container.querySelectorAll(".vera5-hover-card-source-badge")
+    ).toHaveLength(2);
+    expect(
+      mounted.container.querySelector(".vera5-hover-card-source-badge--ok")
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(".vera5-hover-card-source-badge--error")
+    ).not.toBeNull();
+  });
+
   it("shows GreyNoise per-source row alongside AbuseIPDB and OTX in multi-source enrichment", () => {
     mounted = renderHoverCard({
       ...baseProps,
@@ -503,6 +547,70 @@ describe("HoverCard enrichment states", () => {
     expect(
       mounted.container.querySelectorAll(".vera5-hover-card-source-badge")
     ).toHaveLength(3);
+  });
+
+  it("shows VT, Shodan, and Censys per-source rows alongside AbuseIPDB and OTX in multi-source enrichment", () => {
+    mounted = renderHoverCard({
+      ...baseProps,
+      enrichmentState: "ready",
+      summary: "42 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: "Live",
+          detail: "42 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "ok",
+          badgeText: "Cached",
+          detail: "2 threat pulses",
+          fromCache: true,
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
+          label: "VirusTotal",
+          status: "ok",
+          badgeText: "Live",
+          detail: "5 malicious detections",
+          tags: ["US"],
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.SHODAN,
+          label: "Shodan",
+          status: "ok",
+          badgeText: "Live",
+          detail: "4 open services",
+          tags: ["US", "Google"],
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.CENSYS,
+          label: "Censys",
+          status: "ok",
+          badgeText: "Live",
+          detail: "3 observed services",
+          tags: ["DE", "443/tcp"],
+        },
+      ],
+    });
+
+    expect(mounted.container.textContent).toContain("AbuseIPDB · Live");
+    expect(mounted.container.textContent).toContain("OTX · Cached");
+    expect(mounted.container.textContent).toContain("VirusTotal · Live");
+    expect(mounted.container.textContent).toContain("Shodan · Live");
+    expect(mounted.container.textContent).toContain("Censys · Live");
+    expect(mounted.container.textContent).toContain("5 malicious detections");
+    expect(mounted.container.textContent).toContain("4 open services");
+    expect(mounted.container.textContent).toContain("3 observed services");
+    expect(
+      mounted.container.querySelector(".vera5-hover-card-attribution")
+    ).toBeNull();
+    expect(
+      mounted.container.querySelectorAll(".vera5-hover-card-source-badge")
+    ).toHaveLength(5);
   });
 
   it("shows expandable redacted raw JSON for a single source", () => {

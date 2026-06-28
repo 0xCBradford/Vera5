@@ -51,7 +51,9 @@ describe("enrichmentSourceRegistry", () => {
     ]);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.URLSCAN);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.GREYNOISE);
+    expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.VIRUSTOTAL);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.SHODAN);
+    expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.CENSYS);
   });
 
   it("registers Shodan as a live connector with default disabled", () => {

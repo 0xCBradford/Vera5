@@ -12,6 +12,7 @@ import {
   assertDeclaredEnrichmentApiUrl,
   assertEnrichmentFetchHasNoBody,
   DECLARED_ENRICHMENT_API_HOSTS,
+  MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS,
   ENRICH_IOC_MESSAGE_KEYS,
   EnrichmentOutboundBlockedError,
   enrichmentFetch,
@@ -76,6 +77,17 @@ describe("enrichment IOC request boundaries", () => {
         body: JSON.stringify({ page: "html" }),
       })
     ).toBe(false);
+  });
+
+  it("derives manifest host permissions from declared enrichment API hosts", () => {
+    expect(MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS).toHaveLength(
+      DECLARED_ENRICHMENT_API_HOSTS.length
+    );
+    for (const hostname of DECLARED_ENRICHMENT_API_HOSTS) {
+      expect(MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS).toContain(
+        `https://${hostname}/*`
+      );
+    }
   });
 
   it("declares live connector API hosts explicitly", () => {

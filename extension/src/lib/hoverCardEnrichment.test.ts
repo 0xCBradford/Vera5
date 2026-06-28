@@ -284,6 +284,117 @@ describe("hover card enrichment placeholders", () => {
     expect(view.sourceResults[2]?.detail).toBe("benign RIOT service");
   });
 
+  it("orders VT, Shodan, and Censys source rows in connector order with labels", () => {
+    const entries = buildHoverCardSourceEntries([
+      {
+        sourceId: "censys",
+        sourceLabel: "Censys",
+        status: "ok",
+        summary: "3 observed services",
+        tags: ["DE", "443/tcp"],
+      },
+      {
+        sourceId: "shodan",
+        sourceLabel: "Shodan",
+        status: "ok",
+        summary: "4 open services",
+        tags: ["US", "Google"],
+      },
+      {
+        sourceId: "virustotal",
+        sourceLabel: "VirusTotal",
+        status: "ok",
+        summary: "5 malicious detections",
+        tags: ["US"],
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+      },
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "42 abuse confidence",
+      },
+    ]);
+
+    expect(entries.map((entry) => entry.sourceId)).toEqual([
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.OTX,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.SHODAN,
+      ENRICHMENT_SOURCE.CENSYS,
+    ]);
+    expect(entries.map((entry) => entry.label)).toEqual([
+      "AbuseIPDB",
+      "OTX",
+      "VirusTotal",
+      "Shodan",
+      "Censys",
+    ]);
+    expect(entries[2]?.detail).toBe("5 malicious detections");
+    expect(entries[3]?.tags).toEqual(["US", "Google"]);
+    expect(entries[4]?.detail).toBe("3 observed services");
+  });
+
+  it("resolves multi-source enrichment with VT, Shodan, and Censys attribution alongside AbuseIPDB and OTX", () => {
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "42 abuse confidence",
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+      },
+      {
+        sourceId: "virustotal",
+        sourceLabel: "VirusTotal",
+        status: "ok",
+        summary: "5 malicious detections",
+        tags: ["US"],
+      },
+      {
+        sourceId: "shodan",
+        sourceLabel: "Shodan",
+        status: "ok",
+        summary: "4 open services",
+        tags: ["US", "Google"],
+      },
+      {
+        sourceId: "censys",
+        sourceLabel: "Censys",
+        status: "ok",
+        summary: "3 observed services",
+        tags: ["DE", "443/tcp"],
+      },
+    ]);
+
+    expect(view.enrichmentState).toBe("ready");
+    expect(view.sourceResults).toHaveLength(5);
+    expect(view.sourceResults.map((entry) => entry.label)).toEqual([
+      "AbuseIPDB",
+      "OTX",
+      "VirusTotal",
+      "Shodan",
+      "Censys",
+    ]);
+    expect(shouldShowMultiSourceResults(view.sourceResults)).toBe(true);
+    expect(
+      shouldShowEnrichmentSourceAttribution("ready", view.sourceAttribution, view.sourceResults)
+    ).toBe(false);
+    expect(view.sourceResults[2]?.badgeText).toBe(formatSourceStatusBadge("ok"));
+    expect(view.sourceResults[3]?.detail).toBe("4 open services");
+    expect(view.sourceResults[4]?.tags).toEqual(["DE", "443/tcp"]);
+  });
+
   it("surfaces URLScan.io connector error copy on source entries", () => {
     const missingKey = buildHoverCardSourceEntries([
       {
@@ -556,6 +667,65 @@ describe("hover card enrichment placeholders", () => {
     expect(view.tags).toEqual(["phishing"]);
     expect(view.sourceResults).toHaveLength(2);
     expect(shouldShowMultiSourceResults(view.sourceResults)).toBe(true);
+    expect(
+      shouldShowEnrichmentSourceAttribution("ready", view.sourceAttribution, view.sourceResults)
+    ).toBe(false);
+  });
+
+  it("resolves partial success when Shodan succeeds and Censys is down", () => {
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: "shodan",
+        sourceLabel: "Shodan",
+        status: "ok",
+        summary: "4 open services",
+        tags: ["US", "Google"],
+      },
+      {
+        sourceId: "censys",
+        sourceLabel: "Censys",
+        status: "error",
+        errorMessage: "Censys rate limit reached.",
+        errorCode: "rate_limited",
+      },
+    ]);
+
+    expect(view.enrichmentState).toBe("ready");
+    expect(view.summary).toBe("4 open services");
+    expect(view.tags).toEqual(["US", "Google"]);
+    expect(view.sourceResults).toHaveLength(2);
+    expect(view.sourceResults[0]?.label).toBe("Shodan");
+    expect(view.sourceResults[0]?.badgeText).toBe(formatSourceStatusBadge("ok"));
+    expect(view.sourceResults[1]?.detail).toBe("Censys rate limit reached.");
+    expect(view.sourceResults[1]?.badgeText).toBe(formatSourceStatusBadge("error"));
+    expect(shouldShowMultiSourceResults(view.sourceResults)).toBe(true);
+  });
+
+  it("resolves partial success when Censys succeeds and Shodan errors", () => {
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: "censys",
+        sourceLabel: "Censys",
+        status: "ok",
+        summary: "3 observed services",
+        tags: ["DE", "443/tcp"],
+      },
+      {
+        sourceId: "shodan",
+        sourceLabel: "Shodan",
+        status: "error",
+        errorMessage: "Shodan rejected the API key.",
+        errorCode: "unauthorized",
+      },
+    ]);
+
+    expect(view.enrichmentState).toBe("ready");
+    expect(view.summary).toBe("3 observed services");
+    expect(view.sourceResults).toHaveLength(2);
+    expect(view.sourceResults[0]?.label).toBe("Shodan");
+    expect(view.sourceResults[0]?.detail).toBe("Shodan rejected the API key.");
+    expect(view.sourceResults[1]?.label).toBe("Censys");
+    expect(view.sourceResults[1]?.detail).toBe("3 observed services");
     expect(
       shouldShowEnrichmentSourceAttribution("ready", view.sourceAttribution, view.sourceResults)
     ).toBe(false);

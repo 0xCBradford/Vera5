@@ -1,10 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Vera5",
-  "description": "IOC enrichment for analyst workflows. storage: local API keys and enrichment cache. activeTab: run only on the tab you are viewing. scripting: inject IOC detection on demand. host_permissions: read page text on sites you visit; live enrichment sends IOC values over HTTPS GET only to declared vendor API hosts you enable (AbuseIPDB, OTX, URLScan.io, GreyNoise).",
+  "description": "IOC enrichment for analyst workflows. storage: local API keys and enrichment cache. activeTab: run only on the tab you are viewing. scripting: inject IOC detection on demand. host_permissions: read page text on sites you visit; live enrichment sends IOC values over HTTPS GET only to declared vendor API hosts you enable (AbuseIPDB, OTX, URLScan.io, GreyNoise, Shodan, Censys, VirusTotal).",
   "version": "0.1.0",
   "permissions": ["storage", "activeTab", "scripting", "contextMenus"],
-  "host_permissions": ["http://*/*", "https://*/*"],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*",
+    "https://api.abuseipdb.com/*",
+    "https://otx.alienvault.com/*",
+    "https://urlscan.io/*",
+    "https://api.greynoise.io/*",
+    "https://www.virustotal.com/*",
+    "https://api.shodan.io/*",
+    "https://search.censys.io/*"
+  ],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

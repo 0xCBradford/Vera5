@@ -1,5 +1,130 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`golden: enrichment export JSON snapshots > Priority-2 multi-source ready enrichment 1`] = `
+"{
+  "schemaVersion": 1,
+  "exportedAt": "2026-06-02T12:00:00.000Z",
+  "ioc": "8.8.8.8",
+  "iocType": "ipv4",
+  "iocTypeLabel": "IPv4 address",
+  "enrichmentState": "ready",
+  "summary": "42 abuse confidence",
+  "tags": [
+    "US"
+  ],
+  "sources": [
+    {
+      "sourceId": "abuseipdb",
+      "name": "AbuseIPDB",
+      "status": "ok",
+      "summary": "42 abuse confidence",
+      "tags": [
+        "US"
+      ],
+      "fromCache": false,
+      "badgeText": "Live"
+    },
+    {
+      "sourceId": "virustotal",
+      "name": "VirusTotal",
+      "status": "ok",
+      "summary": "5 malicious detections",
+      "tags": [
+        "US",
+        "GOOGLE"
+      ],
+      "fromCache": false,
+      "badgeText": "Live"
+    },
+    {
+      "sourceId": "shodan",
+      "name": "Shodan",
+      "status": "ok",
+      "summary": "1 open service",
+      "tags": [
+        "US",
+        "Google LLC",
+        "443/tcp"
+      ],
+      "fromCache": false,
+      "badgeText": "Live"
+    },
+    {
+      "sourceId": "censys",
+      "name": "Censys",
+      "status": "ok",
+      "summary": "2 observed services",
+      "tags": [
+        "US",
+        "GOOGLE",
+        "HTTP",
+        "443/tcp"
+      ],
+      "fromCache": false,
+      "badgeText": "Live"
+    }
+  ],
+  "disabledSources": [],
+  "score": {
+    "mode": "insufficient",
+    "label": "unknown",
+    "summaryText": "Unknown risk",
+    "compositeSignal": null,
+    "reasoningLines": [],
+    "reasoningEmptyDetail": "Blended score steps are not available until at least two sources return parseable evidence.",
+    "insufficientDetail": "At least two enabled sources must return parseable evidence for a blended composite score. Review per-source details below."
+  },
+  "disagreement": false,
+  "pivots": [
+    {
+      "provider": "abuseipdb",
+      "label": "AbuseIPDB",
+      "href": "https://www.abuseipdb.com/check/8.8.8.8"
+    },
+    {
+      "provider": "otx",
+      "label": "OTX",
+      "href": "https://otx.alienvault.com/indicator/ip/8.8.8.8"
+    },
+    {
+      "provider": "virustotal",
+      "label": "VirusTotal",
+      "href": "https://www.virustotal.com/gui/ip-address/8.8.8.8"
+    },
+    {
+      "provider": "urlscan",
+      "label": "URLScan.io",
+      "href": "https://urlscan.io/search/#ip:8.8.8.8"
+    },
+    {
+      "provider": "greynoise",
+      "label": "GreyNoise",
+      "href": "https://viz.greynoise.io/ip/8.8.8.8"
+    },
+    {
+      "provider": "shodan",
+      "label": "Shodan",
+      "href": "https://www.shodan.io/host/8.8.8.8"
+    },
+    {
+      "provider": "pulsedive",
+      "label": "Pulsedive",
+      "href": "https://pulsedive.com/explore?q=8.8.8.8"
+    },
+    {
+      "provider": "censys",
+      "label": "Censys",
+      "href": "https://search.censys.io/hosts/8.8.8.8"
+    },
+    {
+      "provider": "threatfox",
+      "label": "ThreatFox",
+      "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
+    }
+  ]
+}"
+`;
+
 exports[`golden: enrichment export JSON snapshots > all enrichment sources disabled 1`] = `
 "{
   "schemaVersion": 1,
@@ -414,6 +539,33 @@ exports[`golden: enrichment export JSON snapshots > with analyst notes 1`] = `
   ],
   "analystNotes": "Review firewall logs."
 }"
+`;
+
+exports[`golden: enrichment export markdown snapshots > Priority-2 multi-source ready enrichment 1`] = `
+"## Vera5 IOC Summary
+
+IOC: 8.8.8.8
+Type: IPv4 address
+
+Summary: 42 abuse confidence
+
+Tags: US
+
+Risk score: Unknown risk
+
+At least two enabled sources must return parseable evidence for a blended composite score. Review per-source details below.
+
+### How this score was computed
+
+Blended score steps are not available until at least two sources return parseable evidence.
+
+### Source Summary
+
+- AbuseIPDB (Live): 42 abuse confidence [US]
+- VirusTotal (Live): 5 malicious detections [US, GOOGLE]
+- Shodan (Live): 1 open service [US, Google LLC, 443/tcp]
+- Censys (Live): 2 observed services [US, GOOGLE, HTTP, 443/tcp]
+"
 `;
 
 exports[`golden: enrichment export markdown snapshots > all enrichment sources disabled 1`] = `

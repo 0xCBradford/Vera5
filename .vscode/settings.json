@@ -1,0 +1,13 @@
+{
+  "files.associations": {
+    ".env": "properties",
+    ".env.example": "properties",
+    "**/.env": "properties",
+    "**/.env.example": "properties"
+  },
+  "shellcheck.ignoreFilePatterns": [
+    "**/.env",
+    "**/.env.*",
+    "**/.env.example"
+  ]
+}

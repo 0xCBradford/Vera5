@@ -8,7 +8,11 @@ import {
   buildHoverCardSourceEntries,
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
+  resolveMultiSourceEnrichmentView,
 } from "./hoverCardEnrichment";
+import { normalizeCensysHostResponse } from "./censysConnector";
+import { normalizeShodanHostResponse } from "./shodanConnector";
+import { normalizeVirustotalResponse } from "./virustotalConnector";
 
 const ALL_DISABLED_ENRICHMENT_SOURCES = [...ENRICHMENT_SOURCE_ORDER];
 import {
@@ -561,6 +565,159 @@ describe("buildEnrichmentExportMarkdown", () => {
     expect(buildEnrichmentExportMarkdown(record)).not.toContain(
       ENRICHMENT_EXPORT_ANALYST_NOTES_HEADING
     );
+  });
+});
+
+describe("multi-source normalization regression", () => {
+  const VT_IPV4_PAYLOAD = {
+    data: {
+      attributes: {
+        last_analysis_stats: {
+          malicious: 5,
+          suspicious: 0,
+          harmless: 60,
+          undetected: 8,
+        },
+        country: "US",
+        as_owner: "GOOGLE",
+      },
+    },
+  };
+
+  const SHODAN_HOST_PAYLOAD = {
+    ip_str: "8.8.8.8",
+    country_code: "US",
+    org: "Google LLC",
+    data: [{ port: 443, transport: "tcp", product: "nginx" }],
+  };
+
+  const CENSYS_HOST_PAYLOAD = {
+    result: {
+      ip: "8.8.8.8",
+      location: { country_code: "US" },
+      autonomous_system: { name: "GOOGLE" },
+      services: [
+        { port: 443, service_name: "HTTP", transport_protocol: "TCP" },
+        { port: 53, service_name: "DNS", transport_protocol: "UDP" },
+      ],
+    },
+  };
+
+  function buildPriority2MultiSourceEntries() {
+    const virustotal = normalizeVirustotalResponse(VT_IPV4_PAYLOAD);
+    const shodan = normalizeShodanHostResponse(SHODAN_HOST_PAYLOAD);
+    const censys = normalizeCensysHostResponse(CENSYS_HOST_PAYLOAD);
+
+    return buildHoverCardSourceEntries([
+      {
+        sourceId: ENRICHMENT_SOURCE.CENSYS,
+        sourceLabel: "Censys",
+        status: "ok",
+        summary: censys.summary,
+        tags: [...censys.tags],
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.SHODAN,
+        sourceLabel: "Shodan",
+        status: "ok",
+        summary: shodan.summary,
+        tags: [...shodan.tags],
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
+        sourceLabel: "VirusTotal",
+        status: "ok",
+        summary: virustotal.summary,
+        tags: [...virustotal.tags],
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "42 abuse confidence",
+        tags: ["US"],
+      },
+    ]);
+  }
+
+  it("maps connector normalization into hover-card and export records", () => {
+    const sourceResults = buildPriority2MultiSourceEntries();
+    const view = resolveMultiSourceEnrichmentView(
+      sourceResults.map((entry) => ({
+        sourceId: entry.sourceId,
+        sourceLabel: entry.label,
+        status: entry.status,
+        summary: entry.status === "ok" ? entry.detail : undefined,
+        tags: entry.tags,
+      }))
+    );
+
+    expect(view.enrichmentState).toBe("ready");
+    expect(view.summary).toBe("42 abuse confidence");
+    expect(sourceResults.map((entry) => entry.sourceId)).toEqual([
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.SHODAN,
+      ENRICHMENT_SOURCE.CENSYS,
+    ]);
+    expect(sourceResults[1]?.detail).toBe("5 malicious detections");
+    expect(sourceResults[2]?.detail).toBe("1 open service");
+    expect(sourceResults[3]?.detail).toBe("2 observed services");
+
+    const record = buildNormalizedEnrichmentRecord({
+      value: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      sourceResults,
+      exportedAt: EXPORTED_AT,
+    });
+
+    expect(record.enrichmentState).toBe("ready");
+    expect(record.summary).toBe("42 abuse confidence");
+    expect(record.sources).toHaveLength(4);
+    expect(record.sources[1]).toMatchObject({
+      sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
+      name: "VirusTotal",
+      summary: "5 malicious detections",
+      badgeText: "Live",
+    });
+    expect(record.sources[2]).toMatchObject({
+      sourceId: ENRICHMENT_SOURCE.SHODAN,
+      summary: "1 open service",
+    });
+    expect(record.sources[3]).toMatchObject({
+      sourceId: ENRICHMENT_SOURCE.CENSYS,
+      summary: "2 observed services",
+    });
+
+    const markdown = buildEnrichmentExportMarkdown(record);
+    expect(markdown).toContain("- AbuseIPDB (Live): 42 abuse confidence");
+    expect(markdown).toContain("- VirusTotal (Live): 5 malicious detections");
+    expect(markdown).toContain("- Shodan (Live): 1 open service");
+    expect(markdown).toContain("- Censys (Live): 2 observed services");
+  });
+
+  it("serializes Priority-2 multi-source normalization into export JSON", () => {
+    const record = buildNormalizedEnrichmentRecord({
+      value: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      sourceResults: buildPriority2MultiSourceEntries(),
+      exportedAt: EXPORTED_AT,
+    });
+
+    const parsed = JSON.parse(serializeEnrichmentExportJson(record)) as {
+      sources: Array<{ sourceId: string; summary: string; tags: string[] }>;
+    };
+
+    expect(parsed.sources.map((source) => source.sourceId)).toEqual([
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.SHODAN,
+      ENRICHMENT_SOURCE.CENSYS,
+    ]);
+    expect(parsed.sources[1]?.summary).toBe("5 malicious detections");
+    expect(parsed.sources[2]?.summary).toBe("1 open service");
+    expect(parsed.sources[3]?.summary).toBe("2 observed services");
+    expect(parsed.sources[3]?.tags).toContain("443/tcp");
   });
 });
 

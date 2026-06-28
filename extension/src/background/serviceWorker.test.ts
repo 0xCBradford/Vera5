@@ -9,7 +9,10 @@ import {
   toggleCommandPaletteMessage,
   toggleWorkspaceMessage,
 } from "../lib/messages";
-import { DECLARED_ENRICHMENT_API_HOSTS } from "../lib/iocRequestBoundaries";
+import {
+  DECLARED_ENRICHMENT_API_HOSTS,
+  MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS,
+} from "../lib/iocRequestBoundaries";
 
 const extensionRoot = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -35,7 +38,18 @@ describe("manifest host permissions for declared enrichment APIs", () => {
     }
   });
 
-  it("documents live enrichment vendors in the manifest description", () => {
+  it("lists explicit manifest host permissions for every declared enrichment API host", () => {
+    const manifest = JSON.parse(
+      readFileSync(join(extensionRoot, "public", "manifest.json"), "utf8")
+    ) as { host_permissions?: string[] };
+
+    const hostPermissions = manifest.host_permissions ?? [];
+    for (const permission of MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS) {
+      expect(hostPermissions).toContain(permission);
+    }
+  });
+
+  it("documents declared enrichment vendors in the manifest description", () => {
     const manifest = JSON.parse(
       readFileSync(join(extensionRoot, "public", "manifest.json"), "utf8")
     ) as { description?: string };
@@ -44,6 +58,9 @@ describe("manifest host permissions for declared enrichment APIs", () => {
     expect(manifest.description).toContain("OTX");
     expect(manifest.description).toContain("URLScan.io");
     expect(manifest.description).toContain("GreyNoise");
+    expect(manifest.description).toContain("Shodan");
+    expect(manifest.description).toContain("Censys");
+    expect(manifest.description).toContain("VirusTotal");
   });
 });
 

@@ -1158,6 +1158,80 @@ describe("hover card overlay", () => {
     expect(panel.textContent).toContain("GreyNoise:");
   });
 
+  it("shows VT, Shodan, and Censys attribution on multi-source rows alongside AbuseIPDB and OTX", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "42 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "42 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          status: "ok",
+          summary: "2 threat pulses",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
+          sourceLabel: "VirusTotal",
+          status: "ok",
+          summary: "5 malicious detections",
+          tags: ["US"],
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.SHODAN,
+          sourceLabel: "Shodan",
+          status: "ok",
+          summary: "4 open services",
+          tags: ["US", "Google"],
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.CENSYS,
+          sourceLabel: "Censys",
+          status: "ok",
+          summary: "3 observed services",
+          tags: ["DE", "443/tcp"],
+        },
+      ]),
+    });
+
+    const sourceItems = panel.querySelectorAll(`.${HOVER_CARD_SOURCE_ITEM_CLASS}`);
+    expect(sourceItems).toHaveLength(5);
+    expect(panel.textContent).toContain("AbuseIPDB · Live");
+    expect(panel.textContent).toContain("OTX · Live");
+    expect(panel.textContent).toContain("VirusTotal · Live");
+    expect(panel.textContent).toContain("Shodan · Live");
+    expect(panel.textContent).toContain("Censys · Live");
+    expect(panel.textContent).toContain("5 malicious detections");
+    expect(panel.textContent).toContain("4 open services");
+    expect(panel.textContent).toContain("3 observed services");
+    expect(
+      panel.querySelector(".vera5-hover-card-attribution")
+    ).toBeNull();
+  });
+
   it("shows source attribution footer when enrichment is ready", () => {
     const anchor = document.createElement("span");
     document.body.appendChild(anchor);
@@ -1828,6 +1902,65 @@ describe("hover card overlay", () => {
     expect(panel.textContent).toContain("AbuseIPDB · Live");
     expect(panel.textContent).toContain("OTX · Error");
     expect(panel.textContent).toContain("OTX rate limit reached");
+    expect(panel.querySelector(".vera5-hover-card-attribution")).toBeNull();
+    expect(
+      panel.querySelectorAll(".vera5-hover-card-source-badge")
+    ).toHaveLength(2);
+    expect(
+      panel.querySelector(".vera5-hover-card-source-badge--ok")
+    ).not.toBeNull();
+    expect(
+      panel.querySelector(".vera5-hover-card-source-badge--error")
+    ).not.toBeNull();
+  });
+
+  it("shows Shodan and Censys partial success when one source succeeds and the other fails", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "4 open services",
+      tags: ["US", "Google"],
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.SHODAN,
+          label: "Shodan",
+          status: "ok",
+          badgeText: "Live",
+          detail: "4 open services",
+          tags: ["US", "Google"],
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.CENSYS,
+          label: "Censys",
+          status: "error",
+          badgeText: "Error",
+          detail: "Censys rate limit reached.",
+          retryHint: "Retry after 60 seconds.",
+        },
+      ],
+    });
+
+    expect(panel.textContent).toContain("4 open services");
+    expect(panel.textContent).toContain("Shodan · Live");
+    expect(panel.textContent).toContain("Censys · Error");
+    expect(panel.textContent).toContain("Censys rate limit reached");
     expect(panel.querySelector(".vera5-hover-card-attribution")).toBeNull();
     expect(
       panel.querySelectorAll(".vera5-hover-card-source-badge")

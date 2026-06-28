@@ -104,6 +104,11 @@ export const DECLARED_ENRICHMENT_API_HOSTS = [
   "search.censys.io",
 ] as const;
 
+export const MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS =
+  DECLARED_ENRICHMENT_API_HOSTS.map(
+    (hostname) => `https://${hostname}/*`
+  ) as readonly string[];
+
 export type DeclaredEnrichmentApiHost =
   (typeof DECLARED_ENRICHMENT_API_HOSTS)[number];
 

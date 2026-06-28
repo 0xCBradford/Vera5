@@ -16,6 +16,7 @@ import {
   TEST_FIXTURE_GENERIC_API_KEY,
   TEST_FIXTURE_GREYNOISE_API_KEY,
   TEST_FIXTURE_OTX_API_KEY,
+  TEST_FIXTURE_SECONDARY_API_KEY,
   TEST_FIXTURE_URLSCAN_API_KEY,
 } from "../lib/fixtureSecrets";
 import { handleEnrichIocMessage } from "./enrichmentHandler";
@@ -1461,6 +1462,223 @@ describe("disabled source and partial success regression", () => {
           sourceId: "otx",
           status: ENRICHMENT_SOURCE_STATUS.ERROR,
           errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+        }),
+      ])
+    );
+  });
+
+  it("returns partial success when Shodan succeeds and Censys rate limits", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      shodan: true,
+      censys: true,
+    });
+    await storage.setApiKey("shodan", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("censys", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("censys_secret", TEST_FIXTURE_SECONDARY_API_KEY);
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("api.shodan.io")) {
+        return Response.json(
+          {
+            ip_str: "8.8.8.8",
+            country_code: "US",
+            org: "Google LLC",
+            data: [{ port: 443, transport: "tcp", product: "nginx" }],
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (url.includes("search.censys.io")) {
+        return new Response("", {
+          status: 429,
+          headers: { "Retry-After": "60" },
+        });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.ok).toBe(true);
+    const payload = (
+      response as {
+        ok: true;
+        payload: {
+          source: Record<string, unknown>;
+          sources: Record<string, unknown>[];
+        };
+      }
+    ).payload;
+    expect(payload.source).toMatchObject({
+      sourceId: "shodan",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "1 open service",
+    });
+    expect(payload.sources).toHaveLength(2);
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "shodan",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "1 open service",
+        }),
+        expect.objectContaining({
+          sourceId: "censys",
+          status: ENRICHMENT_SOURCE_STATUS.ERROR,
+          errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+        }),
+      ])
+    );
+  });
+
+  it("returns partial success when Censys succeeds and Shodan errors", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      shodan: true,
+      censys: true,
+    });
+    await storage.setApiKey("shodan", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("censys", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("censys_secret", TEST_FIXTURE_SECONDARY_API_KEY);
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("search.censys.io")) {
+        return Response.json(
+          {
+            result: {
+              ip: "8.8.8.8",
+              location: { country_code: "US" },
+              autonomous_system: { name: "GOOGLE" },
+              services: [
+                { service_name: "HTTP", port: 443, transport_protocol: "tcp" },
+                { service_name: "DNS", port: 53, transport_protocol: "udp" },
+              ],
+            },
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (url.includes("api.shodan.io")) {
+        return new Response("", { status: 401 });
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.ok).toBe(true);
+    const payload = (
+      response as {
+        ok: true;
+        payload: {
+          source: Record<string, unknown>;
+          sources: Record<string, unknown>[];
+        };
+      }
+    ).payload;
+    expect(payload.source).toMatchObject({
+      sourceId: "censys",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "2 observed services",
+    });
+    expect(payload.sources).toHaveLength(2);
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "censys",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+        }),
+        expect.objectContaining({
+          sourceId: "shodan",
+          status: ENRICHMENT_SOURCE_STATUS.ERROR,
+          errorCode: ENRICHMENT_ERROR_CODE.UNAUTHORIZED,
+        }),
+      ])
+    );
+  });
+
+  it("returns normalized multi-source summaries when Shodan and Censys both succeed", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      shodan: true,
+      censys: true,
+    });
+    await storage.setApiKey("shodan", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("censys", TEST_FIXTURE_GENERIC_API_KEY);
+    await storage.setApiKey("censys_secret", TEST_FIXTURE_SECONDARY_API_KEY);
+
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.includes("api.shodan.io")) {
+        return Response.json(
+          {
+            ip_str: "8.8.8.8",
+            country_code: "US",
+            org: "Google LLC",
+            data: [{ port: 443, transport: "tcp", product: "nginx" }],
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      if (url.includes("search.censys.io")) {
+        return Response.json(
+          {
+            result: {
+              ip: "8.8.8.8",
+              location: { country_code: "US" },
+              autonomous_system: { name: "GOOGLE" },
+              services: [
+                { port: 443, service_name: "HTTP", transport_protocol: "TCP" },
+                { port: 53, service_name: "DNS", transport_protocol: "UDP" },
+              ],
+            },
+          },
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(response.ok).toBe(true);
+    const payload = (
+      response as {
+        ok: true;
+        payload: {
+          source: Record<string, unknown>;
+          sources: Record<string, unknown>[];
+        };
+      }
+    ).payload;
+    expect(payload.source).toMatchObject({
+      sourceId: "shodan",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "1 open service",
+    });
+    expect(payload.sources).toHaveLength(2);
+    expect(payload.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceId: "shodan",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "1 open service",
+          tags: expect.arrayContaining(["US", "Google LLC"]),
+        }),
+        expect.objectContaining({
+          sourceId: "censys",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "2 observed services",
+          tags: expect.arrayContaining(["US", "GOOGLE", "443/tcp"]),
         }),
       ])
     );

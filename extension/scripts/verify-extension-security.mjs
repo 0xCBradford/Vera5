@@ -49,7 +49,49 @@ function readDeclaredEnrichmentApiHosts() {
   if (hosts.length === 0) {
     fail("DECLARED_ENRICHMENT_API_HOSTS is empty in iocRequestBoundaries.ts");
   }
-  return new Set(hosts);
+  return hosts;
+}
+
+function manifestHostPatternCoversHttpsHostname(pattern, hostname) {
+  if (pattern === "https://*/*") {
+    return true;
+  }
+  if (!pattern.startsWith("https://") || !pattern.endsWith("/*")) {
+    return false;
+  }
+  const hostPattern = pattern.slice("https://".length, -2);
+  if (hostPattern.startsWith("*.")) {
+    const suffix = hostPattern.slice(2);
+    return hostname === suffix || hostname.endsWith(`.${suffix}`);
+  }
+  return hostname === hostPattern;
+}
+
+function checkManifestDeclaredHostPermissions(manifestPath, declaredHosts) {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const hostPermissions = manifest.host_permissions ?? [];
+
+  if (!hostPermissions.includes("https://*/*")) {
+    fail(`${manifestPath} must include https://*/* for analyst page access`);
+  }
+
+  for (const hostname of declaredHosts) {
+    const explicitPermission = `https://${hostname}/*`;
+    if (!hostPermissions.includes(explicitPermission)) {
+      fail(
+        `${manifestPath} missing explicit host permission for declared enrichment API: ${explicitPermission}`
+      );
+    }
+    if (
+      !hostPermissions.some((pattern) =>
+        manifestHostPatternCoversHttpsHostname(pattern, hostname)
+      )
+    ) {
+      fail(
+        `${manifestPath} host_permissions do not cover declared enrichment API host: ${hostname}`
+      );
+    }
+  }
 }
 
 function fail(message) {
@@ -346,7 +388,7 @@ function checkShippedExtensionPages(manifest, distRoot) {
 }
 
 function checkLiveFetchLimitedToConnectors() {
-  const declaredHosts = readDeclaredEnrichmentApiHosts();
+  const declaredHosts = new Set(readDeclaredEnrichmentApiHosts());
 
   for (const filePath of walkFiles(srcDir, [".ts", ".tsx"])) {
     if (filePath.endsWith(".test.ts") || filePath.endsWith(".test.tsx")) {
@@ -397,6 +439,8 @@ function checkConnectorFetchUsesGetWithoutBody(filePath, source) {
     "urlscanConnector.ts",
     "greynoiseConnector.ts",
     "virustotalConnector.ts",
+    "shodanConnector.ts",
+    "censysConnector.ts",
   ]);
   if (!connectorFiles.has(path.basename(filePath))) {
     return;
@@ -414,7 +458,12 @@ if (!fs.existsSync(distDir)) {
 }
 
 const publicManifest = JSON.parse(fs.readFileSync(publicManifestPath, "utf8"));
+const declaredEnrichmentApiHosts = readDeclaredEnrichmentApiHosts();
 checkManifestCsp(publicManifestPath);
+checkManifestDeclaredHostPermissions(
+  publicManifestPath,
+  declaredEnrichmentApiHosts
+);
 checkShippedExtensionPages(publicManifest, distDir);
 
 if (fs.existsSync(path.join(distDir, "manifest.json"))) {
@@ -422,6 +471,10 @@ if (fs.existsSync(path.join(distDir, "manifest.json"))) {
     fs.readFileSync(path.join(distDir, "manifest.json"), "utf8")
   );
   checkManifestCsp(path.join(distDir, "manifest.json"));
+  checkManifestDeclaredHostPermissions(
+    path.join(distDir, "manifest.json"),
+    declaredEnrichmentApiHosts
+  );
   checkShippedExtensionPages(distManifest, distDir);
 }
 

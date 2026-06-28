@@ -24,6 +24,7 @@ import {
 } from "./enrichmentVendorNormalize";
 import {
   TEST_FIXTURE_GENERIC_API_KEY,
+  TEST_FIXTURE_INVALID_API_KEY,
   TEST_FIXTURE_SECONDARY_API_KEY,
 } from "./fixtureSecrets";
 import { getApiKey, setApiKey } from "./storage";
@@ -286,7 +287,7 @@ describe("Censys IPv4 live enrichment path", () => {
     });
   });
 
-  it("enriches IPv4 hosts with mocked vendor responses", async () => {
+  it("enriches IPv4 hosts with mocked auth success responses", async () => {
     stubChromeStorage({});
     await setApiKey("censys", TEST_FIXTURE_GENERIC_API_KEY);
     await setApiKey("censys_secret", TEST_FIXTURE_SECONDARY_API_KEY);
@@ -322,5 +323,79 @@ describe("Censys IPv4 live enrichment path", () => {
       tags: ["US", "GOOGLE", "HTTP", "443/tcp", "DNS"],
     });
     await expect(getApiKey("censys")).resolves.toBe(TEST_FIXTURE_GENERIC_API_KEY);
+  });
+
+  it("maps HTTP 401 to unauthorized when auth fails", async () => {
+    const fetchMock = vi.fn(async () => new Response("", { status: 401 }));
+    const result = await enrichWithCensys(
+      { value: "8.8.8.8", type: IOC_TYPE.IPV4 },
+      {
+        getApiId: async () => TEST_FIXTURE_INVALID_API_KEY,
+        getApiSecret: async () => TEST_FIXTURE_SECONDARY_API_KEY,
+        fetch: fetchMock as typeof fetch,
+      }
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      `${CENSYS_API_BASE_URL}/hosts/8.8.8.8`,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: buildCensysBasicAuthorization(
+            TEST_FIXTURE_INVALID_API_KEY,
+            TEST_FIXTURE_SECONDARY_API_KEY
+          ),
+        }),
+      })
+    );
+    expect(result).toMatchObject({
+      sourceId: "censys",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.UNAUTHORIZED,
+      errorMessage: "Censys rejected the API credentials.",
+    });
+  });
+
+  it("maps HTTP 403 to unauthorized when auth fails", async () => {
+    const fetchMock = vi.fn(async () => new Response("", { status: 403 }));
+    const result = await enrichWithCensys(
+      { value: "8.8.8.8", type: IOC_TYPE.IPV4 },
+      {
+        getApiId: async () => TEST_FIXTURE_INVALID_API_KEY,
+        getApiSecret: async () => TEST_FIXTURE_SECONDARY_API_KEY,
+        fetch: fetchMock as typeof fetch,
+      }
+    );
+
+    expect(result).toMatchObject({
+      sourceId: "censys",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.UNAUTHORIZED,
+      errorMessage: "Censys rejected the API credentials.",
+    });
+  });
+
+  it("maps HTTP 429 to rate limited with retry hint", async () => {
+    const result = await enrichWithCensys(
+      { value: "8.8.8.8", type: IOC_TYPE.IPV4 },
+      {
+        getApiId: async () => TEST_FIXTURE_GENERIC_API_KEY,
+        getApiSecret: async () => TEST_FIXTURE_SECONDARY_API_KEY,
+        fetch: vi.fn(
+          async () =>
+            new Response("", {
+              status: 429,
+              headers: { "Retry-After": "60" },
+            })
+        ) as typeof fetch,
+      }
+    );
+
+    expect(result).toMatchObject({
+      sourceId: "censys",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+      errorMessage: "Censys rate limit reached. Back off before retrying.",
+      retryHint: "Retry after 60 seconds.",
+    });
   });
 });

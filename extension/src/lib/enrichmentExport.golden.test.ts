@@ -92,6 +92,44 @@ function withAnalystNotesRecord() {
   });
 }
 
+function priority2MultiSourceRecord() {
+  return buildNormalizedEnrichmentRecord({
+    value: "8.8.8.8",
+    iocType: IOC_TYPE.IPV4,
+    sourceResults: buildHoverCardSourceEntries([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "42 abuse confidence",
+        tags: ["US"],
+      },
+      {
+        sourceId: "virustotal",
+        sourceLabel: "VirusTotal",
+        status: "ok",
+        summary: "5 malicious detections",
+        tags: ["US", "GOOGLE"],
+      },
+      {
+        sourceId: "shodan",
+        sourceLabel: "Shodan",
+        status: "ok",
+        summary: "1 open service",
+        tags: ["US", "Google LLC", "443/tcp"],
+      },
+      {
+        sourceId: "censys",
+        sourceLabel: "Censys",
+        status: "ok",
+        summary: "2 observed services",
+        tags: ["US", "GOOGLE", "HTTP", "443/tcp"],
+      },
+    ]),
+    exportedAt: EXPORTED_AT,
+  });
+}
+
 describe("golden: enrichment export markdown snapshots", () => {
   it("multi-source ready enrichment", () => {
     expect(buildEnrichmentExportMarkdown(multiSourceReadyRecord())).toMatchSnapshot();
@@ -111,6 +149,10 @@ describe("golden: enrichment export markdown snapshots", () => {
 
   it("with analyst notes", () => {
     expect(buildEnrichmentExportMarkdown(withAnalystNotesRecord())).toMatchSnapshot();
+  });
+
+  it("Priority-2 multi-source ready enrichment", () => {
+    expect(buildEnrichmentExportMarkdown(priority2MultiSourceRecord())).toMatchSnapshot();
   });
 });
 
@@ -133,5 +175,9 @@ describe("golden: enrichment export JSON snapshots", () => {
 
   it("with analyst notes", () => {
     expect(serializeEnrichmentExportJson(withAnalystNotesRecord())).toMatchSnapshot();
+  });
+
+  it("Priority-2 multi-source ready enrichment", () => {
+    expect(serializeEnrichmentExportJson(priority2MultiSourceRecord())).toMatchSnapshot();
   });
 });

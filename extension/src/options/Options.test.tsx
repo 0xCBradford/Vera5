@@ -22,8 +22,10 @@ import { IOC_TYPE_SETTINGS_ORDER } from "../lib/storage";
 import { DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES } from "../lib/domainPolicy";
 import {
   TEST_FIXTURE_ABUSEIPDB_API_KEY,
+  TEST_FIXTURE_GENERIC_API_KEY,
   TEST_FIXTURE_GREYNOISE_API_KEY,
   TEST_FIXTURE_OTX_API_KEY,
+  TEST_FIXTURE_SECONDARY_API_KEY,
   TEST_FIXTURE_STORED_API_KEY,
   TEST_FIXTURE_URLSCAN_API_KEY,
 } from "../lib/fixtureSecrets";
@@ -117,6 +119,15 @@ describe("Options API key inputs", () => {
     ).not.toBeNull();
     expect(
       mounted.container.querySelector('input[aria-label="Enable GreyNoise"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('input[aria-label="Enable VirusTotal"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('input[aria-label="Enable Shodan"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('input[aria-label="Enable Censys"]')
     ).not.toBeNull();
   });
 
@@ -212,6 +223,21 @@ describe("Options API key inputs", () => {
     expect(
       mounted.container.querySelector(
         'input[aria-label="GreyNoise cache lifetime in seconds"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="VirusTotal cache lifetime in seconds"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="Shodan cache lifetime in seconds"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="Censys cache lifetime in seconds"]'
       )
     ).not.toBeNull();
   });
@@ -507,6 +533,212 @@ describe("Options API key inputs", () => {
     ) as HTMLInputElement;
     expect(includeKeysToggle).not.toBeNull();
     expect(includeKeysToggle.checked).toBe(false);
+  });
+
+  it("renders masked inputs and enable toggles for VirusTotal, Shodan, and Censys", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    for (const sourceLabel of ["VirusTotal", "Shodan", "Censys"] as const) {
+      expect(
+        mounted.container.querySelector(`input[aria-label="Enable ${sourceLabel}"]`)
+      ).not.toBeNull();
+      expect(
+        mounted.container.querySelector(`input[aria-label="${sourceLabel} API key"]`)
+      ).not.toBeNull();
+    }
+
+    const censysSecretInput = mounted.container.querySelector(
+      'input[aria-label="Censys API secret API key"]'
+    );
+    expect(censysSecretInput).not.toBeNull();
+    expect(censysSecretInput?.getAttribute("type")).toBe("password");
+    expect(
+      mounted.container.querySelector('input[aria-label="VirusTotal API key"]')?.getAttribute(
+        "type"
+      )
+    ).toBe("password");
+    expect(
+      mounted.container.querySelector('input[aria-label="Shodan API key"]')?.getAttribute(
+        "type"
+      )
+    ).toBe("password");
+  });
+
+  it("persists a newly entered Shodan API key on blur", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const shodanInput = mounted.container.querySelector(
+      'input[aria-label="Shodan API key"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      shodanInput.focus();
+    });
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(shodanInput, "fresh-shodan-key");
+      shodanInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      shodanInput.blur();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      shodan: "fresh-shodan-key",
+    });
+  });
+
+  it("persists the Censys credential pair on blur", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const censysIdInput = mounted.container.querySelector(
+      'input[aria-label="Censys API key"]'
+    ) as HTMLInputElement;
+    const censysSecretInput = mounted.container.querySelector(
+      'input[aria-label="Censys API secret API key"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      censysIdInput.focus();
+    });
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(censysIdInput, "fresh-censys-id");
+      censysIdInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      censysIdInput.blur();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      censysSecretInput.focus();
+    });
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(censysSecretInput, "fresh-censys-secret");
+      censysSecretInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      censysSecretInput.blur();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      censys: "fresh-censys-id",
+      censys_secret: "fresh-censys-secret",
+    });
+  });
+
+  it("loads stored VirusTotal keys as masked previews only", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      virustotal: TEST_FIXTURE_GENERIC_API_KEY,
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const vtInput = mounted.container.querySelector(
+      'input[aria-label="VirusTotal API key"]'
+    ) as HTMLInputElement;
+
+    expect(vtInput.value).toBe(maskApiKeyForDisplay(TEST_FIXTURE_GENERIC_API_KEY));
+    expect(vtInput.value).not.toBe(TEST_FIXTURE_GENERIC_API_KEY);
+  });
+
+  it("shows Shodan source status when enabled without a saved key", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const shodanToggle = mounted.container.querySelector(
+      'input[aria-label="Enable Shodan"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      shodanToggle.click();
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("No API key");
+  });
+
+  it("shows Censys source status when enabled without the full credential pair", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      censys: TEST_FIXTURE_GENERIC_API_KEY,
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const censysToggle = mounted.container.querySelector(
+      'input[aria-label="Enable Censys"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      censysToggle.click();
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("No API key");
+  });
+
+  it("shows Censys as saved when enabled with both credential slots configured", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      censys: TEST_FIXTURE_GENERIC_API_KEY,
+      censys_secret: TEST_FIXTURE_SECONDARY_API_KEY,
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const censysToggle = mounted.container.querySelector(
+      'input[aria-label="Enable Censys"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      censysToggle.click();
+      await Promise.resolve();
+    });
+
+    const censysSource = Array.from(
+      mounted.container.querySelectorAll(".v5-source")
+    ).find((element) => element.textContent?.includes("Censys"));
+
+    expect(censysSource?.textContent).toContain("Saved");
+    expect(censysSource?.textContent).not.toContain("No API key");
   });
 
   it("exports settings without API keys by default", async () => {

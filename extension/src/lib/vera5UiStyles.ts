@@ -1014,6 +1014,9 @@ html.vera5-workspace-open {
   flex-shrink: 0;
 }
 .vera5-workspace-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   margin: 0;
   font-family: "Space Grotesk", "Inter", system-ui, sans-serif;
   font-size: 18px;
@@ -1021,6 +1024,11 @@ html.vera5-workspace-open {
   letter-spacing: -0.03em;
   color: #f5f7fa;
   text-decoration: none;
+}
+.vera5-workspace-title-mark {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
 }
 .vera5-workspace-title-5 {
   color: #ffb224;

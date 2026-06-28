@@ -12,12 +12,13 @@ Vendor quotas change with plan tier and policy updates. Treat the tables below a
 | **AlienVault OTX** | Yes (IPv4, domain, URL, hashes, CVE) | `GET https://otx.alienvault.com/api/v1/indicators/{type}/{value}` — one indicator lookup per enabled source per hover enrichment | **10,000** requests/hour with API key; **1,000** requests/hour without a key | Hourly (vendor-documented); contact vendor for sustained higher volume | Yes (documented); may also see timeouts on heavy endpoints | [OTX API overview](https://otx.alienvault.com/api) |
 | **URLScan.io** | Yes (domain, URL) | `GET https://urlscan.io/api/v1/search/?q=…&size=5` — one search query per enabled source per hover enrichment (domain or URL indicator in `q`) | Per-action limits: separate **minute**, **hour**, and **day** quotas; values vary by account — use `GET https://urlscan.io/api/v1/quotas` | Fixed windows; day resets **midnight UTC** | Yes; `X-Rate-Limit-*` headers per action | [urlscan.io API rate limits](https://docs.urlscan.io/pages/api-rate-limits) |
 | **GreyNoise (community)** | Yes (IPv4) | `GET https://api.greynoise.io/v3/community/{ip}` — one community lookup per enabled source per hover enrichment | **50** lookups/week (free community account, combined with Visualizer); unauthenticated lookups more restricted (e.g. **10**/day cited in API errors) | Weekly / daily depending on authentication tier | Yes; JSON error body describes plan and limit; may include `Retry-After` | [GreyNoise Community API](https://docs.greynoise.io/docs/using-the-greynoise-community-api) |
+| **VirusTotal** | No (pivots and saved key today; live API gated off) | `GET https://www.virustotal.com/api/v3/{collection}/{id}` — one object lookup per enabled source per hover enrichment when live integration is enabled (`ip_addresses`, `domains`, `urls`, or `files` collections) | **500** lookups/day and **4** requests/min (typical public API tier); premium subscriptions higher — confirm in your account | Daily and per-minute | Yes; may include rate-limit headers | [VirusTotal API v3 overview](https://docs.virustotal.com/reference/overview) |
 | **Shodan** | Yes (IPv4, domain) | `GET https://api.shodan.io/shodan/host/{ip}` (IPv4) or `GET https://api.shodan.io/dns/domain/{domain}` (domain) — one lookup per enabled source per hover enrichment; API key in `key` query parameter | **1** request/second (all API plans); **query credits** renew monthly by plan (Membership **100**/mo, Freelancer **10,000**/mo, Small Business **200,000**/mo, Corporate **unlimited**); IPv4 host lookups do **not** consume query credits; domain DNS lookups consume query credits per vendor rules | Per-second throttle; query credits reset at month start | Yes; may include `Retry-After` | [Shodan API](https://book.shodan.io/developer-apis/shodan-api/) · [Shodan credits](https://help.shodan.io/the-basics/credit-types-explained) · [API plans](https://account.shodan.io/billing) |
 | **Censys** | Yes (IPv4 only) | `GET https://search.censys.io/api/v2/hosts/{ip}` — one host lookup per enabled source per hover enrichment; API ID and secret in `Authorization: Basic` from local Settings storage | Plan-dependent **monthly query quota** on Censys Search API accounts; confirm effective limits in your Censys account | Monthly (typical); confirm in account dashboard | Yes; may include `Retry-After` | [Censys Search API](https://docs.censys.com/docs/platform-api) |
 
 ### Quota impact of multi-source enrichment
 
-When multiple live sources are enabled for an indicator type, Vera5 issues **one vendor request per enabled source in parallel** (for example, domain hover enrichment with OTX, URLScan.io, and Shodan enabled consumes **one OTX indicator request**, **one URLScan.io search**, and **one Shodan DNS domain lookup** per enrichment; IPv4 with AbuseIPDB, OTX, GreyNoise, and Shodan enabled consumes **one AbuseIPDB check**, **one OTX indicator request**, **one GreyNoise community lookup**, and **one Shodan host lookup**). Rapid repeated hovers on the same value can trigger multiple calls; there is no shared Vera5-side request pool.
+When multiple live sources are enabled for an indicator type, Vera5 issues **one vendor request per enabled source in parallel** (for example, domain hover enrichment with OTX, URLScan.io, and Shodan enabled consumes **one OTX indicator request**, **one URLScan.io search**, and **one Shodan DNS domain lookup** per enrichment; IPv4 with AbuseIPDB, OTX, GreyNoise, Shodan, and Censys enabled consumes **one AbuseIPDB check**, **one OTX indicator request**, **one GreyNoise community lookup**, **one Shodan host lookup**, and **one Censys host lookup** per enrichment). Rapid repeated hovers on the same value can trigger multiple calls; there is no shared Vera5-side request pool.
 
 Manual-only enrichment (default) reduces accidental quota use by requiring an explicit enrich action on each indicator.
 
@@ -42,6 +43,29 @@ Vera5 live enrichment uses the **GreyNoise Community API** only (`GET /v3/commun
 - Create a free community account and API key via [GreyNoise pricing / sign-up](https://greynoise.io/pricing), then save the key under GreyNoise in Vera5 Settings.
 - Monitor combined Community API + Visualizer usage in GreyNoise **Search — Usage Monitoring** (see [Community API documentation](https://docs.greynoise.io/docs/using-the-greynoise-community-api)).
 - With AbuseIPDB, OTX, and GreyNoise all enabled, each IPv4 enrichment consumes **three** vendor requests in parallel — use manual-only enrichment (default) to avoid accidental quota burn on routine page hovers.
+
+### VirusTotal API tier limits
+
+Vera5 ships a VirusTotal **v3 connector** and saves your API key locally, but **live enrichment is not enabled** in the extension today — enabling VirusTotal does not issue HTTPS API calls until live integration is turned on in a future release. Pivot links still open VirusTotal GUI pages in your browser.
+
+| Topic | Typical limits / Vera5 behavior |
+|-------|--------------------------------|
+| **Live in extension today** | **No** — registry shell with pivot links and masked API key storage only |
+| **Connector scope (when live)** | IPv4, domain, URL, MD5, SHA1, SHA256 via `GET /api/v3/{collection}/{id}` — **CVE** is not supported |
+| **Authentication** | Vera5 sends your API key in the `x-apikey` request header from local Settings storage |
+| **Public API quota (typical)** | **500** object lookups per **day** and **4** requests per **minute** on common public API tiers — confirm effective limits in your VirusTotal account API key settings |
+| **Premium / enterprise** | Higher daily and per-minute caps per subscription — confirm in [VirusTotal API documentation](https://docs.virustotal.com/reference/overview) |
+| **Quota window** | Daily and per-minute windows per vendor rules |
+| **HTTP 429** | Rate limit — mapped to VirusTotal rate-limit copy on the hover card when live enrichment is enabled; may trigger the [global enrichment cooldown](#global-enrichment-cooldown) |
+| **HTTP 401 / 403** | Invalid or rejected API key — “VirusTotal rejected the API key.” |
+| **HTTP 404** | No VirusTotal report for the indicator |
+| **Timeout** | Aborts after 15 seconds when live enrichment is enabled; surfaces as “VirusTotal request timed out.” |
+
+**Planning VirusTotal enrichment**
+
+- Create an API key from your VirusTotal account API key settings and save it under VirusTotal in Vera5 Settings so you are ready when live enrichment ships.
+- Review VirusTotal **Terms of Service** and organizational policy before sending production or classified indicators — see [Vendor terms, privacy, and acceptable use](#vendor-terms-privacy-and-acceptable-use) below.
+- Until live enrichment is enabled, use **Recommended next pivots** for manual VirusTotal GUI review without consuming API quota from Vera5.
 
 ### Shodan API tier limits
 
@@ -99,6 +123,7 @@ Live connector `fetch()` calls are limited to HTTPS GET on hosts listed in `DECL
 | `otx.alienvault.com` | AlienVault OTX | `/api/v1/indicators/{type}/{value}` |
 | `urlscan.io` | URLScan.io | `/api/v1/search/?q=…&size=5` |
 | `api.greynoise.io` | GreyNoise (community) | `/v3/community/{ip}` |
+| `www.virustotal.com` | VirusTotal | `/api/v3/{collection}/{id}` (`x-apikey` header) — allowlisted; live enrichment not enabled in extension today |
 | `api.shodan.io` | Shodan | `/shodan/host/{ip}` or `/dns/domain/{domain}` (`key` query parameter) |
 | `search.censys.io` | Censys | `/api/v2/hosts/{ip}` (`Authorization: Basic` with API ID and secret) |
 
@@ -108,7 +133,7 @@ Pivot links may open other vendor origins in a normal browser tab; those navigat
 
 ### Request timeout
 
-Live connectors abort outbound requests after **15 seconds** (`DEFAULT_ABUSEIPDB_REQUEST_TIMEOUT_MS`, `DEFAULT_OTX_REQUEST_TIMEOUT_MS`, `DEFAULT_URLSCAN_REQUEST_TIMEOUT_MS`, `DEFAULT_GREYNOISE_REQUEST_TIMEOUT_MS`, `DEFAULT_SHODAN_REQUEST_TIMEOUT_MS`, and `DEFAULT_CENSYS_REQUEST_TIMEOUT_MS`). Aborts surface as a timeout error on the hover card for that source.
+Live connectors abort outbound requests after **15 seconds** (`DEFAULT_ABUSEIPDB_REQUEST_TIMEOUT_MS`, `DEFAULT_OTX_REQUEST_TIMEOUT_MS`, `DEFAULT_URLSCAN_REQUEST_TIMEOUT_MS`, `DEFAULT_GREYNOISE_REQUEST_TIMEOUT_MS`, `DEFAULT_VIRUSTOTAL_REQUEST_TIMEOUT_MS`, `DEFAULT_SHODAN_REQUEST_TIMEOUT_MS`, and `DEFAULT_CENSYS_REQUEST_TIMEOUT_MS`). Aborts surface as a timeout error on the hover card for that source.
 
 ### Rate-limit handling (HTTP 429)
 
@@ -144,7 +169,7 @@ stateDiagram-v2
 
 | Behavior | Detail |
 |----------|--------|
-| **Trigger** | HTTP 429 from AbuseIPDB, OTX, URLScan.io, GreyNoise, Shodan, or Censys during a live fetch |
+| **Trigger** | HTTP 429 from AbuseIPDB, OTX, URLScan.io, GreyNoise, Shodan, Censys, or VirusTotal (when live enrichment is enabled) during a live fetch |
 | **Duration** | `Retry-After` seconds when the vendor sends it; otherwise **60 seconds** default |
 | **Maximum** | Cooldown capped at **3600 seconds** (one hour) |
 | **Multiple 429s** | Cooldown extends to the **longest** active retry window |
@@ -162,6 +187,8 @@ Shodan enforces a **1 request/second** limit on all API plans and may return **H
 
 Censys may return **HTTP 429** when Search API quota is exhausted. The Censys connector applies `Retry-After` when present and the same user-facing backoff pattern as other live sources.
 
+VirusTotal public API tiers enforce daily and per-minute lookup caps and may return **HTTP 429** when exceeded. The VirusTotal connector applies `Retry-After` when present and the same user-facing backoff pattern when live enrichment is enabled in the extension.
+
 ### Other HTTP outcomes
 
 | Status | Typical Vera5 mapping |
@@ -172,7 +199,7 @@ Censys may return **HTTP 429** when Search API quota is exhausted. The Censys co
 
 ### IOC-only requests
 
-Connectors send only the sanitized indicator value required by the vendor endpoint (for example, `ipAddress` query parameter for AbuseIPDB check; `q` search parameter for URLScan.io domain or URL queries; IPv4 in the path for GreyNoise community lookup; IPv4 or domain in the path for Shodan with your API key in the `key` query parameter; IPv4 in the path for Censys with your API ID and secret in the `Authorization` header). Other API keys travel in request headers (`Key`, `X-OTX-API-KEY`, `API-Key`, `key`, `Authorization`) from local extension storage, never in page content or Vera5-hosted relays.
+Connectors send only the sanitized indicator value required by the vendor endpoint (for example, `ipAddress` query parameter for AbuseIPDB check; `q` search parameter for URLScan.io domain or URL queries; IPv4 in the path for GreyNoise community lookup; IPv4 or domain in the path for Shodan with your API key in the `key` query parameter; IPv4 in the path for Censys with your API ID and secret in the `Authorization` header; object id in the path for VirusTotal v3 with your API key in the `x-apikey` header when live enrichment is enabled). Other API keys travel in request headers (`Key`, `X-OTX-API-KEY`, `API-Key`, `x-apikey`, `key`, `Authorization`) from local extension storage, never in page content or Vera5-hosted relays.
 
 ## Monitoring and verification
 
@@ -180,6 +207,7 @@ Connectors send only the sanitized indicator value required by the vendor endpoi
 - **OTX:** API key from [OTX settings](https://otx.alienvault.com/); monitor usage through your key issuance workflow and vendor communications for high volume.
 - **URLScan.io:** `GET https://urlscan.io/api/v1/quotas` with your API key when URLScan.io is enabled.
 - **GreyNoise:** [Community API usage limits](https://docs.greynoise.io/docs/using-the-greynoise-community-api); **Search — Usage Monitoring** in your GreyNoise account; see [GreyNoise Community tier limits](#greynoise-community-tier-limits) above.
+- **VirusTotal:** [VirusTotal API documentation](https://docs.virustotal.com/reference/overview) and your account API key page for daily and per-minute usage; see [VirusTotal API tier limits](#virustotal-api-tier-limits) above.
 - **Shodan:** [Shodan account billing](https://account.shodan.io/billing) for query/scan credit balances; [Shodan credits explained](https://help.shodan.io/the-basics/credit-types-explained); see [Shodan API tier limits](#shodan-api-tier-limits) above.
 - **Censys:** [Censys account](https://search.censys.io/account) for Search API quota; see [Censys Search API limits and unsupported types](#censys-search-api-limits-and-unsupported-types) above.
 
@@ -193,7 +221,7 @@ Vera5 does not operate threat-intelligence vendors. When you enable a source, sa
 |--------|-------------------------------|----------------------|-----------------------------------|------------------------|
 | **AbuseIPDB** | Yes (IPv4) | Live API from the extension service worker; pivot links open in your browser | [AbuseIPDB Terms of Use](https://www.abuseipdb.com/legal) | [AbuseIPDB Privacy Policy](https://www.abuseipdb.com/privacy) |
 | **AlienVault OTX** | Yes (IPv4, domain, URL, hashes, CVE) | Live API; pivot links | [OTX End-User Agreement (LevelBlue)](https://www.levelblue.com/legal/otx-eula-terms) | [LevelBlue Privacy Policy](https://www.levelblue.com/legal/privacy-policy) |
-| **VirusTotal** | No (registry shell; pivots only today) | Pivot links; future live API would use your API key per vendor rules | [VirusTotal Terms of Service](https://support.virustotal.com/hc/en-us/articles/360016879500-Terms-of-Service) | [VirusTotal Privacy Policy](https://support.virustotal.com/hc/en-us/articles/360016879480-Privacy-Policy) |
+| **VirusTotal** | No (registry shell; pivots and saved key today) | Pivot links; live API connector implemented but not enabled for live enrichment in extension today | [VirusTotal Terms of Service](https://support.virustotal.com/hc/en-us/articles/360016879500-Terms-of-Service) | [VirusTotal Privacy Policy](https://support.virustotal.com/hc/en-us/articles/360016879480-Privacy-Policy) |
 | **URLScan.io** | Yes (domain, URL) | Live API from the extension service worker (`GET /api/v1/search/`); pivot links open in your browser | [urlscan.io Terms of Service](https://urlscan.io/about/terms/) | [urlscan.io Privacy Policy](https://urlscan.io/about/privacy/) |
 | **GreyNoise** | Yes (IPv4) | Live API from the extension service worker (`GET /v3/community/{ip}`); pivot links open in your browser | [GreyNoise Terms of Use](https://www.greynoise.io/company/legal) | [GreyNoise Privacy Policy](https://www.greynoise.io/company/legal/privacy-policy) |
 | **Shodan** | Yes (IPv4, domain) | Live API from the extension service worker (`GET /shodan/host/{ip}` or `GET /dns/domain/{domain}`); pivot links open in your browser | [Shodan Terms of Service](https://account.shodan.io/terms) | [Shodan Privacy Policy](https://account.shodan.io/privacy) |
