@@ -41,6 +41,7 @@ import {
   getIncludePrivateIpv4,
   getInstallQuickStartCompleted,
   getLocalBackendEnabled,
+  getLocalLlmSummaryEnabled,
   getInternalAssetCidrRanges,
   getInternalAssetDomains,
   getInternalAssetEnrichGateEnabled,
@@ -67,6 +68,7 @@ import {
   setEnrichmentSourceEnabled,
   setIncludePrivateIpv4,
   setLocalBackendEnabled,
+  setLocalLlmSummaryEnabled,
   setInternalAssetCidrRanges,
   setInternalAssetDomains,
   setInternalAssetEnrichGateEnabled,
@@ -159,6 +161,7 @@ const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "scanning", label: "Scanning" },
   { id: "indicators", label: "Indicators" },
   { id: "sources", label: "Enrichment Sources" },
+  { id: "local-ai-summary", label: "Local AI Summary" },
   { id: "trust", label: "Trust & Consent" },
   { id: "cache", label: "Cache" },
   { id: "backup", label: "Backup" },
@@ -731,6 +734,7 @@ export function Options() {
     indicators: true,
     "private-ipv4": true,
     sources: true,
+    "local-ai-summary": true,
     trust: true,
     cache: true,
     backup: true,
@@ -745,6 +749,7 @@ export function Options() {
     useState<IocTypeEnabledRecord>(createDefaultIocTypeEnabledState());
   const [includePrivateIpv4, setIncludePrivateIpv4State] = useState(false);
   const [localBackendEnabled, setLocalBackendEnabledState] = useState(false);
+  const [localLlmSummaryEnabled, setLocalLlmSummaryEnabledState] = useState(false);
   const [showDisabledSourcesInWorkspace, setShowDisabledSourcesInWorkspaceState] =
     useState(false);
   const [showPreQueryNotices, setShowPreQueryNoticesState] = useState(true);
@@ -809,6 +814,7 @@ export function Options() {
       getIocTypeEnabled(),
       getIncludePrivateIpv4(),
       getLocalBackendEnabled(),
+      getLocalLlmSummaryEnabled(),
       getShowDisabledSourcesInWorkspace(),
       getShowPreQueryNotices(),
       getPreQueryNoticePreferenceConfigured(),
@@ -850,6 +856,7 @@ export function Options() {
           iocTypeEnabledValue,
           includePrivateIpv4Value,
           localBackendEnabledValue,
+          localLlmSummaryEnabledValue,
           showDisabledSourcesValue,
           showPreQueryNoticesValue,
           preQueryNoticePreferenceConfiguredValue,
@@ -873,6 +880,7 @@ export function Options() {
           setIocTypeEnabledState(iocTypeEnabledValue);
           setIncludePrivateIpv4State(includePrivateIpv4Value);
           setLocalBackendEnabledState(localBackendEnabledValue);
+          setLocalLlmSummaryEnabledState(localLlmSummaryEnabledValue);
           setShowDisabledSourcesInWorkspaceState(showDisabledSourcesValue);
           setShowPreQueryNoticesState(showPreQueryNoticesValue);
           setPreQueryNoticePreferenceConfiguredState(
@@ -976,6 +984,11 @@ export function Options() {
   const handleLocalBackendToggle = (checked: boolean) => {
     setLocalBackendEnabledState(checked);
     void setLocalBackendEnabled(checked);
+  };
+
+  const handleLocalLlmSummaryToggle = (checked: boolean) => {
+    setLocalLlmSummaryEnabledState(checked);
+    void setLocalLlmSummaryEnabled(checked);
   };
 
   const handleShowDisabledSourcesToggle = (checked: boolean) => {
@@ -2084,6 +2097,46 @@ export function Options() {
               >
                 {ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE}
               </p>
+            </div>
+          </section>
+
+          <section
+            id="local-ai-summary"
+            className="v5-card"
+            aria-labelledby="local-ai-summary-heading"
+          >
+            <div className="v5-card__head">
+              <h2 id="local-ai-summary-heading" className="v5-card__title">
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections["local-ai-summary"]}
+                  aria-controls="local-ai-summary-body"
+                  onClick={() => toggleSection("local-ai-summary")}
+                >
+                  <span className="v5-card__toggle-text">Local AI Summary</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
+              </h2>
+              <p className="v5-card__desc">
+                Optional narrative summaries from a model you run on this machine.
+                Vera5 sends normalized enrichment JSON only—never page content or
+                API keys.
+              </p>
+            </div>
+            <div
+              id="local-ai-summary-body"
+              className="v5-card__body"
+              hidden={collapsedSections["local-ai-summary"]}
+            >
+              <ToggleRow
+                label="Enable local AI summary"
+                hint="When on, Vera5 can request markdown summaries from an OpenAI-compatible endpoint on 127.0.0.1. Off by default until you opt in."
+                ariaLabel="Enable local AI summary"
+                checked={localLlmSummaryEnabled}
+                disabled={!ready}
+                onChange={handleLocalLlmSummaryToggle}
+              />
             </div>
           </section>
 

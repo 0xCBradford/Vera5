@@ -43,6 +43,7 @@ export const STORAGE_KEY_AUTO_SCAN_ENABLED = "autoScanEnabled";
 export const STORAGE_KEY_MANUAL_ONLY_MODE = "manualOnlyMode";
 export const STORAGE_KEY_INCLUDE_PRIVATE_IPV4 = "includePrivateIpv4";
 export const STORAGE_KEY_LOCAL_BACKEND_ENABLED = "localBackendEnabled";
+export const STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED = "localLlmSummaryEnabled";
 export const STORAGE_KEY_API_KEYS = "apiKeys";
 export const STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED = "enrichmentSourceEnabled";
 export const STORAGE_KEY_IOC_TYPE_ENABLED = "iocTypeEnabled";
@@ -82,6 +83,7 @@ export const STORAGE_KEYS = {
   MANUAL_ONLY_MODE: STORAGE_KEY_MANUAL_ONLY_MODE,
   INCLUDE_PRIVATE_IPV4: STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
   LOCAL_BACKEND_ENABLED: STORAGE_KEY_LOCAL_BACKEND_ENABLED,
+  LOCAL_LLM_SUMMARY_ENABLED: STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
   API_KEYS: STORAGE_KEY_API_KEYS,
   ENRICHMENT_SOURCE_ENABLED: STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   IOC_TYPE_ENABLED: STORAGE_KEY_IOC_TYPE_ENABLED,
@@ -131,6 +133,7 @@ export type Vera5Settings = {
   manualOnlyMode: boolean;
   includePrivateIpv4: boolean;
   localBackendEnabled: boolean;
+  localLlmSummaryEnabled: boolean;
   apiKeys: ApiKeysRecord;
   enrichmentSourceEnabled: EnrichmentSourceEnabledRecord;
   iocTypeEnabled: IocTypeEnabledRecord;
@@ -161,6 +164,7 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_MANUAL_ONLY_MODE]?: unknown;
   [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]?: unknown;
   [STORAGE_KEY_LOCAL_BACKEND_ENABLED]?: unknown;
+  [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]?: unknown;
   [STORAGE_KEY_API_KEYS]?: unknown;
   [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]?: unknown;
   [STORAGE_KEY_IOC_TYPE_ENABLED]?: unknown;
@@ -191,6 +195,7 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_MANUAL_ONLY_MODE,
   STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
   STORAGE_KEY_LOCAL_BACKEND_ENABLED,
+  STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
   STORAGE_KEY_API_KEYS,
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_IOC_TYPE_ENABLED,
@@ -322,6 +327,7 @@ export function createDefaultVera5Settings(): Vera5Settings {
     manualOnlyMode: true,
     includePrivateIpv4: false,
     localBackendEnabled: false,
+    localLlmSummaryEnabled: false,
     apiKeys: createDefaultApiKeysRecord(),
     enrichmentSourceEnabled: createDefaultEnrichmentSourceEnabledRecord(),
     iocTypeEnabled: createDefaultIocTypeEnabledRecord(),
@@ -472,6 +478,10 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
       raw[STORAGE_KEY_LOCAL_BACKEND_ENABLED],
       defaults.localBackendEnabled
     ),
+    localLlmSummaryEnabled: readStoredBoolean(
+      raw[STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED],
+      defaults.localLlmSummaryEnabled
+    ),
     apiKeys: normalizeApiKeysRecord(raw[STORAGE_KEY_API_KEYS]),
     enrichmentSourceEnabled: normalizeEnrichmentSourceEnabledRecord(
       raw[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]
@@ -589,6 +599,7 @@ export function vera5SettingsToStoragePayload(
     [STORAGE_KEY_MANUAL_ONLY_MODE]: settings.manualOnlyMode,
     [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: settings.includePrivateIpv4,
     [STORAGE_KEY_LOCAL_BACKEND_ENABLED]: settings.localBackendEnabled,
+    [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: settings.localLlmSummaryEnabled,
     [STORAGE_KEY_API_KEYS]: settings.apiKeys,
     [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: settings.enrichmentSourceEnabled,
     [STORAGE_KEY_IOC_TYPE_ENABLED]: settings.iocTypeEnabled,
@@ -782,6 +793,17 @@ export async function getLocalBackendEnabled(): Promise<boolean> {
 export async function setLocalBackendEnabled(enabled: boolean): Promise<void> {
   await chrome.storage.local.set({
     [STORAGE_KEY_LOCAL_BACKEND_ENABLED]: enabled,
+  });
+}
+
+export async function getLocalLlmSummaryEnabled(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.localLlmSummaryEnabled;
+}
+
+export async function setLocalLlmSummaryEnabled(enabled: boolean): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: enabled,
   });
 }
 

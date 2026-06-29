@@ -20,6 +20,7 @@ import {
   getHighlightEnabled,
   getIncludePrivateIpv4,
   getLocalBackendEnabled,
+  getLocalLlmSummaryEnabled,
   getVera5Settings,
   listDisabledEnrichmentSources,
   setAutoScanEnabled,
@@ -31,11 +32,13 @@ import {
   setEnrichmentCacheTtlSeconds,
   setIncludePrivateIpv4,
   setLocalBackendEnabled,
+  setLocalLlmSummaryEnabled,
   setIocTypeEnabled,
   setManualOnlyMode,
   setPreQueryNoticePreference,
   STORAGE_KEY_MANUAL_ONLY_MODE,
   STORAGE_KEY_LOCAL_BACKEND_ENABLED,
+  STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
   hasApiKey,
   isMaskedApiKeyDisplay,
   maskApiKeyForDisplay,
@@ -347,6 +350,29 @@ describe("local backend enabled storage", () => {
   });
 });
 
+describe("local LLM summary enabled storage", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults to disabled when unset", async () => {
+    await expect(getLocalLlmSummaryEnabled()).resolves.toBe(false);
+  });
+
+  it("persists enabled state", async () => {
+    await setLocalLlmSummaryEnabled(true);
+    expect(store[STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]).toBe(true);
+    await expect(getLocalLlmSummaryEnabled()).resolves.toBe(true);
+  });
+});
+
 describe("highlight enabled storage", () => {
   let store: Record<string, unknown>;
 
@@ -475,6 +501,7 @@ describe("migrate-safe defaults", () => {
     expect(defaults.manualOnlyMode).toBe(true);
     expect(defaults.includePrivateIpv4).toBe(false);
     expect(defaults.localBackendEnabled).toBe(false);
+    expect(defaults.localLlmSummaryEnabled).toBe(false);
     expect(defaults.showPreQueryNotices).toBe(true);
     expect(defaults.preQueryNoticePreferenceConfigured).toBe(false);
     expect(defaults.domainPolicyMode).toBe("allow_by_default");
@@ -592,6 +619,7 @@ describe("migrate-safe defaults", () => {
         [STORAGE_KEY_MANUAL_ONLY_MODE]: true,
         [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: false,
         [STORAGE_KEY_LOCAL_BACKEND_ENABLED]: false,
+        [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: false,
         [STORAGE_KEY_API_KEYS]: {},
         [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]:
           createDefaultVera5Settings().enrichmentSourceEnabled,

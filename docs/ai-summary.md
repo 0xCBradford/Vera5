@@ -37,21 +37,6 @@ The summary service accepts **only** the JSON document produced by `buildEnrichm
 | `loading` | Do not call the model; wait until enrichment finishes. |
 | `empty` / `error` | Do not call the model; show overlay error or empty state instead. |
 
-### Forbidden inputs
-
-The model request payload must **not** include any of the following—even if they exist elsewhere in the extension:
-
-| Forbidden | Why |
-|-----------|-----|
-| API keys, tokens, or connector credentials | BYOK secrets stay in local storage or operator `.env`; never sent to the model. |
-| Full page HTML, DOM snapshots, or selection text | Detection stays local; only the indicator value is in scope for enrichment and summary. |
-| Raw vendor HTTP responses (`rawVendorJson` and similar) | Export JSON already carries normalized `sources[].summary` lines; raw bodies may contain secrets or irrelevant PII. |
-| Settings export blobs, connector profile exports, or storage dumps | Unrelated to a single-indicator enrichment record. |
-| Multiple unrelated IOC documents in one prompt | One summary request maps to one `EnrichmentExportDocument`. |
-| Composite score inputs not present in the JSON | Do not re-fetch vendors or invent signals inside the prompt. |
-
-Implementations should validate JSON against the schema before calling the model and **fail closed** when forbidden fields appear at the top level.
-
 ### Example input (abbreviated)
 
 Full field reference: [export-artifacts.md — Example JSON](export-artifacts.md#example-json-schema-version-1).
@@ -89,6 +74,88 @@ Full field reference: [export-artifacts.md — Example JSON](export-artifacts.md
   "pivots": []
 }
 ```
+
+## Forbidden inputs — keys, page content, and credentials
+
+Local AI summary requests must contain **only** the normalized enrichment export JSON described above. The categories below are **forbidden** in the HTTP body, prompt text, or template expansion— even when the same data exists elsewhere in the browser profile, optional localhost backend, or vendor responses.
+
+Prompt template mirror: `extension/prompts/enrichment-summary.v1.json` lists the same prohibitions in `forbiddenPromptContent`. The only permitted template placeholder is `{{ENRICHMENT_EXPORT_JSON}}`.
+
+### Design rule
+
+| Allowed | Forbidden |
+|---------|-----------|
+| One `EnrichmentExportDocument` (`schemaVersion` **1**) built by `buildEnrichmentExportDocument()` | Any other payload shape, batch arrays, or ad-hoc JSON invented at request time |
+| Normalized `sources[].summary` strings already on the hover card | Raw vendor HTTP bodies, cache entries, or re-fetched connector responses |
+| The single indicator value in the export `ioc` field | Full page text, DOM trees, or multi-indicator scan dumps |
+| Operator `analystNotes` when present on the export record | API keys, tokens, or connector credential pairs |
+
+Implementations **fail closed**: reject the request before calling the model when forbidden material is detected in the prompt wrapper or inside non-export JSON fields.
+
+### API keys and connector credentials (forbidden)
+
+BYOK credentials stay in `chrome.storage.local` (`apiKeys` and related settings) or in an optional operator-run backend `.env`. They must **never** appear in summary prompts.
+
+| Forbidden artifact | Typical location | Why it must not reach the model |
+|--------------------|------------------|----------------------------------|
+| Vendor API keys (AbuseIPDB, OTX, URLScan, GreyNoise, Shodan, VirusTotal, etc.) | Options → `apiKeys` in extension storage | Secrets; unrelated to narrative summary; high exfiltration risk if the model or endpoint logs prompts. |
+| Censys API ID and secret pair | Options → `apiKeys.censys` (ID + secret) | Same as vendor keys; pair required for live Censys auth. |
+| Backend aggregator credentials | Operator `backend/.env` when localhost backend is enabled | Same BYOK boundary; backend proxies enrichment, not page or key export to the LLM. |
+| OAuth or session tokens | Vendor dashboards (never stored by Vera5 in export JSON) | Out of scope; must not be concatenated into prompts manually. |
+| LLM provider API keys | Operator LLM runtime config (Ollama, llama.cpp, local OpenAI-compatible server) | Authenticate to **`http://127.0.0.1`** via the operator’s server config or HTTP headers—not by embedding keys inside the Vera5 prompt body. |
+
+The enrichment export schema intentionally **omits** an `apiKeys` field. Summary code must not read `chrome.storage.local` for credentials when building the model request—only the export document for the active indicator.
+
+### Full page DOM and selection text (forbidden)
+
+Detection reads visible page text locally; enrichment sends **indicator values** to vendors you enable. The LLM summary path inherits the same boundary: **no bulk page upload**.
+
+| Forbidden content | Examples | Allowed alternative |
+|-------------------|----------|---------------------|
+| Full page HTML or DOM serialization | `document.documentElement.outerHTML`, saved ticket HTML files | None—do not send. |
+| Full visible text dump | Concatenated text nodes from scan, clipboard page copy, “copy outer text” | Use only fields inside the export JSON. |
+| Scan-selection payloads | Raw selection strings from **Scan selection** beyond what is already normalized into the export `ioc` | Run enrichment first; summarize the resulting export JSON only. |
+| Non-visible subtrees | Content inside `script`, `style`, `textarea`, and metadata nodes (same skips as the detector walker) | Never included—walker already skips these for detection. |
+| Adjacent page context | Surrounding paragraphs, email thread bodies, ticket headers unrelated to the export record | May appear indirectly in operator-authored `analystNotes` if the analyst typed them—still not an excuse to attach DOM. |
+| Multiple indicators from the tab | Tray subset arrays, investigation session exports, collection CSV rows | One summary request per `EnrichmentExportDocument`; batch summaries require a future schema. |
+
+The export `ioc` field may contain a value that originated on the page (for example an IPv4 in a ticket). That single normalized indicator string is in scope because it is part of the enrichment export—not because the model receives the surrounding DOM.
+
+### Credentials and secret-bearing artifacts (forbidden)
+
+Beyond explicit API keys, these artifacts can embed secrets or unrelated PII and must stay out of prompts:
+
+| Forbidden artifact | Why |
+|--------------------|-----|
+| Full settings export JSON (`settingsExport.ts` output) | May include toggles and metadata operators expect to stay local; not shaped for summary input. |
+| Connector profile export | Designed to exclude keys on import, but still not the enrichment export contract. |
+| Raw vendor HTTP responses (`rawVendorJson` on hover-card entries) | May contain auth echoes, internal IDs, or fields not shown in normalized `sources[].summary`. |
+| Enrichment cache blobs | Cached vendor payloads; use normalized export rows instead. |
+| `chrome.storage.local` dumps | Includes `apiKeys` and session state. |
+| Investigation session or collection export files | Multi-IOC case artifacts—not single-indicator export JSON. |
+| Cloud LLM request forwarding through Vera5 | No Vera5-operated relay; operator runs localhost inference only. |
+
+### Additional prohibitions
+
+| Forbidden | Why |
+|-----------|-----|
+| Multiple unrelated IOC documents in one prompt | One summary maps to one indicator export. |
+| Re-fetching vendors inside the summary service | Composite score inputs must come from the JSON `score` block only. |
+| User PII placeholders in prompt templates | No `{{operator_name}}`, `{{user_email}}`, or similar—only `{{ENRICHMENT_EXPORT_JSON}}`. |
+| Raw vendor responses containing secrets | Out of scope for summary input—vendor bodies may embed credentials or hidden fields. |
+
+### Validation checklist (implementers)
+
+Before calling the local model:
+
+1. Confirm input parses as `EnrichmentExportDocument` with `schemaVersion === 1`.
+2. Reject top-level keys not defined in [export-artifacts.md](export-artifacts.md) (for example `apiKeys`, `rawVendorJson`, `html`, `dom`, `pageText`, `storage`).
+3. Reject prompt wrappers that include strings outside the export JSON except the versioned system/user template text.
+4. Confirm `enrichmentState === "ready"` unless a future schema defines otherwise.
+5. Serialize **only** the validated export object into `{{ENRICHMENT_EXPORT_JSON}}`.
+6. Send HTTP to **`http://127.0.0.1`** (or operator-configured localhost path)—never to Vera5-operated cloud inference.
+
+On validation failure, surface an operator-visible error on the hover card; do not call the model with partial or augmented input.
 
 ## Output format
 
@@ -197,8 +264,8 @@ flowchart LR
 
 ## Implementation notes (for contributors)
 
-- **Module home (planned):** summary client in `extension/src/lib/`; optional `/summarize` route on the localhost backend when enabled.
-- **Prompt templates:** versioned template files in the repository (separate deliverable); templates reference JSON field paths, not live page context.
+- **Module home (planned):** `extension/src/lib/aiSummaryService.ts` and `extension/src/lib/aiSummaryPrompt.ts`; optional `/summarize` route on the localhost backend when enabled.
+- **Prompt templates:** [extension/prompts/enrichment-summary.v1.json](../extension/prompts/enrichment-summary.v1.json) (`promptTemplateVersion` **1**); templates reference JSON field paths, not live page context.
 - **Safety tests (planned):** reject outputs that cite vendor counts or IOCs absent from fixture input; reject service invocation when the global toggle is off.
 
 See [export-artifacts.md](export-artifacts.md) for the authoritative JSON schema and [analyst-workflows.md](analyst-workflows.md) for score and explain-chain operator guidance.

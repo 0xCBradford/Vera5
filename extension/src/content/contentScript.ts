@@ -1,6 +1,14 @@
 import { safeRuntimeSendMessage, runWithExtensionContextAsync } from "../lib/extensionContext";
 import { setupAutoScanStorageListener, syncAutoScanWithStorage } from "./autoScan";
 import {
+  setupLocalBackendStorageListener,
+  syncLocalBackendWithStorage,
+} from "./localBackendStorage";
+import {
+  setupLocalLlmSummaryStorageListener,
+  syncLocalLlmSummaryWithStorage,
+} from "./localLlmSummaryStorage";
+import {
   setupAnalystNotesStorageListener,
   syncAnalystNotesWithStorage,
 } from "./analystNotesContent";
@@ -36,6 +44,10 @@ if (!contentScriptAlreadyInitialized) {
   setupAnalystNotesStorageListener();
   setupIocLabelStorageListener();
   setupAnalystModeStorageListener();
+  setupLocalLlmSummaryStorageListener();
+  setupLocalBackendStorageListener();
+  void runWithExtensionContextAsync(syncLocalLlmSummaryWithStorage);
+  void runWithExtensionContextAsync(syncLocalBackendWithStorage);
   void runWithExtensionContextAsync(syncAnalystNotesWithStorage);
   void runWithExtensionContextAsync(syncIocLabelsWithStorage);
   setupBackgroundEnrichmentRouting();

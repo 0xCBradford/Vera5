@@ -33,7 +33,16 @@ import {
   buildHoverCardPanel,
   hideHoverCard,
   HOVER_CARD_COPY_BUTTON_CLASS,
+  HOVER_CARD_GENERATE_SUMMARY_LABEL,
+  HOVER_CARD_GENERATE_SUMMARY_LOADING_LABEL,
   HOVER_CARD_HOST_ID,
+  HOVER_CARD_INTEL_SUMMARY_CLASS,
+  HOVER_CARD_LOCAL_LLM_SUMMARY_BODY_CLASS,
+  HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS,
+  HOVER_CARD_LOCAL_LLM_SUMMARY_DISCLAIMER,
+  HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING,
+  HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING_CLASS,
+  HOVER_CARD_LOCAL_LLM_SUMMARY_STATUS_CLASS,
   HOVER_CARD_IOC_PIN_BUTTON_CLASS,
   HOVER_CARD_PANEL_CLASS,
   HOVER_CARD_ENRICHMENT_CLASS,
@@ -74,6 +83,8 @@ import {
   focusFirstHoverCardControl,
   HOVER_CARD_SAVE_TO_COLLECTION_TOGGLE_CLASS,
   resetHoverCardSaveToCollectionStateForTests,
+  resetHoverCardLocalLlmSummaryStateForTests,
+  runHoverCardLocalLlmSummaryGenerationForTests,
   showHoverCardNearAnchor,
   updateHoverCardAnalystNoteIfOpen,
 } from "./hoverCardOverlay";
@@ -87,6 +98,45 @@ import * as tabScanSummary from "../lib/tabScanSummary";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import * as tabScanSnapshotStorage from "../lib/tabScanSnapshotStorage";
 import * as tabScanSummaryContent from "./tabScanSummaryContent";
+import {
+  setCachedLocalBackendEnabledForTests,
+} from "./localBackendStorage";
+import {
+  setCachedLocalLlmSummaryEnabledForTests,
+} from "./localLlmSummaryStorage";
+import * as aiSummaryService from "../lib/aiSummaryService";
+import { buildLocalBackendSummarizeUrl } from "../lib/localBackendSummarize";
+
+function readyHoverCardPayload() {
+  return {
+    value: "8.8.8.8",
+    type: IOC_TYPE.IPV4,
+    enrichmentState: "ready" as const,
+    summary: "84 abuse confidence",
+    sourceResults: buildHoverCardSourceEntries([
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        status: "ok" as const,
+        summary: "84 abuse confidence",
+      },
+    ]),
+  };
+}
+
+function groundedLocalLlmSummaryMarkdown(): string {
+  return [
+    "# IOC summary: 8.8.8.8",
+    "",
+    "**Type:** IPv4 address",
+    "",
+    "AbuseIPDB reported 84 abuse confidence.",
+    "",
+    "- **AbuseIPDB** (Live): 84 abuse confidence",
+    "",
+    "**Risk score:** Unknown risk",
+  ].join("\n");
+}
 
 function queryOverlayEnrichmentSummary(panel: ParentNode): HTMLElement | null {
   return panel.querySelector(`.${HOVER_CARD_ENRICHMENT_CLASS}`);
@@ -2999,5 +3049,267 @@ describe("hover card save to collection", () => {
       panel = readPanel();
       expect(panel.textContent).toContain("Saved to Qakbot Investigation.");
     });
+  });
+});
+
+describe("local LLM summary controls", () => {
+  afterEach(() => {
+    setCachedLocalLlmSummaryEnabledForTests(false);
+    setCachedLocalBackendEnabledForTests(false);
+    resetHoverCardLocalLlmSummaryStateForTests();
+    hideHoverCard();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it("hides generate summary controls when the global toggle is off", () => {
+    setCachedLocalLlmSummaryEnabledForTests(false);
+
+    const panel = buildHoverCardPanel(readyHoverCardPayload());
+
+    expect(panel.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS}`)).toBeNull();
+  });
+
+  it("does not invoke resolveLocalLlmSummaryRequest when the global toggle is off", async () => {
+    setCachedLocalLlmSummaryEnabledForTests(false);
+    const requestSpy = vi
+      .spyOn(aiSummaryService, "resolveLocalLlmSummaryRequest")
+      .mockResolvedValue({ ok: true, markdown: "ignored" });
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await runHoverCardLocalLlmSummaryGenerationForTests(readyHoverCardPayload());
+
+    expect(requestSpy).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not call localhost fetch when generate summary is blocked by the toggle", async () => {
+    setCachedLocalLlmSummaryEnabledForTests(false);
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, readyHoverCardPayload());
+
+    await runHoverCardLocalLlmSummaryGenerationForTests(readyHoverCardPayload());
+
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("shows generate summary for ready enrichment when the global toggle is on", () => {
+    setCachedLocalLlmSummaryEnabledForTests(true);
+
+    const panel = buildHoverCardPanel(readyHoverCardPayload());
+    const summarySection = panel.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS}`);
+    const button = summarySection?.querySelector("button");
+
+    expect(
+      summarySection?.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING_CLASS}`)
+        ?.textContent
+    ).toBe(HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING);
+    expect(summarySection?.getAttribute("aria-label")).toBe(
+      HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING
+    );
+    expect(button?.textContent).toBe(HOVER_CARD_GENERATE_SUMMARY_LABEL);
+    expect((button as HTMLButtonElement | undefined)?.disabled).toBe(false);
+  });
+
+  it("keeps the AI summary panel separate from risk score and explain chain", () => {
+    setCachedLocalLlmSummaryEnabledForTests(true);
+
+    const panel = buildHoverCardPanel({
+      ...readyHoverCardPayload(),
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "84 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          status: "ok",
+          summary: "4 threat pulses",
+        },
+      ]),
+    });
+
+    const intelSection = panel.querySelector(`.${HOVER_CARD_INTEL_SUMMARY_CLASS}`);
+    const summarySection = panel.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS}`);
+    const riskScore = panel.querySelector(`.${HOVER_CARD_RISK_SCORE_CLASS}`);
+    const reasoning = panel.querySelector(`.${HOVER_CARD_RISK_REASONING_CLASS}`);
+
+    expect(intelSection?.contains(riskScore)).toBe(true);
+    expect(intelSection?.contains(reasoning)).toBe(true);
+    expect(intelSection?.contains(summarySection)).toBe(false);
+
+    const panelChildren = [...panel.children];
+    expect(panelChildren.indexOf(summarySection!)).toBeGreaterThan(
+      panelChildren.indexOf(intelSection!)
+    );
+  });
+
+  it("disables generate summary while enrichment is loading", () => {
+    setCachedLocalLlmSummaryEnabledForTests(true);
+
+    const panel = buildHoverCardPanel({
+      ...readyHoverCardPayload(),
+      enrichmentState: "loading",
+    });
+    const button = panel.querySelector(
+      `.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS} button`
+    ) as HTMLButtonElement | null;
+
+    expect(button?.disabled).toBe(true);
+  });
+
+  it("shows loading and success states after generate summary", async () => {
+    setCachedLocalLlmSummaryEnabledForTests(true);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        choices: [{ message: { content: groundedLocalLlmSummaryMarkdown() } }],
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    const panel = showHoverCardNearAnchor(anchor, readyHoverCardPayload());
+    const button = panel.querySelector(
+      `.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS} button`
+    ) as HTMLButtonElement;
+    button.click();
+
+    await vi.waitFor(() => {
+      const currentPanel = document.querySelector(
+        `.${HOVER_CARD_PANEL_CLASS}`
+      ) as HTMLElement | null;
+      expect(
+        currentPanel?.querySelector(
+          `.${HOVER_CARD_LOCAL_LLM_SUMMARY_STATUS_CLASS}.vera5-hover-card-local-llm-summary-status--loading`
+        )?.textContent
+      ).toBe(HOVER_CARD_GENERATE_SUMMARY_LOADING_LABEL);
+    });
+
+    await vi.waitFor(() => {
+      const currentPanel = document.querySelector(
+        `.${HOVER_CARD_PANEL_CLASS}`
+      ) as HTMLElement | null;
+      expect(
+        currentPanel?.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_BODY_CLASS}`)
+          ?.textContent
+      ).toBe(groundedLocalLlmSummaryMarkdown());
+      expect(currentPanel?.textContent).toContain(
+        HOVER_CARD_LOCAL_LLM_SUMMARY_DISCLAIMER
+      );
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("surfaces summary service errors on the hover card", async () => {
+    setCachedLocalLlmSummaryEnabledForTests(true);
+    const error = new TypeError("fetch failed");
+    Object.assign(error, { cause: { code: "ECONNREFUSED" } });
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>().mockRejectedValue(error));
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    const panel = showHoverCardNearAnchor(anchor, readyHoverCardPayload());
+    const button = panel.querySelector(
+      `.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS} button`
+    ) as HTMLButtonElement;
+    button.click();
+
+    await vi.waitFor(() => {
+      const currentPanel = document.querySelector(
+        `.${HOVER_CARD_PANEL_CLASS}`
+      ) as HTMLElement | null;
+      expect(
+        currentPanel?.querySelector(
+          `.${HOVER_CARD_LOCAL_LLM_SUMMARY_STATUS_CLASS}.vera5-hover-card-local-llm-summary-status--error`
+        )?.textContent
+      ).toBe("Local LLM endpoint refused the connection on 127.0.0.1.");
+    });
+  });
+
+  it("uses the backend summarize route with the same disclaimer UX when local backend is enabled", async () => {
+    setCachedLocalLlmSummaryEnabledForTests(true);
+    setCachedLocalBackendEnabledForTests(true);
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json({
+        ok: true,
+        markdown: groundedLocalLlmSummaryMarkdown(),
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    const panel = showHoverCardNearAnchor(anchor, readyHoverCardPayload());
+    const button = panel.querySelector(
+      `.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS} button`
+    ) as HTMLButtonElement;
+    button.click();
+
+    await vi.waitFor(() => {
+      const currentPanel = document.querySelector(
+        `.${HOVER_CARD_PANEL_CLASS}`
+      ) as HTMLElement | null;
+      expect(
+        currentPanel?.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_BODY_CLASS}`)
+          ?.textContent
+      ).toBe(groundedLocalLlmSummaryMarkdown());
+      expect(currentPanel?.textContent).toContain(
+        HOVER_CARD_LOCAL_LLM_SUMMARY_DISCLAIMER
+      );
+      expect(
+        currentPanel?.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING_CLASS}`)
+          ?.textContent
+      ).toBe(HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING);
+    });
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(buildLocalBackendSummarizeUrl());
+  });
+
+  it("falls back to direct local LLM with the same disclaimer UX when backend summarize is unreachable", async () => {
+    setCachedLocalLlmSummaryEnabledForTests(true);
+    setCachedLocalBackendEnabledForTests(true);
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockRejectedValueOnce(new Error("connection refused"))
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [{ message: { content: groundedLocalLlmSummaryMarkdown() } }],
+        })
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    const panel = showHoverCardNearAnchor(anchor, readyHoverCardPayload());
+    const button = panel.querySelector(
+      `.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS} button`
+    ) as HTMLButtonElement;
+    button.click();
+
+    await vi.waitFor(() => {
+      const currentPanel = document.querySelector(
+        `.${HOVER_CARD_PANEL_CLASS}`
+      ) as HTMLElement | null;
+      expect(currentPanel?.textContent).toContain(
+        HOVER_CARD_LOCAL_LLM_SUMMARY_DISCLAIMER
+      );
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(buildLocalBackendSummarizeUrl());
+    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+      aiSummaryService.DEFAULT_LOCAL_LLM_SUMMARY_ENDPOINT
+    );
   });
 });

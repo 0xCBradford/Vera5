@@ -126,6 +126,48 @@ export function buildVera5UiStylesCss(): string {
 .vera5-hover-card-enrichment--ready {
   color: var(--vera5-ready);
 }
+.vera5-hover-card-local-llm-summary {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--vera5-border);
+}
+.vera5-hover-card-local-llm-summary-heading {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--vera5-text);
+}
+.vera5-hover-card-local-llm-summary-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.vera5-hover-card-local-llm-summary-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+.vera5-hover-card-local-llm-summary-status--loading {
+  color: var(--vera5-muted);
+  font-style: italic;
+  animation: vera5-loading-pulse 1.4s ease-in-out infinite;
+}
+.vera5-hover-card-local-llm-summary-status--error {
+  color: var(--vera5-error);
+}
+.vera5-hover-card-local-llm-summary-disclaimer {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-local-llm-summary-body {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  color: var(--vera5-text);
+}
 .vera5-hover-card-risk-score {
   margin: 8px 0;
 }

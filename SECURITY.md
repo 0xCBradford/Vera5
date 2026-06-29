@@ -240,6 +240,51 @@ Setup and architecture diagram: [docs/local-mode.md](docs/local-mode.md).
 
 The extension-only MVP security model above applies unchanged when the backend is not used.
 
+## Optional local AI summary (LLM)
+
+Vera5 offers an **opt-in** feature that requests narrative markdown summaries from a **user-operated** language model on **your machine**. It is **off by default** and separate from live threat-intelligence enrichment and the local composite risk score.
+
+| Property | Behavior |
+|----------|----------|
+| **Required?** | **No.** **Enable local AI summary** in Vera5 Settings is **off by default**. When off, the extension does not call a summary service or your local model. |
+| **Who runs the model?** | **You.** You install and operate Ollama, llama.cpp, or another OpenAI-compatible server on the same workstation. Vera5 does not bundle, host, or operate the model. |
+| **Network destination** | HTTP requests are restricted to **`http://127.0.0.1`** only. The extension rejects endpoints on other hostnames, non-HTTP schemes, and URLs with embedded credentials. The default path targets a common local OpenAI-compatible API (for example port 11434). |
+| **Vera5 infrastructure** | The extension sends requests **directly** to your localhost endpoint. Vera5 does **not** operate a cloud LLM relay, prompt store, or summary proxy. No indicators, export JSON, or prompts are uploaded to Vera5-operated servers. |
+| **When requests run** | Only after you opt in globally **and** click **Generate summary** on a ready enrichment card. Summary generation does not run automatically when a card opens. |
+| **Data sent** | Normalized enrichment export JSON for the single indicator on the card—not full page HTML, DOM, browsing history, vendor API keys, or raw vendor HTTP bodies. |
+| **Data not sent** | Page content, settings storage dumps, connector credentials, and multi-indicator batch exports. |
+| **Output handling** | Markdown displays in a panel labeled **AI summary (local, unverified)**, separate from **Risk score** and the explain chain. Responses pass grounding checks before display; ungrounded verdict language or invented detection counts are rejected. |
+
+### Localhost-only path (no Vera5 relay)
+
+```mermaid
+flowchart LR
+  subgraph Browser[Vera5 extension]
+    Card[Hover card]
+    Export[Normalized export JSON]
+    Guard[127.0.0.1 guard]
+  end
+  subgraph Localhost[User-operated on 127.0.0.1]
+    LLM[OpenAI-compatible local server]
+  end
+
+  Card -->|Generate summary when enabled| Export
+  Export --> Guard
+  Guard -->|HTTP export JSON only| LLM
+  LLM -->|markdown| Card
+```
+
+This path is independent of optional vendor enrichment and independent of the optional localhost FastAPI aggregator described above. Neither path relays through Vera5-operated infrastructure.
+
+### Your responsibilities when using local AI summary
+
+- Run the model only on systems you control; keep logs and model cache on trusted local storage.
+- Treat summaries as **unverified narrative**—verify per-source rows, pivots, and the local composite score before acting.
+- Do not point Vera5 at non-localhost endpoints; shipped guards block outbound summary calls except to `127.0.0.1`.
+- Read your LLM runtime's privacy and retention policies; prompt content includes normalized enrichment fields for the indicator you summarize.
+
+Input contract, forbidden payloads, output guardrails, and disclaimers: [docs/ai-summary.md](docs/ai-summary.md).
+
 ## Trust and query checklist
 
 Use this checklist to confirm consent and hostname controls before live threat-intelligence queries leave the browser. Detailed pattern guidance and permission rationale: [docs/security-model.md](docs/security-model.md) (domain policy, internal asset lists, sensitive-site presets).
@@ -317,5 +362,6 @@ We aim to acknowledge reports in a reasonable timeframe and coordinate fixes bef
 
 - [docs/security-model.md](docs/security-model.md) — manifest permissions, host access, domain policy, internal asset lists, and sensitive-domain guidance
 - [docs/local-mode.md](docs/local-mode.md) — extension-only versus optional localhost enrichment backend
+- [docs/ai-summary.md](docs/ai-summary.md) — optional local AI summary input contract, localhost-only posture, and disclaimers
 - [docs/architecture.md](docs/architecture.md) — IOC types, connector order, data boundaries
 - [README.md](README.md) — install, development, and capability summary
