@@ -72,11 +72,12 @@ export function buildVera5UiStylesCss(): string {
   gap: 6px;
   margin-left: auto;
 }
+.vera5-hover-card-type {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--vera5-accent);
+  color: var(--vera5-muted-label);
 }
 .vera5-hover-card-value {
   margin: 0 0 8px;
@@ -412,14 +413,14 @@ export function buildVera5UiStylesCss(): string {
   color: var(--vera5-muted-label);
 }
 .vera5-hover-card-section-heading {
-  margin: 12px 0 10px;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  margin: 14px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  text-align: center;
+  text-align: left;
   color: var(--vera5-muted-label);
-  line-height: 1.05;
+  line-height: 1.3;
 }
 .vera5-hover-card-intel-summary {
   margin-bottom: 8px;
@@ -551,7 +552,7 @@ export function buildVera5UiStylesCss(): string {
 }
 .vera5-tray-why-detected summary {
   cursor: pointer;
-  color: var(--vera5-accent-text);
+  color: var(--vera5-muted-label);
   font-weight: 600;
   list-style-position: outside;
 }
@@ -564,11 +565,24 @@ export function buildVera5UiStylesCss(): string {
 .vera5-tray-save-collection-toggle {
   border: none;
   background: transparent;
-  color: var(--vera5-accent);
+  color: var(--vera5-muted-label);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   padding: 0;
+}
+.vera5-workspace-tray-row .vera5-tray-save-collection-toggle,
+.vera5-workspace-tray-row .vera5-tray-why-detected summary {
+  opacity: 0.55;
+  transition: opacity 0.14s ease;
+}
+.vera5-workspace-tray-row:hover .vera5-tray-save-collection-toggle,
+.vera5-workspace-tray-row:focus-within .vera5-tray-save-collection-toggle,
+.vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-save-collection-toggle,
+.vera5-workspace-tray-row:hover .vera5-tray-why-detected summary,
+.vera5-workspace-tray-row:focus-within .vera5-tray-why-detected summary,
+.vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-why-detected summary {
+  opacity: 1;
 }
 .vera5-tray-save-collection-panel {
   margin-top: 6px;
@@ -1023,7 +1037,7 @@ html.vera5-workspace-open {
   border-right: none;
   border-radius: 8px 0 0 8px;
   background: #222b36;
-  color: #a7b0ba;
+  color: #ffb224;
   font-size: 18px;
   font-weight: 700;
   line-height: 1;
@@ -1045,6 +1059,11 @@ html.vera5-workspace-open {
 }
 .vera5-workspace-sidebar--collapsed .vera5-workspace-title {
   display: none;
+}
+.vera5-workspace-sidebar--collapsed .vera5-workspace-header {
+  justify-content: center;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 .vera5-workspace-header {
   display: flex;
@@ -1211,16 +1230,31 @@ html.vera5-workspace-open {
   margin-bottom: 8px;
   padding: 8px 12px;
   border-radius: 6px;
-  border: 1px solid transparent;
-  background: #ffb224;
-  color: #0b0e11;
+  border: 1px solid #313a45;
+  background: #19202a;
+  color: #f5f7fa;
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: background-color 0.14s ease, border-color 0.14s ease,
+    box-shadow 0.14s ease;
 }
 .vera5-workspace-button:hover:not(:disabled) {
+  background: #222b36;
+  border-color: rgba(255, 178, 36, 0.38);
+}
+.vera5-workspace-button--primary {
+  border-color: transparent;
+  background: #ffb224;
+  color: #0b0e11;
+}
+.vera5-workspace-button--primary:hover:not(:disabled) {
   background: #ffc24d;
   border-color: #ffc24d;
+}
+.vera5-workspace-sidebar button:hover:not(:disabled),
+.vera5-workspace-sidebar .vera5-hover-card-pivot-link:hover {
+  box-shadow: 0 0 0 1.5px rgba(255, 178, 36, 0.45), 0 4px 16px rgba(255, 178, 36, 0.18);
 }
 .vera5-workspace-button:disabled {
   opacity: 0.65;
@@ -1240,9 +1274,9 @@ html.vera5-workspace-open {
 }
 .vera5-workspace-tray-heading {
   margin: 0;
-  font-size: 13px;
-  font-weight: 700;
-  color: #a7b0ba;
+  font-size: 15px;
+  font-weight: 600;
+  color: #f5f7fa;
 }
 .vera5-workspace-icon-button {
   flex-shrink: 0;
@@ -1329,11 +1363,15 @@ html.vera5-workspace-open {
   gap: 4px;
   padding: 6px 8px;
   border-radius: 6px;
-  border: 1px solid #313a45;
+  border: 1px solid transparent;
   background: #19202a;
   font-size: 12px;
   line-height: 1.4;
   cursor: pointer;
+  transition: background-color 0.14s ease;
+}
+.vera5-workspace-tray-row:hover {
+  background: #222b36;
 }
 .vera5-workspace-tray-row-main {
   display: flex;
@@ -1424,6 +1462,8 @@ html.vera5-workspace-open {
   min-width: 0;
   word-break: break-all;
   color: #f5f7fa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
   display: flex;
   flex-direction: column;
   gap: 2px;

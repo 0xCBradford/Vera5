@@ -164,6 +164,8 @@ function TrayIndicatorValue({ entry }: { entry: TabScanSummaryEntry }) {
       <span
         style={{
           color: POPUP_THEME.text,
+          fontFamily: VERA5_FONT.mono,
+          fontSize: 13,
           wordBreak: "break-all",
           flex: 1,
         }}
@@ -183,7 +185,14 @@ function TrayIndicatorValue({ entry }: { entry: TabScanSummaryEntry }) {
         minWidth: 0,
       }}
     >
-      <span style={{ color: POPUP_THEME.text, wordBreak: "break-all" }}>
+      <span
+        style={{
+          color: POPUP_THEME.text,
+          fontFamily: VERA5_FONT.mono,
+          fontSize: 13,
+          wordBreak: "break-all",
+        }}
+      >
         {presentation.onPageValue}
       </span>
       <span
@@ -298,9 +307,9 @@ function SaveToCollectionTrayPanel({
         style={{
           border: "none",
           background: "transparent",
-          color: POPUP_THEME.accent,
+          color: POPUP_THEME.muted,
           cursor: "pointer",
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: 600,
           padding: 0,
         }}
@@ -826,6 +835,7 @@ function CollectionsManagerPanel() {
   const [renameDraft, setRenameDraft] = useState("");
   const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [collectionsCollapsed, setCollectionsCollapsed] = useState(true);
 
   const refreshCollections = async () => {
     const list = await requestListIocCollections();
@@ -1019,16 +1029,54 @@ function CollectionsManagerPanel() {
         paddingTop: 12,
       }}
     >
-      <h2
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          margin: "0 0 8px",
-          color: POPUP_THEME.accentText,
-        }}
-      >
-        {IOC_COLLECTION_MANAGER_SECTION_LABEL}
+      <h2 style={{ margin: "0 0 8px" }}>
+        <button
+          type="button"
+          onClick={() => setCollectionsCollapsed((value) => !value)}
+          aria-expanded={!collectionsCollapsed}
+          aria-controls="popup-collections-body"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 8,
+            width: "100%",
+            padding: 0,
+            border: "none",
+            background: "transparent",
+            color: POPUP_THEME.accentText,
+            fontFamily: "inherit",
+            fontSize: 15,
+            fontWeight: 600,
+            textAlign: "left",
+            cursor: "pointer",
+          }}
+        >
+          <span>{IOC_COLLECTION_MANAGER_SECTION_LABEL}</span>
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+            style={{
+              flex: "0 0 auto",
+              color: POPUP_THEME.muted,
+              transform: collectionsCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+              transition: "transform 0.15s ease",
+            }}
+          >
+            <path
+              d="M6 9l6 6 6-6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
       </h2>
+      <div id="popup-collections-body" hidden={collectionsCollapsed}>
       {loading ? (
         <p style={trayStatusStyle()} aria-live="polite">
           Loading collections…
@@ -1280,6 +1328,7 @@ function CollectionsManagerPanel() {
           {exportMessage}
         </p>
       ) : null}
+      </div>
     </section>
   );
 }
@@ -1309,7 +1358,7 @@ function WhyDetectedTrayDetails({
       <summary
         style={{
           cursor: "pointer",
-          color: POPUP_THEME.accent,
+          color: POPUP_THEME.muted,
           fontWeight: 600,
         }}
       >
@@ -1571,6 +1620,8 @@ export function Popup() {
   const [sessionExportMessage, setSessionExportMessage] = useState<string | null>(null);
   const [sourceOps, setSourceOps] = useState<EnrichmentSourceOpsSnapshot | null>(null);
   const [sourceOpsReady, setSourceOpsReady] = useState(false);
+  const [sourceOpsCollapsed, setSourceOpsCollapsed] = useState(true);
+  const [investigationCollapsed, setInvestigationCollapsed] = useState(true);
   const [saveToCollectionAnchorId, setSaveToCollectionAnchorId] = useState<string | null>(
     null
   );
@@ -2153,6 +2204,7 @@ export function Popup() {
 
   return (
     <main
+      className="vera5-popup"
       style={{
         minWidth: 280,
         maxWidth: 360,
@@ -2287,46 +2339,124 @@ export function Popup() {
           </span>
         </span>
       </h1>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          cursor: ready ? "pointer" : "wait",
-          marginBottom: 12,
-          color: POPUP_THEME.text,
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={enabled}
-          disabled={!ready}
-          onChange={(event) => handleToggle(event.target.checked)}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={enabled}
           aria-label="Extension enabled"
-          style={{ accentColor: POPUP_THEME.accent }}
-        />
-        Extension enabled
-      </label>
-      <label
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          cursor: ready && enabled ? "pointer" : "not-allowed",
-          marginBottom: 12,
-          color: POPUP_THEME.text,
-        }}
-      >
-        <input
-          type="checkbox"
-          checked={highlightEnabled}
-          disabled={!ready || !enabled}
-          onChange={(event) => handleHighlightToggle(event.target.checked)}
+          disabled={!ready}
+          onClick={() => handleToggle(!enabled)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flex: "1 1 0",
+            minWidth: 0,
+            padding: "6px 8px 6px 10px",
+            borderRadius: 999,
+            border: `1px solid ${POPUP_THEME.border}`,
+            background: POPUP_THEME.buttonBg,
+            color: POPUP_THEME.muted,
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: "inherit",
+            cursor: ready ? "pointer" : "not-allowed",
+            opacity: ready ? 1 : 0.65,
+            textAlign: "left",
+          }}
+        >
+          <span style={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.2 }}>
+            Extension enabled
+          </span>
+          <span
+            aria-hidden="true"
+            style={{
+              position: "relative",
+              flexShrink: 0,
+              width: 30,
+              height: 16,
+              borderRadius: 999,
+              background: enabled ? POPUP_THEME.accent : POPUP_THEME.buttonBg,
+              border: `1px solid ${enabled ? POPUP_THEME.accent : POPUP_THEME.border}`,
+              transition: "background 0.15s ease, border-color 0.15s ease",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: 1,
+                left: 1,
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                background: enabled ? POPUP_THEME.onAccent : POPUP_THEME.muted,
+                transform: enabled ? "translateX(14px)" : "translateX(0)",
+                transition: "transform 0.15s ease, background 0.15s ease",
+              }}
+            />
+          </span>
+        </button>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={highlightEnabled}
           aria-label="Highlight indicators"
-          style={{ accentColor: POPUP_THEME.accent }}
-        />
-        Highlight indicators
-      </label>
+          disabled={!ready || !enabled}
+          onClick={() => handleHighlightToggle(!highlightEnabled)}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            flex: "1 1 0",
+            minWidth: 0,
+            padding: "6px 8px 6px 10px",
+            borderRadius: 999,
+            border: `1px solid ${POPUP_THEME.border}`,
+            background: POPUP_THEME.buttonBg,
+            color: POPUP_THEME.muted,
+            fontSize: 11,
+            fontWeight: 600,
+            fontFamily: "inherit",
+            cursor: ready && enabled ? "pointer" : "not-allowed",
+            opacity: ready && enabled ? 1 : 0.65,
+            textAlign: "left",
+          }}
+        >
+          <span style={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.2 }}>
+            Highlight indicators
+          </span>
+          <span
+            aria-hidden="true"
+            style={{
+              position: "relative",
+              flexShrink: 0,
+              width: 30,
+              height: 16,
+              borderRadius: 999,
+              background: highlightEnabled ? POPUP_THEME.accent : POPUP_THEME.buttonBg,
+              border: `1px solid ${
+                highlightEnabled ? POPUP_THEME.accent : POPUP_THEME.border
+              }`,
+              transition: "background 0.15s ease, border-color 0.15s ease",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: 1,
+                left: 1,
+                width: 12,
+                height: 12,
+                borderRadius: "50%",
+                background: highlightEnabled ? POPUP_THEME.onAccent : POPUP_THEME.muted,
+                transform: highlightEnabled ? "translateX(14px)" : "translateX(0)",
+                transition: "transform 0.15s ease, background 0.15s ease",
+              }}
+            />
+          </span>
+        </button>
+      </div>
       <div style={actionButtonGroupStyle}>
       <button
         type="button"
@@ -2370,10 +2500,10 @@ export function Popup() {
       <button
         type="button"
         disabled={!ready}
-        className="v5-btn v5-btn--primary"
+        className="v5-btn"
         onClick={handleOpenSettings}
         style={{
-          ...primaryButtonStyle,
+          ...buttonStyle,
           cursor: ready ? "pointer" : "not-allowed",
           opacity: ready ? 1 : 0.65,
         }}
@@ -2383,10 +2513,10 @@ export function Popup() {
       <button
         type="button"
         disabled={!ready}
-        className="v5-btn v5-btn--primary"
+        className="v5-btn"
         onClick={handleOpenPermissions}
         style={{
-          ...primaryButtonStyle,
+          ...buttonStyle,
           cursor: ready ? "pointer" : "not-allowed",
           opacity: ready ? 1 : 0.65,
         }}
@@ -2415,16 +2545,54 @@ export function Popup() {
           paddingTop: 12,
         }}
       >
-        <h2
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            margin: "0 0 8px",
-            color: POPUP_THEME.accentText,
-          }}
-        >
-          Investigation session
+        <h2 style={{ margin: "0 0 8px" }}>
+          <button
+            type="button"
+            onClick={() => setInvestigationCollapsed((value) => !value)}
+            aria-expanded={!investigationCollapsed}
+            aria-controls="popup-investigation-body"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              width: "100%",
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              color: POPUP_THEME.accentText,
+              fontFamily: "inherit",
+              fontSize: 15,
+              fontWeight: 600,
+              textAlign: "left",
+              cursor: "pointer",
+            }}
+          >
+            <span>Investigation session</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              style={{
+                flex: "0 0 auto",
+                color: POPUP_THEME.muted,
+                transform: investigationCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                transition: "transform 0.15s ease",
+              }}
+            >
+              <path
+                d="M6 9l6 6 6-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
         </h2>
+        <div id="popup-investigation-body" hidden={investigationCollapsed}>
         {!activeSession && sessionTitleReady ? (
           <p style={trayStatusStyle()} aria-live="polite">
             {INVESTIGATION_SESSION_EMPTY_STATE_TEXT}
@@ -2760,6 +2928,7 @@ export function Popup() {
         ) : (
           <p style={{ ...trayStatusStyle(), marginTop: 12 }}>No saved sessions yet.</p>
         )}
+        </div>
       </section>
       <CollectionsManagerPanel />
       <section
@@ -2770,16 +2939,54 @@ export function Popup() {
           paddingTop: 12,
         }}
       >
-        <h2
-          style={{
-            fontSize: 13,
-            fontWeight: 700,
-            margin: "0 0 8px",
-            color: POPUP_THEME.accentText,
-          }}
-        >
-          {ENRICHMENT_SOURCE_OPS_SECTION_TITLE}
+        <h2 style={{ margin: "0 0 8px" }}>
+          <button
+            type="button"
+            onClick={() => setSourceOpsCollapsed((value) => !value)}
+            aria-expanded={!sourceOpsCollapsed}
+            aria-controls="popup-source-ops-body"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              width: "100%",
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              color: POPUP_THEME.accentText,
+              fontFamily: "inherit",
+              fontSize: 15,
+              fontWeight: 600,
+              textAlign: "left",
+              cursor: "pointer",
+            }}
+          >
+            <span>{ENRICHMENT_SOURCE_OPS_SECTION_TITLE}</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              style={{
+                flex: "0 0 auto",
+                color: POPUP_THEME.muted,
+                transform: sourceOpsCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                transition: "transform 0.15s ease",
+              }}
+            >
+              <path
+                d="M6 9l6 6 6-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
         </h2>
+        <div id="popup-source-ops-body" hidden={sourceOpsCollapsed}>
         {!sourceOpsReady ? (
           <p style={trayStatusStyle()} aria-live="polite">
             Loading source status…
@@ -2892,6 +3099,7 @@ export function Popup() {
             </ul>
           </>
         )}
+        </div>
       </section>
       {scanState === "error" ? (        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
           Scan failed. Reload the tab and try again.
@@ -2909,8 +3117,8 @@ export function Popup() {
         >
           <h2
             style={{
-              fontSize: 13,
-              fontWeight: 700,
+              fontSize: 15,
+              fontWeight: 600,
               margin: "0 0 8px",
               color: POPUP_THEME.accentText,
             }}
@@ -3032,7 +3240,7 @@ export function Popup() {
                         gap: 6,
                         padding: "6px 8px",
                         borderRadius: 6,
-                        border: `1px solid ${POPUP_THEME.border}`,
+                        border: "1px solid transparent",
                         backgroundColor: POPUP_THEME.trayRowBg,
                         fontSize: 12,
                         lineHeight: 1.4,
@@ -3053,7 +3261,7 @@ export function Popup() {
                           padding: "1px 6px",
                           borderRadius: 4,
                           backgroundColor: POPUP_THEME.buttonBg,
-                          color: POPUP_THEME.accent,
+                          color: POPUP_THEME.muted,
                           fontSize: 10,
                           fontWeight: 700,
                         }}

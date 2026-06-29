@@ -1,3 +1,4 @@
+import "../lib/browserCompat";
 import {
   enrichSelectionMessage,
   scanPageMessage,

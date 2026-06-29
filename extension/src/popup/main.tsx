@@ -1,3 +1,4 @@
+import "../lib/browserCompat";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import "../styles/tokens.css";

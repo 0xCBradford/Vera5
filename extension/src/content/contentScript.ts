@@ -1,3 +1,4 @@
+import "../lib/browserCompat";
 import { safeRuntimeSendMessage, runWithExtensionContextAsync } from "../lib/extensionContext";
 import { setupAutoScanStorageListener, syncAutoScanWithStorage } from "./autoScan";
 import {

@@ -188,3 +188,16 @@
     transform: none;
   }
 }
+
+/* Cursor-location hover glow on every popup button (amber ring + soft glow). */
+.vera5-popup button:not(.v5-btn) {
+  transition: box-shadow var(--t-hover) var(--ease-out);
+}
+.vera5-popup button:hover:not(:disabled) {
+  box-shadow: 0 0 0 1.5px rgba(255, 178, 36, 0.45), 0 4px 16px rgba(255, 178, 36, 0.18);
+}
+@media (prefers-reduced-motion: reduce) {
+  .vera5-popup button:not(.v5-btn) {
+    transition: none;
+  }
+}

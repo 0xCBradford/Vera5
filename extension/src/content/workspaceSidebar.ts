@@ -496,11 +496,14 @@ function createWorkspaceButton(
   label: string,
   doc: Document,
   onClick: () => void,
-  disabled = false
+  disabled = false,
+  primary = false
 ): HTMLButtonElement {
   const button = doc.createElement("button");
   button.type = "button";
-  button.className = "vera5-workspace-button";
+  button.className = primary
+    ? "vera5-workspace-button vera5-workspace-button--primary"
+    : "vera5-workspace-button";
   button.textContent = label;
   button.disabled = disabled;
   button.addEventListener("click", onClick);
@@ -1147,7 +1150,7 @@ function toggleWorkspaceCollapsed(doc: Document): void {
   }
   const edgeTab = doc.querySelector(".vera5-workspace-edge-tab");
   if (edgeTab instanceof HTMLButtonElement) {
-    edgeTab.textContent = workspaceState.collapsed ? "‹" : "›";
+    edgeTab.textContent = workspaceState.collapsed ? "«" : "»";
     edgeTab.setAttribute(
       "aria-label",
       workspaceState.collapsed ? "Expand workspace" : "Collapse workspace"
@@ -1512,7 +1515,8 @@ function renderWorkspaceTop(doc: Document): void {
       },
       !workspaceState.ready ||
         !workspaceState.enabled ||
-        workspaceState.scanState === "scanning"
+        workspaceState.scanState === "scanning",
+      true
     )
   );
   controls.appendChild(
@@ -1905,7 +1909,7 @@ function renderWorkspace(doc: Document): void {
   const edgeTab = doc.createElement("button");
   edgeTab.type = "button";
   edgeTab.className = "vera5-workspace-edge-tab";
-  edgeTab.textContent = workspaceState.collapsed ? "‹" : "›";
+  edgeTab.textContent = workspaceState.collapsed ? "«" : "»";
   edgeTab.setAttribute(
     "aria-label",
     workspaceState.collapsed ? "Expand workspace" : "Collapse workspace"
