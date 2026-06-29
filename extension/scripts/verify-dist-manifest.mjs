@@ -6,15 +6,27 @@ const extensionRoot = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   ".."
 );
-const distDir = path.join(extensionRoot, "dist");
+const distRelative = process.env.VERA5_DIST_DIR ?? "dist";
+const distDir = path.join(extensionRoot, distRelative);
 
 function fail(message) {
   console.error(`verify-dist-manifest: ${message}`);
   process.exit(1);
 }
 
+function backgroundScriptPath(manifest) {
+  if (manifest.background?.service_worker) {
+    return manifest.background.service_worker;
+  }
+  const scripts = manifest.background?.scripts;
+  if (Array.isArray(scripts) && scripts.length > 0) {
+    return scripts[0];
+  }
+  return null;
+}
+
 if (!fs.existsSync(path.join(distDir, "manifest.json"))) {
-  fail("dist/manifest.json missing — run npm run build first");
+  fail(`${distRelative}/manifest.json missing — run the extension build first`);
 }
 
 const manifest = JSON.parse(
@@ -29,7 +41,7 @@ function add(relativePath) {
   }
 }
 
-add(manifest.background?.service_worker);
+add(backgroundScriptPath(manifest));
 for (const entry of manifest.content_scripts ?? []) {
   for (const js of entry.js ?? []) {
     add(js);
@@ -107,8 +119,9 @@ function checkJs(jsRelative) {
   }
 }
 
-if (manifest.background?.service_worker) {
-  checkJs(manifest.background.service_worker);
+const backgroundEntry = backgroundScriptPath(manifest);
+if (backgroundEntry) {
+  checkJs(backgroundEntry);
 }
 for (const entry of manifest.content_scripts ?? []) {
   for (const js of entry.js ?? []) {
@@ -128,5 +141,5 @@ for (const entry of manifest.content_scripts ?? []) {
 }
 
 console.log(
-  `verify-dist-manifest: OK (${required.size} manifest paths, HTML and JS references checked)`
+  `verify-dist-manifest: OK (${distRelative}, ${required.size} manifest paths, HTML and JS references checked)`
 );

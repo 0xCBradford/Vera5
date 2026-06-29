@@ -1,8 +1,10 @@
 import { defineConfig } from "vite";
 
+const outDir = process.env.VERA5_OUT_DIR ?? "dist";
+
 export default defineConfig({
   build: {
-    outDir: "dist",
+    outDir,
     emptyOutDir: false,
     target: "es2022",
     rollupOptions: {

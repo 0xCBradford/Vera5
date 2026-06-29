@@ -1,11 +1,13 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+const outDir = process.env.VERA5_OUT_DIR ?? "dist";
+
 export default defineConfig({
   plugins: [react()],
   root: ".",
   build: {
-    outDir: "dist",
+    outDir,
     emptyOutDir: true,
     target: "es2022",
     rollupOptions: {

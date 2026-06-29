@@ -32,7 +32,7 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["dist/**", "node_modules/**", "scripts/**"],
+    ignores: ["dist/**", "dist-firefox/**", "node_modules/**", "scripts/**"],
   },
   {
     files: ["e2e/**/*.ts"],

@@ -7,9 +7,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && vite build -c vite.content.config.ts",
+    "build:firefox": "node scripts/build-firefox.mjs",
     "build:watch": "vite build --watch",
     "icons": "node scripts/generate-icons.mjs",
     "verify:dist": "node scripts/verify-dist-manifest.mjs",
+    "verify:firefox-manifest": "node scripts/verify-firefox-manifest.mjs",
     "verify:security": "node scripts/verify-extension-security.mjs",
     "postbuild": "npm run verify:dist && npm run verify:security",
     "preview": "vite preview",

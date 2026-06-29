@@ -8,6 +8,7 @@ Quality gates for the extension workspace live under `extension/`.
 cd extension
 npm run check      # eslint + vitest
 npm run build      # dist/ + verify:dist + verify:security
+npm run build:firefox   # dist-firefox/ + verify:firefox-manifest + verify:dist
 npm run test       # vitest only
 npm run test:e2e   # Playwright browser harness (requires build + browser install)
 npm run test:e2e:critical   # PR-gate Investigation Mode smokes only
@@ -194,7 +195,7 @@ Use redacted fixtures only in issues and PRs.
 
 ## CI
 
-GitHub Actions workflows under `.github/workflows/` run lint, unit tests, production dependency audit (`npm run audit:prod`), a non-blocking full `npm audit` report for devDependencies, Gitleaks secret scanning on pull requests and pushes to `main`, and a `browser-e2e-smokes` job in `extension-quality.yml` on every pull request that builds `dist/`, installs Playwright Chromium, and runs `npm run test:e2e:critical`. A failing critical smoke fails the job and the pull request workflow; enable **browser-e2e-smokes** as a required status check on the default branch to block merge. Manual workflow runs can set **Skip browser E2E smokes** when quota-sensitive; pull request checks always run the smokes. Live vendor APIs are not called in CI.
+GitHub Actions workflows under `.github/workflows/` run lint, unit tests, production dependency audit (`npm run audit:prod`), a non-blocking full `npm audit` report for devDependencies, Gitleaks secret scanning on pull requests and pushes to `main`, a `browser-e2e-smokes` job in `extension-quality.yml` on every pull request that builds `dist/`, installs Playwright Chromium, and runs `npm run test:e2e:critical`, and a `firefox-artifact` job in the same workflow that builds both `dist/` and `dist-firefox/` (`npm run build` then `npm run build:firefox`) and uploads the Firefox unpack directory as a workflow artifact. A failing critical smoke fails the job and the pull request workflow; enable **browser-e2e-smokes** as a required status check on the default branch to block merge. Manual workflow runs can set **Skip browser E2E smokes** when quota-sensitive; pull request checks always run the smokes. Live vendor APIs are not called in CI.
 
 Local secret scan (same config as CI):
 

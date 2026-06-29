@@ -57,10 +57,11 @@ From `extension/`:
 | Command | Purpose |
 |---------|---------|
 | `npm run build` | Emit `dist/`, run `verify:dist` and `verify:security` |
+| `npm run build:firefox` | Emit `dist-firefox/` from shared sources with Firefox manifest, run `verify:firefox-manifest` and `verify:dist` against that output |
 | `npm run check` | ESLint + Vitest |
 | `npm run build:watch` | Rebuild popup/options/background; full `build` after content changes |
 
-Manifest: `extension/public/manifest.json`. Built manifest and bundles land under `extension/dist/`.
+Manifest: `extension/public/manifest.json` (Chromium service worker background). Firefox MV3 variant: `extension/public/manifest.firefox.json` (`browser_specific_settings.gecko`, `background.scripts` event background, permission parity with Chromium). Built manifests and bundles land under `extension/dist/` (Chromium) or `extension/dist-firefox/` when the dual-target build is enabled.
 
 ## Repository neighbors
 
