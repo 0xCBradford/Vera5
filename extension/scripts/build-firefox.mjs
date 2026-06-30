@@ -63,4 +63,6 @@ run("verify:dist-firefox", "node", ["scripts/verify-dist-manifest.mjs"], {
   VERA5_DIST_DIR: distRelative,
 });
 
+run("verify:security-firefox", "node", ["scripts/verify-extension-security.mjs", "--dist=dist-firefox"]);
+
 console.log(`build-firefox: OK (${distRelative}/ ready for temporary Firefox load)`);

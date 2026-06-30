@@ -6,7 +6,9 @@ const extensionRoot = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   ".."
 );
-const distRelative = process.env.VERA5_DIST_DIR ?? "dist";
+const distArg = process.argv.find((entry) => entry.startsWith("--dist="));
+const distRelative =
+  distArg?.slice("--dist=".length) ?? process.env.VERA5_DIST_DIR ?? "dist";
 const distDir = path.join(extensionRoot, distRelative);
 
 function fail(message) {

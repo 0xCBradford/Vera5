@@ -151,6 +151,8 @@ describe("Options API key inputs", () => {
     expect(
       mounted.container.querySelectorAll(".v5-source__health").length
     ).toBe(0);
+    expect(mounted.container.textContent).not.toContain("Last status:");
+    expect(mounted.container.textContent).not.toContain("Vendor quota:");
   });
 
   it("renders the manual-only enrichment toggle", async () => {

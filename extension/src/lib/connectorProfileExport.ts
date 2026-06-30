@@ -1,4 +1,5 @@
 import { DEFAULT_ABUSEIPDB_REQUEST_TIMEOUT_MS } from "./abuseipdbConnector";
+import { DEFAULT_CENSYS_REQUEST_TIMEOUT_MS } from "./censysConnector";
 import {
   DEFAULT_GLOBAL_ENRICHMENT_COOLDOWN_SECONDS,
   MAX_GLOBAL_ENRICHMENT_COOLDOWN_SECONDS,
@@ -6,11 +7,17 @@ import {
 import {
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
+  type EnrichmentSourceId,
+} from "./enrichmentSourceRegistry";
+import { DEFAULT_GREYNOISE_REQUEST_TIMEOUT_MS } from "./greynoiseConnector";
+import {
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
-  type EnrichmentSourceId,
 } from "./hoverCardEnrichment";
 import { DEFAULT_OTX_REQUEST_TIMEOUT_MS } from "./otxConnector";
+import { DEFAULT_SHODAN_REQUEST_TIMEOUT_MS } from "./shodanConnector";
+import { DEFAULT_URLSCAN_REQUEST_TIMEOUT_MS } from "./urlscanConnector";
+import { DEFAULT_VIRUSTOTAL_REQUEST_TIMEOUT_MS } from "./virustotalConnector";
 import {
   normalizeEnrichmentSourceCacheTtlRecord,
   normalizeEnrichmentSourceEnabledRecord,
@@ -97,24 +104,89 @@ const SOURCE_RATE_LIMIT_METADATA: Record<
     liveEnrichment: true,
     requestTimeoutSeconds: DEFAULT_OTX_REQUEST_TIMEOUT_MS / 1000,
     quotaSummary:
-      "Typical keyed tier: 10,000 requests/hour. Confirm limits in your OTX account.",
+      "Typical keyed tier: 10,000 requests/hour; 1,000/hour without a key. Confirm limits in your OTX account.",
     rateLimitHeaderHints: ["Retry-After"],
   },
-  [ENRICHMENT_SOURCE.URLSCAN]: {
+  [ENRICHMENT_SOURCE.VIRUSTOTAL]: {
     liveEnrichment: false,
     requestTimeoutSeconds: null,
     quotaSummary:
-      "Live enrichment not shipped. Toggle stores preference and pivot links only.",
+      "Live enrichment not enabled today. Typical public API tier when live: 500 lookups/day and 4 requests/min. Confirm limits in your VirusTotal account.",
+    rateLimitHeaderHints: [],
+  },
+  [ENRICHMENT_SOURCE.URLSCAN]: {
+    liveEnrichment: true,
+    requestTimeoutSeconds: DEFAULT_URLSCAN_REQUEST_TIMEOUT_MS / 1000,
+    quotaSummary:
+      "Per-action minute, hour, and day quotas vary by account (day resets midnight UTC). Confirm limits in your URLScan.io account or via GET /api/v1/quotas.",
     rateLimitHeaderHints: ["X-Rate-Limit-Limit", "X-Rate-Limit-Remaining"],
   },
   [ENRICHMENT_SOURCE.GREYNOISE]: {
+    liveEnrichment: true,
+    requestTimeoutSeconds: DEFAULT_GREYNOISE_REQUEST_TIMEOUT_MS / 1000,
+    quotaSummary:
+      "Typical free Community tier: 50 IPv4 lookups/week (combined with Visualizer). Confirm limits in your GreyNoise account.",
+    rateLimitHeaderHints: ["Retry-After"],
+  },
+  [ENRICHMENT_SOURCE.SHODAN]: {
+    liveEnrichment: true,
+    requestTimeoutSeconds: DEFAULT_SHODAN_REQUEST_TIMEOUT_MS / 1000,
+    quotaSummary:
+      "1 request/second on all plans; monthly query credits vary by plan (domain lookups consume credits). Confirm limits on Shodan billing.",
+    rateLimitHeaderHints: ["Retry-After"],
+  },
+  [ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING]: {
     liveEnrichment: false,
     requestTimeoutSeconds: null,
     quotaSummary:
-      "Live enrichment not shipped. Toggle stores preference and pivot links only.",
+      "Live enrichment not available. Pivot links only; confirm Google Safe Browsing API limits in your Google Cloud account if live integration ships.",
+    rateLimitHeaderHints: [],
+  },
+  [ENRICHMENT_SOURCE.PULSEDIVE]: {
+    liveEnrichment: false,
+    requestTimeoutSeconds: null,
+    quotaSummary:
+      "Live enrichment not available. Pivot links only; confirm API limits in your Pulsedive account if live integration ships.",
+    rateLimitHeaderHints: [],
+  },
+  [ENRICHMENT_SOURCE.MALWAREBAZAAR]: {
+    liveEnrichment: false,
+    requestTimeoutSeconds: null,
+    quotaSummary:
+      "Live enrichment not available. Pivot links only; see abuse.ch fair-use terms for API access.",
+    rateLimitHeaderHints: [],
+  },
+  [ENRICHMENT_SOURCE.CENSYS]: {
+    liveEnrichment: true,
+    requestTimeoutSeconds: DEFAULT_CENSYS_REQUEST_TIMEOUT_MS / 1000,
+    quotaSummary:
+      "Plan-dependent monthly query quota on Search API accounts. Confirm limits in your Censys account.",
+    rateLimitHeaderHints: ["Retry-After"],
+  },
+  [ENRICHMENT_SOURCE.THREATFOX]: {
+    liveEnrichment: false,
+    requestTimeoutSeconds: null,
+    quotaSummary:
+      "Live enrichment not available. Pivot links only; see abuse.ch API fair-use terms.",
+    rateLimitHeaderHints: [],
+  },
+  [ENRICHMENT_SOURCE.URLHAUS]: {
+    liveEnrichment: false,
+    requestTimeoutSeconds: null,
+    quotaSummary:
+      "Live enrichment not available. Pivot links only; see abuse.ch API fair-use terms.",
     rateLimitHeaderHints: [],
   },
 };
+
+export function getEnrichmentSourceQuotaSummary(
+  sourceId: EnrichmentSourceId
+): string {
+  return (
+    SOURCE_RATE_LIMIT_METADATA[sourceId]?.quotaSummary ??
+    "Confirm limits in your vendor account."
+  );
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);

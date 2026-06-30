@@ -4,23 +4,38 @@ This document explains why the Manifest V3 extension requests each permission in
 
 Vera5 is **local-first**: enrichment uses API keys you configure; indicator values are sent only to vendors you enable—not to Vera5-operated infrastructure.
 
-## Current release scope
+## Product scope
 
-The shipped extension registers a Manifest V3 service worker, content scripts on HTTP/HTTPS pages, a toolbar popup, and an options page. On pages you open, Vera5 can scan visible text for IOCs, show on-page highlights, open a production hover overlay, and—when you configure API keys—fetch enrichment from AbuseIPDB and OTX directly from the background worker. Settings, API keys, and enrichment cache stay in local browser storage. There is no Vera5-operated enrichment backend and no default telemetry. Permission rationale below matches this behavior.
+The Vera5 extension registers a Manifest V3 service worker, content scripts on HTTP/HTTPS pages, a toolbar popup, an options page, keyboard commands, and a context-menu enrich action. Builds target **Chrome/Chromium** and **Firefox** with shared sources and permission parity.
+
+On pages you open, Vera5 can:
+
+- scan visible text (and, when explicitly enabled, allowlisted link attributes) for IOCs
+- show on-page highlights and a production workspace overlay
+- enrich indicators when you configure API keys and take an explicit enrich action
+- manage investigation sessions, collections, history, timelines, notebook fragments, and local correlation memory
+
+Settings, API keys, enrichment cache, trust policy, and investigation data stay in local browser storage. There is no Vera5-operated enrichment backend and no default telemetry.
+
+An optional **localhost-only** FastAPI backend and **localhost-only** LLM summary endpoint are user-operated add-ons; they are default-off and never required.
+
+Permission rationale below matches this behavior.
 
 ## Manifest permissions
 
 | Permission | Required | Why Vera5 needs it |
 |------------|----------|-------------------|
-| `storage` | Yes | Persist analyst-controlled settings locally in the browser: extension on/off, API keys (masked at rest in UI), per-source toggles, enrichment cache entries, and related options. No Vera5 cloud sync; data stays in `chrome.storage.local` (or equivalent) on your profile. |
-| `activeTab` | Yes | Operate on the tab you are viewing when you invoke the extension (toolbar action, keyboard shortcut, or future on-demand actions) without requesting blanket access to every tab’s URL up front. Supports analyst-driven, tab-scoped behavior aligned with “enrich what I’m looking at now.” |
-| `scripting` | Yes | Inject or update page scripts when needed for IOC detection and UI (for example programmatic injection on demand, re-scan after navigation, or future manual-only modes). Content scripts are declared in the manifest; `scripting` covers dynamic injection paths the product may use without listing every site pattern twice. |
+| `storage` | Yes | Persist analyst-controlled settings locally: extension on/off, API keys (masked at rest in UI), per-source toggles, enrichment cache, domain policy, sessions, collections, macros, notebook fragments, correlation data, and related options. No Vera5 cloud sync; data stays in `chrome.storage.local` (or equivalent) on your profile. |
+| `activeTab` | Yes | Operate on the tab you are viewing when you invoke the extension (toolbar action, keyboard shortcut, context menu, or palette) without requesting blanket access to every tab’s URL up front. Supports analyst-driven, tab-scoped behavior aligned with “enrich what I’m looking at now.” |
+| `scripting` | Yes | Inject or update page scripts when needed for IOC detection and UI (programmatic injection on demand, re-scan after navigation, workspace overlay updates). Content scripts are declared in the manifest; `scripting` covers dynamic injection paths without listing every site pattern twice. |
+| `contextMenus` | Yes | Register **Enrich selection with Vera5** on text selection so analysts can enrich a highlighted indicator through the same trust-gated pipeline as palette and hover enrich—without a separate permission model. |
 
 ### What these permissions do not grant
 
 - **`storage`** does not send data to Vera5 servers; it is local browser storage only.
 - **`activeTab`** does not by itself read page content until you interact with the extension in that tab (combined with host access below for declared content scripts).
 - **`scripting`** is not used to run remote code, `eval`, or maintainer-hosted scripts—all executable code ships inside the extension package reviewers install.
+- **`contextMenus`** adds a selection action only; it does not bypass domain policy, quiet mode, pre-query disclosure, or manual-only defaults.
 
 ## Host permissions
 
@@ -28,36 +43,43 @@ The shipped extension registers a Manifest V3 service worker, content scripts on
 |---------|----------|-------------------|
 | `http://*/*` | Yes | Analyst workflows include internal tools, blogs, ticketing mirrors, and lab pages served over HTTP. IOC text must be readable on those origins when you visit them. |
 | `https://*/*` | Yes | Same for HTTPS sites (GitHub, vendor portals, search results, documentation). Broad match avoids maintaining an incomplete allowlist of analyst destinations. |
+| Declared vendor API hosts (see [Remote origins matrix](#remote-origins-matrix)) | Yes | Live enrichment uses HTTPS GET to configured threat-intel APIs from the background worker. Manifest entries align with `DECLARED_ENRICHMENT_API_HOSTS`; runtime `enrichmentFetch` blocks undeclared hosts before network I/O. |
 
 ### How host access is used
 
-- **Content scripts** (see manifest `content_scripts`) run at `document_idle` on matching pages, scan visible text for IOCs when you trigger a scan (or when auto-scan is enabled), and render the on-page hover overlay.
+- **Content scripts** run at `document_idle` on matching pages, scan visible text for IOCs when you trigger a scan (or when auto-scan is enabled), and render the on-page workspace overlay.
 - **Page text** is processed in the browser for detection. Only **indicator values you choose to enrich** are sent in API requests to third parties you configure—not full page HTML to Vera5 infrastructure.
-- **Skip rules:** ignore `script`, `style`, and `textarea` text by default; respect manual-only enrichment and per-source toggles in settings.
+- **Opt-in attribute/href extraction** (default **off**): when enabled, a conservative allowlisted attribute scan merges with visible-text detection. A first-enable consent dialog explains data accessed; password fields and hidden nodes are excluded.
+- **Skip rules:** ignore `script`, `style`, and `textarea` text by default; respect manual-only enrichment, quiet mode, per-source toggles, domain policy, and internal asset lists.
 
 ### Why broad host patterns
 
 Analysts cannot predict every SOC, CTI, or DFIR site in advance. Narrow host lists would block legitimate workflows. The tradeoff is explicit: Vera5 may access pages you open on HTTP/HTTPS origins you visit; you control whether enrichment runs and which vendors receive IOC values.
 
-## Surfaces declared in the manifest (not separate permission keys)
+## Surfaces declared in the manifest
 
 | Surface | Purpose |
 |---------|---------|
-| `background` service worker (`background.js`, ES module) | Message routing, enrichment fetch orchestration, cache, rate-limit cooldown, and connector calls. No DOM access. |
-| `content_scripts` → `content.js` on `http://*/*`, `https://*/*` | IOC detection, highlights, production hover overlay, and enrich wiring. Runs only on origins covered by host permissions. |
-| `action` popup (`popup.html`) | Extension on/off, highlight toggle, scan page, match count. |
-| `options_page` (`options.html`) | Masked API keys, source toggles, manual-only mode, cache clear, settings export/import. |
+| `background` service worker | Message routing, enrichment fetch orchestration, cache, rate-limit cooldown, connector calls, context-menu registration. No DOM access. |
+| `content_scripts` → `content.js` on `http://*/*`, `https://*/*` | IOC detection, highlights, workspace overlay, palette, enrich wiring, replay highlight sync. Runs only on origins covered by host permissions. |
+| `action` popup | Extension on/off, IOC tray, investigation session, source operations, history, quick actions. |
+| `options_page` | Masked API keys, source toggles, trust policy, manual-only mode, quiet mode, domain policy, internal assets, macros, threat profiles, cache clear, settings export/import. |
+| `commands` | Keyboard shortcuts for scan page and command palette. |
+| `contextMenus` | **Enrich selection with Vera5** on text selection. |
 
-Icons and HTML entrypoints do not add extra Chrome permission keys beyond those listed above.
+Icons, fonts, and HTML entrypoints do not add extra Chrome permission keys beyond those listed above.
 
 ## Data and trust boundaries
 
 | Data | Stays local | May leave the browser (your choice) |
-|------|-------------|-----------------------------------|
-| API keys | Stored in extension storage (or optional self-hosted env you control) | Sent only to vendor APIs you enable, over TLS, as required by each connector |
-| Extension enabled flag, UI settings | Yes | No |
+|------|-------------|-------------------------------------|
+| API keys | Stored in extension storage or optional self-hosted `backend/.env` you control | Sent only to vendor APIs you enable, over TLS, as required by each connector |
+| Extension settings, sessions, collections, notebook, correlation | Yes | No |
 | Detected IOC values | Processed locally for display | Sent as **indicator-only** requests to configured threat-intel APIs |
+| Normalized enrichment JSON for AI summary | Built locally from card fields | Sent only to **your** `http://127.0.0.1` LLM endpoint when summary is explicitly requested and toggle is on |
 | Full page HTML, browsing history, tickets | Not uploaded to Vera5-operated services | Not sent to Vera5 by design |
+| Investigation replay segments | Stored locally; read-only playback | No upload; markdown export is user-initiated clipboard/download only |
+| Portable threat profiles and settings packs | Imported/exported as JSON without keys | No Vera5-hosted profile store |
 
 For a visual summary of IOC and data boundaries, see the **IOC and data boundary** diagram in [SECURITY.md](../SECURITY.md#ioc-leakage).
 
@@ -65,36 +87,53 @@ For a visual summary of IOC and data boundaries, see the **IOC and data boundary
 
 **Telemetry:** No usage analytics or crash reporting to Vera5 by default.
 
+## Trust gates (stacked)
+
+Live outbound enrichment passes through layered gates before vendor calls:
+
+| Gate | Behavior |
+|------|----------|
+| **Manual-only enrichment** (default) | Auto-fetch on hover stays off until you disable manual-only mode |
+| **Quiet mode** (default off) | Blocks all live vendor `fetch()` calls; pivots, cached enrich display, and local detection remain available |
+| **Domain policy** | Blocks live enrich on denylisted hostnames (and allowlist mode when configured) before pre-query disclosure |
+| **Internal asset lists** | Blocks outbound enrich when the **indicator value** matches configured internal domains, IPv4 CIDR ranges, or vendor/SaaS hostname patterns |
+| **Known-good policy** (optional) | When enabled, may skip vendor enrich for curated benign/internal matches; does not bypass domain deny or quiet mode |
+| **Pre-query disclosure** | Inline notice names enabled vendors and the indicator before the first vendor fetch when notices are on |
+| **Context-menu / selection enrich** | Re-validates selection as an exact IOC match; same page and indicator gates as hover enrich |
+| **`extractExactIocValue` / `sanitizeEnrichmentIoc`** | Rejects multi-line, oversized, or markup-bearing values before messages reach the service worker |
+| **`enrichmentFetch` allowlist** | Throws before network I/O when the target host is not a declared connector API |
+
+Pivot recipe links are navigation-only (no live `fetch` from the page context).
+
 ## Domain policy and sensitive sites
 
-Vera5 can gate **auto-scan** and **live enrichment** on the hostname of the page you are viewing. Policy is stored locally in extension settings (`domainPolicyMode`, `domainAllowlist`, `domainDenylist`). When the domain enrich gate is enabled (default), the same rules block vendor API calls before pre-query disclosure runs.
+Vera5 gates **auto-scan** and **live enrichment** on the hostname of the page you are viewing. Policy is stored locally (`domainPolicyMode`, `domainAllowlist`, `domainDenylist`). When the domain enrich gate is enabled (default), the same rules block vendor API calls before pre-query disclosure runs.
 
 | Mode | Behavior |
 |------|----------|
-| Allow by default (current product default) | Auto-scan and enrichment run on all hosts **except** those on the denylist. |
+| Allow by default (product default) | Auto-scan and enrichment run on all hosts **except** those on the denylist. |
 | Deny by default (optional posture) | Auto-scan and enrichment run **only** on hosts in the allowlist. |
 
 Lists are managed in **Vera5 Settings** under **Trust & consent**, or via settings export/import.
 
 ### Product default policy
 
-Fresh installs and normalized settings use **allow by default** (`domainPolicyMode`: `allow_by_default`). The **denylist ships with sensitive webmail patterns by default** so common webmail hosts are blocked for auto-scan and live enrichment without manual setup. The allowlist starts empty. Upgrades from earlier profiles with an empty denylist receive the same webmail defaults during storage migration.
+Fresh installs and normalized settings use **allow by default**. The **denylist ships with sensitive webmail patterns by default** so common webmail hosts are blocked for auto-scan and live enrichment without manual setup.
 
 | Control | Default | What it means for sensitive sites |
 |---------|---------|-----------------------------------|
 | Domain policy mode | Allow by default | SOC and vendor sites stay open unless denylisted |
-| Denylist | Sensitive webmail patterns | Blocks `mail.*`, `webmail.*`, and common provider webmail hosts (see below) |
+| Denylist | Sensitive webmail patterns | Blocks `mail.*`, `webmail.*`, and common provider webmail hosts |
 | Allowlist | Empty | Not used until you switch to deny-by-default |
 | Domain enrich gate | On | Denylisted hosts skip vendor calls before pre-query disclosure |
-| Manual-only enrichment | On | Live fetch still requires an explicit enrich action on allowed hosts |
+| Manual-only enrichment | On | Live fetch requires an explicit enrich action on allowed hosts |
 | Auto-scan | Off | DOM-driven rescans stay off until you enable auto-scan |
 | Pre-query notices | On until first-run choice | Inline disclosure precedes vendor calls when enrichment is allowed |
+| Quiet mode | Off | When on, blocks outbound vendor calls regardless of other enrich toggles |
 
-**Deny by default** is an alternate mode you can set when your operating policy requires an allowlist-first model (for example only internal SOC exports and approved CTI consoles). Switching modes does not auto-fill the allowlist; you maintain list entries to match the mode you choose.
+**Deny by default** is an alternate mode for allowlist-first operating policy. Switching modes does not auto-fill the allowlist.
 
 #### Default sensitive webmail denylist
-
-Under the allow-by-default product posture, Vera5 **requires** default protection on common webmail origins. Fresh installs and qualifying upgrades include these denylist entries:
 
 | Pattern | Covers |
 |---------|--------|
@@ -104,20 +143,17 @@ Under the allow-by-default product posture, Vera5 **requires** default protectio
 | `mail.google.com` | Gmail web |
 | `mail.yahoo.com` | Yahoo Mail web |
 
-Analysts can remove or extend denylist rows in **Trust & consent**. Banking, health, and HR patterns are **not** in the default denylist; use the **Sensitive sites denylist** preset or add entries manually.
+Analysts can remove or extend denylist rows in **Trust & consent**. The **Sensitive sites denylist** preset merges banking, patient-portal, and workforce SaaS patterns into the denylist without removing custom entries.
 
-#### Mapping sensitive-domain guidance to the default
+#### Pattern syntax
 
-The pattern tables below are written for the **shipped default**:
+| Form | Example | Matches |
+|------|---------|---------|
+| Exact hostname | `mail.company.com` | That host only |
+| Prefix wildcard | `mail.*` | `mail` and `mail.<label>` |
+| Suffix wildcard | `*.corp.example` | `corp.example` and `<label>.corp.example` |
 
-| Posture | Where to apply suggested patterns | Typical outcome |
-|---------|-----------------------------------|-----------------|
-| **Allow by default** (product default) | Add sensitive patterns to the **denylist** | SOC and vendor sites stay open; webmail, banking, health, and HR hosts you list are blocked for auto-scan and live enrich |
-| **Deny by default** (optional) | Build an **allowlist** of approved investigation hosts first; avoid allowlisting sensitive categories unless policy requires it | Only listed origins scan or enrich; everything else is blocked |
-
-Under allow by default, start with denylist entries such as `mail.*`, `webmail.*`, and exact hosts for banking, patient portals, and HR SaaS tenants your organization uses. Under deny by default, invert the workflow: allowlist SOC destinations explicitly, then audit whether any sensitive host truly belongs on the allowlist.
-
-Other trust controls stack on top of domain policy: manual-only enrichment and pre-query disclosure remain the first lines of defense on allowed hosts; denylist entries add hostname-level blocks before disclosure or vendor calls.
+For workflow context, see [analyst-workflows.md](analyst-workflows.md).
 
 ## Internal asset lists
 
@@ -129,92 +165,100 @@ Separate from page-hostname domain policy, Vera5 supports **indicator-level** in
 | Internal IPv4 CIDR ranges | IPv4 indicators | `10.0.0.0/8`, `192.168.0.0/16` |
 | Vendor and SaaS labels | Domain and URL indicators (hostname match) | Label `Corporate VPN`, pattern `vpn.corp.example` |
 
-Lists start empty. Hash and CVE indicators are not matched by these lists in the current release. Manage lists under **Trust & consent** in Vera5 Settings, or via settings export/import. Matching logic lives in `extension/src/lib/internalAssetPolicy.ts`; the content-script gate runs in `enrichmentBackgroundFetch.ts` via `internalAssetPolicyStorage.ts`.
+Hash and CVE indicators are not matched by these lists. Manage lists under **Trust & consent** in Vera5 Settings, or via settings export/import.
 
-### Shipped default-safe presets
+## Opt-in attribute and href extraction
 
-Vera5 documents **allow by default** as the chosen product posture (not deny-by-default). To reduce accidental scan or enrich on sensitive origins without blocking SOC tooling by default, the extension ships one mergeable preset in **Trust & consent**:
+**Default: off.** Vera5 does not scan link attributes unless you explicitly enable attribute/href extraction in Settings and confirm the first-enable consent dialog.
 
-| Preset | Recommended mode | What it adds |
-|--------|------------------|--------------|
-| **Sensitive sites denylist** | Allow by default | Merges banking (`*.bank`), patient-portal (`*.mychart.org`), and workforce SaaS patterns (`hr.*`, `people.*`, `*.workday.com`, `*.successfactors.com`, `*.ultipro.com`) into your **denylist** in addition to the default webmail entries |
+| Control | Behavior |
+|---------|----------|
+| Default on fresh install | **Off** — visible-text detection only |
+| Allowlisted attributes | Conservative set (for example `href`, `src`, `data-url`); excludes password inputs and hidden subtrees |
+| Provenance | IOCs found via attribute path are labeled separately from visible-text matches |
+| Performance | Capped attribute-node scan per page; large DOMs may skip attribute pass |
+| Trust interaction | Same domain policy, quiet mode, and enrich gates apply to attribute-sourced IOCs |
 
-Applying a preset **merges** entries; it does not remove custom allowlist or denylist rows. It sets domain policy mode to the preset’s recommended mode (allow by default for the shipped preset). See [analyst-workflows.md](analyst-workflows.md) for workflow context.
+Enabling this feature increases passive indicator handling in page markup; combine with domain denylist entries on sensitive hosts.
 
-### Pattern syntax
+## Quiet mode
 
-Entries are normalized to lowercase. Supported forms match the domain policy matcher in the extension:
+Quiet mode is a global setting (default **off**) that blocks **outbound vendor enrichment calls** while preserving:
 
-| Form | Example | Matches |
-|------|---------|---------|
-| Exact hostname | `mail.company.com` | That host only |
-| Prefix wildcard | `mail.*` | `mail` and `mail.<label>` (for example `mail.google.com`, `mail.contoso.com`) |
-| Suffix wildcard | `*.corp.example` | `corp.example` and `<label>.corp.example` |
+- local IOC detection and highlighting
+- attributed pivot links (user-initiated navigation)
+- cached enrichment display with cached vs live labels
+- export, sessions, collections, and notebook workflows
 
-Use prefix patterns for common webmail layouts (`mail.*`, `webmail.*`). Use suffix patterns for internal zones (`*.internal`, `*.corp.example`).
+Bulk enrich queue and macro enrich steps abort with clear messaging when quiet mode is active. Quiet mode does not bypass domain deny when you later disable it—it is an additional outbound gate.
 
-### Suggested sensitive-domain patterns
+Analyst mode presets and portable threat profiles may suggest quiet mode defaults; applying a profile never injects API keys.
 
-The tables below are **starting points** aligned with the **allow-by-default product default**: add them to your **denylist**, apply the **Sensitive sites denylist** preset in Options, or build an allowlist if you use deny-by-default (see [Product default policy](#product-default-policy)). Adjust for your organization’s DNS and SaaS tenants.
+## Optional local backend (127.0.0.1)
 
-#### Webmail and personal email
+When enabled, the extension may send indicator-only enrich requests to a user-operated FastAPI service on localhost instead of calling vendors directly from the background worker.
 
-Accidental enrichment on webmail can associate message-adjacent indicators (headers, URLs, addresses) with third-party threat-intel vendors.
+| Boundary | Behavior |
+|----------|----------|
+| Listen address | `127.0.0.1` only—not exposed on LAN by default |
+| Default | Off; extension direct BYOK vendor calls remain the primary path |
+| Credentials | May live in `backend/.env` on your machine; never committed to git |
+| Fallback | Extension falls back to in-browser connectors with honest UI when backend is unreachable |
+| CORS | Restricted to extension origin and localhost |
+| Logging | Backend request logs redact API keys and bulk IOC payloads |
+| Vera5 cloud | Backend does not relay indicators or keys to Vera5-operated infrastructure |
 
-| Suggested pattern | Notes |
-|-------------------|-------|
-| `mail.*` | Corporate and provider webmail hosts (`mail.contoso.com`, `mail.proton.me`) |
-| `webmail.*` | Alternate webmail prefixes |
-| `outlook.office.com`, `outlook.live.com` | Microsoft consumer and M365 webmail |
-| `mail.google.com` | Gmail web |
-| `mail.yahoo.com` | Yahoo Mail web |
+See [local-mode.md](local-mode.md) for setup.
 
-#### Banking and financial services
+## Local AI summary (127.0.0.1)
 
-Online banking and payment portals often sit on regulated domains where outbound indicator queries may be restricted or require explicit approval.
+The optional AI summary feature is **default-off**. When enabled, it sends **normalized enrichment JSON only** to a user-configured `http://127.0.0.1` endpoint.
 
-| Suggested pattern | Notes |
-|-------------------|-------|
-| Exact institution hosts | Prefer known login, wire, and treasury portals (for example `chase.com`, `wellsfargo.com`, or your regional equivalents) |
-| `*.bank` | Matches hosts ending in `.bank` where your providers use that layout—verify against live DNS before relying on TLD-style rules |
+Forbidden inputs: API keys, full DOM, browsing history, raw vendor HTTP bodies, credentials.
 
-Avoid overly broad prefix wildcards (for example `online.*`) on shared analyst machines; they can block legitimate SOC and vendor sites.
+Summary output is labeled **AI summary (local, unverified)** and does not replace composite score or per-source attribution. Guardrail tests reject claims not present in input JSON.
 
-#### Health and patient portals
+See [ai-summary.md](ai-summary.md).
 
-Patient charts, lab results, and telehealth sessions may contain PHI-adjacent indicators.
+## Investigation replay and local memory
 
-| Suggested pattern | Notes |
-|-------------------|-------|
-| Exact portal hosts | Insurer, hospital, and telehealth login domains your workforce uses |
-| `*.mychart.org` | Common MyChart-style patient portal naming (validate against your providers) |
-| Suffix patterns for health zones | Internal clinical or research zones (for example `*.clinical.corp.example`) when you operate split DNS |
+Investigation replay, timelines, correlation clusters, relationship edges, and notebook fragments are **local-only**:
 
-Treat health-related origins like high-sensitivity workflow: under the product default, add them to the **denylist**; if you use deny-by-default, allowlist only approved SOC destinations and omit patient-portal hosts unless policy explicitly requires them.
+- stored in extension local storage
+- no screen or video capture APIs
+- no upload endpoint to Vera5
+- replay step-through does **not** re-issue live vendor API calls
+- export/copy actions are user-initiated
 
-#### Internal HR and workforce systems
+Clear-all controls for correlation or relationship memory do not delete investigation sessions unless you explicitly choose combined wipe (documented in Settings).
 
-HR portals, performance tools, and payroll sites expose employee identifiers, compensation context, and internal routing data.
+## Portable profiles, settings packs, and third-party JSON
 
-| Suggested pattern | Notes |
-|-------------------|-------|
-| Exact internal hosts | `hr.company.com`, `people.company.internal`, VPN-only HR zones |
-| `hr.*`, `people.*` | Common internal naming—tune to your corporate DNS |
-| `*.workday.com`, `*.successfactors.com`, `*.ultipro.com` | Common SaaS HR platforms; prefer exact tenant subdomains when known |
-| `*.internal`, `*.corp.example` | Broad intranet suffix patterns to block passive scan and enrich on internal browsing |
+Threat profiles and settings packs import connector toggles, TTL, domain policy, analyst mode, export templates, and optional noise-list references—**never API keys or tokens**.
 
-### Applying patterns safely
+| Control | Behavior |
+|---------|----------|
+| Schema validation | Rejects files containing `apiKey`, `token`, or similar secret fields |
+| Pre-import warning | UI explains profiles change modes and connectors—not stored keys |
+| Merge preview | Diff before apply for settings packs and profiles |
+| Trust | Verify source before import; Vera5 does not host a profile marketplace |
 
-- **Pre-query disclosure** still applies when enrichment is allowed; domain policy is an additional gate, not a replacement for analyst consent.
-- **Manual-only enrichment** (default on) reduces accidental live queries; combine with denylist entries on sensitive hosts.
-- **Auto-scan** (default off) respects the same lists; enabling auto-scan on webmail increases passive indicator handling in page text even when vendor calls stay blocked.
-- Review patterns after DNS or SaaS migrations; stale denylist entries are harmless, missing entries are not.
+Profiles cannot bypass pre-query disclosure, domain deny, quiet mode, or internal asset gates.
 
-For workflow context, see [analyst-workflows.md](analyst-workflows.md) (manual-only enrichment and sensitive cases).
+## Local noise rules and known-good lists
+
+Noise reduction and known-good intelligence use **inspectable local rules** only:
+
+- created from explicit analyst actions (suppress, internal, benign labels)
+- stored and exported as human-readable JSON
+- no telemetry, cloud training, or opaque ML weight vectors
+- importable pattern lists for team handoff without secrets
+
+Known-good labels are informational; optional skip-enrich policy does not bypass domain deny or quiet mode.
 
 ## Permission changes
 
-Any new permission or host pattern requires an update to this document, [SECURITY.md](../SECURITY.md), the manifest, and the Chrome Web Store listing so analysts can review the change before upgrading.
+Any new permission or host pattern requires an update to this document, [SECURITY.md](../SECURITY.md), the manifest, store listings (Chrome and Firefox), and release notes so analysts can review the change before upgrading.
 
 ## Executable code and content security policy
 
@@ -246,12 +290,20 @@ Vera5 does not add `unsafe-eval`, `unsafe-inline`, or remote `https://` entries 
 |------------------|-----------|---------|---------------------|
 | `https://api.abuseipdb.com/…` | `fetch()` GET (connector) | AbuseIPDB enrichment when enabled and keyed | No — BYOK to vendor |
 | `https://otx.alienvault.com/…` | `fetch()` GET (connector) | OTX enrichment when enabled and keyed | No — BYOK to vendor |
+| `https://urlscan.io/…` | `fetch()` GET (connector) | URLScan.io search when enabled and keyed | No — BYOK to vendor |
+| `https://api.greynoise.io/…` | `fetch()` GET (connector) | GreyNoise community lookup when enabled and keyed | No — BYOK to vendor |
+| `https://www.virustotal.com/…` | `fetch()` GET (connector) | VirusTotal v3 object lookup when enabled and keyed | No — BYOK to vendor |
+| `https://api.shodan.io/…` | `fetch()` GET (connector) | Shodan host/DNS lookup when enabled and keyed | No — BYOK to vendor |
+| `https://search.censys.io/…` | `fetch()` GET (connector) | Censys host lookup when enabled and credentialed | No — BYOK to vendor |
+| RDAP/WHOIS endpoints (declared per connector) | `fetch()` GET | Domain registration context when RDAP connector enabled | No — to public RDAP or configured resolver |
+| `http://127.0.0.1:<port>/…` | `fetch()` (optional bridge) | Local backend enrich or summarize when toggled on | No — localhost only |
+| `http://127.0.0.1:<llm-port>/…` | `fetch()` (opt-in summary) | Local LLM summary when explicitly requested | No — normalized JSON only |
 | `https://…` pivot URLs | `chrome.tabs.create` / user navigation | Analyst opens vendor search pages from pivot actions | No live API call from extension |
 | `https://www.vera5.io/` | `chrome.tabs.create` | Product website link from workspace sidebar | No enrichment |
 | `chrome://settings/…` | `chrome.tabs.create` | Site-permissions helper | Internal browser UI |
-| Page under scan (`http(s)://*/*`) | Content scripts (`host_permissions`) | DOM read for IOC detection only | No upload to Vera5 infrastructure |
+| Page under scan (`http(s)://*/*`) | Content scripts | DOM read for IOC detection only | No upload to Vera5 infrastructure |
 
-Live `fetch()` calls exist only in [`abuseipdbConnector.ts`](../extension/src/lib/abuseipdbConnector.ts) and [`otxConnector.ts`](../extension/src/lib/otxConnector.ts). Connectors default to `enrichmentFetch` in [`iocRequestBoundaries.ts`](../extension/src/lib/iocRequestBoundaries.ts), which throws before any network I/O when the target host is not listed in `DECLARED_ENRICHMENT_API_HOSTS` or when the request uses a non-HTTPS URL or includes a body. Connectors use GET without a request body; indicator values are passed in the URL or query string per vendor API requirements.
+Live `fetch()` calls for enrichment are limited to connector modules registered in the enrichment source registry. Connectors use `enrichmentFetch` in [`iocRequestBoundaries.ts`](../extension/src/lib/iocRequestBoundaries.ts), which throws before any network I/O when the target host is not listed in `DECLARED_ENRICHMENT_API_HOSTS`, when the request uses a non-HTTPS URL (except documented localhost bridges), or when a request body is present. Connectors use GET without a request body; indicator values are passed in the URL or query string per vendor API requirements.
 
 There is no `importScripts()` or dynamic `import()` from network URLs in production bundles.
 
@@ -262,8 +314,9 @@ There is no `importScripts()` or dynamic `import()` from network URLs in product
 | `eval()` / `new Function()` | Not used in `extension/src/` or production bundles under `extension/dist/`. |
 | Remote scripts in extension pages | Popup and options HTML reference only relative `/assets/…` paths. |
 | Manifest CSP override | No custom CSP with `unsafe-eval`, `unsafe-inline`, or remote `script-src`. |
-| Live fetch allowlist | Only connector modules may call `fetch()`; declared HTTPS hosts are `api.abuseipdb.com` and `otx.alienvault.com`. Runtime `enrichmentFetch` blocks undeclared hosts before network I/O. |
+| Live fetch allowlist | Only connector modules may call enrichment `fetch()`; hosts must appear in `DECLARED_ENRICHMENT_API_HOSTS`. Runtime guard blocks undeclared hosts before network I/O. |
 | Remote code at runtime | No dynamic import or `importScripts()` from `https://` URLs in `dist/`. |
+| Quiet mode / domain gates | Tests assert outbound enrich blocked on denylisted hosts and under quiet mode before vendor calls. |
 
 After each production build:
 
@@ -281,9 +334,9 @@ Vera5 does not write API keys, bulk IOC lists, scan snapshots, or vendor raw JSO
 | Surface | Policy |
 |---------|--------|
 | Content-script scan diagnostics | `devLog.ts` logs numeric scan metrics only when `import.meta.env.DEV` is true; production bundles omit `console.debug` output. |
-| Unexpected runtime errors | `logUnlessBenignExtensionError` in `extensionContext.ts` logs a truncated `name: message` string only; raw error objects, storage payloads, and bulk indicator data are never passed to `console.error`. |
+| Unexpected runtime errors | `logUnlessBenignExtensionError` logs a truncated `name: message` string only; raw error objects, storage payloads, and bulk indicator data are never passed to `console.error`. |
 | Live connectors | No `console` usage; vendor responses stay in memory/cache unless the analyst opens raw JSON in the overlay. |
-| Regression | `npm run verify:security` rejects new production `console` calls outside the allowlisted modules, blocks sensitive payload patterns in log statements, and fails if shipped bundles contain `console.debug` or raw-object `console.error`. |
+| Regression | `npm run verify:security` rejects new production `console` calls outside allowlisted modules, blocks sensitive payload patterns in log statements, and fails if shipped bundles contain `console.debug` or raw-object `console.error`. |
 
 ## Test fixture hygiene
 
@@ -298,35 +351,35 @@ Hostile or misleading page content can try to confuse IOC triage: decoy indicato
 | Scenario | Goal of the page | What Vera5 must prevent |
 |----------|------------------|-------------------------|
 | Decoy or bait IOCs | Trigger false positives or wasted enrichments | Surfacing only regex-valid, deduplicated spans with transparent match provenance |
-| Hidden or metadata IOCs | Smuggle values via attributes or non-visible subtrees | Scanning visible text nodes only; skipping script, style, textarea, and metadata subtrees by default |
-| Selection / clipboard confusion | Enrich a value the analyst did not intend | Re-validating selection text as an exact IOC match before enrich; opening cards from verified highlights or validated matches only |
+| Hidden or metadata IOCs | Smuggle values via attributes or non-visible subtrees | Visible-text scan by default; attribute scan opt-in only |
+| Selection / clipboard confusion | Enrich a value the analyst did not intend | Re-validating selection text as an exact IOC match before enrich |
 | Fake extension UI | Mimic enrich buttons or disclosure prompts | Building overlay UI only from the content script; never executing page-supplied HTML as extension chrome |
-| Forced outbound queries | Exfiltrate data via unexpected hosts | Routing live `fetch()` through the service worker with `enrichmentFetch` host allowlisting; analyst consent gates before vendor calls |
+| Forced outbound queries | Exfiltrate data via unexpected hosts | Routing live `fetch()` through the service worker with `enrichmentFetch` host allowlisting; trust gates before vendor calls |
 | Markup in indicator values | Break UI or smuggle HTML into outbound requests | Binding overlay text with `textContent`; rejecting values containing markup or newlines in `extractExactIocValue` |
 
 ### Detection surface controls
 
-IOC detection walks **text nodes** under the scan root (`textWalker.ts`). Default production behavior:
+IOC detection walks **text nodes** under the scan root. Default production behavior:
 
-- Skips `<script>`, `<style>`, `<textarea>`, and metadata subtrees (`head`, `meta`, `link`, `noscript`, `template`, `title`).
-- Does **not** scan element attributes (`href`, `src`, `data-*`, event handlers, etc.); only visible text content is considered.
-- Caps scans at **2,500 text nodes** per pass to limit work on pathological DOMs.
+- Skips `<script>`, `<style>`, `<textarea>`, and metadata subtrees.
+- Does **not** scan element attributes unless attribute/href extraction is explicitly enabled.
+- Caps scans at **2,500 text nodes** per pass (and separate caps for attribute scans when enabled).
 - Applies conservative regex rules, overlap deduplication, and documented suppressions (see [Known false positives and suppressions](architecture.md#known-false-positives-and-suppressions)).
 
-The hover overlay shows **Why detected?** with rule id, source context, on-page vs refanged values, and ignored overlaps so analysts can reconcile page text with the matched span.
+The workspace overlay shows **Why detected?** with rule id, source context, on-page vs refanged values, and ignored overlaps.
 
 ### Overlay and workspace UI
 
-Production on-page UI (hover card, workspace sidebar, command palette) is assembled by the content script using `document.createElement` and **`textContent`** for analyst-visible strings and vendor-derived summaries. Vendor raw JSON is redacted and length-capped before display (`enrichmentRawResponse.ts`).
+Production on-page UI is assembled by the content script using `document.createElement` and **`textContent`** for analyst-visible strings and vendor-derived summaries. Vendor raw JSON is redacted and length-capped before display.
 
 | Control | Purpose |
 |---------|---------|
 | Dedicated host elements (`vera5-hover-card-host`, `vera5-workspace-host`, `vera5-command-palette-host`) | Keeps extension UI in nodes the content script owns |
 | High `z-index` and scoped `pointer-events` | Reduces accidental interaction with page layers beneath real extension panels |
-| `stopPropagation` on overlay controls | Prevents page handlers from intercepting enrich, disclosure, or copy actions on Vera5 buttons |
-| `confirmOpenLiveUrl` | Requires analyst confirmation before navigating to a refanged live URL from the overlay |
+| `stopPropagation` on overlay controls | Prevents page handlers from intercepting enrich, disclosure, or copy actions |
+| `confirmOpenLiveUrl` | Requires analyst confirmation before navigating to a refanged live URL |
 
-**Limitation:** A hostile page can still inject DOM that **looks** like Vera5. The real extension UI appears only after you invoke Vera5 (toolbar, workspace, keyboard shortcut, context menu, or highlight). Treat unexpected enrich prompts that did not follow your action as suspicious; legitimate live enrichment shows the pre-query disclosure naming **your** enabled vendors when notices are on.
+**Limitation:** A hostile page can still inject DOM that **looks** like Vera5. The real extension UI appears only after you invoke Vera5 (toolbar, workspace, keyboard shortcut, context menu, or highlight). Treat unexpected enrich prompts that did not follow your action as suspicious.
 
 ### Enrichment and credential isolation
 
@@ -334,27 +387,18 @@ Page JavaScript cannot read `chrome.storage.local` or call vendor APIs with stor
 
 ```mermaid
 flowchart LR
-  PageDOM[Untrusted page DOM] -->|visible text only| CS[Content script]
+  PageDOM[Untrusted page DOM] -->|visible text optional attributes| CS[Content script]
   CS -->|indicator value messages| SW[Service worker]
-  SW -->|HTTPS GET + your key| Vendor[Configured vendor API]
+  SW -->|HTTPS GET plus your key| Vendor[Configured vendor API]
+  SW -.->|optional localhost indicator only| Backend[127.0.0.1 backend]
 ```
-
-| Gate | Behavior |
-|------|----------|
-| Manual-only enrichment (default) | Auto-fetch on hover stays off until you disable manual-only mode |
-| Domain policy | Blocks live enrich on denylisted hostnames before pre-query disclosure |
-| Internal asset lists | Blocks outbound enrich when the indicator matches configured internal ranges |
-| Pre-query disclosure | Inline notice names enabled vendors and the indicator before the first vendor fetch |
-| `extractExactIocValue` / `sanitizeEnrichmentIoc` | Rejects multi-line, oversized, or markup-bearing values before messages reach the service worker |
-| `enrichmentFetch` allowlist | Throws before network I/O when the target host is not a declared connector API |
-
-Pivot recipe links are navigation-only (no live `fetch` from the page context). See [Remote origins matrix](#remote-origins-matrix) for declared hosts.
 
 ### Residual risk and analyst practice
 
-- Decoy IOCs in **visible** page text may still match valid grammar; suppressions reduce noise but cannot eliminate judgment calls on ambiguous prose.
-- Auto-scan (when enabled) re-reads DOM mutations on allowed hosts; use domain denylist and manual-only mode on sensitive origins.
-- Validate enrichment intent on high-risk pages: confirm **Why detected?**, read the pre-query disclosure, and use **Trust & consent** presets for webmail and internal tools.
+- Decoy IOCs in **visible** page text may still match valid grammar; suppressions reduce noise but cannot eliminate judgment calls.
+- Auto-scan (when enabled) re-reads DOM mutations on allowed hosts; use domain denylist, quiet mode, and manual-only mode on sensitive origins.
+- Attribute extraction (when enabled) increases exposure to markup-embedded strings; keep it off unless policy requires it.
+- Validate enrichment intent on high-risk pages: confirm **Why detected?**, read pre-query disclosure, and use **Trust & consent** presets for webmail and internal tools.
 
 For operator checks on trust gates and disclosure, use the [Trust and query checklist](../SECURITY.md#trust-and-query-checklist). For regression fixtures that exercise decoy suppressions, see [soc-validation-fixtures.md](soc-validation-fixtures.md).
 
@@ -366,39 +410,47 @@ Pen-test style review for the shipped extension: supply chain, executable surfac
 
 Run from repository root unless noted. Re-run after dependency bumps, manifest permission changes, or connector additions.
 
-| # | Control | Verification | Status |
-|---|---------|--------------|--------|
-| 1 | Production dependency audit | `cd extension && npm run audit:prod` (CI: **Extension quality** workflow, blocking) | **Verified** — 0 vulnerabilities |
-| 2 | Extension build integrity | `cd extension && npm run build` → `verify:dist` + `verify:security` in postbuild | **Verified** |
-| 3 | Unit and lint regression | `cd extension && npm run check` | **Verified** — 1018 tests (79 files) |
-| 4 | Secret scan (Gitleaks) | `gitleaks detect --source . --config .github/gitleaks.toml`; CI: `.github/workflows/secret-scan.yml` on pull requests and `main` pushes | **Verified** — no leaks |
-| 5 | `.env.example` credential placeholders | Root `.env.example`; `verify:security` rejects non-empty credential values | **Verified** |
-| 6 | Extension-page CSP | Default MV3 CSP; no remote assets in popup/options HTML (`verify:security`) | **Verified** |
-| 7 | Live fetch allowlist | `enrichmentFetch` + `DECLARED_ENRICHMENT_API_HOSTS`; only AbuseIPDB and OTX connector modules | **Verified** |
-| 8 | Enrichment GET without body | Connector modules; `verify:security` | **Verified** |
-| 9 | Production logging hygiene | No sensitive `console` in shipped bundles; redacted error strings only | **Verified** |
-| 10 | Test fixture redaction | `fixtureSecrets.ts` placeholders; no legacy inline secret strings in tests | **Verified** |
-| 11 | No `eval` / remote dynamic import | `verify:security` on `extension/src` and `extension/dist` | **Verified** |
-| 12 | Manifest permissions match documentation | Compare [Manifest permissions](#manifest-permissions) and [Host permissions](#host-permissions) to [`extension/public/manifest.json`](../extension/public/manifest.json) | **Verified** |
+| # | Control | Verification |
+|---|---------|--------------|
+| 1 | Production dependency audit | `cd extension && npm run audit:prod` (CI: **Extension quality** workflow) |
+| 2 | Extension build integrity | `cd extension && npm run build` → `verify:dist` + `verify:security` in postbuild |
+| 3 | Unit, lint, and E2E regression | `cd extension && npm run check` and `npm run test:e2e:critical` |
+| 4 | Secret scan (Gitleaks) | CI: `.github/workflows/secret-scan.yml` on pull requests and main pushes |
+| 5 | `.env.example` credential placeholders | Root and `backend/.env.example`; `verify:security` rejects non-empty credential values |
+| 6 | Extension-page CSP | Default MV3 CSP; no remote assets in popup/options HTML |
+| 7 | Live fetch allowlist | `enrichmentFetch` + `DECLARED_ENRICHMENT_API_HOSTS`; registry connector modules only |
+| 8 | Enrichment GET without body | Connector modules; `verify:security` |
+| 9 | Production logging hygiene | No sensitive `console` in shipped bundles |
+| 10 | Test fixture redaction | `fixtureSecrets.ts` placeholders; no legacy inline secret strings in tests |
+| 11 | No `eval` / remote dynamic import | `verify:security` on `extension/src` and `extension/dist` |
+| 12 | Manifest permissions match documentation | Compare this document to [`extension/public/manifest.json`](../extension/public/manifest.json) |
+| 13 | Firefox build parity | Dual-target build; permission and CSP review per [browser-support.md](browser-support.md) |
+| 14 | Trust gate regression | Tests for domain deny, quiet mode, internal assets, context-menu enrich gates |
 
 ### Operator confirmation (browser)
 
-Automated checks do not replace unpacked Chrome validation. Confirm trust, consent, and hostname gates using the [Trust and query checklist](../SECURITY.md#trust-and-query-checklist) in [SECURITY.md](../SECURITY.md):
+Automated checks do not replace unpacked browser validation. Confirm trust, consent, and hostname gates using the [Trust and query checklist](../SECURITY.md#trust-and-query-checklist):
 
 - Manual-only enrichment and **Trust & consent** settings match your workflow.
-- Denylisted hosts block live enrich without vendor calls.
+- Denylisted hosts block live enrich without vendor calls (including context-menu enrich).
+- Quiet mode blocks outbound enrich while pivots and cache display work.
 - Pre-query disclosure appears before the first vendor fetch on allowed hosts when notices are enabled.
 - Only authorized live sources and API keys are enabled.
+- Optional localhost backend and LLM endpoints bind to `127.0.0.1` only.
 
 Serve `examples/` over HTTP and use SOC fixtures per [soc-validation-fixtures.md](soc-validation-fixtures.md). Record operator pass/fail in your internal release notes; do not paste API keys or full page content into issues.
 
 ### Checklist maintenance
 
-When adding permissions, connectors, or CI steps, update this checklist, [SECURITY.md](../SECURITY.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md), and the manifest together so reviewers can assess upgrades before install.
+When adding permissions, connectors, localhost bridges, or CI steps, update this checklist, [SECURITY.md](../SECURITY.md), [`CONTRIBUTING.md`](../CONTRIBUTING.md), and the manifest together so reviewers can assess upgrades before install.
 
 ## Related documents
 
 - [SECURITY.md](../SECURITY.md) — vulnerability reporting and high-level threat model
-- [architecture.md](architecture.md) — codebase layout, MVP IOC types, connector order
+- [architecture.md](architecture.md) — codebase layout, IOC types, connector order
 - [analyst-workflows.md](analyst-workflows.md) — analyst-facing workflow guidance
+- [local-mode.md](local-mode.md) — extension-only and optional localhost backend
+- [ai-summary.md](ai-summary.md) — local LLM summary input contract and safety
+- [browser-support.md](browser-support.md) — Chrome and Firefox install paths
+- [api-integrations.md](api-integrations.md) — vendor quotas and connector behavior
 - [README.md](../README.md) — install and development workflow

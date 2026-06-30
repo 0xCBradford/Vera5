@@ -51,6 +51,11 @@ vi.mock("./enrichmentMessageClient", async (importOriginal) => {
 
 import * as enrichmentSourceStorage from "./enrichmentSourceStorage";
 import { hasPendingPreQueryDisclosure } from "../lib/enrichmentPolicy";
+import { INVESTIGATION_HISTORY_SCHEMA_VERSION } from "../lib/investigationHistory";
+import {
+  listInvestigationHistoryEntries,
+  STORAGE_KEY_INVESTIGATION_HISTORY,
+} from "../lib/investigationHistoryStorage";
 
 async function waitForPreQueryDisclosurePending(): Promise<void> {
   for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -1047,5 +1052,114 @@ describe("internal asset enrich gate", () => {
     expect(
       enrichmentMessageClient.requestEnrichmentFromServiceWorker
     ).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("investigation history persistence after enrichment", () => {
+  let localStore: Record<string, unknown>;
+
+  beforeEach(() => {
+    localStore = {};
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: {
+        href: "https://example.com/alert",
+        hostname: "example.com",
+      },
+    });
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in localStore) {
+                result[key] = localStore[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(localStore, items);
+            return Promise.resolve();
+          },
+        },
+      },
+      runtime: {
+        id: "test-extension-id",
+        sendMessage: vi.fn(async () => ({ ok: true })),
+      },
+    });
+    vi.mocked(enrichmentSourceStorage.getEnrichmentSourceEnabledForContent).mockResolvedValue({
+      abuseipdb: true,
+      otx: false,
+      urlscan: false,
+      greynoise: false,
+    });
+    vi.mocked(enrichmentSourceStorage.getShowPreQueryNoticesForContent).mockResolvedValue(
+      false
+    );
+  });
+
+  afterEach(() => {
+    cancelPendingHoverEnrichment();
+    document.body.replaceChildren();
+    vi.unstubAllGlobals();
+  });
+
+  it("persists a history entry after completed live enrichment", async () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "203.0.113.42",
+      type: IOC_TYPE.IPV4,
+    });
+
+    vi.mocked(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).mockResolvedValue({
+      sources: [
+        {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "25% abuse confidence",
+        },
+      ],
+      primary: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "25% abuse confidence",
+      },
+    });
+
+    await expect(
+      runBackgroundEnrichment({
+        value: "203.0.113.42",
+        type: IOC_TYPE.IPV4,
+      })
+    ).resolves.toBe("completed");
+
+    const entries = await listInvestigationHistoryEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      ioc: "203.0.113.42",
+      iocType: IOC_TYPE.IPV4,
+      pageOrigin: "https://example.com",
+      pageUrl: "https://example.com/alert",
+    });
+
+    const persisted = localStore[STORAGE_KEY_INVESTIGATION_HISTORY] as {
+      schemaVersion: number;
+      entries: Array<{ ioc: string }>;
+    };
+    expect(persisted.schemaVersion).toBe(INVESTIGATION_HISTORY_SCHEMA_VERSION);
+    expect(persisted.entries[0]?.ioc).toBe("203.0.113.42");
   });
 });

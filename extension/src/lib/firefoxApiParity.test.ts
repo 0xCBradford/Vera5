@@ -4,6 +4,10 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { routeIncomingMessage } from "../background/messageRouter";
 import { enrichIocMessage, MESSAGE, pingMessage } from "./messages";
+import {
+  DECLARED_ENRICHMENT_API_HOSTS,
+  MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS,
+} from "./iocRequestBoundaries";
 
 const extensionRoot = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -15,7 +19,11 @@ function readManifest(relativePath: string): {
   permissions?: string[];
   host_permissions?: string[];
   background?: { service_worker?: string; scripts?: string[] };
-  browser_specific_settings?: { gecko?: { strict_min_version?: string } };
+  browser_specific_settings?: { gecko?: { strict_min_version?: string; data_collection_permissions?: { required?: string[] } } };
+  web_accessible_resources?: unknown;
+  content_security_policy?: unknown;
+  options_page?: string;
+  action?: { default_popup?: string };
 } {
   return JSON.parse(
     readFileSync(path.join(extensionRoot, relativePath), "utf8")
@@ -39,6 +47,7 @@ const BACKGROUND_ASYNC_MESSAGE_TYPES = [
   MESSAGE.ARCHIVE_INVESTIGATION_SESSION,
   MESSAGE.DELETE_INVESTIGATION_SESSION,
   MESSAGE.GET_ENRICHMENT_SOURCE_OPS,
+  MESSAGE.OPEN_EXTENSION_POPUP,
   MESSAGE.LIST_IOC_COLLECTIONS,
   MESSAGE.CREATE_IOC_COLLECTION,
   MESSAGE.ADD_IOC_TO_COLLECTION,
@@ -53,6 +62,7 @@ const CONTENT_SCRIPT_MESSAGE_LISTENERS = [
   "src/content/enrichSelection.ts",
   "src/content/commandPalette.ts",
   "src/content/iocTrayNavigation.ts",
+  "src/content/investigationHistoryReopen.ts",
   "src/content/workspaceSidebar.ts",
 ] as const;
 
@@ -62,6 +72,7 @@ const CONTENT_TO_TAB_MESSAGE_TYPES = [
   MESSAGE.ENRICH_SELECTION,
   MESSAGE.GET_SELECTION_ACTION_STATE,
   MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
+  MESSAGE.REOPEN_INVESTIGATION_HISTORY,
   MESSAGE.TOGGLE_WORKSPACE,
   MESSAGE.OPEN_WORKSPACE,
   MESSAGE.TOGGLE_COMMAND_PALETTE,
@@ -73,6 +84,24 @@ const BROWSER_COMPAT_ENTRY_POINTS = [
   "src/popup/main.tsx",
   "src/options/main.tsx",
 ] as const;
+
+function manifestHostPatternCoversHttpsHostname(
+  pattern: string,
+  hostname: string
+): boolean {
+  if (pattern === "https://*/*") {
+    return true;
+  }
+  if (!pattern.startsWith("https://") || !pattern.endsWith("/*")) {
+    return false;
+  }
+  const hostPattern = pattern.slice("https://".length, -2);
+  if (hostPattern.startsWith("*.")) {
+    const suffix = hostPattern.slice(2);
+    return hostname === suffix || hostname.endsWith(`.${suffix}`);
+  }
+  return hostname === hostPattern;
+}
 
 describe("Firefox API parity (storage, messaging, contextMenus)", () => {
   it("declares storage and contextMenus on both Chromium and Firefox manifests", () => {
@@ -92,6 +121,60 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
     expect(firefoxManifest.host_permissions).toEqual(
       chromeManifest.host_permissions
     );
+  });
+
+  it("covers every declared connector API host in the Firefox manifest", () => {
+    const firefoxManifest = readManifest("public/manifest.firefox.json");
+    const hostPermissions = firefoxManifest.host_permissions ?? [];
+
+    expect(hostPermissions).toContain("https://*/*");
+
+    for (const hostname of DECLARED_ENRICHMENT_API_HOSTS) {
+      expect(
+        hostPermissions.some((pattern) =>
+          manifestHostPatternCoversHttpsHostname(pattern, hostname)
+        )
+      ).toBe(true);
+    }
+  });
+
+  it("lists explicit Firefox manifest host permissions for every declared connector API host", () => {
+    const firefoxManifest = readManifest("public/manifest.firefox.json");
+    const hostPermissions = firefoxManifest.host_permissions ?? [];
+
+    for (const permission of MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS) {
+      expect(hostPermissions).toContain(permission);
+    }
+  });
+
+  it("keeps default MV3 CSP posture without remote script-src overrides on both manifests", () => {
+    const chromeManifest = readManifest("public/manifest.json");
+    const firefoxManifest = readManifest("public/manifest.firefox.json");
+
+    expect(chromeManifest.content_security_policy).toBeUndefined();
+    expect(firefoxManifest.content_security_policy).toBeUndefined();
+  });
+
+  it("keeps web_accessible_resources and extension page entrypoints aligned with Chromium", () => {
+    const chromeManifest = readManifest("public/manifest.json");
+    const firefoxManifest = readManifest("public/manifest.firefox.json");
+
+    expect(firefoxManifest.web_accessible_resources).toEqual(
+      chromeManifest.web_accessible_resources
+    );
+    expect(firefoxManifest.options_page).toBe(chromeManifest.options_page);
+    expect(firefoxManifest.action?.default_popup).toBe(
+      chromeManifest.action?.default_popup
+    );
+  });
+
+  it("declares no Mozilla data collection on the Firefox manifest", () => {
+    const firefoxManifest = readManifest("public/manifest.firefox.json");
+
+    expect(
+      firefoxManifest.browser_specific_settings?.gecko?.data_collection_permissions
+        ?.required
+    ).toEqual(["none"]);
   });
 
   it("loads browserCompat at every extension entry point", () => {

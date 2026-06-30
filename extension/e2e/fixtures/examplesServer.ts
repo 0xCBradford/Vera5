@@ -10,6 +10,8 @@ const EXAMPLES_SERVER_PORT = 8765;
 const EXAMPLES_SERVER_HOST = "127.0.0.1";
 
 let server: http.Server | undefined;
+let ownsServer = false;
+let cachedBaseUrl: string | undefined;
 
 function resolveExamplesFilePath(urlPath: string): string | null {
   const normalized = urlPath.split("?")[0] ?? "/";
@@ -32,10 +34,23 @@ function contentTypeForFile(filePath: string): string {
   return "application/octet-stream";
 }
 
-export async function startExamplesServer(): Promise<string> {
-  if (server) {
-    return `http://${EXAMPLES_SERVER_HOST}:${EXAMPLES_SERVER_PORT}`;
+async function probeExamplesServer(baseUrl: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${baseUrl}/sample-alert.html`, {
+      signal: AbortSignal.timeout(2_000),
+    });
+    return response.ok;
+  } catch {
+    return false;
   }
+}
+
+export async function startExamplesServer(): Promise<string> {
+  if (cachedBaseUrl) {
+    return cachedBaseUrl;
+  }
+
+  const defaultBaseUrl = `http://${EXAMPLES_SERVER_HOST}:${EXAMPLES_SERVER_PORT}`;
 
   server = http.createServer((request, response) => {
     const filePath = resolveExamplesFilePath(request.url ?? "/");
@@ -57,18 +72,34 @@ export async function startExamplesServer(): Promise<string> {
     }
   });
 
-  await new Promise<void>((resolve, reject) => {
-    server!.once("error", reject);
-    server!.listen(EXAMPLES_SERVER_PORT, EXAMPLES_SERVER_HOST, () => {
-      resolve();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server!.once("error", reject);
+      server!.listen(EXAMPLES_SERVER_PORT, EXAMPLES_SERVER_HOST, () => {
+        resolve();
+      });
     });
-  });
-
-  return `http://${EXAMPLES_SERVER_HOST}:${EXAMPLES_SERVER_PORT}`;
+    ownsServer = true;
+    cachedBaseUrl = defaultBaseUrl;
+    return cachedBaseUrl;
+  } catch (error) {
+    server = undefined;
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? String(error.code)
+        : "";
+    if (code === "EADDRINUSE" && (await probeExamplesServer(defaultBaseUrl))) {
+      ownsServer = false;
+      cachedBaseUrl = defaultBaseUrl;
+      return cachedBaseUrl;
+    }
+    throw error;
+  }
 }
 
 export async function stopExamplesServer(): Promise<void> {
-  if (!server) {
+  if (!server || !ownsServer) {
+    cachedBaseUrl = undefined;
     return;
   }
 
@@ -82,4 +113,6 @@ export async function stopExamplesServer(): Promise<void> {
     });
   });
   server = undefined;
+  ownsServer = false;
+  cachedBaseUrl = undefined;
 }

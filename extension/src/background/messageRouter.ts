@@ -5,6 +5,9 @@ import {
 } from "../lib/messages";
 import { openExtensionSitePermissionsPage } from "../lib/extensionSitePermissions";
 import {
+  setPopupPanelFocus,
+} from "../lib/popupPanelFocus";
+import {
   handleGetTabScanSummaryMessage,
   handleTabScanSnapshotMessage,
 } from "../lib/tabScanSnapshotStorage";
@@ -85,6 +88,8 @@ export function routeIncomingMessage(raw: unknown): MessageResponse {
       return { ok: false, error: "enrich request requires async handler" };
     case MESSAGE.OPEN_OPTIONS_PAGE:
       return handleOpenOptionsPageMessage();
+    case MESSAGE.OPEN_EXTENSION_POPUP:
+      return { ok: false, error: "open extension popup requires async handler" };
     case MESSAGE.OPEN_SITE_PERMISSIONS:
       return handleOpenSitePermissionsMessage();
   }
@@ -106,6 +111,43 @@ function handleOpenSitePermissionsMessage(): MessageResponse {
   } catch {
     return { ok: false, error: "could not open site permissions page" };
   }
+}
+
+async function handleOpenExtensionPopupMessage(raw: {
+  panel: Parameters<typeof setPopupPanelFocus>[0];
+}): Promise<MessageResponse> {
+  const stored = await setPopupPanelFocus(raw.panel);
+  if (!stored) {
+    return { ok: false, error: "could not store popup panel focus" };
+  }
+
+  let opened = false;
+  if (typeof chrome.action?.openPopup === "function") {
+    try {
+      await chrome.action.openPopup();
+      opened = true;
+    } catch {
+      opened = false;
+    }
+  }
+
+  if (!opened) {
+    return {
+      ok: true,
+      payload: {
+        opened: false,
+        panel: raw.panel,
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      opened: true,
+      panel: raw.panel,
+    },
+  };
 }
 
 export async function routeIncomingMessageAsync(
@@ -190,6 +232,10 @@ export async function routeIncomingMessageAsync(
 
   if (raw.type === MESSAGE.REMOVE_IOC_FROM_COLLECTION) {
     return handleRemoveIocFromCollectionMessage(raw);
+  }
+
+  if (raw.type === MESSAGE.OPEN_EXTENSION_POPUP) {
+    return handleOpenExtensionPopupMessage(raw);
   }
 
   return routeIncomingMessage(raw);

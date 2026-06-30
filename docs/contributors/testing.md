@@ -8,10 +8,11 @@ Quality gates for the extension workspace live under `extension/`.
 cd extension
 npm run check      # eslint + vitest
 npm run build      # dist/ + verify:dist + verify:security
-npm run build:firefox   # dist-firefox/ + verify:firefox-manifest + verify:dist
+npm run build:firefox   # dist-firefox/ + verify:firefox-manifest + verify:dist + verify:security:firefox
 npm run test       # vitest only
 npm run test:e2e   # Playwright browser harness (requires build + browser install)
 npm run test:e2e:critical   # PR-gate Investigation Mode smokes only
+npm run test:e2e:firefox   # Firefox temporary add-on smoke (requires build:firefox + Firefox install)
 npm run typecheck  # tsc --noEmit
 ```
 
@@ -80,6 +81,21 @@ npx playwright show-trace test-results/.../trace.zip
 
 Traces are retained on failure (`playwright.config.ts`).
 
+### Firefox E2E smoke
+
+Firefox has no Chromium-style `--load-extension` flag. The harness launches Playwright Firefox with a remote-debugging server, installs `dist-firefox/` as a temporary add-on over RDP, then opens `examples/sample-alert.html` over the local examples server and asserts the content-script readiness marker.
+
+The investigation smoke seeds mocked enrichment via the examples-server bridge (pre-populated cache entries, no live vendor HTTP), scans the page, opens the hover card, checks the composite score, and runs Copy all export. Playwright Firefox E2E always runs headless because headed runs with Juggler/RDP can hang on Windows.
+
+```bash
+cd extension
+npm run build:firefox
+npm run test:e2e:firefox:install   # once per machine
+npm run test:e2e:firefox
+```
+
+`test:e2e:firefox` runs `verify-dist-manifest.mjs --dist=dist-firefox` first, then `e2e/firefox.harness.load.spec.ts` and `e2e/firefox.scan.hover.export.spec.ts`. This smoke is local/optional today — the PR gate still runs Chromium-only `test:e2e:critical`.
+
 ### E2E layout
 
 | Path | Role |
@@ -88,7 +104,13 @@ Traces are retained on failure (`playwright.config.ts`).
 | `e2e/fixtures/enrichmentMockRoutes.ts` | Fixture-backed vendor JSON responses, storage seed helpers, and live-request assertions |
 | `e2e/fixtures/sampleAlertFixture.ts` | Fixed `sample-alert.html` IOC expectations, stable selectors, shared scan helpers |
 | `e2e/fixtures/examplesServer.ts` | Local HTTP server for `examples/` pages used by browser smokes |
-| `e2e/extensionPaths.ts` | Resolves `extension/dist` for the fixture |
+| `e2e/extensionPaths.ts` | Resolves `extension/dist` and `extension/dist-firefox` for fixtures |
+| `e2e/fixtures/firefoxExtension.ts` | Launches headless Playwright Firefox, installs `dist-firefox/` via RDP `installTemporaryAddon` |
+| `e2e/fixtures/firefoxRdp.ts` | Minimal Firefox Remote Debugging Protocol client for temporary add-on install |
+| `e2e/firefox.harness.load.spec.ts` | Firefox smoke: temporary add-on load and `sample-alert.html` content-script readiness |
+| `e2e/firefox.scan.hover.export.spec.ts` | Firefox smoke: scan, mocked hover enrich, and Copy all export on `sample-alert.html` |
+| `e2e/fixtures/examplesFixtureBridge.ts` | Posts storage/scan commands to the content script on the local examples server (Firefox cannot open `moz-extension://` pages from Playwright) |
+| `e2e/fixtures/extensionRuntime.ts` | Runs extension API calls in the Chromium MV3 service worker; Firefox uses the examples bridge instead |
 | `e2e/*.spec.ts` | Browser smoke specs |
 | `playwright.config.ts` | Serial workers, timeouts, CI reporters |
 
@@ -117,7 +139,7 @@ Browser E2E validates Investigation Mode paths against a **real unpacked extensi
 
 | Limit | Detail |
 |-------|--------|
-| Browser matrix | Chromium via Playwright only — not installed Chrome, Edge, or Firefox |
+| Browser matrix | Chromium via Playwright for the PR gate — not installed Chrome or Edge; Firefox covered only by optional `test:e2e:firefox` |
 | Popup UX | Harness opens `popup.html` in a **background extension tab**, not the toolbar popup overlay; tab-focus semantics differ from manual use |
 | Page coverage | Deterministic `examples/` HTML over `127.0.0.1:8765` — not arbitrary live sites or authenticated portals |
 | Vendor network | No live AbuseIPDB/OTX (or other) calls in CI; mocks and an abort guard only |
@@ -179,9 +201,10 @@ Extension E2E is sensitive to build drift, tab focus, and overlay positioning. P
 ```bash
 cd extension
 npm run verify:security
+npm run verify:security:firefox   # after npm run build:firefox
 ```
 
-Runs after `npm run build` via `postbuild`. Checks extension-page CSP posture (no remote assets in popup/options HTML, no weakened manifest CSP), live fetch limited to connector hosts, no sensitive production logging (keys, bulk IOCs, raw vendor payloads), no `eval`, and no API key logging. See [docs/security-model.md](../security-model.md).
+Runs after `npm run build` via `postbuild` on `dist/`. The Firefox build runs the same checks on `dist-firefox/` via `verify:security:firefox`. Checks extension-page CSP posture (no remote assets in popup/options HTML, no weakened manifest CSP), absence of common analytics/crash-reporting hosts in production bundles, live fetch limited to connector hosts, no sensitive production logging (keys, bulk IOCs, raw vendor payloads), no `eval`, and no API key logging. See [docs/security-model.md](../security-model.md).
 
 ## Manual browser checks
 

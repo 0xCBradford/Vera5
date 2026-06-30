@@ -25,6 +25,8 @@ import { setupHoverCardTrigger } from "./hoverCardTrigger";
 import { setupEnrichSelectionListener } from "./enrichSelection";
 import { setupHighlightStorageListener, setupScanPageListener } from "./scanPage";
 import { setupNavigateToIocAnchorListener } from "./iocTrayNavigation";
+import { setupReopenInvestigationHistoryListener } from "./investigationHistoryReopen";
+import { setupExamplesFixtureBridge } from "./examplesFixtureBridge";
 import { setupWorkspaceSidebarListener } from "./workspaceSidebar";
 
 const contentScriptAlreadyInitialized =
@@ -39,6 +41,7 @@ if (!contentScriptAlreadyInitialized) {
   setupScanPageListener();
   setupEnrichSelectionListener();
   setupNavigateToIocAnchorListener();
+  setupReopenInvestigationHistoryListener();
   setupHighlightStorageListener();
   setupAutoScanStorageListener();
   void runWithExtensionContextAsync(syncAutoScanWithStorage);
@@ -54,6 +57,7 @@ if (!contentScriptAlreadyInitialized) {
   setupBackgroundEnrichmentRouting();
   setupCommandPaletteListener();
   setupHoverCardTrigger();
+  setupExamplesFixtureBridge();
 }
 
 setupWorkspaceSidebarListener();

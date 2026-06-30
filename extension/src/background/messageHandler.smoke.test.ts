@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { contentRegisterMessage, enrichIocMessage, getTabScanSummaryMessage, MESSAGE, pingMessage, tabScanSnapshotMessage } from "../lib/messages";
+import { contentRegisterMessage, enrichIocMessage, getTabScanSummaryMessage, MESSAGE, openExtensionPopupMessage, pingMessage, tabScanSnapshotMessage } from "../lib/messages";
+import { POPUP_PANEL } from "../lib/popupPanelFocus";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import { IOC_RULE_ID } from "../lib/iocRegex";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
@@ -59,10 +60,13 @@ function stubChromeStorage(store: Record<string, unknown>): void {
 
 const enrichWithAbuseIpdb = vi.fn();
 
-vi.mock("../lib/abuseipdbConnector", () => ({
-  ABUSEIPDB_SOURCE_ID: "abuseipdb",
-  enrichWithAbuseIpdb: (...args: unknown[]) => enrichWithAbuseIpdb(...args),
-}));
+vi.mock("../lib/abuseipdbConnector", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/abuseipdbConnector")>();
+  return {
+    ...actual,
+    enrichWithAbuseIpdb: (...args: unknown[]) => enrichWithAbuseIpdb(...args),
+  };
+});
 
 vi.mock("../lib/storage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/storage")>();
@@ -89,6 +93,58 @@ describe("message handler smoke", () => {
       ok: true,
     });
     expect(openOptionsPage).toHaveBeenCalledTimes(1);
+    vi.unstubAllGlobals();
+  });
+
+  it("stores popup panel focus for OPEN_EXTENSION_POPUP", async () => {
+    const store: Record<string, unknown> = {};
+    const openPopup = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: () => Promise.resolve({}),
+          set: () => Promise.resolve(),
+        },
+        session: {
+          get: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (values: Record<string, unknown>) => {
+            Object.assign(store, values);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+      action: { openPopup },
+      runtime: { id: "test-extension-id" },
+    });
+
+    const response = await routeIncomingMessageAsync(
+      openExtensionPopupMessage(POPUP_PANEL.SOURCE_OPERATIONS)
+    );
+
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        opened: true,
+        panel: POPUP_PANEL.SOURCE_OPERATIONS,
+      },
+    });
+    expect(openPopup).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 

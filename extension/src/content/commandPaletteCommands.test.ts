@@ -18,6 +18,8 @@ import {
   CORE_COMMAND_PALETTE_COMMAND_IDS,
   registerCoreCommandPaletteCommands,
 } from "./commandPaletteCommands";
+import { openExtensionPopupMessage } from "../lib/messages";
+import { POPUP_PANEL } from "../lib/popupPanelFocus";
 
 describe("registerCoreCommandPaletteCommands", () => {
   beforeEach(() => {
@@ -32,15 +34,17 @@ describe("registerCoreCommandPaletteCommands", () => {
     vi.restoreAllMocks();
   });
 
-  it("registers all six core palette commands", () => {
+  it("registers all eight core palette commands", () => {
     const ids = listCommandPaletteCommands().map((command) => command.id);
     expect(ids).toEqual([
       CORE_COMMAND_PALETTE_COMMAND_IDS.CLEAR_HIGHLIGHTS,
       CORE_COMMAND_PALETTE_COMMAND_IDS.COPY_FILTERED_MARKDOWN,
       CORE_COMMAND_PALETTE_COMMAND_IDS.ENRICH_SELECTION,
       CORE_COMMAND_PALETTE_COMMAND_IDS.EXPORT_TRAY_SUBSET,
+      CORE_COMMAND_PALETTE_COMMAND_IDS.OPEN_HISTORY,
       CORE_COMMAND_PALETTE_COMMAND_IDS.OPEN_OPTIONS,
       CORE_COMMAND_PALETTE_COMMAND_IDS.SCAN_PAGE,
+      CORE_COMMAND_PALETTE_COMMAND_IDS.SOURCE_HEALTH,
     ]);
   });
 
@@ -143,5 +147,33 @@ describe("registerCoreCommandPaletteCommands", () => {
     await executeCommandPaletteCommand(CORE_COMMAND_PALETTE_COMMAND_IDS.OPEN_OPTIONS);
 
     expect(safeOpenOptionsPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("requests investigation history popup focus", async () => {
+    const safeRuntimeSendMessage = vi
+      .spyOn(extensionContext, "safeRuntimeSendMessage")
+      .mockResolvedValue({ ok: true, payload: { opened: true } });
+
+    await executeCommandPaletteCommand(
+      CORE_COMMAND_PALETTE_COMMAND_IDS.OPEN_HISTORY
+    );
+
+    expect(safeRuntimeSendMessage).toHaveBeenCalledWith(
+      openExtensionPopupMessage(POPUP_PANEL.INVESTIGATION_HISTORY)
+    );
+  });
+
+  it("requests source health popup focus", async () => {
+    const safeRuntimeSendMessage = vi
+      .spyOn(extensionContext, "safeRuntimeSendMessage")
+      .mockResolvedValue({ ok: true, payload: { opened: true } });
+
+    await executeCommandPaletteCommand(
+      CORE_COMMAND_PALETTE_COMMAND_IDS.SOURCE_HEALTH
+    );
+
+    expect(safeRuntimeSendMessage).toHaveBeenCalledWith(
+      openExtensionPopupMessage(POPUP_PANEL.SOURCE_OPERATIONS)
+    );
   });
 });

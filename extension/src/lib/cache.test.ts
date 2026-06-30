@@ -5,6 +5,7 @@ import {
   buildEnrichmentCacheKey,
   cacheEnrichmentSourceResult,
   clearEnrichmentCache,
+  clearEnrichmentCacheForSource,
   countEnrichmentCacheEntries,
   createEmptyEnrichmentCache,
   DEFAULT_MAX_ENRICHMENT_CACHE_ENTRIES,
@@ -129,6 +130,32 @@ describe("enrichment cache storage", () => {
     await expect(getEnrichmentCache()).resolves.toEqual(
       createEmptyEnrichmentCache()
     );
+  });
+
+  it("clears cache entries scoped to one enrichment source", async () => {
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: Date.now(),
+        payload: { summary: "abuse" },
+      },
+      "8.8.8.8|otx": {
+        fetchedAt: Date.now(),
+        payload: { summary: "otx" },
+      },
+      "1.1.1.1|abuseipdb": {
+        fetchedAt: Date.now(),
+        payload: { summary: "other" },
+      },
+    };
+
+    const removedCount = await clearEnrichmentCacheForSource("abuseipdb");
+    expect(removedCount).toBe(2);
+    await expect(getEnrichmentCache()).resolves.toEqual({
+      "8.8.8.8|otx": {
+        fetchedAt: expect.any(Number),
+        payload: { summary: "otx" },
+      },
+    });
   });
 });
 

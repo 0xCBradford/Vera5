@@ -5,7 +5,8 @@ import {
   resolvePreQueryDisclosure,
   shouldShowPreQueryNotices,
 } from "../lib/enrichmentPolicy";
-import { isExtensionContextInvalidated } from "../lib/extensionContext";
+import { isExtensionContextInvalidated, logUnlessBenignExtensionError } from "../lib/extensionContext";
+import { recordInvestigationHistoryEntry } from "../lib/investigationHistoryStorage";
 import type { IocType } from "../lib/iocRegex";
 import {
   hasAnyEnabledLiveEnrichmentSource,
@@ -316,6 +317,11 @@ export async function runBackgroundEnrichment(
   }
 
   await executeBackgroundEnrichmentFetch(payload, doc, options);
+  void recordInvestigationHistoryEntry({
+    ioc: payload.value,
+    iocType: payload.type,
+    pageUrl: doc.location.href,
+  }).catch(logUnlessBenignExtensionError);
   return "completed";
 }
 

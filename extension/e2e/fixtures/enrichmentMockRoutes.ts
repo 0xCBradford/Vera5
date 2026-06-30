@@ -1,8 +1,13 @@
-import type { BrowserContext } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { postExamplesFixtureBridgeMessage } from "./examplesFixtureBridge";
+import {
+  evaluateInExtensionRuntime,
+  hasExtensionServiceWorker,
+} from "./extensionRuntime";
 
 const fixturesDir = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -16,6 +21,7 @@ const fixturesDir = path.join(
 const MOCK_ABUSEIPDB_IPV4 = "8.8.8.8";
 const MOCK_ABUSEIPDB_CONFIDENCE_SCORE = 84;
 const MOCK_OTX_PULSE_COUNT = 4;
+const ENRICHMENT_CACHE_STORAGE_KEY = "enrichmentCache";
 
 export const LIVE_ENRICHMENT_VENDOR_ROUTE_PATTERNS = [
   "**/api.abuseipdb.com/**",
@@ -50,6 +56,56 @@ function buildOtxMockBody(): unknown {
   body.indicator = MOCK_ABUSEIPDB_IPV4;
   body.pulse_info.count = MOCK_OTX_PULSE_COUNT;
   return body;
+}
+
+function buildEnrichmentCacheSeed(): Record<
+  string,
+  { fetchedAt: number; payload: unknown }
+> {
+  const fetchedAt = Date.now();
+  return {
+    [`${MOCK_ABUSEIPDB_IPV4}|abuseipdb`]: {
+      fetchedAt,
+      payload: {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: `${MOCK_ABUSEIPDB_CONFIDENCE_SCORE} abuse confidence`,
+      },
+    },
+    [`${MOCK_ABUSEIPDB_IPV4}|otx`]: {
+      fetchedAt,
+      payload: {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: `${MOCK_OTX_PULSE_COUNT} threat pulses`,
+      },
+    },
+  };
+}
+
+async function seedStorageViaExamplesBridge(
+  page: Page,
+  payload: Record<string, unknown>
+): Promise<void> {
+  await postExamplesFixtureBridgeMessage(page, "setStorage", payload);
+}
+
+async function setExtensionStorage(
+  context: BrowserContext,
+  extensionId: string,
+  page: Page | undefined,
+  payload: Record<string, unknown>
+): Promise<void> {
+  if (page && !hasExtensionServiceWorker(context, extensionId)) {
+    await seedStorageViaExamplesBridge(page, payload);
+    return;
+  }
+
+  await evaluateInExtensionRuntime(context, extensionId, async (storagePayload) => {
+    await chrome.storage.local.set(storagePayload);
+  }, payload);
 }
 
 export async function registerEnrichmentMockRoutes(
@@ -112,77 +168,57 @@ export function expectNoLiveEnrichmentNetworkRequests(
 
 export async function seedExportSmokeStorage(
   context: BrowserContext,
-  extensionId: string
+  extensionId: string,
+  page?: Page
 ): Promise<void> {
-  await seedE2eInstallQuickStart(context, extensionId);
-  const serviceWorker = context
-    .serviceWorkers()
-    .find((worker) => worker.url().includes(extensionId));
-  if (!serviceWorker) {
-    throw new Error("Extension service worker not available for storage seed");
-  }
-
-  await serviceWorker.evaluate(async () => {
-    await chrome.storage.local.set({
-      manualOnlyMode: true,
-      showPreQueryNotices: false,
-      apiKeys: {},
-      enrichmentSourceEnabled: {
-        abuseipdb: false,
-        otx: false,
-        urlscan: false,
-        greynoise: false,
-      },
-    });
+  await seedE2eInstallQuickStart(context, extensionId, page);
+  await setExtensionStorage(context, extensionId, page, {
+    manualOnlyMode: true,
+    showPreQueryNotices: false,
+    apiKeys: {},
+    enrichmentSourceEnabled: {
+      abuseipdb: false,
+      otx: false,
+      urlscan: false,
+      greynoise: false,
+    },
   });
 }
 
 export async function seedE2eInstallQuickStart(
   context: BrowserContext,
-  extensionId: string
+  extensionId: string,
+  page?: Page
 ): Promise<void> {
-  const serviceWorker = context
-    .serviceWorkers()
-    .find((worker) => worker.url().includes(extensionId));
-  if (!serviceWorker) {
-    throw new Error("Extension service worker not available for storage seed");
-  }
-
-  await serviceWorker.evaluate(async () => {
-    await chrome.storage.local.set({
-      installQuickStartCompleted: true,
-      preQueryNoticePreferenceConfigured: true,
-      showPreQueryNotices: true,
-    });
+  await setExtensionStorage(context, extensionId, page, {
+    installQuickStartCompleted: true,
+    preQueryNoticePreferenceConfigured: true,
+    showPreQueryNotices: true,
   });
 }
 
 export async function seedEnrichmentMockStorage(
   context: BrowserContext,
-  extensionId: string
+  extensionId: string,
+  page?: Page
 ): Promise<void> {
-  await seedE2eInstallQuickStart(context, extensionId);
-  const serviceWorker = context
-    .serviceWorkers()
-    .find((worker) => worker.url().includes(extensionId));
-  if (!serviceWorker) {
-    throw new Error("Extension service worker not available for storage seed");
-  }
-
-  await serviceWorker.evaluate(async () => {
-    await chrome.storage.local.set({
-      manualOnlyMode: true,
-      showPreQueryNotices: false,
-      apiKeys: {
-        abuseipdb: "test-fixture-abuseipdb-key",
-        otx: "test-fixture-otx-key",
-      },
-      enrichmentSourceEnabled: {
-        abuseipdb: true,
-        otx: true,
-        urlscan: false,
-        greynoise: false,
-      },
-    });
+  const usesExamplesBridge = Boolean(
+    page && !hasExtensionServiceWorker(context, extensionId)
+  );
+  await seedE2eInstallQuickStart(context, extensionId, page);
+  await setExtensionStorage(context, extensionId, page, {
+    manualOnlyMode: usesExamplesBridge ? false : true,
+    showPreQueryNotices: false,
+    apiKeys: {
+      abuseipdb: "test-fixture-abuseipdb-key",
+      otx: "test-fixture-otx-key",
+    },
+    enrichmentSourceEnabled: {
+      abuseipdb: true,
+      otx: true,
+      urlscan: false,
+      greynoise: false,
+    },
+    [ENRICHMENT_CACHE_STORAGE_KEY]: buildEnrichmentCacheSeed(),
   });
 }

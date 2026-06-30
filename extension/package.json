@@ -13,6 +13,7 @@
     "verify:dist": "node scripts/verify-dist-manifest.mjs",
     "verify:firefox-manifest": "node scripts/verify-firefox-manifest.mjs",
     "verify:security": "node scripts/verify-extension-security.mjs",
+    "verify:security:firefox": "node scripts/verify-extension-security.mjs --dist=dist-firefox",
     "postbuild": "npm run verify:dist && npm run verify:security",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
@@ -25,6 +26,8 @@
     "test:e2e": "node scripts/verify-dist-manifest.mjs && playwright test",
     "test:e2e:critical": "node scripts/verify-dist-manifest.mjs && playwright test e2e/harness.load.spec.ts e2e/scan.sample-alert.spec.ts e2e/popup.tray.spec.ts e2e/hoverCard.disclaimer.spec.ts e2e/hoverCard.compositeScore.spec.ts e2e/commandPalette.scan.spec.ts e2e/export.clipboard.spec.ts e2e/trayEnrichQueue.spec.ts",
     "test:e2e:install": "playwright install chromium",
+    "test:e2e:firefox": "node scripts/verify-dist-manifest.mjs --dist=dist-firefox && playwright test e2e/firefox.harness.load.spec.ts e2e/firefox.scan.hover.export.spec.ts",
+    "test:e2e:firefox:install": "playwright install firefox",
     "check": "npm run lint && npm run test",
     "audit:prod": "npm audit --omit=dev"
   },
@@ -51,6 +54,7 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.33.0",
     "vite": "^6.3.5",
-    "vitest": "4.1.8"
+    "vitest": "4.1.8",
+    "web-ext": "^8.2.0"
   }
 }

@@ -11,7 +11,10 @@ import {
 } from "./domainPolicyStorage";
 import { CONTENT_MESSAGE } from "./constants";
 import * as enrichmentBackgroundFetch from "./enrichmentBackgroundFetch";
-import { DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE } from "./enrichmentBackgroundFetch";
+import {
+  cancelPendingHoverEnrichment,
+  DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
+} from "./enrichmentBackgroundFetch";
 import {
   clearIocHighlights,
   highlightDetectedIocs,
@@ -268,6 +271,15 @@ describe("ENRICH_SELECTION message envelope", () => {
 });
 
 describe("setupEnrichSelectionListener", () => {
+  afterEach(() => {
+    cancelPendingHoverEnrichment();
+    window.getSelection()?.removeAllRanges();
+    document.body.replaceChildren();
+    document.getElementById(HOVER_CARD_HOST_ID)?.replaceChildren();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
   it("registers a chrome message listener", () => {
     const onMessage = vi.fn(() => undefined);
     vi.stubGlobal("chrome", {
@@ -277,6 +289,157 @@ describe("setupEnrichSelectionListener", () => {
     });
     setupEnrichSelectionListener();
     expect(onMessage).toHaveBeenCalledTimes(1);
-    vi.unstubAllGlobals();
+  });
+
+  it("handles ENRICH_SELECTION messages from the context menu pipeline", async () => {
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "soc.example.com" },
+    });
+    stubChromeForEnrichSelectionTests();
+    document.body.replaceChildren();
+    vi.spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment").mockResolvedValue(
+      "completed"
+    );
+
+    let listener:
+      | ((
+          message: unknown,
+          sender: unknown,
+          sendResponse: (response: unknown) => void
+        ) => boolean | void)
+      | undefined;
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: () =>
+            Promise.resolve({
+              [CONTENT_STORAGE_KEY_MANUAL_ONLY_MODE]: true,
+              [CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+                abuseipdb: true,
+                otx: false,
+                urlscan: false,
+                greynoise: false,
+              },
+            }),
+        },
+      },
+      runtime: {
+        id: "test-extension-id",
+        sendMessage: vi.fn(async () => ({ ok: true })),
+        onMessage: {
+          addListener: (
+            callback: (
+              message: unknown,
+              sender: unknown,
+              sendResponse: (response: unknown) => void
+            ) => boolean | void
+          ) => {
+            listener = callback;
+          },
+        },
+      },
+    });
+
+    setupEnrichSelectionListener();
+    expect(listener).toBeDefined();
+
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 192.0.2.1 today.";
+    document.body.appendChild(paragraph);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    const response = await new Promise<unknown>((resolve) => {
+      const handled = listener!(
+        enrichSelectionMessage(),
+        {},
+        (payload) => resolve(payload)
+      );
+      expect(handled).toBe(true);
+    });
+
+    expect(response).toEqual({
+      ok: true,
+      payload: { value: "192.0.2.1", type: "ipv4" },
+    });
+    expect(
+      document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
+    ).not.toBeNull();
+  });
+
+  it("blocks ENRICH_SELECTION from the context menu on denylisted domains before vendor calls", async () => {
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "mail.example.com" },
+    });
+    document.body.replaceChildren();
+    vi.spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment").mockResolvedValue(
+      "completed"
+    );
+
+    let listener:
+      | ((
+          message: unknown,
+          sender: unknown,
+          sendResponse: (response: unknown) => void
+        ) => boolean | void)
+      | undefined;
+
+    stubChromeForEnrichSelectionTests({
+      [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]: true,
+      [STORAGE_KEY_DOMAIN_DENYLIST]: ["mail.example.com"],
+    });
+    vi.stubGlobal("chrome", {
+      ...chrome,
+      runtime: {
+        ...chrome.runtime,
+        onMessage: {
+          addListener: (
+            callback: (
+              message: unknown,
+              sender: unknown,
+              sendResponse: (response: unknown) => void
+            ) => boolean | void
+          ) => {
+            listener = callback;
+          },
+        },
+      },
+    });
+
+    setupEnrichSelectionListener();
+    expect(listener).toBeDefined();
+
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 192.0.2.1 today.";
+    document.body.appendChild(paragraph);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    const response = await new Promise<unknown>((resolve) => {
+      const handled = listener!(
+        enrichSelectionMessage(),
+        {},
+        (payload) => resolve(payload)
+      );
+      expect(handled).toBe(true);
+    });
+
+    expect(response).toEqual({
+      ok: true,
+      payload: { value: "192.0.2.1", type: "ipv4" },
+    });
+    expect(
+      document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
+    ).not.toBeNull();
+    expect(document.body.textContent).toContain(
+      DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE
+    );
+    expect(enrichmentBackgroundFetch.runBackgroundEnrichment).not.toHaveBeenCalled();
   });
 });

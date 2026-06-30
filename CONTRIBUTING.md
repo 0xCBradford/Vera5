@@ -1,6 +1,6 @@
 # Contributing to Vera5
 
-Thank you for helping improve Vera5. This project is an open-source Chromium extension for analyst-driven IOC triage: on-page detection and highlights, a production content-script overlay, popup and workspace IOC trays, live AbuseIPDB and OTX connectors (bring-your-own API keys), local cache, composite risk scoring, export templates, trust and consent gates, investigation sessions, and IOC collections—all computed and stored locally in the browser.
+Thank you for helping improve Vera5. This project is an open-source browser extension for analyst-driven IOC triage: on-page detection and highlights, a production content-script overlay, popup and workspace IOC trays, live AbuseIPDB and OTX connectors (bring-your-own API keys), local cache, composite risk scoring, export templates, trust and consent gates, investigation sessions, and IOC collections—all computed and stored locally in the browser. **Chromium** is the primary development and CI target; an experimental **Firefox** port builds from the same sources under `extension/dist-firefox/`.
 
 ## Before you start
 
@@ -36,6 +36,44 @@ npm run test:smoke  # background message-router smoke only
 Load unpacked from `extension/dist/` in Chrome (`chrome://extensions` → Developer mode → Load unpacked). A **fresh install** opens the Settings page once so the install quick-start flow can run; reload the extension after rebuilds during development.
 
 See [README.md](README.md) for the full watch/build workflow, fixture pages under `examples/`, and unpacked load steps.
+
+### Dual-browser development (Chromium + Firefox)
+
+Shared TypeScript under `extension/src/` compiles to two Manifest V3 outputs:
+
+| Target | Output | Source manifest | Load in browser |
+|--------|--------|-----------------|-----------------|
+| **Chromium** (primary) | `extension/dist/` | `public/manifest.json` (service worker) | **Load unpacked** at `chrome://extensions` |
+| **Firefox** (experimental) | `extension/dist-firefox/` | `public/manifest.firefox.json` (event background) | **Temporary add-on** — select `dist-firefox/manifest.json` in `about:debugging#/runtime/this-firefox` |
+
+From `extension/`:
+
+```bash
+npm run build                 # dist/ — runs verify:dist + verify:security (Chromium)
+npm run build:firefox         # dist-firefox/ — verify:firefox-manifest, verify:dist, verify:security:firefox
+npm run verify:firefox-manifest   # manifest parity without a full Firefox build
+```
+
+**Chromium day-to-day:** `npm run build`, reload unpacked `dist/`, run `npm run check` and (before a PR) `npm run test:e2e:critical`. Pull request CI gates on Chromium browser smokes.
+
+**Firefox optional:** After `npm run build:firefox`, load the temporary add-on (steps in [docs/browser-support.md](docs/browser-support.md)). Optional automated smokes:
+
+```bash
+npm run test:e2e:firefox:install   # once per machine
+npm run test:e2e:firefox
+```
+
+**Shared API surface:** Application code calls `chrome.*`; `extension/src/lib/browserCompat.ts` maps Firefox’s promise-based `browser` namespace at background, content, popup, and options entry points. Do not add Firefox-only feature forks unless Gecko behavior requires it—extend shared modules and keep manifest permissions in sync.
+
+**When you touch:**
+
+| Area | Action |
+|------|--------|
+| Permissions, host patterns, content scripts | Update **both** `public/manifest.json` and `public/manifest.firefox.json`; run `npm run verify:firefox-manifest` |
+| Background messaging or connectors | Rebuild and smoke-test **both** targets if you claim Firefox parity |
+| Extension pages (popup/options) | Same Vite bundles ship in both outputs; `verify:security` and `verify:security:firefox` check for remote assets and weakened CSP |
+
+Deeper layout and message flow: [docs/contributors/extension-architecture.md](docs/contributors/extension-architecture.md). E2E scope and limits: [docs/contributors/testing.md](docs/contributors/testing.md).
 
 ### Repository root scripts (Windows)
 

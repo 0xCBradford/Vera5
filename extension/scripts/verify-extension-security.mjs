@@ -8,11 +8,19 @@ const extensionRoot = path.join(
 );
 const repoRoot = path.join(extensionRoot, "..");
 const envExamplePath = path.join(repoRoot, ".env.example");
-const distDir = path.join(extensionRoot, "dist");
+const distArg = process.argv.find((entry) => entry.startsWith("--dist="));
+const distRelative =
+  distArg?.slice("--dist=".length) ?? process.env.VERA5_DIST_DIR ?? "dist";
+const distDir = path.join(extensionRoot, distRelative);
 const publicManifestPath = path.join(
   extensionRoot,
   "public",
-  "manifest.json"
+  distRelative === "dist-firefox" ? "manifest.firefox.json" : "manifest.json"
+);
+const publicFirefoxManifestPath = path.join(
+  extensionRoot,
+  "public",
+  "manifest.firefox.json"
 );
 const srcDir = path.join(extensionRoot, "src");
 const iocRequestBoundariesPath = path.join(
@@ -34,6 +42,25 @@ const FETCH_ALLOWED_SOURCE_BASENAMES = new Set([
 const FETCH_GUARD_SOURCE_BASENAMES = new Set([
   "iocRequestBoundaries.ts",
 ]);
+
+const TELEMETRY_HOST_SUBSTRINGS = [
+  "analytics.google.com",
+  "google-analytics.com",
+  "googletagmanager.com",
+  "sentry.io",
+  "amplitude.com",
+  "mixpanel.com",
+  "segment.io",
+  "segment.com",
+  "posthog.com",
+  "bugsnag.com",
+  "datadoghq.com",
+  "newrelic.com",
+  "hotjar.com",
+  "fullstory.com",
+  "heap.io",
+  "crashlytics.com",
+];
 
 function readDeclaredEnrichmentApiHosts() {
   const source = fs.readFileSync(iocRequestBoundariesPath, "utf8");
@@ -183,6 +210,17 @@ function checkNoSensitiveProductionLogging(filePath, source) {
         fail(
           `${filePath} logs sensitive enrichment material via ${call.slice(0, 96)}`
         );
+      }
+    }
+  }
+}
+
+function checkDistBundlesForTelemetryHosts(distRoot) {
+  for (const filePath of walkFiles(distRoot, [".js"])) {
+    const source = fs.readFileSync(filePath, "utf8").toLowerCase();
+    for (const host of TELEMETRY_HOST_SUBSTRINGS) {
+      if (source.includes(host)) {
+        fail(`${filePath} references telemetry/analytics host: ${host}`);
       }
     }
   }
@@ -454,12 +492,15 @@ function checkConnectorFetchUsesGetWithoutBody(filePath, source) {
 }
 
 if (!fs.existsSync(distDir)) {
-  fail("dist/ missing — run npm run build first");
+  fail(`${distRelative}/ missing — run npm run build first`);
 }
 
 const publicManifest = JSON.parse(fs.readFileSync(publicManifestPath, "utf8"));
 const declaredEnrichmentApiHosts = readDeclaredEnrichmentApiHosts();
 checkManifestCsp(publicManifestPath);
+if (publicManifestPath !== publicFirefoxManifestPath && fs.existsSync(publicFirefoxManifestPath)) {
+  checkManifestCsp(publicFirefoxManifestPath);
+}
 checkManifestDeclaredHostPermissions(
   publicManifestPath,
   declaredEnrichmentApiHosts
@@ -498,10 +539,11 @@ for (const filePath of walkFiles(distDir, [".js"])) {
   }
 }
 
+checkDistBundlesForTelemetryHosts(distDir);
 checkDistProductionLogging(distDir);
 checkTestFixtureRedaction();
 checkEnvExampleDocumentsSecretsWithoutValues();
 
 console.log(
-  "verify-extension-security: OK (extension pages CSP, no remote assets, live fetch blocked outside declared API hosts, no eval/new Function, no sensitive production logging, redacted test fixtures, .env.example credential placeholders empty, enrichment GET without body)"
+  `verify-extension-security: OK (${distRelative}, extension pages CSP, no remote assets, no telemetry hosts in bundles, live fetch blocked outside declared API hosts, no eval/new Function, no sensitive production logging, redacted test fixtures, .env.example credential placeholders empty, enrichment GET without body)`
 );

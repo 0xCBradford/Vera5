@@ -11,12 +11,168 @@ Everything below assumes the **production on-page overlay** (content script on t
 | Surface | When you use it |
 |---------|-----------------|
 | **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. Assign **Label**, **Pin**, and read **Session timeline** on the card when an investigation session is active. Use **Save to collection…** to add an indicator to a persistent collection. |
-| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page** / **Scan selection**, manage the **Investigation session** (title, rollups, export, recent sessions, **Promote session to collection…**), review **Detected indicators** (**Save to collection…**, **Add filtered to collection…**), manage **IOC collections**, and read **Source operations** (cache, cooldown, per-source status). |
+| **Command palette** | Keyboard-driven actions on the active tab: scan, enrich selection, open history, source health, tray export, clear highlights, and settings. See [Operator UX: command palette and quick actions](#operator-ux-command-palette-and-quick-actions). |
+| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page** / **Scan selection** / **Enrich selection**, manage the **Investigation session** (title, rollups, export, recent sessions, **Promote session to collection…**), review **Investigation history**, **Detected indicators** (**Save to collection…**, **Add filtered to collection…**), manage **IOC collections**, and read **Source operations** (cache, cooldown, per-source status, vendor quota hints). |
 | **Workspace sidebar** | Optional on-page tray from **Open sidebar** in the popup: filter indicators, **Save to collection…**, **Add filtered to collection…**, copy subsets, and export templates while staying on the alert page. Pinned session indicators sort to the top. |
+| **Context menu** | Right-click selected text → **Enrich selection with Vera5** when the selection contains a detectable indicator. Uses the same trust gates and enrich pipeline as palette **Enrich selection**. |
 | **Settings (options) page** | Configure API keys, enable sources, set manual-only and auto-scan, clear the enrichment cache, export or import settings. Source health details live in the popup **Source operations** section—not a duplicate panel here. |
 | **React hover card** | Unit tests and `npm run dev` only. It is **not** shown on live page tabs. It exercises the same local scoring rules as the overlay; unit tests may also show per-source contribution chips the overlay does not render. |
 
-The keyboard shortcut runs the same scan as **Scan page** but does not update the popup match count unless you scan from the popup.
+## Operator UX: command palette and quick actions
+
+Power-user flows stay on the investigation tab: open the **command palette**, use manifest keyboard shortcuts, or enrich from the browser context menu without opening the toolbar popup for every action.
+
+### Keyboard shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Shift+Y` / `Cmd+Shift+Y` | **Scan page** — same detection pass as the popup **Scan page** button. Does not update the popup match count unless you scan from the popup. |
+| `Ctrl+Shift+K` / `Cmd+Shift+K` | **Open command palette** on the active tab. |
+
+Inside the palette: **type to filter** commands, **↑↓** to move selection, **Enter** to run, **Esc** to close.
+
+### Command palette actions
+
+Open the palette with `Ctrl+Shift+K` / `Cmd+Shift+K`, or run **Open command palette** from the manifest shortcut only (there is no separate popup button for the palette today).
+
+| Command | What it does | Notes |
+|---------|--------------|-------|
+| **Scan page** | Detect indicators in visible page text on the active tab. | Same as `Ctrl+Shift+Y` / popup **Scan page**. |
+| **Enrich selection** | Detect an indicator in the current text selection and open the hover card enrich pipeline. | Available only when text is selected and the selection contains a detectable indicator. Respects manual-only mode, domain policy, internal asset lists, and pre-query disclosure like other enrich paths. |
+| **Open history** | Opens the extension popup focused on **Investigation history**. | Use when the popup was closed but you want recent enriched IOCs without hunting through popup sections manually. |
+| **Source health** | Opens the extension popup focused on **Source operations**. | Per-source last status, last error, 429 cooldown, cache row counts, and vendor quota orientation strings. |
+| **Copy filtered Markdown** | Copies the workspace tray’s **filtered** indicator list as Markdown to the clipboard. | Uses the active tray filter on the page. No-op when the filtered list is empty. Records an export event on the active investigation session when one exists. |
+| **Export tray subset** | Downloads the filtered tray list as a Markdown file. | Same filtered subset as **Copy filtered Markdown**. |
+| **Clear highlights** | Removes all indicator highlights on the current page. | Does not clear enrichment cache or investigation history. |
+| **Open options** | Opens **Vera5 Settings**. | API keys, sources, trust policy, cache controls. |
+
+Tray export commands read the on-page workspace filter state. Open the **workspace sidebar** and set a type filter before running **Copy filtered Markdown** or **Export tray subset** if you need a subset rather than every detected IOC.
+
+### Context menu enrich
+
+1. Select text that contains an indicator (for example an IPv4 address or domain in alert prose).
+2. Right-click the selection.
+3. Choose **Enrich selection with Vera5**.
+
+Vera5 validates the selection, applies the same domain and internal-asset gates as hover enrich, and opens the hover card when allowed. On denylisted hosts, the card shows the domain-policy blocked message and does not call vendors—matching palette **Enrich selection** behavior.
+
+### Popup quick actions (without the palette)
+
+| Control | Location | Effect |
+|---------|----------|--------|
+| **Enrich selection** | Popup action row | Same pipeline as palette **Enrich selection**; disabled when no valid indicator is selected in the tab. |
+| **Scan selection** | Popup action row | Scan only the current text selection for indicators. |
+| **Investigation history** | Collapsible popup section | Lists up to **50** recent enriched indicators (value, page origin, timestamp). Click a row to reopen: scroll to the highlight and open the card when the IOC is on the **same tab origin** and still highlighted after scan. |
+| **Source operations** | Collapsible popup section | Global cooldown timer, last cache clear, total cache entries, per-source status, scoped **Clear cache** actions, and **Vendor quota** hints from vendor documentation. |
+
+When an **Investigation session** is active, history rows linked to that session show **Linked to this session** in the popup list.
+
+### Investigation history reopen
+
+History helps you return to a prior enrich without retyping the indicator:
+
+1. Complete at least one live enrich (history records after successful enrichment).
+2. Open **Investigation history** in the popup, or run palette **Open history**.
+3. Click the row for the IOC you need.
+
+**Reopen** works when you are on the same site where the enrich happened and the indicator is still highlighted (scan first if needed). If the tab origin differs, Vera5 shows guidance to open the original site and scan again—history does not silently enrich on the wrong page.
+
+Use **Clear history** in the popup (with confirmation) to remove all locally stored history entries on this browser profile.
+
+### Source health from the palette
+
+Palette **Source health** is a fast path to the popup **Source operations** panel when you need cooldown or quota context mid-triage:
+
+- **Global rate-limit cooldown** — shared backoff after HTTP 429 from any live source.
+- **Per-source last status** — ok, error, rate-limited, or skipped with actionable copy.
+- **Cache entry counts** — rows stored per source; **Clear cache** scoped to one source or all sources.
+- **Vendor quota** — orientation strings pointing to vendor documentation (not fabricated limits).
+
+For HTTP 429 behavior and vendor-specific quotas, see [api-integrations.md](api-integrations.md).
+
+### Operator checklist
+
+| Goal | Suggested approach |
+|------|-------------------|
+| Scan without leaving the keyboard | `Ctrl+Shift+Y` or palette **Scan page**. |
+| Enrich prose you highlighted in a ticket | Context menu **Enrich selection with Vera5** or palette **Enrich selection**. |
+| Return to yesterday’s enrich on this alert page | Popup or palette **Open history** → click row → rescan if highlight missing. |
+| Check AbuseIPDB cooldown before bulk enrich | Palette **Source health** or expand **Source operations** in the popup. |
+| Export filtered tray IOCs to a ticket | Set sidebar filter → palette **Copy filtered Markdown**. |
+| Reset page highlights only | Palette **Clear highlights**. |
+
+All enrich paths honor **Trust & consent** settings: manual-only mode, domain denylist, internal asset lists, and pre-query disclosure when enabled. See [security-model.md](security-model.md#trust-gates-stacked).
+
+## Macro step hooks (operator macros)
+
+Vera5 exposes **stable action identifiers** so programmable **operator macros** (local-only step sequences registered in the command palette or run from the tray) can reuse the same flows as the palette, context menu, and popup—without a second command registry or parallel enrich pipeline.
+
+Macros are stored locally in extension storage. They do not sync through Vera5 cloud infrastructure. Each macro step invokes an existing operator action; trust gates (manual-only mode, domain policy, internal asset lists, pre-query disclosure, and future quiet mode) apply on every **enrich** step the same way they do for manual use.
+
+### Shipped hook: enrich from selection
+
+The context-menu enrich action is registered under a macro-reusable step type so a future macro runner can trigger the same path as **Enrich selection with Vera5**:
+
+| Macro step type | Stable step id | Invokes | Context menu id |
+|-----------------|----------------|---------|-----------------|
+| Open from selection | `openFromSelection` | Selection → IOC detect → hover card (same pipeline as palette **Enrich selection**) | `enrich-with-vera5` |
+
+When you right-click selected text today, the menu item uses id `enrich-with-vera5`. Programmable macros that include an `openFromSelection` step will resolve to that same id and send the enrich-selection message to the active tab.
+
+Additional context-menu step types register in the macro step hook map as operator macro support expands.
+
+### Command palette command ids (macro-invokable)
+
+Core palette commands use stable string ids. A macro runner invokes these through the same command registry the palette uses when you press Enter:
+
+| Command id | Palette label | Typical macro use |
+|------------|---------------|-------------------|
+| `scan-page` | Scan page | Start a playbook with detection on the active tab. |
+| `enrich-selection` | Enrich selection | Enrich the current text selection (requires a detectable indicator in the selection). |
+| `open-history` | Open history | Focus the popup on **Investigation history**. |
+| `source-health` | Source health | Focus the popup on **Source operations**. |
+| `copy-filtered-markdown` | Copy filtered Markdown | Export the filtered tray subset to the clipboard. |
+| `export-tray-subset` | Export tray subset | Download the filtered tray subset as Markdown. |
+| `clear-highlights` | Clear highlights | Reset page highlights without clearing cache or history. |
+| `open-options` | Open options | Open **Vera5 Settings**. |
+
+Macros should call these ids rather than reimplementing scan, enrich, or export logic. Steps that need a filtered tray export should run after the analyst sets a workspace sidebar filter (see [Operator UX](#operator-ux-command-palette-and-quick-actions)).
+
+### Popup panel focus tokens
+
+Steps that open the toolbar popup to a specific section use session-scoped focus tokens (not persisted across browser restarts):
+
+| Focus token | Popup section expanded |
+|-------------|------------------------|
+| `investigation-history` | **Investigation history** |
+| `source-operations` | **Source operations** |
+
+Palette **Open history** and **Source health** already set these tokens before opening the popup. Macro steps that mirror those commands should use the same tokens so the popup lands on the correct panel.
+
+### Planned macro step catalog (v1)
+
+Operator macros will compose the hooks above with additional step types that map to existing export, pivot, and tray behaviors. Planned v1 step type ids (schema validation will reject unknown types):
+
+| Step type id | Intended behavior | Integration note |
+|--------------|-------------------|------------------|
+| `openFromSelection` | Enrich indicator in current selection | Shipped; context menu id `enrich-with-vera5`. |
+| `enrich` | Enrich the active hover-card or tray target | Same trust gates and enrich pipeline as manual **›** enrich. |
+| `exportMarkdown` | Export using normalized enrichment export builders | Uses the existing export template engine; see [export-artifacts.md](export-artifacts.md). |
+| `openPivot` | Open an attributed pivot link for the active indicator | Navigation only; no live vendor `fetch` from the macro runner. |
+| `applyNoteTemplate` | Apply analyst note template to the active IOC | Extends per-IOC notes on the hover card. |
+| `queueRelatedIocs` | Queue related IOCs from the tray scan | Respects bulk-enrich caps and quota warnings. |
+
+Built-in playbooks (for example CTI deep-check and DFIR triage sequences) will ship as predefined macros that chain these steps. User-defined macros will be editable in settings, exportable as JSON without API keys, and runnable from the command palette or tray.
+
+### Trust behavior for macro runs
+
+Macro runs must not bypass analyst consent or hostname policy:
+
+- **Enrich** and **openFromSelection** steps abort with clear UI when domain policy blocks the page, internal asset lists block the indicator, pre-query disclosure is declined, or quiet mode blocks outbound vendor calls (when that mode is enabled).
+- Export and pivot steps may still succeed when enrich is blocked, when the step does not require a live vendor response.
+- Macro bulk enrich is capped per run so playbooks cannot fan out unbounded parallel vendor calls without quota warnings.
+
+When operator macros ship, built-in and custom macros register in the command palette alongside core commands rather than replacing the palette registry.
 
 ## Before you start
 

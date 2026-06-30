@@ -4,6 +4,7 @@ import {
   openWorkspaceMessage,
   enrichSelectionMessage,
   getSelectionActionStateMessage,
+  reopenInvestigationHistoryMessage,
   scanPageMessage,
   scanSelectionMessage,
   type MessageResponse,
@@ -75,6 +76,19 @@ import {
 } from "../lib/investigationSessionExport";
 import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
 import {
+  buildInvestigationHistoryRowAriaLabel,
+  buildInvestigationHistorySessionLinkSummary,
+  countInvestigationHistoryEntriesForSession,
+  formatInvestigationHistoryTimestamp,
+  INVESTIGATION_HISTORY_CLEAR_CONFIRM_MESSAGE,
+  isInvestigationHistoryEntryLinkedToActiveSession,
+  resolveInvestigationHistoryClearFeedback,
+  resolveInvestigationHistoryReopenFeedback,
+  resolveInvestigationHistorySessionTitle,
+  type InvestigationHistoryEntry,
+} from "../lib/investigationHistory";
+import { listInvestigationHistoryEntries, clearInvestigationHistory } from "../lib/investigationHistoryStorage";
+import {
   buildAddFilteredToCollectionActionLabel,
   buildIocCollectionSummaryLine,
   buildPromoteSessionToCollectionActionLabel,
@@ -126,14 +140,24 @@ import {
   requestRemoveIocFromCollection,
   requestRenameIocCollection,
 } from "../lib/iocCollectionClient";
+import { clearEnrichmentCacheForSource } from "../lib/cache";
 import { requestEnrichmentSourceOps } from "../lib/enrichmentSourceOpsClient";
 import {
   formatEnrichmentCacheClearedAtLabel,
+  formatEnrichmentSourceCacheEntryCountLabel,
+  formatEnrichmentSourceLastErrorLabel,
   formatEnrichmentSourceLastStatusLabel,
   formatEnrichmentSourceOpsCooldownLabel,
+  resolveEnrichmentSourceClearCacheFeedback,
   ENRICHMENT_SOURCE_OPS_SECTION_TITLE,
+  type EnrichmentSourceOpsRow,
   type EnrichmentSourceOpsSnapshot,
 } from "../lib/enrichmentSourceOps";
+import {
+  clearPopupPanelFocus,
+  POPUP_PANEL,
+  readPopupPanelFocus,
+} from "../lib/popupPanelFocus";
 import { VERA5_COLOR, VERA5_FONT } from "../lib/theme";
 import {
   resolveWorkspaceTrayView,
@@ -1621,7 +1645,22 @@ export function Popup() {
   const [sourceOps, setSourceOps] = useState<EnrichmentSourceOpsSnapshot | null>(null);
   const [sourceOpsReady, setSourceOpsReady] = useState(false);
   const [sourceOpsCollapsed, setSourceOpsCollapsed] = useState(true);
+  const [clearingSourceCacheId, setClearingSourceCacheId] = useState<string | null>(
+    null
+  );
+  const [sourceOpsClearFeedback, setSourceOpsClearFeedback] = useState<string | null>(
+    null
+  );
   const [investigationCollapsed, setInvestigationCollapsed] = useState(true);
+  const [historyEntries, setHistoryEntries] = useState<InvestigationHistoryEntry[]>([]);
+  const [historyReady, setHistoryReady] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(true);
+  const [historyNavigationMessage, setHistoryNavigationMessage] = useState<string | null>(
+    null
+  );
+  const [historyClearConfirmOpen, setHistoryClearConfirmOpen] = useState(false);
+  const [historyClearing, setHistoryClearing] = useState(false);
+  const [historyClearFeedback, setHistoryClearFeedback] = useState<string | null>(null);
   const [saveToCollectionAnchorId, setSaveToCollectionAnchorId] = useState<string | null>(
     null
   );
@@ -1659,6 +1698,11 @@ export function Popup() {
     setRecentSessions(sessions);
   };
 
+  const refreshInvestigationHistoryState = async () => {
+    const entries = await listInvestigationHistoryEntries();
+    setHistoryEntries(entries);
+  };
+
   useEffect(() => {
     void Promise.all([getExtensionEnabled(), getHighlightEnabled()]).then(
       ([extensionValue, highlightValue]) => {
@@ -1676,8 +1720,21 @@ export function Popup() {
     void refreshInvestigationSessionState().finally(() => {
       setSessionTitleReady(true);
     });
+    void refreshInvestigationHistoryState().finally(() => {
+      setHistoryReady(true);
+    });
     void refreshSourceOps().finally(() => {
       setSourceOpsReady(true);
+    });
+    void readPopupPanelFocus().then((panel) => {
+      if (panel === POPUP_PANEL.INVESTIGATION_HISTORY) {
+        setHistoryCollapsed(false);
+      } else if (panel === POPUP_PANEL.SOURCE_OPERATIONS) {
+        setSourceOpsCollapsed(false);
+      }
+      if (panel) {
+        void clearPopupPanelFocus();
+      }
     });
   }, []);
 
@@ -1795,6 +1852,26 @@ export function Popup() {
     }
     return buildInvestigationSessionActivitySummaryText(activeSession);
   }, [activeSession]);
+
+  const investigationSessionTitlesById = useMemo(() => {
+    const titlesById = new Map<string, string>();
+    for (const session of recentSessions) {
+      titlesById.set(session.id, session.title);
+    }
+    if (activeSession) {
+      titlesById.set(activeSession.id, activeSession.title);
+    }
+    return titlesById;
+  }, [recentSessions, activeSession]);
+
+  const activeSessionHistoryLinkSummary = useMemo(() => {
+    if (!activeSession) {
+      return null;
+    }
+    return buildInvestigationHistorySessionLinkSummary(
+      countInvestigationHistoryEntriesForSession(historyEntries, activeSession.id)
+    );
+  }, [activeSession, historyEntries]);
 
   const handleToggle = (checked: boolean) => {
     setEnabled(checked);
@@ -2031,6 +2108,98 @@ export function Popup() {
     void (async () => {
       await requestDeleteInvestigationSession(sessionId);
       await refreshInvestigationSessionState();
+    })();
+  };
+
+  const handleHistoryRowActivate = (entry: InvestigationHistoryEntry) => {
+    void chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(async ([tab]) => {
+        if (!tab?.id) {
+          setHistoryNavigationMessage(
+            resolveInvestigationHistoryReopenFeedback({
+              tabId: undefined,
+              ioc: entry.ioc,
+              pageOrigin: entry.pageOrigin,
+            })
+          );
+          return;
+        }
+        try {
+          const response = await chrome.tabs.sendMessage(
+            tab.id,
+            reopenInvestigationHistoryMessage({
+              ioc: entry.ioc,
+              iocType: entry.iocType,
+              pageOrigin: entry.pageOrigin,
+            })
+          );
+          setHistoryNavigationMessage(
+            resolveInvestigationHistoryReopenFeedback({
+              tabId: tab.id,
+              response,
+              ioc: entry.ioc,
+              pageOrigin: entry.pageOrigin,
+            })
+          );
+        } catch {
+          setHistoryNavigationMessage(
+            resolveInvestigationHistoryReopenFeedback({
+              tabId: tab.id,
+              sendFailed: true,
+              ioc: entry.ioc,
+              pageOrigin: entry.pageOrigin,
+            })
+          );
+        }
+      });
+  };
+
+  const handleRequestClearHistory = () => {
+    setHistoryClearConfirmOpen(true);
+    setHistoryClearFeedback(null);
+  };
+
+  const handleCancelClearHistory = () => {
+    setHistoryClearConfirmOpen(false);
+  };
+
+  const handleConfirmClearHistory = () => {
+    void (async () => {
+      setHistoryClearing(true);
+      const cleared = await clearInvestigationHistory();
+      setHistoryClearing(false);
+      setHistoryClearConfirmOpen(false);
+      if (cleared) {
+        await refreshInvestigationHistoryState();
+        setHistoryClearFeedback(resolveInvestigationHistoryClearFeedback(true));
+        setHistoryNavigationMessage(null);
+        return;
+      }
+      setHistoryClearFeedback(resolveInvestigationHistoryClearFeedback(false));
+    })();
+  };
+
+  const handleClearSourceCache = (row: EnrichmentSourceOpsRow) => {
+    void (async () => {
+      setClearingSourceCacheId(row.sourceId);
+      setSourceOpsClearFeedback(null);
+      try {
+        const removedCount = await clearEnrichmentCacheForSource(row.sourceId);
+        await refreshSourceOps();
+        setSourceOpsClearFeedback(
+          resolveEnrichmentSourceClearCacheFeedback({
+            sourceDisplayName: row.displayName,
+            removedCount,
+          })
+        );
+      } catch {
+        setSourceOpsClearFeedback(
+          `Could not clear cache for ${row.displayName}. Try again.`
+        );
+      } finally {
+        setClearingSourceCacheId(null);
+      }
     })();
   };
 
@@ -2930,6 +3099,235 @@ export function Popup() {
         )}
         </div>
       </section>
+      <section
+        aria-label="Investigation history"
+        style={{
+          marginTop: 14,
+          borderTop: `1px solid ${POPUP_THEME.border}`,
+          paddingTop: 12,
+        }}
+      >
+        <h2 style={{ margin: "0 0 8px" }}>
+          <button
+            type="button"
+            onClick={() => setHistoryCollapsed((value) => !value)}
+            aria-expanded={!historyCollapsed}
+            aria-controls="popup-history-body"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              width: "100%",
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              color: POPUP_THEME.accentText,
+              fontFamily: "inherit",
+              fontSize: 15,
+              fontWeight: 600,
+              textAlign: "left",
+              cursor: "pointer",
+            }}
+          >
+            <span>Investigation history</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              style={{
+                flex: "0 0 auto",
+                color: POPUP_THEME.muted,
+                transform: historyCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                transition: "transform 0.15s ease",
+              }}
+            >
+              <path
+                d="M6 9l6 6 6-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </h2>
+        <div id="popup-history-body" hidden={historyCollapsed}>
+          {!historyReady ? (
+            <p style={trayStatusStyle()} aria-live="polite">
+              Loading history…
+            </p>
+          ) : historyEntries.length === 0 ? (
+            <p style={trayStatusStyle()} aria-live="polite">
+              No enriched indicators yet.
+            </p>
+          ) : (
+            <>
+              {historyNavigationMessage ? (
+                <p
+                  role="alert"
+                  aria-live="polite"
+                  style={{
+                    fontSize: 12,
+                    margin: "0 0 10px",
+                    color: POPUP_THEME.error,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {historyNavigationMessage}
+                </p>
+              ) : null}
+              {activeSessionHistoryLinkSummary ? (
+                <p style={{ ...trayStatusStyle(), margin: "0 0 10px" }} aria-live="polite">
+                  {activeSessionHistoryLinkSummary}
+                </p>
+              ) : null}
+              <ul
+                aria-label="Recent investigation history"
+                style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  maxHeight: 180,
+                  overflowY: "auto",
+                }}
+              >
+                {historyEntries.map((entry) => {
+                  const sessionTitle = resolveInvestigationHistorySessionTitle(
+                    entry,
+                    investigationSessionTitlesById
+                  );
+                  const linkedToActiveSession = isInvestigationHistoryEntryLinkedToActiveSession(
+                    entry,
+                    activeSession?.id
+                  );
+
+                  return (
+                  <li
+                    key={entry.id}
+                    role="button"
+                    tabIndex={0}
+                    data-vera5-history-entry="true"
+                    data-vera5-type={entry.iocType}
+                    data-vera5-value={entry.ioc}
+                    data-vera5-session-id={entry.sessionId ?? undefined}
+                    aria-label={buildInvestigationHistoryRowAriaLabel(entry, sessionTitle)}
+                    onClick={() => handleHistoryRowActivate(entry)}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") {
+                        return;
+                      }
+                      event.preventDefault();
+                      handleHistoryRowActivate(entry);
+                    }}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                      padding: "6px 8px",
+                      borderRadius: 6,
+                      border: linkedToActiveSession
+                        ? `1px solid ${POPUP_THEME.accent}`
+                        : "1px solid transparent",
+                      backgroundColor: POPUP_THEME.trayRowBg,
+                      fontSize: 12,
+                      lineHeight: 1.4,
+                      cursor: "pointer",
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "monospace",
+                        wordBreak: "break-all",
+                        color: POPUP_THEME.text,
+                      }}
+                    >
+                      {entry.ioc}
+                    </span>
+                    <span style={{ color: POPUP_THEME.muted, fontSize: 11 }}>
+                      {entry.pageOrigin}
+                    </span>
+                    {sessionTitle ? (
+                      <span
+                        style={{
+                          color: linkedToActiveSession
+                            ? POPUP_THEME.accentText
+                            : POPUP_THEME.muted,
+                          fontSize: 11,
+                        }}
+                      >
+                        {linkedToActiveSession
+                          ? "Linked to this session"
+                          : `Session: ${sessionTitle}`}
+                      </span>
+                    ) : null}
+                    <span style={{ color: POPUP_THEME.muted, fontSize: 11 }}>
+                      {formatInvestigationHistoryTimestamp(entry.enrichedAt)}
+                    </span>
+                  </li>
+                  );
+                })}
+              </ul>
+              {historyClearFeedback ? (
+                <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "10px 0 0" }}>
+                  {historyClearFeedback}
+                </p>
+              ) : null}
+              {historyClearConfirmOpen ? (
+                <div
+                  role="group"
+                  aria-label="Confirm clear investigation history"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    marginTop: 10,
+                  }}
+                >
+                  <p style={{ ...trayStatusStyle(), margin: 0 }}>
+                    {INVESTIGATION_HISTORY_CLEAR_CONFIRM_MESSAGE}
+                  </p>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button
+                      type="button"
+                      disabled={historyClearing}
+                      onClick={handleConfirmClearHistory}
+                      style={sessionActionButtonStyle()}
+                    >
+                      {historyClearing ? "Clearing…" : "Confirm clear"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={historyClearing}
+                      onClick={handleCancelClearHistory}
+                      style={sessionActionButtonStyle()}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!historyReady || historyClearing}
+                  onClick={handleRequestClearHistory}
+                  style={{
+                    ...sessionActionButtonStyle(),
+                    marginTop: 10,
+                  }}
+                >
+                  Clear history
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </section>
       <CollectionsManagerPanel />
       <section
         aria-label={ENRICHMENT_SOURCE_OPS_SECTION_TITLE}
@@ -3024,13 +3422,29 @@ export function Popup() {
             <p
               style={{
                 fontSize: 12,
-                margin: "0 0 10px",
+                margin: "0 0 4px",
                 color: POPUP_THEME.text,
                 lineHeight: 1.5,
               }}
             >
               Cache entries: {sourceOps.totalCacheEntryCount}
             </p>
+            <p
+              style={{
+                fontSize: 11,
+                margin: "0 0 10px",
+                color: POPUP_THEME.muted,
+                lineHeight: 1.45,
+              }}
+            >
+              Vendor quota hints are orientation only; confirm effective limits in
+              each vendor account.
+            </p>
+            {sourceOpsClearFeedback ? (
+              <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "0 0 10px" }}>
+                {sourceOpsClearFeedback}
+              </p>
+            ) : null}
             <ul
               aria-label="Enrichment source status"
               style={{
@@ -3048,6 +3462,9 @@ export function Popup() {
                 const statusLabel = formatEnrichmentSourceLastStatusLabel(
                   row.lastStatus
                 );
+                const lastErrorLabel = formatEnrichmentSourceLastErrorLabel(
+                  row.lastStatus
+                );
                 return (
                   <li
                     key={row.sourceId}
@@ -3059,7 +3476,7 @@ export function Popup() {
                       display: "grid",
                       gridTemplateColumns: "minmax(0, 1fr) auto",
                       gap: 8,
-                      alignItems: "center",
+                      alignItems: "start",
                     }}
                   >
                     <div style={{ minWidth: 0 }}>
@@ -3080,19 +3497,68 @@ export function Popup() {
                           marginTop: 2,
                         }}
                       >
-                        {statusLabel}
+                        Last status: {statusLabel}
+                      </div>
+                      {lastErrorLabel ? (
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: POPUP_THEME.error,
+                            marginTop: 2,
+                          }}
+                        >
+                          Last error: {lastErrorLabel}
+                        </div>
+                      ) : null}
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: POPUP_THEME.muted,
+                          marginTop: 2,
+                          lineHeight: 1.45,
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        Vendor quota: {row.quotaHint}
                       </div>
                     </div>
-                    <span
+                    <div
                       style={{
-                        flexShrink: 0,
-                        fontSize: 11,
-                        color: POPUP_THEME.muted,
-                        whiteSpace: "nowrap",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-end",
+                        gap: 6,
                       }}
                     >
-                      {row.cacheEntryCount} cached
-                    </span>
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          fontSize: 11,
+                          color: POPUP_THEME.muted,
+                          whiteSpace: "nowrap",
+                          textAlign: "right",
+                        }}
+                      >
+                        {formatEnrichmentSourceCacheEntryCountLabel(
+                          row.cacheEntryCount
+                        )}
+                      </span>
+                      <button
+                        type="button"
+                        disabled={
+                          !sourceOpsReady ||
+                          row.cacheEntryCount === 0 ||
+                          clearingSourceCacheId === row.sourceId
+                        }
+                        onClick={() => handleClearSourceCache(row)}
+                        aria-label={`Clear cache for ${row.displayName}`}
+                        style={sessionActionButtonStyle()}
+                      >
+                        {clearingSourceCacheId === row.sourceId
+                          ? "Clearing…"
+                          : "Clear cache"}
+                      </button>
+                    </div>
                   </li>
                 );
               })}

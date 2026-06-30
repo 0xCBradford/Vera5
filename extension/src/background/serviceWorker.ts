@@ -1,5 +1,10 @@
 import "../lib/browserCompat";
 import {
+  CONTEXT_MENU_ENRICH_SELECTION_ID,
+  getMacroStepContextMenuActionId,
+  MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+} from "../lib/macroStepActions";
+import {
   enrichSelectionMessage,
   scanPageMessage,
   toggleCommandPaletteMessage,
@@ -8,8 +13,9 @@ import {
 import { clearTabScanSnapshot } from "../lib/tabScanSnapshotStorage";
 import { routeIncomingMessageAsync } from "./messageRouter";
 
-export const CONTEXT_MENU_ENRICH_SELECTION_ID = "enrich-with-vera5";
-export const CONTEXT_MENU_ENRICH_SELECTION_TITLE = "Enrich with Vera5";
+export const CONTEXT_MENU_ENRICH_SELECTION_TITLE = "Enrich selection with Vera5";
+
+export { CONTEXT_MENU_ENRICH_SELECTION_ID, MACRO_STEP_TYPE_OPEN_FROM_SELECTION };
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   void routeIncomingMessageAsync(message, sender).then(sendResponse);
@@ -17,9 +23,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 export function registerEnrichSelectionContextMenu(): void {
+  const contextMenuActionId =
+    getMacroStepContextMenuActionId(MACRO_STEP_TYPE_OPEN_FROM_SELECTION) ??
+    CONTEXT_MENU_ENRICH_SELECTION_ID;
+
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
-      id: CONTEXT_MENU_ENRICH_SELECTION_ID,
+      id: contextMenuActionId,
       title: CONTEXT_MENU_ENRICH_SELECTION_TITLE,
       contexts: ["selection"],
     });
@@ -58,6 +68,13 @@ async function sendEnrichSelectionToTab(tabId: number): Promise<void> {
   await sendMessageToTab(tabId, enrichSelectionMessage());
 }
 
+function resolveEnrichSelectionContextMenuActionId(): string {
+  return (
+    getMacroStepContextMenuActionId(MACRO_STEP_TYPE_OPEN_FROM_SELECTION) ??
+    CONTEXT_MENU_ENRICH_SELECTION_ID
+  );
+}
+
 chrome.runtime.onInstalled.addListener((details) => {
   registerEnrichSelectionContextMenu();
   if (details.reason === "install") {
@@ -66,7 +83,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId !== CONTEXT_MENU_ENRICH_SELECTION_ID) {
+  if (info.menuItemId !== resolveEnrichSelectionContextMenuActionId()) {
     return;
   }
   if (!tab?.id) {

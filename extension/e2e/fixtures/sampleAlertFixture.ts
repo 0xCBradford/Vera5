@@ -1,6 +1,8 @@
 import type { BrowserContext, Page } from "@playwright/test";
 import { expect } from "@playwright/test";
 import fs from "node:fs";
+import { evaluateInExtensionRuntime, hasExtensionServiceWorker } from "./extensionRuntime";
+import { postExamplesFixtureBridgeMessage } from "./examplesFixtureBridge";
 
 export const SAMPLE_ALERT_FIXTURE_PATH = "/sample-alert.html";
 
@@ -115,21 +117,18 @@ export async function scanSampleAlertPage(
     timeout: 30_000,
   });
 
-  const serviceWorker = context
-    .serviceWorkers()
-    .find((worker) => worker.url().includes(extensionId));
-  expect(serviceWorker).toBeDefined();
-
-  await serviceWorker!.evaluate(async () => {
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (!tab?.id) {
-      throw new Error("No active tab for scan request");
-    }
-    await chrome.tabs.sendMessage(tab.id, { type: "SCAN_PAGE" });
-  });
+  if (!hasExtensionServiceWorker(context, extensionId)) {
+    await postExamplesFixtureBridgeMessage(page, "scanPage");
+  } else {
+    await evaluateInExtensionRuntime(context, extensionId, async (contentUrl) => {
+      const tabs = await chrome.tabs.query({});
+      const tab = tabs.find((entry) => entry.url === contentUrl);
+      if (!tab?.id) {
+        throw new Error("No content tab for scan request");
+      }
+      await chrome.tabs.sendMessage(tab.id, { type: "SCAN_PAGE" });
+    }, page.url());
+  }
 
   await expect
     .poll(async () => page.locator(E2E_SELECTORS.iocHighlight).count(), {
@@ -229,9 +228,12 @@ export async function installClipboardWriteCapture(
   page: Page,
   origin: string
 ): Promise<void> {
-  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
-    origin,
-  });
+  const browserName = page.context().browser()?.browserType().name();
+  if (browserName !== "firefox") {
+    await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
+      origin,
+    });
+  }
   await page.addInitScript(() => {
     const writes: string[] = [];
     (
@@ -266,18 +268,24 @@ export async function readCapturedClipboardText(page: Page): Promise<string> {
 }
 
 export async function runCopyAllFromHoverCard(page: Page): Promise<void> {
-  await expect(page.locator(E2E_SELECTORS.hoverCardExportSection)).toBeVisible();
+  const exportSection = page.locator(E2E_SELECTORS.hoverCardExportSection);
+  await expect(exportSection).toBeVisible();
+  await exportSection.scrollIntoViewIfNeeded();
 
   const copyTrigger = page.getByRole("button", {
     name: HOVER_CARD_COPY_DROPDOWN_ARIA_LABEL,
   });
-  await copyTrigger.click();
+  await copyTrigger.evaluate((button: HTMLButtonElement) => {
+    button.click();
+  });
 
   const copyAllItem = page
     .locator(E2E_SELECTORS.hoverCardExportDropdownItem)
     .filter({ hasText: "Copy all" });
   await expect(copyAllItem).toBeVisible();
-  await copyAllItem.click();
+  await copyAllItem.evaluate((item: HTMLElement) => {
+    item.click();
+  });
 }
 
 export async function expectHoverCardCopyAllClipboardResult(

@@ -3,8 +3,11 @@ import {
   copyTrayTemplateExportToClipboard,
   downloadTrayTemplateExportFile,
 } from "../lib/exportTemplates";
-import { safeOpenOptionsPage } from "../lib/extensionContext";
+import { safeOpenOptionsPage, safeRuntimeSendMessage } from "../lib/extensionContext";
 import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
+import { ENRICHMENT_SOURCE_OPS_SECTION_TITLE } from "../lib/enrichmentSourceOps";
+import { openExtensionPopupMessage } from "../lib/messages";
+import { POPUP_PANEL } from "../lib/popupPanelFocus";
 import { handleEnrichSelectionRequest } from "./enrichSelection";
 import { getFilteredTrayEnrichmentRecords } from "./hoverCardOverlay";
 import { clearIocHighlights } from "./highlighter";
@@ -13,6 +16,8 @@ import { handleScanPageRequest } from "./scanPage";
 export const CORE_COMMAND_PALETTE_COMMAND_IDS = {
   SCAN_PAGE: "scan-page",
   ENRICH_SELECTION: "enrich-selection",
+  OPEN_HISTORY: "open-history",
+  SOURCE_HEALTH: "source-health",
   COPY_FILTERED_MARKDOWN: "copy-filtered-markdown",
   EXPORT_TRAY_SUBSET: "export-tray-subset",
   CLEAR_HIGHLIGHTS: "clear-highlights",
@@ -45,6 +50,30 @@ export function registerCoreCommandPaletteCommands(): void {
     isEnabled: () => hasNonCollapsedTextSelection(),
     run: () => {
       void handleEnrichSelectionRequest();
+    },
+  });
+
+  registerCommandPaletteCommand({
+    id: CORE_COMMAND_PALETTE_COMMAND_IDS.OPEN_HISTORY,
+    label: "Open history",
+    description: "Open investigation history in the extension popup",
+    keywords: ["history", "investigation", "recent", "reopen"],
+    run: () => {
+      void safeRuntimeSendMessage(
+        openExtensionPopupMessage(POPUP_PANEL.INVESTIGATION_HISTORY)
+      );
+    },
+  });
+
+  registerCommandPaletteCommand({
+    id: CORE_COMMAND_PALETTE_COMMAND_IDS.SOURCE_HEALTH,
+    label: "Source health",
+    description: `Open ${ENRICHMENT_SOURCE_OPS_SECTION_TITLE} in the extension popup`,
+    keywords: ["health", "quota", "cooldown", "cache", "source", "429"],
+    run: () => {
+      void safeRuntimeSendMessage(
+        openExtensionPopupMessage(POPUP_PANEL.SOURCE_OPERATIONS)
+      );
     },
   });
 

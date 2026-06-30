@@ -1,4 +1,5 @@
-import type { EnrichmentSourceId } from "./hoverCardEnrichment";
+import type { PopupPanelFocus } from "./popupPanelFocus";
+import { isPopupPanelFocus } from "./popupPanelFocus";
 import { IOC_TYPE, type IocType } from "./iocRegex";
 import {
   extractExactIocValue,
@@ -17,12 +18,14 @@ export const MESSAGE = {
   ENRICH_SELECTION: "ENRICH_SELECTION",
   GET_SELECTION_ACTION_STATE: "GET_SELECTION_ACTION_STATE",
   NAVIGATE_TO_IOC_ANCHOR: "NAVIGATE_TO_IOC_ANCHOR",
+  REOPEN_INVESTIGATION_HISTORY: "REOPEN_INVESTIGATION_HISTORY",
   TOGGLE_WORKSPACE: "TOGGLE_WORKSPACE",
   OPEN_WORKSPACE: "OPEN_WORKSPACE",
   TAB_SCAN_SNAPSHOT: "TAB_SCAN_SNAPSHOT",
   GET_TAB_SCAN_SUMMARY: "GET_TAB_SCAN_SUMMARY",
   ENRICH_IOC: "ENRICH_IOC",
   OPEN_OPTIONS_PAGE: "OPEN_OPTIONS_PAGE",
+  OPEN_EXTENSION_POPUP: "OPEN_EXTENSION_POPUP",
   OPEN_SITE_PERMISSIONS: "OPEN_SITE_PERMISSIONS",
   TOGGLE_COMMAND_PALETTE: "TOGGLE_COMMAND_PALETTE",
   GET_ACTIVE_INVESTIGATION_SESSION: "GET_ACTIVE_INVESTIGATION_SESSION",
@@ -59,6 +62,12 @@ export type NavigateToIocAnchorMessage = {
   type: typeof MESSAGE.NAVIGATE_TO_IOC_ANCHOR;
   anchorId: string;
 };
+export type ReopenInvestigationHistoryMessage = {
+  type: typeof MESSAGE.REOPEN_INVESTIGATION_HISTORY;
+  ioc: string;
+  iocType: IocType;
+  pageOrigin: string;
+};
 export type ToggleWorkspaceMessage = { type: typeof MESSAGE.TOGGLE_WORKSPACE };
 export type OpenWorkspaceMessage = { type: typeof MESSAGE.OPEN_WORKSPACE };
 export type TabScanSnapshotMessage = {
@@ -77,6 +86,10 @@ export type EnrichIocMessage = {
   bypassCache?: boolean;
 };
 export type OpenOptionsPageMessage = { type: typeof MESSAGE.OPEN_OPTIONS_PAGE };
+export type OpenExtensionPopupMessage = {
+  type: typeof MESSAGE.OPEN_EXTENSION_POPUP;
+  panel: PopupPanelFocus;
+};
 export type OpenSitePermissionsMessage = {
   type: typeof MESSAGE.OPEN_SITE_PERMISSIONS;
 };
@@ -160,6 +173,7 @@ export type Vera5Message =
   | GetTabScanSummaryMessage
   | EnrichIocMessage
   | OpenOptionsPageMessage
+  | OpenExtensionPopupMessage
   | OpenSitePermissionsMessage
   | ToggleCommandPaletteMessage
   | GetActiveInvestigationSessionMessage
@@ -213,6 +227,19 @@ export function navigateToIocAnchorMessage(
   return { type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR, anchorId };
 }
 
+export function reopenInvestigationHistoryMessage(input: {
+  ioc: string;
+  iocType: IocType;
+  pageOrigin: string;
+}): ReopenInvestigationHistoryMessage {
+  return {
+    type: MESSAGE.REOPEN_INVESTIGATION_HISTORY,
+    ioc: input.ioc.trim(),
+    iocType: input.iocType,
+    pageOrigin: input.pageOrigin.trim(),
+  };
+}
+
 export function toggleWorkspaceMessage(): ToggleWorkspaceMessage {
   return { type: MESSAGE.TOGGLE_WORKSPACE };
 }
@@ -234,6 +261,31 @@ export function isNavigateToIocAnchorMessage(
   return typeof record.anchorId === "string" && record.anchorId.length > 0;
 }
 
+export function isReopenInvestigationHistoryMessage(
+  raw: unknown
+): raw is ReopenInvestigationHistoryMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.REOPEN_INVESTIGATION_HISTORY) {
+    return false;
+  }
+  if (typeof record.ioc !== "string" || record.ioc.trim().length === 0) {
+    return false;
+  }
+  if (typeof record.iocType !== "string") {
+    return false;
+  }
+  if (!Object.values(IOC_TYPE).includes(record.iocType as IocType)) {
+    return false;
+  }
+  if (typeof record.pageOrigin !== "string" || record.pageOrigin.trim().length === 0) {
+    return false;
+  }
+  return extractExactIocValue(record.ioc, record.iocType as IocType) !== null;
+}
+
 export function tabScanSnapshotMessage(
   snapshot: TabScanSnapshotPayload
 ): TabScanSnapshotMessage {
@@ -242,6 +294,12 @@ export function tabScanSnapshotMessage(
 
 export function openOptionsPageMessage(): OpenOptionsPageMessage {
   return { type: MESSAGE.OPEN_OPTIONS_PAGE };
+}
+
+export function openExtensionPopupMessage(
+  panel: PopupPanelFocus
+): OpenExtensionPopupMessage {
+  return { type: MESSAGE.OPEN_EXTENSION_POPUP, panel };
 }
 
 export function openSitePermissionsMessage(): OpenSitePermissionsMessage {
@@ -854,6 +912,9 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   if (type === MESSAGE.REMOVE_IOC_FROM_COLLECTION) {
     return isRemoveIocFromCollectionMessage(raw);
   }
+  if (type === MESSAGE.OPEN_EXTENSION_POPUP) {
+    return isOpenExtensionPopupMessage(raw);
+  }
   return (
     type === MESSAGE.PING ||
     type === MESSAGE.CONTENT_REGISTER ||
@@ -861,5 +922,18 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
     type === MESSAGE.OPEN_OPTIONS_PAGE ||
     type === MESSAGE.OPEN_SITE_PERMISSIONS ||
     type === MESSAGE.TOGGLE_COMMAND_PALETTE
+  );
+}
+
+export function isOpenExtensionPopupMessage(
+  raw: unknown
+): raw is OpenExtensionPopupMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  return (
+    record.type === MESSAGE.OPEN_EXTENSION_POPUP &&
+    isPopupPanelFocus(record.panel)
   );
 }

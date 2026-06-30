@@ -16,6 +16,14 @@ import * as tabScanSummary from "../lib/tabScanSummary";
 import { createIocCollection } from "../lib/iocCollection";
 import * as iocCollectionExport from "../lib/iocCollectionExport";
 import { MESSAGE } from "../lib/messages";
+import {
+  INVESTIGATION_HISTORY_SCHEMA_VERSION,
+} from "../lib/investigationHistory";
+import { STORAGE_KEY_INVESTIGATION_HISTORY } from "../lib/investigationHistoryStorage";
+import {
+  POPUP_PANEL,
+  POPUP_PANEL_FOCUS_STORAGE_KEY,
+} from "../lib/popupPanelFocus";
 import { Popup } from "./Popup";
 
 const sampleCollection = createIocCollection({
@@ -168,13 +176,67 @@ function stubChrome(options: {
   navigateResponse?: unknown;
   navigateSendFailed?: boolean;
   collections?: ReturnType<typeof createIocCollection>[];
+  localStore?: Record<string, unknown>;
+  sessionStore?: Record<string, unknown>;
 }): void {
   const collections = [...(options.collections ?? [])];
+  const localStore = options.localStore ?? {};
+  const sessionStore = options.sessionStore ?? {};
   vi.stubGlobal("chrome", {
     storage: {
       local: {
-        get: () => Promise.resolve({}),
-        set: () => Promise.resolve(),
+        get: (keys: string | string[] | Record<string, unknown>) => {
+          const keyList = Array.isArray(keys)
+            ? keys
+            : typeof keys === "string"
+              ? [keys]
+              : Object.keys(keys);
+          const result: Record<string, unknown> = {};
+          for (const key of keyList) {
+            if (key in localStore) {
+              result[key] = localStore[key];
+            }
+          }
+          return Promise.resolve(result);
+        },
+        set: (items: Record<string, unknown>) => {
+          Object.assign(localStore, items);
+          return Promise.resolve();
+        },
+        remove: (keys: string | string[]) => {
+          const keyList = Array.isArray(keys) ? keys : [keys];
+          for (const key of keyList) {
+            delete localStore[key];
+          }
+          return Promise.resolve();
+        },
+      },
+      session: {
+        get: (keys: string | string[] | Record<string, unknown>) => {
+          const keyList = Array.isArray(keys)
+            ? keys
+            : typeof keys === "string"
+              ? [keys]
+              : Object.keys(keys);
+          const result: Record<string, unknown> = {};
+          for (const key of keyList) {
+            if (key in sessionStore) {
+              result[key] = sessionStore[key];
+            }
+          }
+          return Promise.resolve(result);
+        },
+        set: (items: Record<string, unknown>) => {
+          Object.assign(sessionStore, items);
+          return Promise.resolve();
+        },
+        remove: (keys: string | string[]) => {
+          const keyList = Array.isArray(keys) ? keys : [keys];
+          for (const key of keyList) {
+            delete sessionStore[key];
+          }
+          return Promise.resolve();
+        },
       },
     },
     runtime: {
@@ -477,14 +539,24 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("Source operations");
       expect(mounted?.container.textContent).toContain(
-        "Rate limit cooldown: 30s remaining"
+        "HTTP 429 cooldown: 30s remaining"
       );
     });
     expect(mounted?.container.textContent).toContain("Last cache clear:");
     expect(mounted?.container.textContent).toContain("Cache entries: 2");
     expect(mounted?.container.textContent).toContain("AbuseIPDB");
-    expect(mounted?.container.textContent).toContain("Rate limited");
-    expect(mounted?.container.textContent).toContain("2 cached");
+    expect(mounted?.container.textContent).toContain("Last status: Rate limited");
+    expect(mounted?.container.textContent).toContain(
+      "Last error: HTTP 429 rate limited"
+    );
+    expect(mounted?.container.textContent).toContain("2 cache entries");
+    expect(mounted?.container.textContent).toContain("Clear cache");
+    expect(mounted?.container.textContent).toContain(
+      "Vendor quota hints are orientation only"
+    );
+    expect(mounted?.container.textContent).toContain(
+      "Vendor quota: Typical free tier: 1,000 checks/day"
+    );
   });
 
   it("shows session export copy and download actions when a session is active", async () => {
@@ -1240,5 +1312,111 @@ describe("Popup IOC tray", () => {
     expect(mounted!.container.textContent).toContain("Settings");
     expect(mounted!.container.textContent).toContain("Permissions");
     expect(mounted!.container.textContent).toContain("Open sidebar");
+  });
+});
+
+describe("Popup operator UX surfaces", () => {
+  let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+  afterEach(() => {
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  beforeEach(() => {
+    vi.spyOn(tabScanSummary, "loadTrayEntryEnrichmentStatuses").mockResolvedValue({});
+  });
+
+  it("renders investigation history entries from persisted storage", async () => {
+    stubChrome({
+      initialSummary: null,
+      localStore: {
+        [STORAGE_KEY_INVESTIGATION_HISTORY]: {
+          schemaVersion: INVESTIGATION_HISTORY_SCHEMA_VERSION,
+          entries: [
+            {
+              id: "vera5-hist-popup-1",
+              ioc: "203.0.113.42",
+              iocType: IOC_TYPE.IPV4,
+              pageOrigin: "https://example.com",
+              pageUrl: "https://example.com/alert",
+              enrichedAt: 1_700_000_000_000,
+            },
+          ],
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Investigation history");
+      expect(mounted?.container.textContent).toContain("203.0.113.42");
+      expect(mounted?.container.textContent).toContain("https://example.com");
+    });
+    expect(
+      mounted?.container.querySelector('[aria-label="Recent investigation history"]')
+    ).not.toBeNull();
+    expect(mounted?.container.textContent).toContain("Clear history");
+  });
+
+  it("expands source operations when popup panel focus requests source health", async () => {
+    stubChrome({
+      initialSummary: null,
+      sourceOps: sampleSourceOpsSnapshot,
+      sessionStore: {
+        [POPUP_PANEL_FOCUS_STORAGE_KEY]: POPUP_PANEL.SOURCE_OPERATIONS,
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      const toggle = mounted?.container.querySelector(
+        '[aria-controls="popup-source-ops-body"]'
+      );
+      expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+      expect(mounted?.container.textContent).toContain("Last status: Rate limited");
+    });
+    expect(
+      mounted?.container.querySelector("#popup-source-ops-body")?.hasAttribute("hidden")
+    ).toBe(false);
+  });
+
+  it("expands investigation history when popup panel focus requests history", async () => {
+    stubChrome({
+      initialSummary: null,
+      localStore: {
+        [STORAGE_KEY_INVESTIGATION_HISTORY]: {
+          schemaVersion: INVESTIGATION_HISTORY_SCHEMA_VERSION,
+          entries: [
+            {
+              id: "vera5-hist-popup-2",
+              ioc: "8.8.8.8",
+              iocType: IOC_TYPE.IPV4,
+              pageOrigin: "https://example.com",
+              pageUrl: "https://example.com/alert",
+              enrichedAt: 1_700_000_000_100,
+            },
+          ],
+        },
+      },
+      sessionStore: {
+        [POPUP_PANEL_FOCUS_STORAGE_KEY]: POPUP_PANEL.INVESTIGATION_HISTORY,
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      const toggle = mounted?.container.querySelector(
+        '[aria-controls="popup-history-body"]'
+      );
+      expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+    });
+    expect(
+      mounted?.container.querySelector("#popup-history-body")?.hasAttribute("hidden")
+    ).toBe(false);
   });
 });

@@ -12,6 +12,98 @@ const firefoxManifestPath = path.join(
   "public",
   "manifest.firefox.json"
 );
+const iocRequestBoundariesPath = path.join(
+  extensionRoot,
+  "src",
+  "lib",
+  "iocRequestBoundaries.ts"
+);
+
+function readDeclaredEnrichmentApiHosts() {
+  const source = fs.readFileSync(iocRequestBoundariesPath, "utf8");
+  const match = source.match(
+    /export const DECLARED_ENRICHMENT_API_HOSTS[^=]*=\s*\[([\s\S]*?)\]\s*as const/
+  );
+  if (!match) {
+    fail(
+      "could not parse DECLARED_ENRICHMENT_API_HOSTS from iocRequestBoundaries.ts"
+    );
+  }
+  const hosts = [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1]);
+  if (hosts.length === 0) {
+    fail("DECLARED_ENRICHMENT_API_HOSTS is empty in iocRequestBoundaries.ts");
+  }
+  return hosts;
+}
+
+function manifestHostPatternCoversHttpsHostname(pattern, hostname) {
+  if (pattern === "https://*/*") {
+    return true;
+  }
+  if (!pattern.startsWith("https://") || !pattern.endsWith("/*")) {
+    return false;
+  }
+  const hostPattern = pattern.slice("https://".length, -2);
+  if (hostPattern.startsWith("*.")) {
+    const suffix = hostPattern.slice(2);
+    return hostname === suffix || hostname.endsWith(`.${suffix}`);
+  }
+  return hostname === hostPattern;
+}
+
+function checkManifestCsp(manifestPath) {
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const csp =
+    manifest.content_security_policy?.extension_pages ??
+    manifest.content_security_policy;
+  if (typeof csp !== "string") {
+    return;
+  }
+  const unsafe = ["unsafe-eval", "unsafe-inline"];
+  for (const token of unsafe) {
+    if (csp.includes(token)) {
+      fail(`manifest CSP includes ${token}: ${csp}`);
+    }
+  }
+  if (/script-src[^;]*https?:/i.test(csp)) {
+    fail(`manifest CSP script-src includes a remote origin: ${csp}`);
+  }
+}
+
+function checkManifestDeclaredHostPermissions(manifestLabel, manifest, declaredHosts) {
+  const hostPermissions = manifest.host_permissions ?? [];
+
+  if (!hostPermissions.includes("https://*/*")) {
+    fail(`${manifestLabel} must include https://*/* for analyst page access`);
+  }
+
+  for (const hostname of declaredHosts) {
+    const explicitPermission = `https://${hostname}/*`;
+    if (!hostPermissions.includes(explicitPermission)) {
+      fail(
+        `${manifestLabel} missing explicit host permission for declared enrichment API: ${explicitPermission}`
+      );
+    }
+    if (
+      !hostPermissions.some((pattern) =>
+        manifestHostPatternCoversHttpsHostname(pattern, hostname)
+      )
+    ) {
+      fail(
+        `${manifestLabel} host_permissions do not cover declared enrichment API host: ${hostname}`
+      );
+    }
+  }
+}
+
+function checkManifestRemoteOriginPosture(manifestLabel, manifest, chromeManifest) {
+  if (manifest.options_page !== chromeManifest.options_page) {
+    fail(`${manifestLabel} options_page must match Chrome manifest.json`);
+  }
+  if (manifest.action?.default_popup !== chromeManifest.action?.default_popup) {
+    fail(`${manifestLabel} action.default_popup must match Chrome manifest.json`);
+  }
+}
 
 function fail(message) {
   console.error(`verify-firefox-manifest: ${message}`);
@@ -54,6 +146,15 @@ if (!Array.isArray(gecko.data_collection_permissions?.required)) {
   fail("browser_specific_settings.gecko.data_collection_permissions.required must be set");
 }
 
+if (
+  JSON.stringify(gecko.data_collection_permissions.required) !==
+  JSON.stringify(["none"])
+) {
+  fail(
+    'browser_specific_settings.gecko.data_collection_permissions.required must be ["none"] (no Mozilla data collection declared)'
+  );
+}
+
 assertEqualArrays("permissions", chrome.permissions, firefox.permissions);
 assertEqualArrays(
   "host_permissions",
@@ -89,6 +190,36 @@ if (JSON.stringify(chrome.commands) !== JSON.stringify(firefox.commands)) {
   fail("commands must match Chrome manifest.json");
 }
 
+const declaredEnrichmentApiHosts = readDeclaredEnrichmentApiHosts();
+checkManifestDeclaredHostPermissions(
+  "manifest.json",
+  chrome,
+  declaredEnrichmentApiHosts
+);
+checkManifestDeclaredHostPermissions(
+  "manifest.firefox.json",
+  firefox,
+  declaredEnrichmentApiHosts
+);
+
+checkManifestCsp(chromeManifestPath);
+checkManifestCsp(firefoxManifestPath);
+checkManifestRemoteOriginPosture("manifest.firefox.json", firefox, chrome);
+
+if (
+  JSON.stringify(chrome.web_accessible_resources ?? []) !==
+  JSON.stringify(firefox.web_accessible_resources ?? [])
+) {
+  fail("web_accessible_resources must match Chrome manifest.json");
+}
+
+if (
+  JSON.stringify(chrome.content_security_policy ?? null) !==
+  JSON.stringify(firefox.content_security_policy ?? null)
+) {
+  fail("content_security_policy must match Chrome manifest.json");
+}
+
 console.log(
-  `verify-firefox-manifest: OK (gecko id ${gecko.id}, ${firefox.permissions.length} permissions, ${firefox.host_permissions.length} host_permissions, background ${firefox.background.scripts.join(", ")})`
+  `verify-firefox-manifest: OK (gecko id ${gecko.id}, ${firefox.permissions.length} permissions, ${firefox.host_permissions.length} host_permissions, ${declaredEnrichmentApiHosts.length} declared enrichment API hosts covered, default MV3 CSP posture, no Mozilla data collection, background ${firefox.background.scripts.join(", ")})`
 );

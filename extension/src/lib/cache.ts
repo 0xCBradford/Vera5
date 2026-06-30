@@ -151,6 +151,32 @@ export function removeEnrichmentCacheEntriesForIoc(
   return { cache: next, removedKeys };
 }
 
+export function enrichmentCacheKeysForSource(
+  cache: EnrichmentCacheRecord,
+  sourceId: EnrichmentSourceId
+): string[] {
+  return Object.keys(cache).filter((cacheKey) => {
+    const parsed = parseEnrichmentCacheKey(cacheKey);
+    return parsed?.sourceId === sourceId;
+  });
+}
+
+export function removeEnrichmentCacheEntriesForSource(
+  cache: EnrichmentCacheRecord,
+  sourceId: EnrichmentSourceId
+): { cache: EnrichmentCacheRecord; removedKeys: readonly string[] } {
+  const removedKeys = enrichmentCacheKeysForSource(cache, sourceId);
+  if (removedKeys.length === 0) {
+    return { cache, removedKeys };
+  }
+
+  const next = { ...cache };
+  for (const cacheKey of removedKeys) {
+    delete next[cacheKey];
+  }
+  return { cache: next, removedKeys };
+}
+
 export function buildEnrichmentCacheKey(
   iocValue: string,
   sourceId: EnrichmentSourceId
@@ -389,6 +415,28 @@ export async function clearEnrichmentCache(
   if (options?.recordClearTimestamp === true) {
     await persistEnrichmentCacheClearedAt();
   }
+}
+
+export async function clearEnrichmentCacheForSource(
+  sourceId: EnrichmentSourceId,
+  options?: ClearEnrichmentCacheOptions
+): Promise<number> {
+  const cache = await getEnrichmentCache();
+  const { cache: next, removedKeys } = removeEnrichmentCacheEntriesForSource(
+    cache,
+    sourceId
+  );
+  if (removedKeys.length === 0) {
+    return 0;
+  }
+
+  if (countEnrichmentCacheEntries(next) === 0) {
+    await clearEnrichmentCache(options);
+  } else {
+    await setEnrichmentCache(next);
+  }
+
+  return removedKeys.length;
 }
 
 export async function invalidateEnrichmentCacheForIoc(

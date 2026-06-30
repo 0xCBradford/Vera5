@@ -12,6 +12,7 @@ import {
   readEnrichmentCacheClearedAt,
   type EnrichmentCacheRecord,
 } from "./cache";
+import { getEnrichmentSourceQuotaSummary } from "./connectorProfileExport";
 import {
   ENRICHMENT_SOURCE_DEFINITIONS,
   ENRICHMENT_SOURCE_ORDER,
@@ -22,7 +23,7 @@ import {
 export const ENRICHMENT_SOURCE_OPS_SECTION_TITLE = "Source operations";
 
 export const ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE =
-  "Per-source status, cache counts, rate-limit cooldown, and last cache clear are shown in the extension popup under Source operations.";
+  "Source health and vendor quota hints (last status, last error, cache counts, scoped clear cache, rate-limit cooldown, and last cache clear) live in the extension popup under Source operations—not on this page.";
 
 export const STORAGE_KEY_ENRICHMENT_SOURCE_LAST_STATUS =
   "enrichmentSourceLastStatus";
@@ -43,6 +44,7 @@ export type EnrichmentSourceOpsRow = {
   displayName: string;
   lastStatus: EnrichmentSourceLastStatusEntry | null;
   cacheEntryCount: number;
+  quotaHint: string;
 };
 
 export type EnrichmentSourceOpsSnapshot = {
@@ -137,6 +139,7 @@ export function isEnrichmentSourceOpsSnapshot(
       typeof sourceRow.sourceId !== "string" ||
       !isEnrichmentSourceId(sourceRow.sourceId) ||
       typeof sourceRow.displayName !== "string" ||
+      typeof sourceRow.quotaHint !== "string" ||
       typeof sourceRow.cacheEntryCount !== "number" ||
       !Number.isFinite(sourceRow.cacheEntryCount)
     ) {
@@ -206,6 +209,7 @@ export function buildEnrichmentSourceOpsRows(input: {
     displayName: ENRICHMENT_SOURCE_DEFINITIONS[sourceId].displayName,
     lastStatus: input.lastStatus[sourceId] ?? null,
     cacheEntryCount: cacheCounts[sourceId] ?? 0,
+    quotaHint: getEnrichmentSourceQuotaSummary(sourceId),
   }));
 }
 
@@ -265,6 +269,39 @@ export function formatEnrichmentSourceLastStatusLabel(
   return "Error";
 }
 
+export function formatEnrichmentSourceLastErrorLabel(
+  entry: EnrichmentSourceLastStatusEntry | null
+): string | null {
+  if (!entry?.errorCode) {
+    return null;
+  }
+
+  switch (entry.errorCode) {
+    case ENRICHMENT_ERROR_CODE.RATE_LIMITED:
+      return "HTTP 429 rate limited";
+    case ENRICHMENT_ERROR_CODE.MISSING_KEY:
+      return "Missing API key";
+    case ENRICHMENT_ERROR_CODE.UNAUTHORIZED:
+      return "Unauthorized";
+    case ENRICHMENT_ERROR_CODE.TIMEOUT:
+      return "Request timed out";
+    case ENRICHMENT_ERROR_CODE.NETWORK:
+      return "Network error";
+    case ENRICHMENT_ERROR_CODE.DISABLED:
+      return "Source disabled";
+    case ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE:
+      return "Unsupported indicator type";
+    case ENRICHMENT_ERROR_CODE.DOMAIN_POLICY:
+      return "Blocked by domain policy";
+    case ENRICHMENT_ERROR_CODE.INTERNAL_ASSET:
+      return "Blocked by internal asset policy";
+    case ENRICHMENT_ERROR_CODE.VENDOR:
+      return "Vendor error";
+    default:
+      return entry.errorCode.replace(/_/g, " ");
+  }
+}
+
 export function formatEnrichmentCacheClearedAtLabel(
   clearedAt: string | null
 ): string {
@@ -283,7 +320,26 @@ export function formatEnrichmentSourceOpsCooldownLabel(
   snapshot: EnrichmentSourceOpsSnapshot
 ): string {
   if (!snapshot.globalCooldownActive) {
-    return "No active cooldown";
+    return "No active HTTP 429 cooldown";
   }
-  return `Rate limit cooldown: ${snapshot.globalCooldownRemainingSeconds}s remaining`;
+  return `HTTP 429 cooldown: ${snapshot.globalCooldownRemainingSeconds}s remaining`;
+}
+
+export function formatEnrichmentSourceCacheEntryCountLabel(count: number): string {
+  if (count <= 0) {
+    return "No cache entries";
+  }
+  return count === 1 ? "1 cache entry" : `${count} cache entries`;
+}
+
+export function resolveEnrichmentSourceClearCacheFeedback(input: {
+  sourceDisplayName: string;
+  removedCount: number;
+}): string {
+  if (input.removedCount <= 0) {
+    return `No cache entries cleared for ${input.sourceDisplayName}.`;
+  }
+  return input.removedCount === 1
+    ? `Cleared 1 cache entry for ${input.sourceDisplayName}.`
+    : `Cleared ${input.removedCount} cache entries for ${input.sourceDisplayName}.`;
 }

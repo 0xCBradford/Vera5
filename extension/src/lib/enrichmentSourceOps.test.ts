@@ -17,11 +17,15 @@ import {
   buildEnrichmentSourceOpsRows,
   buildEnrichmentSourceOpsSnapshot,
   formatEnrichmentCacheClearedAtLabel,
+  formatEnrichmentSourceCacheEntryCountLabel,
+  formatEnrichmentSourceLastErrorLabel,
   formatEnrichmentSourceLastStatusLabel,
   formatEnrichmentSourceOpsCooldownLabel,
+  ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE,
   isEnrichmentSourceOpsSnapshot,
   normalizeEnrichmentSourceLastStatusRecord,
   recordEnrichmentSourceLastStatuses,
+  resolveEnrichmentSourceClearCacheFeedback,
 } from "./enrichmentSourceOps";
 import {
   DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
@@ -158,11 +162,27 @@ describe("enrichment source ops", () => {
     expect(rows[0]).toMatchObject({
       sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
       cacheEntryCount: 1,
+      quotaHint: expect.stringContaining("1,000 checks/day"),
       lastStatus: {
         status: ENRICHMENT_SOURCE_STATUS.OK,
         at: "2026-01-01T00:00:00.000Z",
       },
     });
+  });
+
+  it("includes vendor-doc quota hints on every source row", () => {
+    const rows = buildEnrichmentSourceOpsRows({
+      lastStatus: {},
+      cache: createEmptyEnrichmentCache(),
+    });
+
+    expect(rows).toHaveLength(ENRICHMENT_SOURCE_ORDER.length);
+    for (const row of rows) {
+      expect(row.quotaHint.trim().length).toBeGreaterThan(0);
+    }
+    expect(
+      rows.find((row) => row.sourceId === ENRICHMENT_SOURCE.GREYNOISE)?.quotaHint
+    ).toContain("50 IPv4 lookups/week");
   });
 
   it("builds a snapshot from cache, status, and cooldown inputs", async () => {
@@ -206,6 +226,13 @@ describe("enrichment source ops", () => {
         errorCode: "rate_limited",
       })
     ).toBe("Rate limited");
+    expect(
+      formatEnrichmentSourceLastErrorLabel({
+        status: ENRICHMENT_SOURCE_STATUS.ERROR,
+        at: "2026-01-01T00:00:00.000Z",
+        errorCode: "rate_limited",
+      })
+    ).toBe("HTTP 429 rate limited");
     expect(formatEnrichmentCacheClearedAtLabel(null)).toBe("Never");
     expect(
       formatEnrichmentSourceOpsCooldownLabel({
@@ -215,7 +242,15 @@ describe("enrichment source ops", () => {
         totalCacheEntryCount: 0,
         sources: [],
       })
-    ).toBe("Rate limit cooldown: 15s remaining");
+    ).toBe("HTTP 429 cooldown: 15s remaining");
+    expect(formatEnrichmentSourceCacheEntryCountLabel(0)).toBe("No cache entries");
+    expect(formatEnrichmentSourceCacheEntryCountLabel(2)).toBe("2 cache entries");
+    expect(
+      resolveEnrichmentSourceClearCacheFeedback({
+        sourceDisplayName: "AbuseIPDB",
+        removedCount: 2,
+      })
+    ).toBe("Cleared 2 cache entries for AbuseIPDB.");
   });
 
   it("records cache clear timestamps only when requested", async () => {
@@ -228,5 +263,13 @@ describe("enrichment source ops", () => {
 
     await clearEnrichmentCache({ recordClearTimestamp: true });
     expect(await readEnrichmentCacheClearedAt()).toMatch(/^\d{4}-/);
+  });
+
+  it("defers duplicate source health UI to the popup via options guidance", () => {
+    expect(ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE).toContain(
+      "Source operations—not on this page"
+    );
+    expect(ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE).toContain("vendor quota hints");
+    expect(ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE).toContain("last error");
   });
 });

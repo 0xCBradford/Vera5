@@ -6,11 +6,13 @@ import {
   CONNECTOR_PROFILE_SCHEMA_VERSION,
   ConnectorProfileImportError,
   exportConnectorProfileJson,
+  getEnrichmentSourceQuotaSummary,
   importConnectorProfileJson,
   mergeImportedConnectorProfile,
   parseConnectorProfileDocument,
   serializeConnectorProfileExport,
 } from "./connectorProfileExport";
+import { ENRICHMENT_SOURCE, ENRICHMENT_SOURCE_ORDER } from "./enrichmentSourceRegistry";
 import {
   createDefaultVera5Settings,
   getVera5Settings,
@@ -86,6 +88,12 @@ describe("connector profile export", () => {
     });
     expect(document.rateLimitMetadata.defaultGlobalCooldownSeconds).toBe(60);
     expect(document.rateLimitMetadata.sources.length).toBeGreaterThan(0);
+    expect(document.rateLimitMetadata.sources).toHaveLength(
+      ENRICHMENT_SOURCE_ORDER.length
+    );
+    expect(
+      getEnrichmentSourceQuotaSummary(ENRICHMENT_SOURCE.URLSCAN)
+    ).toContain("URLScan.io account");
     expect(document.privacyWarnings.enrichmentDisclaimer).toBe(
       HOVER_CARD_ENRICHMENT_DISCLAIMER
     );

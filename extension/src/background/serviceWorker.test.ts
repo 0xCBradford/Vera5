@@ -295,7 +295,7 @@ describe("service worker scan-page command routing", () => {
     expect(contextMenusRemoveAll).toHaveBeenCalledTimes(1);
     expect(contextMenusCreate).toHaveBeenCalledWith({
       id: "enrich-with-vera5",
-      title: "Enrich with Vera5",
+      title: "Enrich selection with Vera5",
       contexts: ["selection"],
     });
     expect(openOptionsPage).not.toHaveBeenCalled();

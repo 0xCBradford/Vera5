@@ -358,6 +358,19 @@ export function findHighlightByAnchorId(
   );
 }
 
+export function findHighlightByIoc(
+  value: string,
+  type: IocType,
+  root: ParentNode = document.body
+): HTMLElement | null {
+  for (const highlight of listIocHighlightsInDocumentOrder(root)) {
+    if (highlight.dataset.vera5Value === value && highlight.dataset.vera5Type === type) {
+      return highlight;
+    }
+  }
+  return null;
+}
+
 export function listIocHighlightsInDocumentOrder(
   root: ParentNode = document.body
 ): HTMLElement[] {
