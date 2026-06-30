@@ -159,13 +159,13 @@ const IOC_TYPE_CODES: Record<IocType, string> = {
 const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "scanning", label: "Scanning" },
-  { id: "indicators", label: "Indicators" },
+  { id: "indicators", label: "Indicator Types" },
   { id: "sources", label: "Enrichment Sources" },
+  { id: "api-keys", label: "API Keys" },
   { id: "local-ai-summary", label: "Local AI Summary" },
   { id: "trust", label: "Trust & Consent" },
-  { id: "cache", label: "Cache" },
-  { id: "backup", label: "Backup" },
-  { id: "api-keys", label: "API Keys" },
+  { id: "cache", label: "Enrichment Cache" },
+  { id: "backup", label: "Settings Backup" },
 ];
 
 const CACHE_PRESETS: { label: string; seconds: number }[] = [
@@ -1900,66 +1900,6 @@ export function Options() {
           </section>
 
           <section
-            className="v5-card"
-            aria-labelledby="private-ipv4-heading"
-          >
-            <div className="v5-card__head">
-              <h2
-                id="private-ipv4-heading"
-                className="v5-card__title"
-                style={{ fontSize: 18 }}
-              >
-                <button
-                  type="button"
-                  className="v5-card__toggle"
-                  aria-expanded={!collapsedSections["private-ipv4"]}
-                  aria-controls="private-ipv4-body"
-                  onClick={() => toggleSection("private-ipv4")}
-                >
-                  <span className="v5-card__toggle-text">
-                    Private-Space IPv4 Addresses
-                  </span>
-                  <span className="v5-card__chevron" aria-hidden="true" />
-                </button>
-              </h2>
-              <p className="v5-card__desc">
-                A core control for SOC and lab workflows. When off, RFC1918,
-                loopback, and link-local IPv4 literals are omitted from page scans
-                so internal network addresses are never treated as indicators.
-              </p>
-            </div>
-            <div
-              id="private-ipv4-body"
-              className="v5-card__body"
-              hidden={collapsedSections["private-ipv4"]}
-            >
-              <label
-                className="v5-row"
-                style={{
-                  borderBottom: "none",
-                  paddingTop: 6,
-                  cursor: ready ? "pointer" : "wait",
-                }}
-              >
-                <span className="v5-row__text">
-                  <span className="v5-row__label" style={{ fontSize: 15 }}>
-                    Detect private-space IPv4 addresses
-                  </span>
-                  <span className="v5-row__hint">
-                    Enable for lab or internal SOC pages that use private ranges.
-                  </span>
-                </span>
-                <Switch
-                  ariaLabel="Include private-space IPv4 addresses"
-                  checked={includePrivateIpv4}
-                  disabled={!ready}
-                  onChange={handleIncludePrivateIpv4Toggle}
-                />
-              </label>
-            </div>
-          </section>
-
-          <section
             id="sources"
             className="v5-card"
             aria-labelledby="sources-heading"
@@ -2097,6 +2037,60 @@ export function Options() {
               >
                 {ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE}
               </p>
+            </div>
+          </section>
+
+          <section
+            id="api-keys"
+            className="v5-card"
+            aria-labelledby="api-keys-heading"
+          >
+            <div className="v5-card__head">
+              <h2 id="api-keys-heading" className="v5-card__title">
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections["api-keys"]}
+                  aria-controls="api-keys-body"
+                  onClick={() => toggleSection("api-keys")}
+                >
+                  <span className="v5-card__toggle-text">API Keys</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
+              </h2>
+              <p className="v5-card__desc">
+                Keys are stored locally in your browser. Vera5 does not operate a
+                shared enrichment service or receive your credentials.
+              </p>
+            </div>
+            <div
+              id="api-keys-body"
+              className="v5-card__body"
+              hidden={collapsedSections["api-keys"]}
+            >
+              {OPTIONS_API_KEY_SLOTS.map((slot) => (
+                <ApiKeyField
+                  key={slot}
+                  slot={slot}
+                  label={ENRICHMENT_SOURCE_LABELS[slot]}
+                  ready={ready}
+                  fieldState={fieldStates[slot]}
+                  onDraftChange={handleDraftChange}
+                  onEditingChange={handleEditingChange}
+                  onPersist={handlePersist}
+                  onSaved={handleSaved}
+                />
+              ))}
+              <ApiKeyField
+                slot={CENSYS_SECRET_API_KEY_SLOT}
+                label="Censys API secret"
+                ready={ready}
+                fieldState={fieldStates[CENSYS_SECRET_API_KEY_SLOT]}
+                onDraftChange={handleDraftChange}
+                onEditingChange={handleEditingChange}
+                onPersist={handlePersist}
+                onSaved={handleSaved}
+              />
             </div>
           </section>
 
@@ -2585,56 +2579,62 @@ export function Options() {
           </section>
 
           <section
-            id="api-keys"
             className="v5-card"
-            aria-labelledby="api-keys-heading"
+            aria-labelledby="private-ipv4-heading"
           >
             <div className="v5-card__head">
-              <h2 id="api-keys-heading" className="v5-card__title">
+              <h2
+                id="private-ipv4-heading"
+                className="v5-card__title"
+                style={{ fontSize: 18 }}
+              >
                 <button
                   type="button"
                   className="v5-card__toggle"
-                  aria-expanded={!collapsedSections["api-keys"]}
-                  aria-controls="api-keys-body"
-                  onClick={() => toggleSection("api-keys")}
+                  aria-expanded={!collapsedSections["private-ipv4"]}
+                  aria-controls="private-ipv4-body"
+                  onClick={() => toggleSection("private-ipv4")}
                 >
-                  <span className="v5-card__toggle-text">API Keys</span>
+                  <span className="v5-card__toggle-text">
+                    Private-Space IPv4 Addresses
+                  </span>
                   <span className="v5-card__chevron" aria-hidden="true" />
                 </button>
               </h2>
               <p className="v5-card__desc">
-                Keys are stored locally in your browser. Vera5 does not operate a
-                shared enrichment service or receive your credentials.
+                A core control for SOC and lab workflows. When off, RFC1918,
+                loopback, and link-local IPv4 literals are omitted from page scans
+                so internal network addresses are never treated as indicators.
               </p>
             </div>
             <div
-              id="api-keys-body"
+              id="private-ipv4-body"
               className="v5-card__body"
-              hidden={collapsedSections["api-keys"]}
+              hidden={collapsedSections["private-ipv4"]}
             >
-              {OPTIONS_API_KEY_SLOTS.map((slot) => (
-                <ApiKeyField
-                  key={slot}
-                  slot={slot}
-                  label={ENRICHMENT_SOURCE_LABELS[slot]}
-                  ready={ready}
-                  fieldState={fieldStates[slot]}
-                  onDraftChange={handleDraftChange}
-                  onEditingChange={handleEditingChange}
-                  onPersist={handlePersist}
-                  onSaved={handleSaved}
+              <label
+                className="v5-row"
+                style={{
+                  borderBottom: "none",
+                  paddingTop: 6,
+                  cursor: ready ? "pointer" : "wait",
+                }}
+              >
+                <span className="v5-row__text">
+                  <span className="v5-row__label" style={{ fontSize: 15 }}>
+                    Detect private-space IPv4 addresses
+                  </span>
+                  <span className="v5-row__hint">
+                    Enable for lab or internal SOC pages that use private ranges.
+                  </span>
+                </span>
+                <Switch
+                  ariaLabel="Include private-space IPv4 addresses"
+                  checked={includePrivateIpv4}
+                  disabled={!ready}
+                  onChange={handleIncludePrivateIpv4Toggle}
                 />
-              ))}
-              <ApiKeyField
-                slot={CENSYS_SECRET_API_KEY_SLOT}
-                label="Censys API secret"
-                ready={ready}
-                fieldState={fieldStates[CENSYS_SECRET_API_KEY_SLOT]}
-                onDraftChange={handleDraftChange}
-                onEditingChange={handleEditingChange}
-                onPersist={handlePersist}
-                onSaved={handleSaved}
-              />
+              </label>
             </div>
           </section>
         </div>
