@@ -9,7 +9,6 @@ import {
 } from "../lib/analystNotesStorage";
 import { runWithExtensionContext } from "../lib/extensionContext";
 import { updateHoverCardAnalystNoteIfOpen } from "./hoverCardOverlay";
-import { updateWorkspaceAnalystNoteIfOpen } from "./workspaceSidebar";
 
 export async function syncAnalystNotesWithStorage(): Promise<void> {
   await hydrateAnalystNotesFromStorage();
@@ -45,7 +44,6 @@ export function setupAnalystNotesStorageListener(): void {
 
         if (sessionBefore !== nextNote) {
           updateHoverCardAnalystNoteIfOpen(key, nextNote);
-          updateWorkspaceAnalystNoteIfOpen(key, nextNote);
         }
       }
     });

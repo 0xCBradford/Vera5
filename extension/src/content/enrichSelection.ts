@@ -278,17 +278,6 @@ async function presentSelectionTrustGateBlocked(
   return true;
 }
 
-function resolveSelectionAnchorElement(range: Range, doc: Document): HTMLElement {
-  let node: Node | null = range.commonAncestorContainer;
-  if (node.nodeType === Node.TEXT_NODE) {
-    node = node.parentElement;
-  }
-  if (node instanceof HTMLElement) {
-    return node;
-  }
-  return doc.body;
-}
-
 export async function openEnrichmentForResolvedSelection(
   resolved: {
     value: string;
@@ -300,20 +289,6 @@ export async function openEnrichmentForResolvedSelection(
   options: HoverCardOpenOptions = { enrichmentTrigger: "manual" }
 ): Promise<boolean> {
   if (resolved.highlight) {
-    const workspaceModule = await import("./workspaceSidebar");
-    if (workspaceModule.isWorkspaceOpen(doc)) {
-      const payload = buildHoverCardPayloadFromHighlight(resolved.highlight);
-      if (!payload) {
-        return false;
-      }
-      workspaceModule.presentWorkspaceEnrichmentForPayload(
-        payload,
-        resolved.highlight,
-        options,
-        doc
-      );
-      return true;
-    }
     return openHoverCardForHighlight(resolved.highlight, options, doc);
   }
 
@@ -328,17 +303,6 @@ export async function openEnrichmentForResolvedSelection(
     sourceTextHint: resolved.sourceTextHint,
     enrichmentState: "empty",
   };
-
-  const workspaceModule = await import("./workspaceSidebar");
-  if (workspaceModule.isWorkspaceOpen(doc)) {
-    workspaceModule.presentWorkspaceEnrichmentForPayload(
-      basePayload,
-      resolveSelectionAnchorElement(resolved.range, doc),
-      options,
-      doc
-    );
-    return true;
-  }
 
   const { disabledSourceIds, enabledSourceIds, showDisabledSourcesInWorkspace } =
     await loadWorkspaceEnrichmentSourceContext();

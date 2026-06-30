@@ -24,7 +24,7 @@
     "test": "vitest run",
     "test:smoke": "vitest run src/background/messageHandler.smoke.test.ts",
     "test:e2e": "node scripts/verify-dist-manifest.mjs && playwright test",
-    "test:e2e:critical": "node scripts/verify-dist-manifest.mjs && playwright test e2e/harness.load.spec.ts e2e/scan.sample-alert.spec.ts e2e/popup.tray.spec.ts e2e/hoverCard.disclaimer.spec.ts e2e/hoverCard.compositeScore.spec.ts e2e/commandPalette.scan.spec.ts e2e/export.clipboard.spec.ts e2e/trayEnrichQueue.spec.ts",
+    "test:e2e:critical": "node scripts/verify-dist-manifest.mjs && playwright test e2e/harness.load.spec.ts e2e/scan.sample-alert.spec.ts e2e/popup.tray.spec.ts e2e/hoverCard.disclaimer.spec.ts e2e/hoverCard.compositeScore.spec.ts e2e/commandPalette.scan.spec.ts e2e/export.clipboard.spec.ts",
     "test:e2e:install": "playwright install chromium",
     "test:e2e:firefox": "node scripts/verify-dist-manifest.mjs --dist=dist-firefox && playwright test e2e/firefox.harness.load.spec.ts e2e/firefox.scan.hover.export.spec.ts",
     "test:e2e:firefox:install": "playwright install firefox",

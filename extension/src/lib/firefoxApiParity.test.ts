@@ -24,6 +24,8 @@ function readManifest(relativePath: string): {
   content_security_policy?: unknown;
   options_page?: string;
   action?: { default_popup?: string };
+  side_panel?: { default_path?: string };
+  sidebar_action?: { default_panel?: string };
 } {
   return JSON.parse(
     readFileSync(path.join(extensionRoot, relativePath), "utf8")
@@ -63,7 +65,6 @@ const CONTENT_SCRIPT_MESSAGE_LISTENERS = [
   "src/content/commandPalette.ts",
   "src/content/iocTrayNavigation.ts",
   "src/content/investigationHistoryReopen.ts",
-  "src/content/workspaceSidebar.ts",
 ] as const;
 
 const CONTENT_TO_TAB_MESSAGE_TYPES = [
@@ -73,8 +74,6 @@ const CONTENT_TO_TAB_MESSAGE_TYPES = [
   MESSAGE.GET_SELECTION_ACTION_STATE,
   MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
   MESSAGE.REOPEN_INVESTIGATION_HISTORY,
-  MESSAGE.TOGGLE_WORKSPACE,
-  MESSAGE.OPEN_WORKSPACE,
   MESSAGE.TOGGLE_COMMAND_PALETTE,
 ] as const;
 
@@ -82,6 +81,7 @@ const BROWSER_COMPAT_ENTRY_POINTS = [
   "src/background/serviceWorker.ts",
   "src/content/contentScript.ts",
   "src/popup/main.tsx",
+  "src/sidepanel/main.tsx",
   "src/options/main.tsx",
 ] as const;
 
@@ -163,9 +163,28 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
       chromeManifest.web_accessible_resources
     );
     expect(firefoxManifest.options_page).toBe(chromeManifest.options_page);
-    expect(firefoxManifest.action?.default_popup).toBe(
-      chromeManifest.action?.default_popup
-    );
+  });
+
+  it("uses the native Side Panel as the Chromium action surface and keeps the popup launcher on Firefox", () => {
+    const chromeManifest = readManifest("public/manifest.json");
+    const firefoxManifest = readManifest("public/manifest.firefox.json");
+
+    // Chromium: the toolbar icon opens the persistent native side panel.
+    expect(chromeManifest.permissions).toContain("sidePanel");
+    expect(chromeManifest.side_panel?.default_path).toBe("sidepanel.html");
+    // A declared popup would preempt openPanelOnActionClick, so it must be absent.
+    expect(chromeManifest.action?.default_popup).toBeUndefined();
+
+    // Firefox has no chrome.sidePanel: keep the existing popup action surface
+    // and never leak the Chromium-only permission/entry.
+    expect(firefoxManifest.permissions).not.toContain("sidePanel");
+    expect(firefoxManifest.side_panel).toBeUndefined();
+    expect(firefoxManifest.action?.default_popup).toBe("popup.html");
+
+    // Firefox hosts the same persistent workspace via sidebar_action pointed at
+    // the shared side-panel document; Chromium ignores sidebar_action.
+    expect(firefoxManifest.sidebar_action?.default_panel).toBe("sidepanel.html");
+    expect(chromeManifest.sidebar_action).toBeUndefined();
   });
 
   it("declares no Mozilla data collection on the Firefox manifest", () => {

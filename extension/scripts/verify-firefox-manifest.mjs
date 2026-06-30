@@ -96,10 +96,48 @@ function checkManifestDeclaredHostPermissions(manifestLabel, manifest, declaredH
   }
 }
 
+// Permissions that exist only on the Chromium build. The native Side Panel is
+// Chromium-only (`chrome.sidePanel`); Firefox keeps its declared popup action
+// instead, so the manifests intentionally diverge by exactly these entries.
+const CHROME_ONLY_PERMISSIONS = new Set(["sidePanel"]);
+
 function checkManifestRemoteOriginPosture(manifestLabel, manifest, chromeManifest) {
   if (manifest.options_page !== chromeManifest.options_page) {
     fail(`${manifestLabel} options_page must match Chrome manifest.json`);
   }
+
+  // Chromium drives its action via the native Side Panel and therefore omits
+  // action.default_popup. Firefox retains popup.html as its action surface.
+  if (chromeManifest.side_panel?.default_path) {
+    if (chromeManifest.action?.default_popup) {
+      fail(
+        "Chrome manifest.json must not declare action.default_popup while using side_panel (the popup would preempt openPanelOnActionClick)"
+      );
+    }
+    if (!manifest.action?.default_popup) {
+      fail(`${manifestLabel} must keep action.default_popup as its action surface`);
+    }
+    if (manifest.side_panel) {
+      fail(`${manifestLabel} must not declare side_panel (Chromium-only API)`);
+    }
+    // Firefox has no chrome.sidePanel; it hosts the same persistent workspace
+    // via sidebar_action pointed at the shared side-panel document. Chromium
+    // ignores sidebar_action, so the two surfaces are declared per-browser.
+    if (chromeManifest.sidebar_action) {
+      fail(
+        "Chrome manifest.json must not declare sidebar_action (Firefox-only API)"
+      );
+    }
+    if (
+      manifest.sidebar_action?.default_panel !== chromeManifest.side_panel.default_path
+    ) {
+      fail(
+        `${manifestLabel} must host the workspace via sidebar_action.default_panel (${chromeManifest.side_panel.default_path})`
+      );
+    }
+    return;
+  }
+
   if (manifest.action?.default_popup !== chromeManifest.action?.default_popup) {
     fail(`${manifestLabel} action.default_popup must match Chrome manifest.json`);
   }
@@ -155,7 +193,18 @@ if (
   );
 }
 
-assertEqualArrays("permissions", chrome.permissions, firefox.permissions);
+const chromeSharedPermissions = (chrome.permissions ?? []).filter(
+  (permission) => !CHROME_ONLY_PERMISSIONS.has(permission)
+);
+const firefoxChromeOnlyPermissions = (firefox.permissions ?? []).filter(
+  (permission) => CHROME_ONLY_PERMISSIONS.has(permission)
+);
+if (firefoxChromeOnlyPermissions.length > 0) {
+  fail(
+    `manifest.firefox.json must not declare Chromium-only permissions: ${firefoxChromeOnlyPermissions.join(", ")}`
+  );
+}
+assertEqualArrays("permissions", chromeSharedPermissions, firefox.permissions);
 assertEqualArrays(
   "host_permissions",
   chrome.host_permissions,

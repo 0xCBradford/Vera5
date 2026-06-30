@@ -17,7 +17,6 @@ import {
 import { DEFAULT_OTX_REQUEST_TIMEOUT_MS } from "./otxConnector";
 import { DEFAULT_SHODAN_REQUEST_TIMEOUT_MS } from "./shodanConnector";
 import { DEFAULT_URLSCAN_REQUEST_TIMEOUT_MS } from "./urlscanConnector";
-import { DEFAULT_VIRUSTOTAL_REQUEST_TIMEOUT_MS } from "./virustotalConnector";
 import {
   normalizeEnrichmentSourceCacheTtlRecord,
   normalizeEnrichmentSourceEnabledRecord,

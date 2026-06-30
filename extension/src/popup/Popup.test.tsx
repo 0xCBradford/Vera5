@@ -24,6 +24,7 @@ import {
   POPUP_PANEL,
   POPUP_PANEL_FOCUS_STORAGE_KEY,
 } from "../lib/popupPanelFocus";
+import { STORAGE_KEY_ANALYST_NOTES } from "../lib/analystNotesStorage";
 import { Popup } from "./Popup";
 
 const sampleCollection = createIocCollection({
@@ -717,6 +718,152 @@ describe("Popup IOC tray", () => {
     });
   });
 
+  it("opens the indicator detail pane with Why-detected and analyst notes on activation", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+    });
+
+    const row = Array.from(
+      mounted.container.querySelectorAll('[role="button"]')
+    ).find(
+      (element) =>
+        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+    ) as HTMLElement | undefined;
+    expect(row).toBeDefined();
+    flushSync(() => {
+      row?.click();
+    });
+
+    const pane = mounted.container.querySelector('[data-vera5-detail-pane="true"]');
+    expect(pane).not.toBeNull();
+    expect(pane?.textContent).toContain("Analyst notes");
+    expect(pane?.textContent).toContain("Why detected?");
+
+    const closeButton = pane?.querySelector(
+      'button[aria-label="Close indicator details"]'
+    ) as HTMLButtonElement | null;
+    expect(closeButton).not.toBeNull();
+    flushSync(() => {
+      closeButton?.click();
+    });
+    expect(
+      mounted.container.querySelector('[data-vera5-detail-pane="true"]')
+    ).toBeNull();
+  });
+
+  it("loads a persisted analyst note for the selected indicator", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      localStore: {
+        [STORAGE_KEY_ANALYST_NOTES]: { "8.8.8.8": "Known C2 server" },
+      },
+    });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+    });
+
+    const row = Array.from(
+      mounted.container.querySelectorAll('[role="button"]')
+    ).find(
+      (element) =>
+        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+    ) as HTMLElement | undefined;
+    flushSync(() => {
+      row?.click();
+    });
+
+    await vi.waitFor(() => {
+      const textarea = mounted?.container.querySelector(
+        'textarea[data-vera5-analyst-note="true"]'
+      ) as HTMLTextAreaElement | null;
+      expect(textarea?.value).toBe("Known C2 server");
+    });
+  });
+
+  it("persists analyst note edits for the selected indicator", async () => {
+    const localStore: Record<string, unknown> = {};
+    stubChrome({ initialSummary: sampleSummary, localStore });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+    });
+
+    const row = Array.from(
+      mounted.container.querySelectorAll('[role="button"]')
+    ).find(
+      (element) =>
+        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+    ) as HTMLElement | undefined;
+    flushSync(() => {
+      row?.click();
+    });
+
+    const textarea = (await vi.waitFor(() => {
+      const node = mounted?.container.querySelector(
+        'textarea[data-vera5-analyst-note="true"]'
+      ) as HTMLTextAreaElement | null;
+      expect(node).not.toBeNull();
+      return node;
+    })) as HTMLTextAreaElement;
+
+    flushSync(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(textarea, "Blocklisted at firewall");
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      const record = localStore[STORAGE_KEY_ANALYST_NOTES] as
+        | Record<string, string>
+        | undefined;
+      expect(record?.["8.8.8.8"]).toBe("Blocklisted at firewall");
+    });
+  });
+
+  it("re-enriches the selected indicator through the background worker", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+    });
+
+    const row = Array.from(
+      mounted.container.querySelectorAll('[role="button"]')
+    ).find(
+      (element) =>
+        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+    ) as HTMLElement | undefined;
+    flushSync(() => {
+      row?.click();
+    });
+
+    const pane = mounted.container.querySelector('[data-vera5-detail-pane="true"]');
+    const enrichButton = Array.from(pane?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent === "Enrich"
+    );
+    expect(enrichButton).toBeDefined();
+    flushSync(() => {
+      enrichButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(chrome.runtime.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "ENRICH_IOC",
+          value: "8.8.8.8",
+          iocType: "ipv4",
+          bypassCache: true,
+        })
+      );
+    });
+  });
+
   it("shows stale-highlight feedback when navigation cannot find the anchor", async () => {
     stubChrome({
       initialSummary: sampleSummary,
@@ -1311,7 +1458,6 @@ describe("Popup IOC tray", () => {
     });
     expect(mounted!.container.textContent).toContain("Settings");
     expect(mounted!.container.textContent).toContain("Permissions");
-    expect(mounted!.container.textContent).toContain("Open sidebar");
   });
 });
 

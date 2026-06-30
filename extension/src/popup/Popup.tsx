@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   navigateToIocAnchorMessage,
-  openWorkspaceMessage,
+  enrichIocMessage,
   enrichSelectionMessage,
   getSelectionActionStateMessage,
   reopenInvestigationHistoryMessage,
@@ -36,10 +36,19 @@ import {
 } from "../lib/tabScanSummary";
 import {
   buildWhyDetectedView,
+  HOVER_CARD_ANALYST_NOTES_LABEL,
+  HOVER_CARD_ANALYST_NOTES_PLACEHOLDER,
   HOVER_CARD_REFANGED_VALUE_LABEL,
   HOVER_CARD_WHY_DETECTED_HEADING,
   resolveIndicatorValuePresentation,
 } from "../lib/hoverCardEnrichment";
+import {
+  getStoredAnalystNote,
+  normalizeAnalystNotesRecord,
+  normalizeIocNoteKey,
+  setStoredAnalystNote,
+  STORAGE_KEY_ANALYST_NOTES,
+} from "../lib/analystNotesStorage";
 import {
   getExtensionEnabled,
   getHighlightEnabled,
@@ -1413,6 +1422,178 @@ function WhyDetectedTrayDetails({
   );
 }
 
+type AnalystNoteSaveStatus = "idle" | "saving" | "saved";
+type DetailEnrichState = "idle" | "enriching";
+
+function IndicatorDetailPane({
+  entry,
+  enrichmentStatus,
+  note,
+  noteStatus,
+  enrichState,
+  onNoteChange,
+  onShowOnPage,
+  onEnrich,
+  onClear,
+}: {
+  entry: TabScanSummaryEntry;
+  enrichmentStatus: TrayEntryEnrichmentStatus | undefined;
+  note: string;
+  noteStatus: AnalystNoteSaveStatus;
+  enrichState: DetailEnrichState;
+  onNoteChange: (value: string) => void;
+  onShowOnPage: () => void;
+  onEnrich: () => void;
+  onClear: () => void;
+}) {
+  const noteStatusLabel =
+    noteStatus === "saving" ? "Saving…" : noteStatus === "saved" ? "Saved" : "";
+
+  return (
+    <section
+      aria-label="Indicator details"
+      data-vera5-detail-pane="true"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        marginBottom: 10,
+        padding: 10,
+        borderRadius: 8,
+        border: `1px solid ${POPUP_THEME.border}`,
+        backgroundColor: POPUP_THEME.surface,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <span
+          aria-hidden="true"
+          style={{
+            flexShrink: 0,
+            padding: "1px 6px",
+            borderRadius: 4,
+            backgroundColor: POPUP_THEME.buttonBg,
+            color: POPUP_THEME.muted,
+            fontSize: 10,
+            fontWeight: 700,
+          }}
+        >
+          {IOC_TYPE_TRAY_LABEL[entry.type]}
+        </span>
+        <span style={{ display: "flex", flex: 1, minWidth: 0 }}>
+          <TrayIndicatorValue entry={entry} />
+        </span>
+        <button
+          type="button"
+          aria-label="Close indicator details"
+          onClick={onClear}
+          style={{
+            flexShrink: 0,
+            border: "none",
+            background: "transparent",
+            color: POPUP_THEME.muted,
+            cursor: "pointer",
+            fontSize: 16,
+            lineHeight: 1,
+            padding: 0,
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <span style={{ fontSize: 11, color: POPUP_THEME.muted }}>
+          {enrichmentStatus ? (
+            <span style={trayEnrichmentHintStyle(enrichmentStatus.badgeText)}>
+              {formatTrayRowEnrichmentHint(enrichmentStatus)}
+            </span>
+          ) : (
+            "Not enriched yet"
+          )}
+        </span>
+        <button
+          type="button"
+          onClick={onEnrich}
+          disabled={enrichState === "enriching"}
+          style={{
+            flexShrink: 0,
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: `1px solid ${POPUP_THEME.border}`,
+            backgroundColor: POPUP_THEME.buttonBg,
+            color: POPUP_THEME.text,
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: enrichState === "enriching" ? "default" : "pointer",
+          }}
+        >
+          {enrichState === "enriching" ? "Enriching…" : "Enrich"}
+        </button>
+      </div>
+
+      <WhyDetectedTrayDetails entry={entry} />
+
+      <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: POPUP_THEME.muted }}>
+          {HOVER_CARD_ANALYST_NOTES_LABEL}
+        </span>
+        <textarea
+          data-vera5-analyst-note="true"
+          value={note}
+          onChange={(event) => onNoteChange(event.target.value)}
+          placeholder={HOVER_CARD_ANALYST_NOTES_PLACEHOLDER}
+          rows={3}
+          style={{
+            width: "100%",
+            resize: "vertical",
+            boxSizing: "border-box",
+            padding: 6,
+            borderRadius: 6,
+            border: `1px solid ${POPUP_THEME.border}`,
+            backgroundColor: POPUP_THEME.page,
+            color: POPUP_THEME.text,
+            fontFamily: VERA5_FONT.sans,
+            fontSize: 12,
+            lineHeight: 1.4,
+          }}
+        />
+        <span
+          aria-live="polite"
+          style={{ fontSize: 10, color: POPUP_THEME.muted, minHeight: 12 }}
+        >
+          {noteStatusLabel}
+        </span>
+      </label>
+
+      <div style={{ display: "flex", gap: 8 }}>
+        <button
+          type="button"
+          onClick={onShowOnPage}
+          style={{
+            padding: "4px 10px",
+            borderRadius: 6,
+            border: `1px solid ${POPUP_THEME.border}`,
+            backgroundColor: POPUP_THEME.buttonBg,
+            color: POPUP_THEME.text,
+            fontSize: 11,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          Show on page
+        </button>
+      </div>
+    </section>
+  );
+}
+
 export function resolvePopupTrayView(input: {
   enabled: boolean;
   scanState: "idle" | "scanning" | "done" | "error";
@@ -1630,6 +1811,14 @@ export function Popup() {
   const [trayEnrichmentStatuses, setTrayEnrichmentStatuses] = useState<
     Record<string, TrayEntryEnrichmentStatus>
   >({});
+  const [selectedDetailEntry, setSelectedDetailEntry] =
+    useState<TabScanSummaryEntry | null>(null);
+  const [analystNote, setAnalystNote] = useState("");
+  const [analystNoteStatus, setAnalystNoteStatus] =
+    useState<AnalystNoteSaveStatus>("idle");
+  const [detailEnrichState, setDetailEnrichState] =
+    useState<DetailEnrichState>("idle");
+  const analystNoteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectionEnrichMessage, setSelectionEnrichMessage] = useState<string | null>(
     null
   );
@@ -1792,6 +1981,72 @@ export function Popup() {
     };
   }, [scanSummary]);
 
+  // Drop the open detail pane when its indicator is no longer in the active
+  // tab's scan (re-scan, navigation, or tab switch in the side panel).
+  useEffect(() => {
+    if (!selectedDetailEntry) {
+      return;
+    }
+    const stillPresent = scanSummary?.entries.some(
+      (candidate) => candidate.anchorId === selectedDetailEntry.anchorId
+    );
+    if (!stillPresent) {
+      setSelectedDetailEntry(null);
+    }
+  }, [scanSummary, selectedDetailEntry]);
+
+  // Load the persisted analyst note for the selected indicator.
+  useEffect(() => {
+    if (!selectedDetailEntry) {
+      setAnalystNote("");
+      setAnalystNoteStatus("idle");
+      return;
+    }
+    let cancelled = false;
+    setAnalystNoteStatus("idle");
+    void getStoredAnalystNote(selectedDetailEntry.value).then((stored) => {
+      if (!cancelled) {
+        setAnalystNote(stored);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDetailEntry]);
+
+  // Keep the note editor in sync when the same indicator is annotated elsewhere
+  // (e.g. the in-page hover card). Guarded because chrome.storage.onChanged is
+  // absent in some contexts/tests. Never clobber text the analyst is typing.
+  useEffect(() => {
+    const onChanged = chrome.storage?.onChanged;
+    if (!onChanged?.addListener || !selectedDetailEntry) {
+      return;
+    }
+    const listener = (
+      changes: Record<string, { newValue?: unknown }>,
+      areaName: string
+    ): void => {
+      if (areaName !== "local" || !changes[STORAGE_KEY_ANALYST_NOTES]) {
+        return;
+      }
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLTextAreaElement &&
+        active.dataset.vera5AnalystNote === "true"
+      ) {
+        return;
+      }
+      const record = normalizeAnalystNotesRecord(
+        changes[STORAGE_KEY_ANALYST_NOTES].newValue
+      );
+      setAnalystNote(record[normalizeIocNoteKey(selectedDetailEntry.value)] ?? "");
+    };
+    onChanged.addListener(listener);
+    return () => {
+      onChanged.removeListener?.(listener);
+    };
+  }, [selectedDetailEntry]);
+
   useEffect(() => {
     if (!scanSummary) {
       setTrayFilterReady(false);
@@ -1897,30 +2152,6 @@ export function Popup() {
 
   const handleOpenPermissions = () => {
     openExtensionSitePermissionsPage();
-  };
-
-  const handleOpenSidebar = () => {
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
-      if (!tab?.id) {
-        return;
-      }
-
-      const message = openWorkspaceMessage();
-      try {
-        await chrome.tabs.sendMessage(tab.id, message);
-      } catch {
-        try {
-          await chrome.scripting.executeScript({
-            target: { tabId: tab.id },
-            files: ["content.js"],
-          });
-          await chrome.tabs.sendMessage(tab.id, message);
-        } catch {
-          // Content script may be unavailable on restricted pages.
-        }
-      }
-      window.close();
-    });
   };
 
   const handleNewSession = () => {
@@ -2203,7 +2434,8 @@ export function Popup() {
     })();
   };
 
-  const handleTrayRowActivate = (entry: TabScanSummaryEntry) => {    void chrome.tabs
+  const navigateToTrayEntry = (entry: TabScanSummaryEntry) => {
+    void chrome.tabs
       .query({ active: true, currentWindow: true })
       .then(async ([tab]) => {
         if (!tab?.id) {
@@ -2234,6 +2466,59 @@ export function Popup() {
           );
         }
       });
+  };
+
+  // Activating a tray row both opens the detail pane (the side panel's primary
+  // analyst surface) and highlights the indicator on the page.
+  const handleTrayRowActivate = (entry: TabScanSummaryEntry) => {
+    setSelectedDetailEntry(entry);
+    navigateToTrayEntry(entry);
+  };
+
+  const handleAnalystNoteChange = (value: string) => {
+    const entry = selectedDetailEntry;
+    if (!entry) {
+      return;
+    }
+    setAnalystNote(value);
+    setAnalystNoteStatus("saving");
+    if (analystNoteSaveTimerRef.current) {
+      clearTimeout(analystNoteSaveTimerRef.current);
+    }
+    analystNoteSaveTimerRef.current = setTimeout(() => {
+      void setStoredAnalystNote(entry.value, value).then(() => {
+        setAnalystNoteStatus("saved");
+      });
+    }, 300);
+  };
+
+  // Force a fresh enrichment for the selected indicator, then refresh the tray
+  // badges from cache. Routed through the background service worker so the side
+  // panel never touches the page DOM directly.
+  const handleEnrichSelectedDetail = () => {
+    const entry = selectedDetailEntry;
+    if (!entry || detailEnrichState === "enriching") {
+      return;
+    }
+    setDetailEnrichState("enriching");
+    void (async () => {
+      try {
+        await chrome.runtime.sendMessage(
+          enrichIocMessage({ value: entry.value, iocType: entry.type, bypassCache: true })
+        );
+      } catch {
+        // Background unreachable; surface stays on the last known status.
+      }
+      try {
+        if (scanSummary && scanSummary.entries.length > 0) {
+          const statuses = await loadTrayEntryEnrichmentStatuses(scanSummary.entries);
+          setTrayEnrichmentStatuses(statuses);
+        }
+      } catch {
+        // Leave existing statuses in place on refresh failure.
+      }
+      setDetailEnrichState("idle");
+    })();
   };
 
   const handleScanPage = () => {
@@ -2691,19 +2976,6 @@ export function Popup() {
         }}
       >
         Permissions
-      </button>
-      <button
-        type="button"
-        disabled={!ready}
-        className="v5-btn"
-        onClick={handleOpenSidebar}
-        style={{
-          ...buttonStyle,
-          cursor: ready ? "pointer" : "not-allowed",
-          opacity: ready ? 1 : 0.65,
-        }}
-      >
-        Open sidebar
       </button>
       </div>
       <section
@@ -3659,6 +3931,21 @@ export function Popup() {
                 >
                   {trayNavigationMessage}
                 </p>
+              ) : null}
+              {selectedDetailEntry ? (
+                <IndicatorDetailPane
+                  entry={selectedDetailEntry}
+                  enrichmentStatus={
+                    trayEnrichmentStatuses[selectedDetailEntry.anchorId]
+                  }
+                  note={analystNote}
+                  noteStatus={analystNoteStatus}
+                  enrichState={detailEnrichState}
+                  onNoteChange={handleAnalystNoteChange}
+                  onShowOnPage={() => navigateToTrayEntry(selectedDetailEntry)}
+                  onEnrich={handleEnrichSelectedDetail}
+                  onClear={() => setSelectedDetailEntry(null)}
+                />
               ) : null}
               {filteredEntries.length > 0 ? (
                 <ul

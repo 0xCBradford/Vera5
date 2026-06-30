@@ -7,7 +7,6 @@ import {
   MESSAGE,
   scanPageMessage,
   toggleCommandPaletteMessage,
-  toggleWorkspaceMessage,
 } from "../lib/messages";
 import {
   DECLARED_ENRICHMENT_API_HOSTS,
@@ -149,7 +148,6 @@ describe("enrich selection context menu manifest", () => {
 
 describe("service worker scan-page command routing", () => {
   let onCommandCallback: ((command: string) => void) | undefined;
-  let onActionClickedCallback: (() => void) | undefined;
   let onInstalledCallback:
     | ((details: { reason: string }) => void)
     | undefined;
@@ -167,7 +165,6 @@ describe("service worker scan-page command routing", () => {
   beforeEach(async () => {
     vi.resetModules();
     onCommandCallback = undefined;
-    onActionClickedCallback = undefined;
     onInstalledCallback = undefined;
     onContextMenuClickedCallback = undefined;
     tabsQuery.mockReset();
@@ -189,13 +186,6 @@ describe("service worker scan-page command routing", () => {
           },
         },
         openOptionsPage,
-      },
-      action: {
-        onClicked: {
-          addListener: (callback: () => void) => {
-            onActionClickedCallback = callback;
-          },
-        },
       },
       commands: {
         onCommand: {
@@ -274,18 +264,6 @@ describe("service worker scan-page command routing", () => {
     onCommandCallback!("scan-page");
     await Promise.resolve();
     expect(tabsSendMessage).not.toHaveBeenCalled();
-  });
-
-  it("toggles the workspace when the toolbar action is clicked", async () => {
-    expect(onActionClickedCallback).toBeDefined();
-    onActionClickedCallback!();
-    await vi.waitFor(() => {
-      expect(tabsSendMessage).toHaveBeenCalledWith(42, toggleWorkspaceMessage());
-    });
-    expect(tabsQuery).toHaveBeenCalledWith({
-      active: true,
-      currentWindow: true,
-    });
   });
 
   it("registers the enrich selection context menu on install", () => {

@@ -27,7 +27,6 @@ import { setupHighlightStorageListener, setupScanPageListener } from "./scanPage
 import { setupNavigateToIocAnchorListener } from "./iocTrayNavigation";
 import { setupReopenInvestigationHistoryListener } from "./investigationHistoryReopen";
 import { setupExamplesFixtureBridge } from "./examplesFixtureBridge";
-import { setupWorkspaceSidebarListener } from "./workspaceSidebar";
 
 const contentScriptAlreadyInitialized =
   document.documentElement.dataset.vera5ContentInit === "1";
@@ -59,5 +58,3 @@ if (!contentScriptAlreadyInitialized) {
   setupHoverCardTrigger();
   setupExamplesFixtureBridge();
 }
-
-setupWorkspaceSidebarListener();

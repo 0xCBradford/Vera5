@@ -19,8 +19,6 @@ export const MESSAGE = {
   GET_SELECTION_ACTION_STATE: "GET_SELECTION_ACTION_STATE",
   NAVIGATE_TO_IOC_ANCHOR: "NAVIGATE_TO_IOC_ANCHOR",
   REOPEN_INVESTIGATION_HISTORY: "REOPEN_INVESTIGATION_HISTORY",
-  TOGGLE_WORKSPACE: "TOGGLE_WORKSPACE",
-  OPEN_WORKSPACE: "OPEN_WORKSPACE",
   TAB_SCAN_SNAPSHOT: "TAB_SCAN_SNAPSHOT",
   GET_TAB_SCAN_SUMMARY: "GET_TAB_SCAN_SUMMARY",
   ENRICH_IOC: "ENRICH_IOC",
@@ -68,8 +66,6 @@ export type ReopenInvestigationHistoryMessage = {
   iocType: IocType;
   pageOrigin: string;
 };
-export type ToggleWorkspaceMessage = { type: typeof MESSAGE.TOGGLE_WORKSPACE };
-export type OpenWorkspaceMessage = { type: typeof MESSAGE.OPEN_WORKSPACE };
 export type TabScanSnapshotMessage = {
   type: typeof MESSAGE.TAB_SCAN_SNAPSHOT;
   snapshot: TabScanSnapshotPayload;
@@ -238,14 +234,6 @@ export function reopenInvestigationHistoryMessage(input: {
     iocType: input.iocType,
     pageOrigin: input.pageOrigin.trim(),
   };
-}
-
-export function toggleWorkspaceMessage(): ToggleWorkspaceMessage {
-  return { type: MESSAGE.TOGGLE_WORKSPACE };
-}
-
-export function openWorkspaceMessage(): OpenWorkspaceMessage {
-  return { type: MESSAGE.OPEN_WORKSPACE };
 }
 
 export function isNavigateToIocAnchorMessage(
@@ -832,24 +820,6 @@ export function isGetSelectionActionStateMessage(
     typeof raw === "object" &&
     "type" in raw &&
     (raw as { type: unknown }).type === MESSAGE.GET_SELECTION_ACTION_STATE
-  );
-}
-
-export function isToggleWorkspaceMessage(raw: unknown): raw is ToggleWorkspaceMessage {
-  return (
-    raw !== null &&
-    typeof raw === "object" &&
-    "type" in raw &&
-    (raw as { type: unknown }).type === MESSAGE.TOGGLE_WORKSPACE
-  );
-}
-
-export function isOpenWorkspaceMessage(raw: unknown): raw is OpenWorkspaceMessage {
-  return (
-    raw !== null &&
-    typeof raw === "object" &&
-    "type" in raw &&
-    (raw as { type: unknown }).type === MESSAGE.OPEN_WORKSPACE
   );
 }
 

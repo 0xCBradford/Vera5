@@ -26,14 +26,6 @@ export const E2E_SELECTORS = {
   hoverCardScanExportStatus: ".vera5-hover-card-scan-export-status",
   hoverCardIocPin: ".vera5-hover-card-ioc-pin",
   hoverCardSaveToCollectionToggle: ".vera5-hover-card-save-collection-toggle",
-  workspaceHost: "#vera5-workspace-host",
-  workspaceTrayList: ".vera5-workspace-tray-list",
-  workspaceTraySummary: ".vera5-workspace-tray-summary",
-  workspaceTrayRow: ".vera5-workspace-tray-row",
-  workspaceTraySelect: ".vera5-workspace-tray-select",
-  workspaceTrayQueueStatus: ".vera5-workspace-tray-queue-status",
-  workspaceBottom: ".vera5-workspace-bottom",
-  bulkEnrichWarningPanel: ".vera5-tray-enrich-queue-warning-panel",
 } as const;
 
 export const HOVER_CARD_ENRICHMENT_DISCLAIMER_TEXT =
@@ -83,10 +75,6 @@ export const EXPECTED_SAMPLE_ALERT_COPY_ALL_CLIPBOARD_TEXT =
 export const HOVER_CARD_COPY_ALL_SUCCESS_MESSAGE = `Copied ${EXPECTED_SAMPLE_ALERT_DETECTED_IOC_COUNT} indicators to clipboard.`;
 
 export const HOVER_CARD_COPY_DROPDOWN_ARIA_LABEL = "Copy case artifacts to the clipboard";
-
-export const WORKSPACE_BULK_ENRICH_WARNING_HEADING = "Confirm bulk enrich";
-export const WORKSPACE_START_ENRICH_QUEUE_LABEL = "Start enrich queue";
-export const WORKSPACE_BULK_ENRICH_QUEUE_IOC_VALUE = "8.8.8.8";
 
 export const POPUP_INVESTIGATION_SESSION_SECTION_ARIA_LABEL =
   "Investigation session";
@@ -363,97 +351,6 @@ export async function runScanPageCommandFromPalette(page: Page): Promise<void> {
   await expect(page.locator(E2E_SELECTORS.commandPaletteHost)).toBeHidden({
     timeout: 15_000,
   });
-}
-
-export async function toggleWorkspaceOnActiveTab(
-  context: BrowserContext,
-  extensionId: string
-): Promise<void> {
-  const serviceWorker = context
-    .serviceWorkers()
-    .find((worker) => worker.url().includes(extensionId));
-  expect(serviceWorker).toBeDefined();
-
-  await serviceWorker!.evaluate(async () => {
-    const [tab] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (!tab?.id) {
-      throw new Error("No active tab for workspace toggle");
-    }
-    await chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_WORKSPACE" });
-  });
-}
-
-export async function expectWorkspaceTrayReady(page: Page): Promise<void> {
-  await expect(page.locator(E2E_SELECTORS.workspaceHost)).toBeVisible({
-    timeout: 15_000,
-  });
-  await expect(page.locator(E2E_SELECTORS.workspaceTrayRow)).toHaveCount(
-    EXPECTED_SAMPLE_ALERT_DETECTED_IOC_COUNT,
-    { timeout: 15_000 }
-  );
-  await expect(page.locator(E2E_SELECTORS.workspaceTraySummary)).toContainText(
-    "11 indicators"
-  );
-}
-
-export async function selectWorkspaceTrayIocForBulkEnrich(
-  page: Page,
-  value: string = WORKSPACE_BULK_ENRICH_QUEUE_IOC_VALUE
-): Promise<void> {
-  const row = page.locator(
-    `${E2E_SELECTORS.workspaceTrayRow}[data-vera5-value="${value}"]`
-  );
-  await expect(row).toHaveCount(1);
-  const checkbox = row.locator(E2E_SELECTORS.workspaceTraySelect);
-  await checkbox.check();
-  await expect(
-    page.getByRole("button", { name: `Enrich selected (1)`, exact: true })
-  ).toBeEnabled();
-}
-
-export async function startBulkEnrichQueueFromWorkspace(page: Page): Promise<void> {
-  await page
-    .getByRole("button", { name: "Enrich selected (1)", exact: true })
-    .click();
-  const warningPanel = page.locator(E2E_SELECTORS.bulkEnrichWarningPanel);
-  await expect(warningPanel).toBeVisible({ timeout: 15_000 });
-  await expect(warningPanel).toContainText(WORKSPACE_BULK_ENRICH_WARNING_HEADING);
-  await expect(warningPanel).toContainText("Vendor quotas apply:");
-  await page
-    .getByRole("button", { name: WORKSPACE_START_ENRICH_QUEUE_LABEL, exact: true })
-    .click();
-  await expect(warningPanel).toBeHidden({ timeout: 15_000 });
-}
-
-export async function expectBulkEnrichQueueCompleted(page: Page): Promise<void> {
-  await expect(page.locator(E2E_SELECTORS.workspaceTrayQueueStatus)).toHaveCount(0, {
-    timeout: 30_000,
-  });
-  await expect(
-    page.getByRole("button", { name: "Cancel enrich queue", exact: true })
-  ).toHaveCount(0);
-}
-
-export async function expectWorkspaceDetailCompositeScoreVisible(
-  page: Page
-): Promise<void> {
-  const scoreSection = page.locator(
-    `${E2E_SELECTORS.workspaceBottom} ${E2E_SELECTORS.hoverCardRiskScore}`
-  );
-  await expect(scoreSection).toBeVisible({ timeout: 30_000 });
-
-  const label = page.locator(
-    `${E2E_SELECTORS.workspaceBottom} ${E2E_SELECTORS.hoverCardRiskScoreLabel}`
-  );
-  await expect(label).toBeVisible();
-  await expect(label).toContainText("Risk score:");
-
-  await expect
-    .poll(async () => label.locator("strong").textContent(), { timeout: 30_000 })
-    .toMatch(/(Low|Suspicious|High|Critical) risk \(\d+\/100\)/);
 }
 
 export async function expectPopupInvestigationSessionIndicatorCount(

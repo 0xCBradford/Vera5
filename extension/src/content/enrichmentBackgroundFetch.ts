@@ -32,7 +32,6 @@ import {
   type HoverCardOverlayPayload,
 } from "./hoverCardOverlay";
 import { setAutoEnrichmentFetcher } from "./enrichmentAutoFetch";
-import { tryUpdateWorkspaceDetailPayload, isWorkspaceTargetForPayload } from "./workspaceSelectionState";
 
 export const DEFAULT_HOVER_ENRICHMENT_DEBOUNCE_MS = 400;
 
@@ -152,10 +151,6 @@ function applyIndicatorDetailPayload(
   payload: HoverCardOverlayPayload,
   doc: Document
 ): boolean {
-  if (tryUpdateWorkspaceDetailPayload(payload, doc)) {
-    return true;
-  }
-
   const anchor = getLastHoverCardAnchor();
   const hoverPayload = getLastHoverCardPayload();
   if (anchor && hoverPayload?.value === payload.value) {
@@ -163,16 +158,12 @@ function applyIndicatorDetailPayload(
     return true;
   }
 
-  return tryUpdateWorkspaceDetailPayload(payload, doc);
+  return false;
 }
 
 function hasIndicatorDetailTarget(
-  payload: HoverCardOverlayPayload,
-  doc: Document
+  payload: HoverCardOverlayPayload
 ): boolean {
-  if (isWorkspaceTargetForPayload(payload, doc)) {
-    return true;
-  }
   const anchor = getLastHoverCardAnchor();
   const hoverPayload = getLastHoverCardPayload();
   return Boolean(anchor && hoverPayload?.value === payload.value);
@@ -256,7 +247,7 @@ export async function runBackgroundEnrichment(
     return "skipped";
   }
 
-  if (!hasIndicatorDetailTarget(payload, doc)) {
+  if (!hasIndicatorDetailTarget(payload)) {
     return "skipped";
   }
 
@@ -312,7 +303,7 @@ export async function runBackgroundEnrichment(
     return "cancelled";
   }
 
-  if (!hasIndicatorDetailTarget(payload, doc)) {
+  if (!hasIndicatorDetailTarget(payload)) {
     return "skipped";
   }
 

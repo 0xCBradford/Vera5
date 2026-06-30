@@ -3,10 +3,6 @@ import { rethrowUnlessStaleExtensionError } from "../lib/extensionContext";
 import { CONTENT_MESSAGE } from "./constants";
 import { findHighlightByAnchorId } from "./highlighter";
 import { openHoverCardForHighlight } from "./hoverCardTrigger";
-import {
-  activateWorkspaceIndicatorByAnchorId,
-  isWorkspaceOpen,
-} from "./workspaceSidebar";
 
 export function isNavigateToIocAnchorMessage(
   raw: unknown
@@ -32,12 +28,6 @@ export function handleNavigateToIocAnchorRequest(
   }
 
   highlight.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-
-  if (isWorkspaceOpen(doc)) {
-    return activateWorkspaceIndicatorByAnchorId(anchorId, doc)
-      ? { ok: true }
-      : { ok: false, error: "highlight not found" };
-  }
 
   openHoverCardForHighlight(highlight, { enrichmentTrigger: "auto" }, doc);
   return { ok: true };

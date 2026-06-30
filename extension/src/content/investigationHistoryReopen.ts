@@ -6,10 +6,6 @@ import { rethrowUnlessStaleExtensionError } from "../lib/extensionContext";
 import { CONTENT_MESSAGE } from "./constants";
 import { findHighlightByIoc } from "./highlighter";
 import { openHoverCardForHighlight } from "./hoverCardTrigger";
-import {
-  activateWorkspaceIndicatorByAnchorId,
-  isWorkspaceOpen,
-} from "./workspaceSidebar";
 
 export function isReopenInvestigationHistoryMessage(
   raw: unknown
@@ -59,16 +55,6 @@ export function handleReopenInvestigationHistoryRequest(
   }
 
   highlight.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
-
-  if (isWorkspaceOpen(doc)) {
-    const anchorId = highlight.dataset.vera5AnchorId;
-    if (!anchorId) {
-      return { ok: false, error: "highlight not found" };
-    }
-    return activateWorkspaceIndicatorByAnchorId(anchorId, doc)
-      ? { ok: true }
-      : { ok: false, error: "highlight not found" };
-  }
 
   openHoverCardForHighlight(highlight, { enrichmentTrigger: "auto" }, doc);
   return { ok: true };

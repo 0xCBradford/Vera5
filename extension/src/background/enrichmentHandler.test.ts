@@ -52,24 +52,42 @@ const enrichWithOtx = vi.fn();
 const enrichWithUrlscan = vi.fn();
 const enrichWithGreynoise = vi.fn();
 
-vi.mock("../lib/abuseipdbConnector", () => ({
-  ABUSEIPDB_SOURCE_ID: "abuseipdb",
-  enrichWithAbuseIpdb: (...args: unknown[]) => enrichWithAbuseIpdb(...args),
-}));
+// Spread the real connector modules so transitively-imported consumers (e.g.
+// connectorProfileExport.ts, which reads DEFAULT_*_REQUEST_TIMEOUT_MS at module
+// evaluation) always find every export. Returning a partial factory here let
+// those constants resolve as undefined whenever the real module was evaluated
+// fresh under the mock, producing an order/cache-dependent suite flake.
+vi.mock("../lib/abuseipdbConnector", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/abuseipdbConnector")>();
+  return {
+    ...actual,
+    enrichWithAbuseIpdb: (...args: unknown[]) => enrichWithAbuseIpdb(...args),
+  };
+});
 
-vi.mock("../lib/otxConnector", () => ({
-  enrichWithOtx: (...args: unknown[]) => enrichWithOtx(...args),
-}));
+vi.mock("../lib/otxConnector", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/otxConnector")>();
+  return {
+    ...actual,
+    enrichWithOtx: (...args: unknown[]) => enrichWithOtx(...args),
+  };
+});
 
-vi.mock("../lib/urlscanConnector", () => ({
-  URLSCAN_SOURCE_ID: "urlscan",
-  enrichWithUrlscan: (...args: unknown[]) => enrichWithUrlscan(...args),
-}));
+vi.mock("../lib/urlscanConnector", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/urlscanConnector")>();
+  return {
+    ...actual,
+    enrichWithUrlscan: (...args: unknown[]) => enrichWithUrlscan(...args),
+  };
+});
 
-vi.mock("../lib/greynoiseConnector", () => ({
-  GREYNOISE_SOURCE_ID: "greynoise",
-  enrichWithGreynoise: (...args: unknown[]) => enrichWithGreynoise(...args),
-}));
+vi.mock("../lib/greynoiseConnector", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/greynoiseConnector")>();
+  return {
+    ...actual,
+    enrichWithGreynoise: (...args: unknown[]) => enrichWithGreynoise(...args),
+  };
+});
 
 vi.mock("../lib/storage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/storage")>();

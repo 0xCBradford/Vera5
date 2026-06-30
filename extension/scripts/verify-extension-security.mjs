@@ -415,6 +415,12 @@ function checkShippedExtensionPages(manifest, distRoot) {
   if (manifest.action?.default_popup) {
     pages.push(manifest.action.default_popup);
   }
+  if (manifest.side_panel?.default_path) {
+    pages.push(manifest.side_panel.default_path);
+  }
+  if (manifest.sidebar_action?.default_panel) {
+    pages.push(manifest.sidebar_action.default_panel);
+  }
 
   for (const page of pages) {
     const htmlPath = path.join(distRoot, page);

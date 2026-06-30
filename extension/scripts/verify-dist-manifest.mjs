@@ -50,6 +50,8 @@ for (const entry of manifest.content_scripts ?? []) {
   }
 }
 add(manifest.action?.default_popup);
+add(manifest.side_panel?.default_path);
+add(manifest.sidebar_action?.default_panel);
 add(manifest.options_page);
 for (const iconPath of Object.values(manifest.icons ?? {})) {
   add(iconPath);
@@ -99,6 +101,12 @@ function checkHtml(htmlRelative) {
 
 if (manifest.action?.default_popup) {
   checkHtml(manifest.action.default_popup);
+}
+if (manifest.side_panel?.default_path) {
+  checkHtml(manifest.side_panel.default_path);
+}
+if (manifest.sidebar_action?.default_panel) {
+  checkHtml(manifest.sidebar_action.default_panel);
 }
 if (manifest.options_page) {
   checkHtml(manifest.options_page);

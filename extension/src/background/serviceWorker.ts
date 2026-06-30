@@ -8,7 +8,6 @@ import {
   enrichSelectionMessage,
   scanPageMessage,
   toggleCommandPaletteMessage,
-  toggleWorkspaceMessage,
 } from "../lib/messages";
 import { clearTabScanSnapshot } from "../lib/tabScanSnapshotStorage";
 import { routeIncomingMessageAsync } from "./messageRouter";
@@ -21,6 +20,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   void routeIncomingMessageAsync(message, sender).then(sendResponse);
   return true;
 });
+
+// Open the persistent native side panel (the primary analyst workspace) when
+// the toolbar icon is clicked. Guarded because `chrome.sidePanel` is
+// Chromium-only — on Firefox the action keeps its declared popup launcher.
+if (typeof chrome.sidePanel?.setPanelBehavior === "function") {
+  void chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch(() => {});
+}
 
 export function registerEnrichSelectionContextMenu(): void {
   const contextMenuActionId =
@@ -54,10 +62,6 @@ async function sendMessageToActiveTab(message: unknown): Promise<void> {
 
 async function sendScanPageToActiveTab(): Promise<void> {
   await sendMessageToActiveTab(scanPageMessage());
-}
-
-async function toggleWorkspaceOnActiveTab(): Promise<void> {
-  await sendMessageToActiveTab(toggleWorkspaceMessage());
 }
 
 async function toggleCommandPaletteOnActiveTab(): Promise<void> {
@@ -94,10 +98,6 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void clearTabScanSnapshot(tabId);
-});
-
-chrome.action.onClicked.addListener(() => {
-  void toggleWorkspaceOnActiveTab();
 });
 
 chrome.commands.onCommand.addListener((command) => {
