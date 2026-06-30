@@ -995,7 +995,7 @@ body {
  * Layout extras (top bar, info note, domain list) — Vera5 dark tokens.
  * ============================================================ */
 
-/* Sticky top bar with centered "Saved automatically". */
+/* Sticky top bar hosting the website-style Vera5 product nav. */
 .v5-topbar {
   position: sticky;
   top: 0;
@@ -1003,7 +1003,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 15px 24px;
+  padding: 12px 24px;
   background: linear-gradient(
     90deg,
     var(--v5-surface) 0%,
@@ -1014,22 +1014,120 @@ body {
   box-shadow: var(--v5-shadow-md);
 }
 
-.v5-topbar__saved {
-  display: inline-flex;
+/* Rounded dark nav container, modeled on the vera5.io top navigation.
+ * Container sits on a darker surface so the raised chips inside lift off it. */
+.v5-topnav {
+  display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 16px;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  width: 100%;
+  max-width: 1180px;
+  padding: 8px 8px 8px 18px;
+  border: 1px solid var(--border-hard);
+  border-radius: var(--v5-radius-lg);
+  background: linear-gradient(
+    180deg,
+    var(--surface-2) 0%,
+    var(--surface-1) 100%
+  );
+  box-shadow:
+    var(--highlight-top),
+    0 0 0 1px var(--border-accent),
+    var(--v5-shadow-md);
+}
+
+.v5-topnav__brand {
+  font-family: var(--font-wordmark);
+  font-size: 20px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   color: var(--v5-text);
 }
 
-.v5-topbar__dot {
-  width: 9px;
-  height: 9px;
+.v5-topnav__brand .v5-brand__five {
+  color: var(--v5-accent);
+  text-shadow: 0 0 22px var(--accent-glow);
+}
+
+.v5-topnav__saved {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border: 1px solid var(--border-hard);
   border-radius: 999px;
-  background: var(--v5-success);
-  box-shadow: 0 0 0 3px rgba(34, 199, 169, 0.3);
+  background: var(--surface-raised);
+  box-shadow: var(--highlight-top);
+  color: var(--v5-text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.v5-topnav__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--terminal-teal);
+  box-shadow: 0 0 0 3px rgba(34, 199, 169, 0.22), 0 0 10px rgba(34, 199, 169, 0.55);
+}
+
+.v5-topnav__links {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.v5-topnav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border-hard);
+  border-radius: var(--v5-radius-md);
+  background: var(--surface-raised);
+  color: var(--v5-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: var(--highlight-top), var(--shadow-low);
+  transition:
+    border-color var(--v5-transition-fast, 140ms) ease,
+    box-shadow var(--v5-transition-fast, 140ms) ease,
+    color var(--v5-transition-fast, 140ms) ease,
+    background var(--v5-transition-fast, 140ms) ease;
+}
+
+.v5-topnav__link:hover {
+  border-color: var(--v5-accent);
+  color: var(--v5-accent-strong);
+  background: var(--accent-weak);
+  box-shadow:
+    0 0 0 1px rgba(255, 178, 36, 0.35),
+    0 0 14px var(--accent-glow);
+}
+
+.v5-topnav__link:focus-visible {
+  outline: 2px solid var(--v5-accent);
+  outline-offset: 2px;
+}
+
+.v5-topnav__sep {
+  width: 2px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--v5-accent);
+  opacity: 0.9;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+@media (max-width: 720px) {
+  .v5-topnav__links {
+    margin-left: 0;
+    flex-wrap: wrap;
+  }
 }
 
 /* Offset sticky sidebar + anchored sections beneath the top bar. */
