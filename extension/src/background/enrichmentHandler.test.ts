@@ -89,6 +89,31 @@ vi.mock("../lib/greynoiseConnector", async (importOriginal) => {
   };
 });
 
+vi.mock("../lib/connectorRegistry", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/connectorRegistry")>();
+  return {
+    ...actual,
+    enrichRegisteredLiveConnector: async (
+      sourceId: Parameters<typeof actual.enrichRegisteredLiveConnector>[0],
+      ioc: Parameters<typeof actual.enrichRegisteredLiveConnector>[1]
+    ) => {
+      if (sourceId === "abuseipdb") {
+        return enrichWithAbuseIpdb(ioc);
+      }
+      if (sourceId === "otx") {
+        return enrichWithOtx(ioc);
+      }
+      if (sourceId === "urlscan") {
+        return enrichWithUrlscan(ioc);
+      }
+      if (sourceId === "greynoise") {
+        return enrichWithGreynoise(ioc);
+      }
+      return actual.enrichRegisteredLiveConnector(sourceId, ioc);
+    },
+  };
+});
+
 vi.mock("../lib/storage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/storage")>();
   return {

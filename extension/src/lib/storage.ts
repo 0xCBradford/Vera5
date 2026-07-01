@@ -32,12 +32,16 @@ import {
   type ApiKeyStorageSlot,
 } from "./enrichmentSourceRegistry";
 
-export const SETTINGS_SCHEMA_VERSION = 3;
+export const SETTINGS_SCHEMA_VERSION = 5;
+
+export const STORAGE_SCHEMA_VERSION = SETTINGS_SCHEMA_VERSION;
 
 export const DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS = 3600;
 
 export const STORAGE_KEY_EXTENSION_ENABLED = "extensionEnabled";
 export const STORAGE_KEY_HIGHLIGHT_ENABLED = "highlightEnabled";
+export const STORAGE_KEY_STORAGE_SCHEMA_VERSION = "storageSchemaVersion";
+/** @deprecated Legacy settings key; read for migration only. */
 export const STORAGE_KEY_SCHEMA_VERSION = "settingsSchemaVersion";
 export const STORAGE_KEY_AUTO_SCAN_ENABLED = "autoScanEnabled";
 export const STORAGE_KEY_MANUAL_ONLY_MODE = "manualOnlyMode";
@@ -78,7 +82,7 @@ export type { InternalAssetPolicy, InternalAssetVendorLabelEntry };
 export const STORAGE_KEYS = {
   EXTENSION_ENABLED: STORAGE_KEY_EXTENSION_ENABLED,
   HIGHLIGHT_ENABLED: STORAGE_KEY_HIGHLIGHT_ENABLED,
-  SCHEMA_VERSION: STORAGE_KEY_SCHEMA_VERSION,
+  STORAGE_SCHEMA_VERSION: STORAGE_KEY_STORAGE_SCHEMA_VERSION,
   AUTO_SCAN_ENABLED: STORAGE_KEY_AUTO_SCAN_ENABLED,
   MANUAL_ONLY_MODE: STORAGE_KEY_MANUAL_ONLY_MODE,
   INCLUDE_PRIVATE_IPV4: STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
@@ -128,7 +132,7 @@ export type EnrichmentSourceCacheTtlRecord = Partial<
 export type Vera5Settings = {
   extensionEnabled: boolean;
   highlightEnabled: boolean;
-  settingsSchemaVersion: number;
+  storageSchemaVersion: number;
   autoScanEnabled: boolean;
   manualOnlyMode: boolean;
   includePrivateIpv4: boolean;
@@ -159,6 +163,7 @@ export type Vera5Settings = {
 export type Vera5StorageRaw = {
   [STORAGE_KEY_EXTENSION_ENABLED]?: unknown;
   [STORAGE_KEY_HIGHLIGHT_ENABLED]?: unknown;
+  [STORAGE_KEY_STORAGE_SCHEMA_VERSION]?: unknown;
   [STORAGE_KEY_SCHEMA_VERSION]?: unknown;
   [STORAGE_KEY_AUTO_SCAN_ENABLED]?: unknown;
   [STORAGE_KEY_MANUAL_ONLY_MODE]?: unknown;
@@ -190,7 +195,7 @@ export type Vera5StorageRaw = {
 export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_EXTENSION_ENABLED,
   STORAGE_KEY_HIGHLIGHT_ENABLED,
-  STORAGE_KEY_SCHEMA_VERSION,
+  STORAGE_KEY_STORAGE_SCHEMA_VERSION,
   STORAGE_KEY_AUTO_SCAN_ENABLED,
   STORAGE_KEY_MANUAL_ONLY_MODE,
   STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
@@ -219,6 +224,7 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
 
 export const VERA5_SETTINGS_READ_KEYS: readonly string[] = [
   ...VERA5_SETTINGS_STORAGE_KEYS,
+  STORAGE_KEY_SCHEMA_VERSION,
   STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
 ];
 
@@ -322,7 +328,7 @@ export function createDefaultVera5Settings(): Vera5Settings {
   return {
     extensionEnabled: true,
     highlightEnabled: true,
-    settingsSchemaVersion: SETTINGS_SCHEMA_VERSION,
+    storageSchemaVersion: SETTINGS_SCHEMA_VERSION,
     autoScanEnabled: false,
     manualOnlyMode: true,
     includePrivateIpv4: false,
@@ -380,6 +386,16 @@ function readStoredSchemaVersion(value: unknown, fallback: number): number {
     return fallback;
   }
   return Math.floor(value);
+}
+
+export function readStorageSchemaVersion(raw: Vera5StorageRaw): number {
+  if (raw[STORAGE_KEY_STORAGE_SCHEMA_VERSION] !== undefined) {
+    return readStoredSchemaVersion(
+      raw[STORAGE_KEY_STORAGE_SCHEMA_VERSION],
+      0
+    );
+  }
+  return readStoredSchemaVersion(raw[STORAGE_KEY_SCHEMA_VERSION], 0);
 }
 
 export function readStoredCacheTtlSeconds(
@@ -458,10 +474,7 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
       raw[STORAGE_KEY_HIGHLIGHT_ENABLED],
       defaults.highlightEnabled
     ),
-    settingsSchemaVersion: readStoredSchemaVersion(
-      raw[STORAGE_KEY_SCHEMA_VERSION],
-      defaults.settingsSchemaVersion
-    ),
+    storageSchemaVersion: readStorageSchemaVersion(raw),
     autoScanEnabled: readStoredBoolean(
       raw[STORAGE_KEY_AUTO_SCAN_ENABLED],
       defaults.autoScanEnabled
@@ -552,7 +565,7 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
 }
 
 export function migrateVera5StorageRaw(raw: Vera5StorageRaw): Vera5StorageRaw {
-  const version = readStoredSchemaVersion(raw[STORAGE_KEY_SCHEMA_VERSION], 0);
+  const version = readStorageSchemaVersion(raw);
   const migrated: Vera5StorageRaw = { ...raw };
 
   if (version < 2) {
@@ -568,23 +581,50 @@ export function migrateVera5StorageRaw(raw: Vera5StorageRaw): Vera5StorageRaw {
     migrated[STORAGE_KEY_SCHEMA_VERSION] = 2;
   }
 
-  if (readStoredSchemaVersion(migrated[STORAGE_KEY_SCHEMA_VERSION], 0) < 3) {
+  if (readStorageSchemaVersion(migrated) < 3) {
     migrated[STORAGE_KEY_IOC_TYPE_ENABLED] = normalizeIocTypeEnabledRecord(
       migrated[STORAGE_KEY_IOC_TYPE_ENABLED]
     );
     migrated[STORAGE_KEY_SCHEMA_VERSION] = 3;
   }
 
-  if (
-    readStoredSchemaVersion(migrated[STORAGE_KEY_SCHEMA_VERSION], 0) >=
-    SETTINGS_SCHEMA_VERSION
-  ) {
+  if (readStorageSchemaVersion(migrated) < 4) {
+    migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 4;
+    delete migrated[STORAGE_KEY_SCHEMA_VERSION];
+  }
+
+  if (readStorageSchemaVersion(migrated) < 5) {
+    migrated[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED] =
+      normalizeEnrichmentSourceEnabledRecord(
+        migrated[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]
+      );
+    migrated[STORAGE_KEY_API_KEYS] = normalizeApiKeysRecord(
+      migrated[STORAGE_KEY_API_KEYS]
+    );
+    migrated[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS] =
+      normalizeEnrichmentSourceCacheTtlRecord(
+        migrated[STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS]
+      );
+    migrated[STORAGE_KEY_IOC_TYPE_ENABLED] = normalizeIocTypeEnabledRecord(
+      migrated[STORAGE_KEY_IOC_TYPE_ENABLED]
+    );
+    const normalizedSettings = normalizeVera5Settings(migrated);
+    Object.assign(
+      migrated,
+      vera5SettingsToStoragePayload({
+        ...normalizedSettings,
+        storageSchemaVersion: 5,
+      })
+    );
+  }
+
+  if (readStorageSchemaVersion(migrated) >= SETTINGS_SCHEMA_VERSION) {
     return migrated;
   }
 
   return {
     ...migrated,
-    [STORAGE_KEY_SCHEMA_VERSION]: SETTINGS_SCHEMA_VERSION,
+    [STORAGE_KEY_STORAGE_SCHEMA_VERSION]: SETTINGS_SCHEMA_VERSION,
   };
 }
 
@@ -594,7 +634,7 @@ export function vera5SettingsToStoragePayload(
   return {
     [STORAGE_KEY_EXTENSION_ENABLED]: settings.extensionEnabled,
     [STORAGE_KEY_HIGHLIGHT_ENABLED]: settings.highlightEnabled,
-    [STORAGE_KEY_SCHEMA_VERSION]: settings.settingsSchemaVersion,
+    [STORAGE_KEY_STORAGE_SCHEMA_VERSION]: settings.storageSchemaVersion,
     [STORAGE_KEY_AUTO_SCAN_ENABLED]: settings.autoScanEnabled,
     [STORAGE_KEY_MANUAL_ONLY_MODE]: settings.manualOnlyMode,
     [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: settings.includePrivateIpv4,
@@ -632,10 +672,11 @@ export function vera5SettingsToStoragePayload(
 }
 
 export function needsStorageMigration(raw: Vera5StorageRaw): boolean {
-  if (
-    readStoredSchemaVersion(raw[STORAGE_KEY_SCHEMA_VERSION], 0) !==
-    SETTINGS_SCHEMA_VERSION
-  ) {
+  if (raw[STORAGE_KEY_SCHEMA_VERSION] !== undefined) {
+    return true;
+  }
+
+  if (readStorageSchemaVersion(raw) !== SETTINGS_SCHEMA_VERSION) {
     return true;
   }
 
@@ -669,24 +710,29 @@ export function needsStorageMigration(raw: Vera5StorageRaw): boolean {
   return false;
 }
 
+export type StorageMigrationResult = {
+  migrated: boolean;
+  fromVersion: number;
+  toVersion: number;
+};
+
+export async function runStorageMigrationIfNeeded(): Promise<StorageMigrationResult> {
+  const { runStorageMigrationIfNeeded: runMigration } = await import(
+    "./storageMigration"
+  );
+  return runMigration();
+}
+
 export async function getVera5Settings(): Promise<Vera5Settings> {
+  await runStorageMigrationIfNeeded();
   const raw = (await chrome.storage.local.get(
     VERA5_SETTINGS_READ_KEYS
   )) as Vera5StorageRaw;
-  const migrated = migrateVera5StorageRaw(raw);
-  const settings = normalizeVera5Settings(migrated);
-
-  if (needsStorageMigration(raw)) {
-    const payload = vera5SettingsToStoragePayload({
-      ...settings,
-      settingsSchemaVersion: SETTINGS_SCHEMA_VERSION,
-    });
-    await chrome.storage.local.set(payload);
-  }
+  const settings = normalizeVera5Settings(migrateVera5StorageRaw(raw));
 
   return {
     ...settings,
-    settingsSchemaVersion: SETTINGS_SCHEMA_VERSION,
+    storageSchemaVersion: SETTINGS_SCHEMA_VERSION,
   };
 }
 

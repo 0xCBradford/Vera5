@@ -11,12 +11,19 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import {
+  CONNECTOR_AUTHORITY_TIER,
+  createLegacyConnectorDefinition,
+  type ConnectorCapabilityFlags,
+  type ConnectorDefinition,
+  type ConnectorRateLimitPolicy,
+} from "./connectorDefinition";
 import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
 import {
   mapShodanFieldsToUnifiedPresentation,
   type ShodanUnifiedInput,
 } from "./enrichmentVendorNormalize";
-import { ENRICHMENT_SOURCE, enrichmentSourceSupportsIocType } from "./enrichmentSourceRegistry";
+import { ENRICHMENT_SOURCE, enrichmentSourceSupportsIocType, getEnrichmentSourceDefinition } from "./enrichmentSourceRegistry";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import { IOC_TYPE, type IocType } from "./iocRegex";
 import {
@@ -32,6 +39,21 @@ export const SHODAN_SOURCE_ID = "shodan" as const;
 export const SHODAN_API_BASE_URL = "https://api.shodan.io";
 
 export const DEFAULT_SHODAN_REQUEST_TIMEOUT_MS = 15_000;
+
+export const DEFAULT_SHODAN_RATE_LIMIT_POLICY: ConnectorRateLimitPolicy = {
+  requestTimeoutMs: DEFAULT_SHODAN_REQUEST_TIMEOUT_MS,
+  quotaSummary:
+    "1 request/second on all plans; monthly query credits vary by plan (domain lookups consume credits). Confirm limits on Shodan billing.",
+  rateLimitHeaderHints: ["Retry-After"],
+};
+
+export const DEFAULT_SHODAN_CAPABILITY_FLAGS: ConnectorCapabilityFlags = {
+  liveEnrichment: true,
+  pivotOnly: false,
+  requiresApiKey: true,
+  supportsHealthCheck: true,
+  authorityTier: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
+};
 
 export const SHODAN_UNSUPPORTED_TYPE_MESSAGE =
   "Shodan supports IPv4 addresses and domains only.";
@@ -504,6 +526,24 @@ export async function checkShodanHealth(
     };
   }
   return { status: CONNECTOR_HEALTH_STATUS.OK };
+}
+
+export function createShodanConnectorDefinition(input?: {
+  rateLimitPolicy?: ConnectorRateLimitPolicy;
+  capabilities?: ConnectorCapabilityFlags;
+}): ConnectorDefinition {
+  const sourceDefinition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.SHODAN);
+  return createLegacyConnectorDefinition({
+    id: ENRICHMENT_SOURCE.SHODAN,
+    supportedIocTypes: sourceDefinition.supportedIndicatorTypes,
+    rateLimitPolicy: input?.rateLimitPolicy ?? DEFAULT_SHODAN_RATE_LIMIT_POLICY,
+    capabilities: input?.capabilities ?? DEFAULT_SHODAN_CAPABILITY_FLAGS,
+    enrich: (ioc) => enrichWithShodan(ioc),
+    healthCheck: (context) =>
+      checkShodanHealth({
+        getApiKey: context?.getApiKey,
+      }),
+  });
 }
 
 export function createShodanConnector(

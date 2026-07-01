@@ -7,6 +7,7 @@ import {
   type Vera5Settings,
   type Vera5StorageRaw,
 } from "./storage";
+import type { StorageMigrationBackupDocument } from "./storageMigrationBackup";
 
 export const SETTINGS_EXPORT_FORMAT_VERSION = 1;
 
@@ -123,7 +124,7 @@ export function mergeImportedVera5Settings(
 
   return {
     ...normalizeVera5Settings(mergedRaw),
-    settingsSchemaVersion: SETTINGS_SCHEMA_VERSION,
+    storageSchemaVersion: SETTINGS_SCHEMA_VERSION,
   };
 }
 
@@ -165,4 +166,30 @@ export function downloadVera5SettingsExport(
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+export function buildSettingsExportFromMigrationBackup(
+  backup: StorageMigrationBackupDocument
+): Vera5SettingsExportDocument {
+  return {
+    vera5SettingsExport: SETTINGS_EXPORT_FORMAT_VERSION,
+    exportedAt: backup.exportedAt,
+    includeApiKeys:
+      backup.settings[STORAGE_KEY_API_KEYS] !== undefined &&
+      typeof backup.settings[STORAGE_KEY_API_KEYS] === "object",
+    settings: { ...backup.settings },
+  };
+}
+
+export async function serializeMigrationBackupForSettingsImport(): Promise<
+  string | null
+> {
+  const { readStorageMigrationBackupDocument } = await import(
+    "./storageMigrationBackup"
+  );
+  const backup = await readStorageMigrationBackupDocument();
+  if (!backup) {
+    return null;
+  }
+  return JSON.stringify(buildSettingsExportFromMigrationBackup(backup), null, 2);
 }

@@ -65,6 +65,7 @@ import {
   STORAGE_KEY_HIGHLIGHT_ENABLED,
   STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
   STORAGE_KEY_IOC_TYPE_ENABLED,
+  STORAGE_KEY_STORAGE_SCHEMA_VERSION,
   STORAGE_KEY_SCHEMA_VERSION,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
   STORAGE_KEY_SHOW_DISABLED_SOURCES_IN_WORKSPACE,
@@ -115,6 +116,13 @@ function stubChromeStorage(store: Record<string, unknown>): void {
         },
         set: (items: Record<string, unknown>) => {
           Object.assign(store, items);
+          return Promise.resolve();
+        },
+        remove: (keys: string | string[]) => {
+          const keyList = Array.isArray(keys) ? keys : [keys];
+          for (const key of keyList) {
+            delete store[key];
+          }
           return Promise.resolve();
         },
       },
@@ -217,7 +225,7 @@ describe("domain policy storage", () => {
 
     const settings = await getVera5Settings();
 
-    expect(settings.settingsSchemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(settings.storageSchemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
     expect(store[STORAGE_KEY_DOMAIN_DENYLIST]).toEqual([
       ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
     ]);
@@ -407,7 +415,10 @@ describe("Vera5 settings schema", () => {
   });
 
   it("lists required settings keys and optional read keys separately", () => {
-    const optionalReadKeys = [STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS];
+    const optionalReadKeys = [
+      STORAGE_KEY_SCHEMA_VERSION,
+      STORAGE_KEY_ENRICHMENT_SOURCE_CACHE_TTL_SECONDS,
+    ];
     const requiredKeys = Object.values(STORAGE_KEYS).filter(
       (key) => !optionalReadKeys.includes(key)
     );
@@ -496,7 +507,7 @@ describe("migrate-safe defaults", () => {
     const defaults = createDefaultVera5Settings();
     expect(defaults.extensionEnabled).toBe(true);
     expect(defaults.highlightEnabled).toBe(true);
-    expect(defaults.settingsSchemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(defaults.storageSchemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
     expect(defaults.autoScanEnabled).toBe(false);
     expect(defaults.manualOnlyMode).toBe(true);
     expect(defaults.includePrivateIpv4).toBe(false);
@@ -572,7 +583,10 @@ describe("migrate-safe defaults", () => {
     const migrated = migrateVera5StorageRaw({
       [STORAGE_KEY_EXTENSION_ENABLED]: true,
     });
-    expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION]).toBe(
+      SETTINGS_SCHEMA_VERSION
+    );
+    expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBeUndefined();
   });
 
   it("backfills default webmail denylist when upgrading from schema version 1", () => {
@@ -583,7 +597,10 @@ describe("migrate-safe defaults", () => {
     expect(migrated[STORAGE_KEY_DOMAIN_DENYLIST]).toEqual([
       ...DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
     ]);
-    expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION]).toBe(
+      SETTINGS_SCHEMA_VERSION
+    );
+    expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBeUndefined();
   });
 
   it("merges Phase 2 IOC type toggles when upgrading from schema version 2", () => {
@@ -591,7 +608,10 @@ describe("migrate-safe defaults", () => {
       [STORAGE_KEY_SCHEMA_VERSION]: 2,
       [STORAGE_KEY_IOC_TYPE_ENABLED]: { ipv4: false, domain: true },
     });
-    expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION]).toBe(
+      SETTINGS_SCHEMA_VERSION
+    );
+    expect(migrated[STORAGE_KEY_SCHEMA_VERSION]).toBeUndefined();
     expect(migrated[STORAGE_KEY_IOC_TYPE_ENABLED]).toEqual({
       ipv4: false,
       domain: true,
@@ -613,6 +633,12 @@ describe("migrate-safe defaults", () => {
     expect(
       needsStorageMigration({
         [STORAGE_KEY_SCHEMA_VERSION]: SETTINGS_SCHEMA_VERSION,
+        [STORAGE_KEY_EXTENSION_ENABLED]: true,
+      })
+    ).toBe(true);
+    expect(
+      needsStorageMigration({
+        [STORAGE_KEY_STORAGE_SCHEMA_VERSION]: SETTINGS_SCHEMA_VERSION,
         [STORAGE_KEY_EXTENSION_ENABLED]: true,
         [STORAGE_KEY_HIGHLIGHT_ENABLED]: true,
         [STORAGE_KEY_AUTO_SCAN_ENABLED]: false,
@@ -675,8 +701,11 @@ describe("getVera5Settings", () => {
 
   it("persists migrated defaults for empty storage", async () => {
     const settings = await getVera5Settings();
-    expect(settings.settingsSchemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
-    expect(store[STORAGE_KEY_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(settings.storageSchemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(store[STORAGE_KEY_STORAGE_SCHEMA_VERSION]).toBe(
+      SETTINGS_SCHEMA_VERSION
+    );
+    expect(store[STORAGE_KEY_SCHEMA_VERSION]).toBeUndefined();
     expect(store[STORAGE_KEY_MANUAL_ONLY_MODE]).toBe(true);
     expect(store[STORAGE_KEY_AUTO_SCAN_ENABLED]).toBe(false);
   });
@@ -696,7 +725,10 @@ describe("getVera5Settings", () => {
     const settings = await getVera5Settings();
     expect(settings.apiKeys).toEqual({});
     expect(store[STORAGE_KEY_API_KEYS]).toEqual({});
-    expect(store[STORAGE_KEY_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(store[STORAGE_KEY_STORAGE_SCHEMA_VERSION]).toBe(
+      SETTINGS_SCHEMA_VERSION
+    );
+    expect(store[STORAGE_KEY_SCHEMA_VERSION]).toBeUndefined();
   });
 });
 

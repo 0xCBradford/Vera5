@@ -11,12 +11,19 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import {
+  CONNECTOR_AUTHORITY_TIER,
+  createLegacyConnectorDefinition,
+  type ConnectorCapabilityFlags,
+  type ConnectorDefinition,
+  type ConnectorRateLimitPolicy,
+} from "./connectorDefinition";
 import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
 import {
   mapGreyNoiseFieldsToUnifiedPresentation,
   type GreyNoiseUnifiedInput,
 } from "./enrichmentVendorNormalize";
-import { ENRICHMENT_SOURCE, enrichmentSourceSupportsIocType } from "./enrichmentSourceRegistry";
+import { ENRICHMENT_SOURCE, enrichmentSourceSupportsIocType, getEnrichmentSourceDefinition } from "./enrichmentSourceRegistry";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import {
   assertEnrichmentFetchHasNoBody,
@@ -32,6 +39,21 @@ export const GREYNOISE_COMMUNITY_API_BASE_URL =
   "https://api.greynoise.io/v3/community/";
 
 export const DEFAULT_GREYNOISE_REQUEST_TIMEOUT_MS = 15_000;
+
+export const DEFAULT_GREYNOISE_RATE_LIMIT_POLICY: ConnectorRateLimitPolicy = {
+  requestTimeoutMs: DEFAULT_GREYNOISE_REQUEST_TIMEOUT_MS,
+  quotaSummary:
+    "Typical free Community tier: 50 IPv4 lookups/week (combined with Visualizer). Confirm limits in your GreyNoise account.",
+  rateLimitHeaderHints: ["Retry-After"],
+};
+
+export const DEFAULT_GREYNOISE_CAPABILITY_FLAGS: ConnectorCapabilityFlags = {
+  liveEnrichment: true,
+  pivotOnly: false,
+  requiresApiKey: true,
+  supportsHealthCheck: true,
+  authorityTier: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
+};
 
 export type GreyNoiseCommunityData = {
   ip?: string;
@@ -379,6 +401,25 @@ export async function checkGreynoiseHealth(
     };
   }
   return { status: CONNECTOR_HEALTH_STATUS.OK };
+}
+
+export function createGreynoiseConnectorDefinition(input?: {
+  rateLimitPolicy?: ConnectorRateLimitPolicy;
+  capabilities?: ConnectorCapabilityFlags;
+}): ConnectorDefinition {
+  const sourceDefinition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.GREYNOISE);
+  return createLegacyConnectorDefinition({
+    id: ENRICHMENT_SOURCE.GREYNOISE,
+    supportedIocTypes: sourceDefinition.supportedIndicatorTypes,
+    rateLimitPolicy:
+      input?.rateLimitPolicy ?? DEFAULT_GREYNOISE_RATE_LIMIT_POLICY,
+    capabilities: input?.capabilities ?? DEFAULT_GREYNOISE_CAPABILITY_FLAGS,
+    enrich: (ioc) => enrichWithGreynoise(ioc),
+    healthCheck: (context) =>
+      checkGreynoiseHealth({
+        getApiKey: context?.getApiKey,
+      }),
+  });
 }
 
 export function createGreynoiseConnector(

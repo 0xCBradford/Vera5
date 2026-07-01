@@ -2,16 +2,23 @@ import {
   CONNECTOR_HEALTH_STATUS,
   ENRICHMENT_ERROR_CODE,
   buildRateLimitedEnrichmentError,
-  createErrorSourceResult,
-  createOkSourceResult,
-  createSkippedSourceResult,
   formatMissingKeyErrorMessage,
   type ConnectorHealthCheckResult,
   type EnrichmentConnector,
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import {
+  CONNECTOR_AUTHORITY_TIER,
+  enrichWithConnectorDefinition,
+  type ConnectorCapabilityFlags,
+  type ConnectorDefinition,
+  type ConnectorFetchContext,
+  type ConnectorFetchResult,
+  type ConnectorRateLimitPolicy,
+} from "./connectorDefinition";
 import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
+import { ENRICHMENT_SOURCE } from "./enrichmentSourceRegistry";
 import { IOC_TYPE, type IocType } from "./iocRegex";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import {
@@ -32,6 +39,31 @@ export const OTX_INDICATORS_API_BASE =
   "https://otx.alienvault.com/api/v1/indicators";
 
 export const DEFAULT_OTX_REQUEST_TIMEOUT_MS = 15_000;
+
+export const OTX_SUPPORTED_IOC_TYPES = [
+  IOC_TYPE.IPV4,
+  IOC_TYPE.DOMAIN,
+  IOC_TYPE.URL,
+  IOC_TYPE.MD5,
+  IOC_TYPE.SHA1,
+  IOC_TYPE.SHA256,
+  IOC_TYPE.CVE,
+] as const;
+
+export const DEFAULT_OTX_RATE_LIMIT_POLICY: ConnectorRateLimitPolicy = {
+  requestTimeoutMs: DEFAULT_OTX_REQUEST_TIMEOUT_MS,
+  quotaSummary:
+    "Typical keyed tier: 10,000 requests/hour; 1,000/hour without a key. Confirm limits in your OTX account.",
+  rateLimitHeaderHints: ["Retry-After"],
+};
+
+export const DEFAULT_OTX_CAPABILITY_FLAGS: ConnectorCapabilityFlags = {
+  liveEnrichment: true,
+  pivotOnly: false,
+  requiresApiKey: true,
+  supportsHealthCheck: true,
+  authorityTier: CONNECTOR_AUTHORITY_TIER.COMMUNITY,
+};
 
 export type OtxPulseInfo = {
   count?: number;
@@ -265,41 +297,45 @@ async function fetchOtxIndicator(
   }
 }
 
-export async function enrichWithOtx(
+async function fetchOtxConnectorPayload(
   ioc: EnrichmentIoc,
-  deps: OtxConnectorDeps = {}
-): Promise<EnrichmentSourceResult> {
-  const resolveApiKey = deps.getApiKey ?? (() => getApiKey(OTX_SOURCE_ID));
-  const fetchImpl = deps.fetch ?? enrichmentFetch;
-  const timeoutMs = deps.timeoutMs ?? DEFAULT_OTX_REQUEST_TIMEOUT_MS;
+  context: ConnectorFetchContext = {}
+): Promise<ConnectorFetchResult> {
+  const resolveApiKey = context.getApiKey ?? (() => getApiKey(OTX_SOURCE_ID));
+  const fetchImpl = context.fetch ?? enrichmentFetch;
+  const timeoutMs = context.timeoutMs ?? DEFAULT_OTX_REQUEST_TIMEOUT_MS;
   const fetchedAt = new Date().toISOString();
 
   const sanitized = sanitizeEnrichmentIoc({ value: ioc.value, type: ioc.type });
   if (!sanitized) {
-    return createErrorSourceResult({
-      sourceId: OTX_SOURCE_ID,
+    return {
+      ok: false,
       errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
       errorMessage: "Invalid indicator value for enrichment.",
       fetchedAt,
-    });
+    };
   }
 
   const indicatorUrl = buildOtxIndicatorUrl(sanitized.type, sanitized.value);
   if (!indicatorUrl) {
-    return createSkippedSourceResult(
-      OTX_SOURCE_ID,
-      ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE,
-      "OTX does not support this indicator type."
-    );
+    return {
+      ok: false,
+      errorCode: ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE,
+      errorMessage: "OTX does not support this indicator type.",
+      fetchedAt,
+    };
   }
 
   const apiKey = (await resolveApiKey()).trim();
   if (!apiKey) {
-    return createSkippedSourceResult(
-      OTX_SOURCE_ID,
-      ENRICHMENT_ERROR_CODE.MISSING_KEY,
-      formatMissingKeyErrorMessage(ENRICHMENT_SOURCE_LABELS[OTX_SOURCE_ID])
-    );
+    return {
+      ok: false,
+      errorCode: ENRICHMENT_ERROR_CODE.MISSING_KEY,
+      errorMessage: formatMissingKeyErrorMessage(
+        ENRICHMENT_SOURCE_LABELS[OTX_SOURCE_ID]
+      ),
+      fetchedAt,
+    };
   }
 
   try {
@@ -316,56 +352,79 @@ export async function enrichWithOtx(
           ENRICHMENT_SOURCE_LABELS[OTX_SOURCE_ID],
           response.headers
         );
-        return createErrorSourceResult({
-          sourceId: OTX_SOURCE_ID,
+        return {
+          ok: false,
           errorCode: mapped.errorCode,
           errorMessage: rateLimit.errorMessage,
-          retryHint: rateLimit.retryHint,
           fetchedAt,
-        });
+          retryHint: rateLimit.retryHint,
+        };
       }
-      return createErrorSourceResult({
-        sourceId: OTX_SOURCE_ID,
+      return {
+        ok: false,
         errorCode: mapped.errorCode,
         errorMessage: mapped.errorMessage,
         fetchedAt,
-      });
+      };
     }
 
     const payload: unknown = await response.json();
-    const normalized = normalizeOtxIndicatorResponse(payload);
-    if (!normalized) {
-      return createErrorSourceResult({
-        sourceId: OTX_SOURCE_ID,
-        errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
-        errorMessage: "OTX returned an unexpected response.",
-        fetchedAt,
-      });
-    }
-
-    return createOkSourceResult({
-      sourceId: OTX_SOURCE_ID,
-      summary: normalized.summary,
-      tags: normalized.tags,
+    return {
+      ok: true,
+      payload,
       fetchedAt,
       rawVendorJson: formatRedactedVendorJson(payload),
-    });
+    };
   } catch (error) {
     if (isAbortError(error)) {
-      return createErrorSourceResult({
-        sourceId: OTX_SOURCE_ID,
+      return {
+        ok: false,
         errorCode: ENRICHMENT_ERROR_CODE.TIMEOUT,
         errorMessage: "OTX request timed out.",
         fetchedAt,
-      });
+      };
     }
-    return createErrorSourceResult({
-      sourceId: OTX_SOURCE_ID,
+    return {
+      ok: false,
       errorCode: ENRICHMENT_ERROR_CODE.NETWORK,
       errorMessage: "OTX request failed.",
       fetchedAt,
-    });
+    };
   }
+}
+
+export function createOtxConnectorDefinition(input?: {
+  rateLimitPolicy?: ConnectorRateLimitPolicy;
+  capabilities?: ConnectorCapabilityFlags;
+}): ConnectorDefinition {
+  return {
+    id: ENRICHMENT_SOURCE.OTX,
+    supportedIocTypes: OTX_SUPPORTED_IOC_TYPES,
+    rateLimitPolicy: input?.rateLimitPolicy ?? DEFAULT_OTX_RATE_LIMIT_POLICY,
+    capabilities: input?.capabilities ?? DEFAULT_OTX_CAPABILITY_FLAGS,
+    fetch(ioc, context) {
+      return fetchOtxConnectorPayload(ioc, context);
+    },
+    normalize(payload) {
+      return normalizeOtxIndicatorResponse(payload);
+    },
+    async healthCheck(context) {
+      return checkOtxHealth({
+        getApiKey: context?.getApiKey,
+      });
+    },
+  };
+}
+
+export async function enrichWithOtx(
+  ioc: EnrichmentIoc,
+  deps: OtxConnectorDeps = {}
+): Promise<EnrichmentSourceResult> {
+  return enrichWithConnectorDefinition(createOtxConnectorDefinition(), ioc, {
+    fetch: deps.fetch,
+    getApiKey: deps.getApiKey,
+    timeoutMs: deps.timeoutMs,
+  });
 }
 
 export async function checkOtxHealth(

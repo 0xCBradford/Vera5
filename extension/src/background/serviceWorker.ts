@@ -10,6 +10,7 @@ import {
   toggleCommandPaletteMessage,
 } from "../lib/messages";
 import { clearTabScanSnapshot } from "../lib/tabScanSnapshotStorage";
+import { runStorageMigrationOnExtensionUpdate } from "../lib/storageMigration";
 import { routeIncomingMessageAsync } from "./messageRouter";
 
 export const CONTEXT_MENU_ENRICH_SELECTION_TITLE = "Enrich selection with Vera5";
@@ -81,6 +82,9 @@ function resolveEnrichSelectionContextMenuActionId(): string {
 
 chrome.runtime.onInstalled.addListener((details) => {
   registerEnrichSelectionContextMenu();
+  if (details.reason === "update") {
+    void runStorageMigrationOnExtensionUpdate();
+  }
   if (details.reason === "install") {
     void chrome.runtime.openOptionsPage();
   }

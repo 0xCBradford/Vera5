@@ -2,19 +2,38 @@
 
 Vera5 enrichment uses **bring-your-own API keys**. Requests go from the extension directly to each vendor over HTTPS; Vera5 does not proxy indicators through Vera5-operated infrastructure. For connector scope, credential storage, and parallel fetch behavior, see [architecture.md](architecture.md).
 
+Each enrichment source registers under a stable **registry id** in `enrichmentSourceRegistry.ts` and `connectorRegistry.ts`. Settings toggles, API key storage, cache keys, and live fetch dispatch use these ids. See [Connector SDK](architecture.md#connector-sdk) for registration and dispatch.
+
+## Connector registry IDs
+
+| Source (display name) | Registry ID |
+|-----------------------|-------------|
+| AbuseIPDB | [`abuseipdb`](architecture.md#connector-sdk) |
+| AlienVault OTX | [`otx`](architecture.md#connector-sdk) |
+| VirusTotal | [`virustotal`](architecture.md#connector-sdk) |
+| URLScan.io | [`urlscan`](architecture.md#connector-sdk) |
+| GreyNoise | [`greynoise`](architecture.md#connector-sdk) |
+| Shodan | [`shodan`](architecture.md#connector-sdk) |
+| Google Safe Browsing | [`google_safe_browsing`](architecture.md#connector-sdk) |
+| Pulsedive | [`pulsedive`](architecture.md#connector-sdk) |
+| MalwareBazaar | [`malwarebazaar`](architecture.md#connector-sdk) |
+| Censys | [`censys`](architecture.md#connector-sdk) |
+| ThreatFox | [`threatfox`](architecture.md#connector-sdk) |
+| URLhaus | [`urlhaus`](architecture.md#connector-sdk) |
+
 Vendor quotas change with plan tier and policy updates. Treat the tables below as orientation; confirm your effective limits in each vendor account or API usage dashboard before heavy automation.
 
 ## Per-source rate limit matrix
 
-| Source | Live in extension | Vera5 API call (per enrichment) | Vendor quota (typical) | Quota window | HTTP 429 | Vendor reference |
-|--------|-------------------|----------------------------------|------------------------|--------------|----------|------------------|
-| **AbuseIPDB** | Yes (IPv4) | `GET https://api.abuseipdb.com/api/v2/check` — one check per enabled source per hover enrichment | **1,000** checks/day (free); higher tiers: 3,000–50,000/day depending on subscription | Resets **00:00 UTC** (API v2 daily limit) | Yes; includes `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` | [AbuseIPDB API v2 — daily rate limits](https://docs.abuseipdb.com/) |
-| **AlienVault OTX** | Yes (IPv4, domain, URL, hashes, CVE) | `GET https://otx.alienvault.com/api/v1/indicators/{type}/{value}` — one indicator lookup per enabled source per hover enrichment | **10,000** requests/hour with API key; **1,000** requests/hour without a key | Hourly (vendor-documented); contact vendor for sustained higher volume | Yes (documented); may also see timeouts on heavy endpoints | [OTX API overview](https://otx.alienvault.com/api) |
-| **URLScan.io** | Yes (domain, URL) | `GET https://urlscan.io/api/v1/search/?q=…&size=5` — one search query per enabled source per hover enrichment (domain or URL indicator in `q`) | Per-action limits: separate **minute**, **hour**, and **day** quotas; values vary by account — use `GET https://urlscan.io/api/v1/quotas` | Fixed windows; day resets **midnight UTC** | Yes; `X-Rate-Limit-*` headers per action | [urlscan.io API rate limits](https://docs.urlscan.io/pages/api-rate-limits) |
-| **GreyNoise (community)** | Yes (IPv4) | `GET https://api.greynoise.io/v3/community/{ip}` — one community lookup per enabled source per hover enrichment | **50** lookups/week (free community account, combined with Visualizer); unauthenticated lookups more restricted (e.g. **10**/day cited in API errors) | Weekly / daily depending on authentication tier | Yes; JSON error body describes plan and limit; may include `Retry-After` | [GreyNoise Community API](https://docs.greynoise.io/docs/using-the-greynoise-community-api) |
-| **VirusTotal** | No (pivots and saved key today; live API gated off) | `GET https://www.virustotal.com/api/v3/{collection}/{id}` — one object lookup per enabled source per hover enrichment when live integration is enabled (`ip_addresses`, `domains`, `urls`, or `files` collections) | **500** lookups/day and **4** requests/min (typical public API tier); premium subscriptions higher — confirm in your account | Daily and per-minute | Yes; may include rate-limit headers | [VirusTotal API v3 overview](https://docs.virustotal.com/reference/overview) |
-| **Shodan** | Yes (IPv4, domain) | `GET https://api.shodan.io/shodan/host/{ip}` (IPv4) or `GET https://api.shodan.io/dns/domain/{domain}` (domain) — one lookup per enabled source per hover enrichment; API key in `key` query parameter | **1** request/second (all API plans); **query credits** renew monthly by plan (Membership **100**/mo, Freelancer **10,000**/mo, Small Business **200,000**/mo, Corporate **unlimited**); IPv4 host lookups do **not** consume query credits; domain DNS lookups consume query credits per vendor rules | Per-second throttle; query credits reset at month start | Yes; may include `Retry-After` | [Shodan API](https://book.shodan.io/developer-apis/shodan-api/) · [Shodan credits](https://help.shodan.io/the-basics/credit-types-explained) · [API plans](https://account.shodan.io/billing) |
-| **Censys** | Yes (IPv4 only) | `GET https://search.censys.io/api/v2/hosts/{ip}` — one host lookup per enabled source per hover enrichment; API ID and secret in `Authorization: Basic` from local Settings storage | Plan-dependent **monthly query quota** on Censys Search API accounts; confirm effective limits in your Censys account | Monthly (typical); confirm in account dashboard | Yes; may include `Retry-After` | [Censys Search API](https://docs.censys.com/docs/platform-api) |
+| Source | Registry ID | Live in extension | Vera5 API call (per enrichment) | Vendor quota (typical) | Quota window | HTTP 429 | Vendor reference |
+|--------|-------------|-------------------|----------------------------------|------------------------|--------------|----------|------------------|
+| **AbuseIPDB** | [`abuseipdb`](architecture.md#connector-sdk) | Yes (IPv4) | `GET https://api.abuseipdb.com/api/v2/check` — one check per enabled source per hover enrichment | **1,000** checks/day (free); higher tiers: 3,000–50,000/day depending on subscription | Resets **00:00 UTC** (API v2 daily limit) | Yes; includes `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset` | [AbuseIPDB API v2 — daily rate limits](https://docs.abuseipdb.com/) |
+| **AlienVault OTX** | [`otx`](architecture.md#connector-sdk) | Yes (IPv4, domain, URL, hashes, CVE) | `GET https://otx.alienvault.com/api/v1/indicators/{type}/{value}` — one indicator lookup per enabled source per hover enrichment | **10,000** requests/hour with API key; **1,000** requests/hour without a key | Hourly (vendor-documented); contact vendor for sustained higher volume | Yes (documented); may also see timeouts on heavy endpoints | [OTX API overview](https://otx.alienvault.com/api) |
+| **URLScan.io** | [`urlscan`](architecture.md#connector-sdk) | Yes (domain, URL) | `GET https://urlscan.io/api/v1/search/?q=…&size=5` — one search query per enabled source per hover enrichment (domain or URL indicator in `q`) | Per-action limits: separate **minute**, **hour**, and **day** quotas; values vary by account — use `GET https://urlscan.io/api/v1/quotas` | Fixed windows; day resets **midnight UTC** | Yes; `X-Rate-Limit-*` headers per action | [urlscan.io API rate limits](https://docs.urlscan.io/pages/api-rate-limits) |
+| **GreyNoise (community)** | [`greynoise`](architecture.md#connector-sdk) | Yes (IPv4) | `GET https://api.greynoise.io/v3/community/{ip}` — one community lookup per enabled source per hover enrichment | **50** lookups/week (free community account, combined with Visualizer); unauthenticated lookups more restricted (e.g. **10**/day cited in API errors) | Weekly / daily depending on authentication tier | Yes; JSON error body describes plan and limit; may include `Retry-After` | [GreyNoise Community API](https://docs.greynoise.io/docs/using-the-greynoise-community-api) |
+| **VirusTotal** | [`virustotal`](architecture.md#connector-sdk) | No (pivots and saved key today; live API gated off) | `GET https://www.virustotal.com/api/v3/{collection}/{id}` — one object lookup per enabled source per hover enrichment when live integration is enabled (`ip_addresses`, `domains`, `urls`, or `files` collections) | **500** lookups/day and **4** requests/min (typical public API tier); premium subscriptions higher — confirm in your account | Daily and per-minute | Yes; may include rate-limit headers | [VirusTotal API v3 overview](https://docs.virustotal.com/reference/overview) |
+| **Shodan** | [`shodan`](architecture.md#connector-sdk) | Yes (IPv4, domain) | `GET https://api.shodan.io/shodan/host/{ip}` (IPv4) or `GET https://api.shodan.io/dns/domain/{domain}` (domain) — one lookup per enabled source per hover enrichment; API key in `key` query parameter | **1** request/second (all API plans); **query credits** renew monthly by plan (Membership **100**/mo, Freelancer **10,000**/mo, Small Business **200,000**/mo, Corporate **unlimited**); IPv4 host lookups do **not** consume query credits; domain DNS lookups consume query credits per vendor rules | Per-second throttle; query credits reset at month start | Yes; may include `Retry-After` | [Shodan API](https://book.shodan.io/developer-apis/shodan-api/) · [Shodan credits](https://help.shodan.io/the-basics/credit-types-explained) · [API plans](https://account.shodan.io/billing) |
+| **Censys** | [`censys`](architecture.md#connector-sdk) | Yes (IPv4 only) | `GET https://search.censys.io/api/v2/hosts/{ip}` — one host lookup per enabled source per hover enrichment; API ID and secret in `Authorization: Basic` from local Settings storage | Plan-dependent **monthly query quota** on Censys Search API accounts; confirm effective limits in your Censys account | Monthly (typical); confirm in account dashboard | Yes; may include `Retry-After` | [Censys Search API](https://docs.censys.com/docs/platform-api) |
 
 ### Quota impact of multi-source enrichment
 
@@ -117,15 +136,15 @@ Vera5 live enrichment uses the Censys Search **host view** for **IPv4 only** (`G
 
 Live connector `fetch()` calls are limited to HTTPS GET on hosts listed in `DECLARED_ENRICHMENT_API_HOSTS` (`extension/src/lib/iocRequestBoundaries.ts`). The extension manifest requests `https://*/*` host permission so analyst pages and declared vendor APIs are reachable; runtime `enrichmentFetch` blocks any host not on the allowlist before network I/O.
 
-| Host | Source | Live endpoint (GET, IOC in query) |
-|------|--------|-----------------------------------|
-| `api.abuseipdb.com` | AbuseIPDB | `/api/v2/check?ipAddress=…` |
-| `otx.alienvault.com` | AlienVault OTX | `/api/v1/indicators/{type}/{value}` |
-| `urlscan.io` | URLScan.io | `/api/v1/search/?q=…&size=5` |
-| `api.greynoise.io` | GreyNoise (community) | `/v3/community/{ip}` |
-| `www.virustotal.com` | VirusTotal | `/api/v3/{collection}/{id}` (`x-apikey` header) — allowlisted; live enrichment not enabled in extension today |
-| `api.shodan.io` | Shodan | `/shodan/host/{ip}` or `/dns/domain/{domain}` (`key` query parameter) |
-| `search.censys.io` | Censys | `/api/v2/hosts/{ip}` (`Authorization: Basic` with API ID and secret) |
+| Host | Source | Registry ID | Live endpoint (GET, IOC in query) |
+|------|--------|-------------|-----------------------------------|
+| `api.abuseipdb.com` | AbuseIPDB | [`abuseipdb`](architecture.md#connector-sdk) | `/api/v2/check?ipAddress=…` |
+| `otx.alienvault.com` | AlienVault OTX | [`otx`](architecture.md#connector-sdk) | `/api/v1/indicators/{type}/{value}` |
+| `urlscan.io` | URLScan.io | [`urlscan`](architecture.md#connector-sdk) | `/api/v1/search/?q=…&size=5` |
+| `api.greynoise.io` | GreyNoise (community) | [`greynoise`](architecture.md#connector-sdk) | `/v3/community/{ip}` |
+| `www.virustotal.com` | VirusTotal | [`virustotal`](architecture.md#connector-sdk) | `/api/v3/{collection}/{id}` (`x-apikey` header) — allowlisted; live enrichment not enabled in extension today |
+| `api.shodan.io` | Shodan | [`shodan`](architecture.md#connector-sdk) | `/shodan/host/{ip}` or `/dns/domain/{domain}` (`key` query parameter) |
+| `search.censys.io` | Censys | [`censys`](architecture.md#connector-sdk) | `/api/v2/hosts/{ip}` (`Authorization: Basic` with API ID and secret) |
 
 Pivot links may open other vendor origins in a normal browser tab; those navigations are not extension `fetch()` calls and are not subject to this allowlist.
 
@@ -203,13 +222,13 @@ Connectors send only the sanitized indicator value required by the vendor endpoi
 
 ## Monitoring and verification
 
-- **AbuseIPDB:** Account → API Usage tab on [abuseipdb.com](https://www.abuseipdb.com/).
-- **OTX:** API key from [OTX settings](https://otx.alienvault.com/); monitor usage through your key issuance workflow and vendor communications for high volume.
-- **URLScan.io:** `GET https://urlscan.io/api/v1/quotas` with your API key when URLScan.io is enabled.
-- **GreyNoise:** [Community API usage limits](https://docs.greynoise.io/docs/using-the-greynoise-community-api); **Search — Usage Monitoring** in your GreyNoise account; see [GreyNoise Community tier limits](#greynoise-community-tier-limits) above.
-- **VirusTotal:** [VirusTotal API documentation](https://docs.virustotal.com/reference/overview) and your account API key page for daily and per-minute usage; see [VirusTotal API tier limits](#virustotal-api-tier-limits) above.
-- **Shodan:** [Shodan account billing](https://account.shodan.io/billing) for query/scan credit balances; [Shodan credits explained](https://help.shodan.io/the-basics/credit-types-explained); see [Shodan API tier limits](#shodan-api-tier-limits) above.
-- **Censys:** [Censys account](https://search.censys.io/account) for Search API quota; see [Censys Search API limits and unsupported types](#censys-search-api-limits-and-unsupported-types) above.
+- **AbuseIPDB** ([`abuseipdb`](architecture.md#connector-sdk)): Account → API Usage tab on [abuseipdb.com](https://www.abuseipdb.com/).
+- **OTX** ([`otx`](architecture.md#connector-sdk)): API key from [OTX settings](https://otx.alienvault.com/); monitor usage through your key issuance workflow and vendor communications for high volume.
+- **URLScan.io** ([`urlscan`](architecture.md#connector-sdk)): `GET https://urlscan.io/api/v1/quotas` with your API key when URLScan.io is enabled.
+- **GreyNoise** ([`greynoise`](architecture.md#connector-sdk)): [Community API usage limits](https://docs.greynoise.io/docs/using-the-greynoise-community-api); **Search — Usage Monitoring** in your GreyNoise account; see [GreyNoise Community tier limits](#greynoise-community-tier-limits) above.
+- **VirusTotal** ([`virustotal`](architecture.md#connector-sdk)): [VirusTotal API documentation](https://docs.virustotal.com/reference/overview) and your account API key page for daily and per-minute usage; see [VirusTotal API tier limits](#virustotal-api-tier-limits) above.
+- **Shodan** ([`shodan`](architecture.md#connector-sdk)): [Shodan account billing](https://account.shodan.io/billing) for query/scan credit balances; [Shodan credits explained](https://help.shodan.io/the-basics/credit-types-explained); see [Shodan API tier limits](#shodan-api-tier-limits) above.
+- **Censys** ([`censys`](architecture.md#connector-sdk)): [Censys account](https://search.censys.io/account) for Search API quota; see [Censys Search API limits and unsupported types](#censys-search-api-limits-and-unsupported-types) above.
 
 To validate Vera5 backoff messaging locally, enable a source, trigger enrichment until the vendor returns 429, and confirm the hover card shows the rate-limit message and retry hint for that source without affecting unrelated pivot links or disabled sources. Confirm subsequent automatic enrichment shows the global cooldown message until the countdown expires; **›** manual refresh should still attempt a live fetch.
 
@@ -217,20 +236,20 @@ To validate Vera5 backoff messaging locally, enable a source, trigger enrichment
 
 Vera5 does not operate threat-intelligence vendors. When you enable a source, save an API key, trigger live enrichment, or click a **Recommended next pivots** link, you interact with that vendor under **your** account and **their** policies—not Vera5’s. Review terms, privacy notices, data retention, subprocessors, export controls, and organizational approval requirements **before** sending production or classified indicators.
 
-| Source | Live HTTPS enrichment in Vera5 | How you may interact | Terms of service / acceptable use | Privacy / data policy |
-|--------|-------------------------------|----------------------|-----------------------------------|------------------------|
-| **AbuseIPDB** | Yes (IPv4) | Live API from the extension service worker; pivot links open in your browser | [AbuseIPDB Terms of Use](https://www.abuseipdb.com/legal) | [AbuseIPDB Privacy Policy](https://www.abuseipdb.com/privacy) |
-| **AlienVault OTX** | Yes (IPv4, domain, URL, hashes, CVE) | Live API; pivot links | [OTX End-User Agreement (LevelBlue)](https://www.levelblue.com/legal/otx-eula-terms) | [LevelBlue Privacy Policy](https://www.levelblue.com/legal/privacy-policy) |
-| **VirusTotal** | No (registry shell; pivots and saved key today) | Pivot links; live API connector implemented but not enabled for live enrichment in extension today | [VirusTotal Terms of Service](https://support.virustotal.com/hc/en-us/articles/360016879500-Terms-of-Service) | [VirusTotal Privacy Policy](https://support.virustotal.com/hc/en-us/articles/360016879480-Privacy-Policy) |
-| **URLScan.io** | Yes (domain, URL) | Live API from the extension service worker (`GET /api/v1/search/`); pivot links open in your browser | [urlscan.io Terms of Service](https://urlscan.io/about/terms/) | [urlscan.io Privacy Policy](https://urlscan.io/about/privacy/) |
-| **GreyNoise** | Yes (IPv4) | Live API from the extension service worker (`GET /v3/community/{ip}`); pivot links open in your browser | [GreyNoise Terms of Use](https://www.greynoise.io/company/legal) | [GreyNoise Privacy Policy](https://www.greynoise.io/company/legal/privacy-policy) |
-| **Shodan** | Yes (IPv4, domain) | Live API from the extension service worker (`GET /shodan/host/{ip}` or `GET /dns/domain/{domain}`); pivot links open in your browser | [Shodan Terms of Service](https://account.shodan.io/terms) | [Shodan Privacy Policy](https://account.shodan.io/privacy) |
-| **Google Safe Browsing** | No (registry shell; no live API shipped) | Future live API would use Google Cloud credentials under Google API terms | [Google Safe Browsing API Terms](https://developers.google.com/safe-browsing/v4/terms) · [Google APIs Terms of Service](https://developers.google.com/terms) | [Google Privacy Policy](https://policies.google.com/privacy) |
-| **Pulsedive** | No (registry shell; pivots only today) | Pivot links | [Pulsedive Terms of Use](https://pulsedive.com/terms_of_use) | [Pulsedive Privacy Policy](https://pulsedive.com/privacy) |
-| **MalwareBazaar** | No (registry shell; pivots only today) | Pivot links to abuse.ch | [MalwareBazaar Terms of Service](https://bazaar.abuse.ch/faq/#tos) (abuse.ch project) | [MalwareBazaar FAQ](https://bazaar.abuse.ch/faq/) (CC0 dataset terms) |
-| **Censys** | Yes (IPv4 only) | Live API from the extension service worker (`GET /api/v2/hosts/{ip}`); domain pivot links only for domain indicators | [Censys Terms of Service](https://censys.io/terms-of-service) | [Censys Privacy Policy](https://censys.io/privacy-policy) |
-| **ThreatFox** | No (registry shell; pivots only today) | Pivot links to abuse.ch | [ThreatFox API Terms of Use](https://threatfox.abuse.ch/api/) (includes abuse.ch fair-use terms) | [ThreatFox FAQ](https://threatfox.abuse.ch/faq/) |
-| **URLHaus** | No (registry shell; pivots only today) | Pivot links to abuse.ch | [URLhaus API Terms of Use](https://urlhaus.abuse.ch/api/) (includes abuse.ch fair-use terms) | [URLhaus About](https://urlhaus.abuse.ch/about/) |
+| Source | Registry ID | Live HTTPS enrichment in Vera5 | How you may interact | Terms of service / acceptable use | Privacy / data policy |
+|--------|-------------|-------------------------------|----------------------|-----------------------------------|------------------------|
+| **AbuseIPDB** | [`abuseipdb`](architecture.md#connector-sdk) | Yes (IPv4) | Live API from the extension service worker; pivot links open in your browser | [AbuseIPDB Terms of Use](https://www.abuseipdb.com/legal) | [AbuseIPDB Privacy Policy](https://www.abuseipdb.com/privacy) |
+| **AlienVault OTX** | [`otx`](architecture.md#connector-sdk) | Yes (IPv4, domain, URL, hashes, CVE) | Live API; pivot links | [OTX End-User Agreement (LevelBlue)](https://www.levelblue.com/legal/otx-eula-terms) | [LevelBlue Privacy Policy](https://www.levelblue.com/legal/privacy-policy) |
+| **VirusTotal** | [`virustotal`](architecture.md#connector-sdk) | No (registry shell; pivots and saved key today) | Pivot links; live API connector implemented but not enabled for live enrichment in extension today | [VirusTotal Terms of Service](https://support.virustotal.com/hc/en-us/articles/360016879500-Terms-of-Service) | [VirusTotal Privacy Policy](https://support.virustotal.com/hc/en-us/articles/360016879480-Privacy-Policy) |
+| **URLScan.io** | [`urlscan`](architecture.md#connector-sdk) | Yes (domain, URL) | Live API from the extension service worker (`GET /api/v1/search/`); pivot links open in your browser | [urlscan.io Terms of Service](https://urlscan.io/about/terms/) | [urlscan.io Privacy Policy](https://urlscan.io/about/privacy/) |
+| **GreyNoise** | [`greynoise`](architecture.md#connector-sdk) | Yes (IPv4) | Live API from the extension service worker (`GET /v3/community/{ip}`); pivot links open in your browser | [GreyNoise Terms of Use](https://www.greynoise.io/company/legal) | [GreyNoise Privacy Policy](https://www.greynoise.io/company/legal/privacy-policy) |
+| **Shodan** | [`shodan`](architecture.md#connector-sdk) | Yes (IPv4, domain) | Live API from the extension service worker (`GET /shodan/host/{ip}` or `GET /dns/domain/{domain}`); pivot links open in your browser | [Shodan Terms of Service](https://account.shodan.io/terms) | [Shodan Privacy Policy](https://account.shodan.io/privacy) |
+| **Google Safe Browsing** | [`google_safe_browsing`](architecture.md#connector-sdk) | No (registry shell; no live API shipped) | Future live API would use Google Cloud credentials under Google API terms | [Google Safe Browsing API Terms](https://developers.google.com/safe-browsing/v4/terms) · [Google APIs Terms of Service](https://developers.google.com/terms) | [Google Privacy Policy](https://policies.google.com/privacy) |
+| **Pulsedive** | [`pulsedive`](architecture.md#connector-sdk) | No (registry shell; pivots only today) | Pivot links | [Pulsedive Terms of Use](https://pulsedive.com/terms_of_use) | [Pulsedive Privacy Policy](https://pulsedive.com/privacy) |
+| **MalwareBazaar** | [`malwarebazaar`](architecture.md#connector-sdk) | No (registry shell; pivots only today) | Pivot links to abuse.ch | [MalwareBazaar Terms of Service](https://bazaar.abuse.ch/faq/#tos) (abuse.ch project) | [MalwareBazaar FAQ](https://bazaar.abuse.ch/faq/) (CC0 dataset terms) |
+| **Censys** | [`censys`](architecture.md#connector-sdk) | Yes (IPv4 only) | Live API from the extension service worker (`GET /api/v2/hosts/{ip}`); domain pivot links only for domain indicators | [Censys Terms of Service](https://censys.io/terms-of-service) | [Censys Privacy Policy](https://censys.io/privacy-policy) |
+| **ThreatFox** | [`threatfox`](architecture.md#connector-sdk) | No (registry shell; pivots only today) | Pivot links to abuse.ch | [ThreatFox API Terms of Use](https://threatfox.abuse.ch/api/) (includes abuse.ch fair-use terms) | [ThreatFox FAQ](https://threatfox.abuse.ch/faq/) |
+| **URLHaus** | [`urlhaus`](architecture.md#connector-sdk) | No (registry shell; pivots only today) | Pivot links to abuse.ch | [URLhaus API Terms of Use](https://urlhaus.abuse.ch/api/) (includes abuse.ch fair-use terms) | [URLhaus About](https://urlhaus.abuse.ch/about/) |
 
 **Live enrichment today:** **AbuseIPDB**, **OTX**, **URLScan.io**, **GreyNoise (community)**, **Shodan**, and **Censys (IPv4 only)** perform HTTPS API calls from the extension when enabled with your keys. Other rows apply to pivot navigation, saved keys that are not sent until live connectors ship, and organizational review before you enable future integrations.
 
@@ -242,6 +261,6 @@ Vendor URLs and policies change without notice. If a link breaks, search the ven
 
 ## Related documentation
 
-- [architecture.md](architecture.md) — MVP connector order, BYOK, parallel fetch, deferred sources
+- [architecture.md](architecture.md) — MVP connector order, BYOK, parallel fetch, [Connector SDK](architecture.md#connector-sdk) registry ids
 - [local-mode.md](local-mode.md) — local-first enrichment and quota expectations
 - [security-model.md](security-model.md) — credential handling and user responsibilities

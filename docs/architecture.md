@@ -154,6 +154,93 @@ Live enrichment sources for the initial release ship in the **fixed order** belo
 
 **Out of scope for the initial connector set** (static pivot links or later phases may reference them; do not treat as MVP live connectors without scope change): VirusTotal, Shodan, MISP, OpenCTI, TheHive, and other providers listed under enrichment philosophy in [Product-Vision.md](../Product-Vision.md).
 
+## Connector SDK
+
+Live enrichment sources register through a **connector registry SDK** inside the extension bundle. Each connector exposes a versioned `ConnectorDefinition` with capability metadata, rate-limit policy, and typed fetch/normalize hooks. The background worker is the only runtime entry point for live vendor calls—UI and content scripts send enrichment messages; they never call vendor APIs directly.
+
+**Design boundaries**
+
+| Boundary | Policy |
+|----------|--------|
+| **Bundled connectors only** | Connectors ship in the extension package and register at startup. There is no hosted connector marketplace and no dynamic loading of connector code from remote URLs. |
+| **Single dispatch path** | `enrichmentHandler.ts` routes every live source through `enrichRegisteredLiveConnector()` in `connectorRegistry.ts`. |
+| **Bring-your-own keys** | `ConnectorDefinition.fetch` resolves API keys from local extension storage via injectable context; Vera5 does not relay indicators through maintainer infrastructure. |
+| **IOC-only outbound requests** | Fetch implementations must send the sanitized indicator value (and required request metadata only) to hosts declared in `DECLARED_ENRICHMENT_API_HOSTS`. |
+| **Capability metadata** | Each source publishes `liveEnrichment`, `pivotOnly`, `requiresApiKey`, `supportsHealthCheck`, and `authorityTier` for Options, profile export, and future confidence scoring. |
+
+### Registry modules
+
+| Module | Role |
+|--------|------|
+| `extension/src/lib/enrichmentSourceRegistry.ts` | Canonical source ids, display order, live vs pivot-only flags, and per-source settings shape. |
+| `extension/src/lib/connectorDefinition.ts` | `ConnectorDefinition` contract, `enrichWithConnectorDefinition()`, fetch/normalize result types, and health-check helpers. |
+| `extension/src/lib/connectorRegistry.ts` | `CONNECTOR_DEFINITION_BUILDERS` map, lazy registry initialization, `enrichRegisteredLiveConnector()`, and capability metadata queries (`getConnectorCapabilityMetadata`, `listConnectorCapabilityMetadata`). |
+| `extension/src/lib/iocRequestBoundaries.ts` | IOC sanitization, declared HTTPS host allowlist, and shared `enrichmentFetch` wrapper. |
+| `extension/src/background/enrichmentHandler.ts` | Parallel multi-source orchestration, cache read/write, cooldown, and per-source skip rules. |
+
+### `ConnectorDefinition` contract
+
+Every live connector implements the same interface:
+
+| Field / method | Purpose |
+|----------------|---------|
+| `id` | Registry id matching `ENRICHMENT_SOURCE` in `enrichmentSourceRegistry.ts`. |
+| `supportedIocTypes` | Indicator types the connector accepts; registry rejects unsupported types before fetch. |
+| `rateLimitPolicy` | Request timeout, quota summary text, and rate-limit header hints for operator UX. |
+| `capabilities` | Flags validated against registry metadata at registration time. |
+| `fetch(ioc, context?)` | Vendor HTTPS call; returns `ConnectorFetchResult` with payload or typed error code. |
+| `normalize(payload, ioc)` | Maps vendor JSON to a display summary and optional tags for hover card and scoring. |
+| `healthCheck?(context?)` | Optional key-presence or lightweight reachability check for Options diagnostics. |
+
+Native implementations (AbuseIPDB, OTX, URLScan.io, GreyNoise, Shodan, Censys) export `create*ConnectorDefinition()` factories. Legacy enrich adapters can wrap existing clients with `createLegacyConnectorDefinition()` until fully migrated.
+
+### Registration flow
+
+1. Add the source id to `enrichmentSourceRegistry.ts` (order, labels, live/pivot flags, cache namespace).
+2. Implement `createYourConnectorDefinition()` under `extension/src/lib/`.
+3. Register a builder in `CONNECTOR_DEFINITION_BUILDERS` inside `connectorRegistry.ts`.
+4. Extend declared API hosts, manifest permissions, Options key fields, and unit tests.
+
+Step-by-step stub for private forks: [local-connector-stub.md](local-connector-stub.md). Maintainer implementation detail: [contributors/enrichment-connectors.md](contributors/enrichment-connectors.md).
+
+### Enrichment dispatch (sequence)
+
+When an analyst requests enrichment, enabled live sources run in parallel. Cache hits short-circuit vendor calls unless the request bypasses cache.
+
+```mermaid
+sequenceDiagram
+  participant UI as Popup or hover overlay
+  participant BG as Background worker
+  participant Handler as enrichmentHandler
+  participant Reg as connectorRegistry
+  participant Def as ConnectorDefinition
+  participant Store as chrome.storage.local
+  participant API as Vendor HTTPS API
+
+  UI->>BG: Enrich indicator message
+  BG->>Handler: enrich enabled live sources in parallel
+  loop Each enabled source
+    alt Valid cache entry
+      Handler->>Store: Read enrichment cache
+      Store-->>Handler: Cached payload
+    else Live fetch
+      Handler->>Reg: enrichRegisteredLiveConnector(sourceId, ioc)
+      Reg->>Def: fetch(ioc, context)
+      Def->>Store: Read API key (BYOK)
+      Def->>API: HTTPS request (IOC value only)
+      API-->>Def: Vendor JSON
+      Def-->>Reg: ConnectorFetchResult
+      Reg->>Def: normalize(payload, ioc)
+      Reg-->>Handler: EnrichmentSourceResult
+      Handler->>Store: Write cache entry and index
+    end
+  end
+  Handler-->>BG: Per-source Live, Cached, Error, or Skipped
+  BG-->>UI: Source-attributed badges and summaries
+```
+
+Storage schema migrations preserve connector enable maps and optional API keys; see [Storage schema migration and rollback](#storage-schema-migration-and-rollback) and Settings Backup export/import in Options.
+
 ## Initial release exclusions (frozen)
 
 The first shippable extension release is **browser-only enrichment**. The following are explicitly **out of scope** until a documented product revision expands the surface. Implementation, manifest permissions, and public docs must not imply these capabilities ship in the initial release.
@@ -201,6 +288,41 @@ The Vera5 browser extension uses **[Semantic Versioning 2.0.0](https://semver.or
 - Prefer git annotated tags `v{version}` (e.g. `v0.2.0`) on the commit that sets the version.
 - Record user-visible changes in `CHANGELOG.md` when that file exists; entries describe shipped capability only.
 - Do not encode build metadata in the version string (no `-beta` suffix in `package.json`; use release channels or tags for pre-releases if needed later).
+
+## Storage schema migration and rollback
+
+Vera5 stores extension settings, connector enable maps, and enrichment cache metadata in `chrome.storage.local`. When the storage schema version changes on extension update, the background service worker runs a migration before enrichment or options code reads the new shape.
+
+**Before each migration**, Vera5 exports a local pre-migration backup (`storageMigrationBackup`) containing:
+
+- Settings fields (including connector enable map and `storageSchemaVersion`)
+- Enrichment cache entries (when present)
+- Enrichment cache index (when present)
+
+The backup excludes nothing that was already in local storage; API keys remain in the snapshot if they were stored before the migration. The backup is overwritten on the next migration and is not uploaded anywhere.
+
+**Recommended rollback (analyst-facing)**
+
+1. Before installing an extension update, open **Options → Settings Backup** and **Export settings JSON**. Include API keys only if you will need live enrichment immediately after restore.
+2. If settings or enrichment behavior is wrong after an update, open **Options → Settings Backup** and **Import settings JSON**, choosing the file you exported in step 1.
+3. Reload the extension (or disable and re-enable it) so background scripts pick up the restored storage.
+
+**Automatic pre-migration snapshot**
+
+If you did not export manually, Vera5 retains the most recent pre-migration backup in local extension storage until the next schema migration runs. That snapshot uses the same settings payload shape as the Settings Backup export (without a separate file on disk).
+
+To roll back using the automatic snapshot without a manual export file, import settings derived from that backup through **Options → Settings Backup** after saving the recovery JSON from the stored backup document, or restore programmatically via the extension migration backup restore path used in recovery builds.
+
+**What rollback restores**
+
+| Restored | Notes |
+|----------|--------|
+| Settings and connector toggles | Full settings payload from before migration |
+| API keys | Restored when present in the backup snapshot |
+| Enrichment cache | Restored when the backup captured cache entries |
+| Cache index | Restored when the backup captured the pre-migration index |
+
+Rollback does not revert extension code—only local storage. If a bug is in the extension build itself, install the previous package version after restoring storage.
 
 ## Principles
 

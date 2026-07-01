@@ -13,6 +13,17 @@ import {
   MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS,
 } from "../lib/iocRequestBoundaries";
 
+const runStorageMigrationOnExtensionUpdate = vi.fn(async () => ({
+  migrated: false,
+  fromVersion: 4,
+  toVersion: 4,
+}));
+
+vi.mock("../lib/storageMigration", () => ({
+  runStorageMigrationOnExtensionUpdate: (...args: unknown[]) =>
+    runStorageMigrationOnExtensionUpdate(...args),
+}));
+
 const extensionRoot = join(
   fileURLToPath(new URL(".", import.meta.url)),
   "..",
@@ -174,6 +185,13 @@ describe("service worker scan-page command routing", () => {
     contextMenusRemoveAll.mockImplementation((callback?: () => void) => {
       callback?.();
     });
+    openOptionsPage.mockReset();
+    runStorageMigrationOnExtensionUpdate.mockReset();
+    runStorageMigrationOnExtensionUpdate.mockResolvedValue({
+      migrated: false,
+      fromVersion: 5,
+      toVersion: 5,
+    });
     tabsQuery.mockResolvedValue([{ id: 42 }]);
     tabsSendMessage.mockResolvedValue({ ok: true, payload: { count: 2 } });
 
@@ -277,6 +295,14 @@ describe("service worker scan-page command routing", () => {
       contexts: ["selection"],
     });
     expect(openOptionsPage).not.toHaveBeenCalled();
+    expect(runStorageMigrationOnExtensionUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs storage migration when the extension updates", () => {
+    expect(onInstalledCallback).toBeDefined();
+    runStorageMigrationOnExtensionUpdate.mockClear();
+    onInstalledCallback!({ reason: "update" });
+    expect(runStorageMigrationOnExtensionUpdate).toHaveBeenCalledTimes(1);
   });
 
   it("opens the options page on first install", async () => {

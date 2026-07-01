@@ -1,30 +1,13 @@
 import {
-  ABUSEIPDB_SOURCE_ID,
-  enrichWithAbuseIpdb,
-} from "../lib/abuseipdbConnector";
-import {
   cacheEnrichmentSourceResult,
   invalidateEnrichmentCacheForIoc,
   readCachedEnrichmentSourceResult,
 } from "../lib/cache";
+import {
+  ensureDefaultConnectorRegistry,
+  enrichRegisteredLiveConnector,
+} from "../lib/connectorRegistry";
 import { enrichWithConnectorShell } from "../lib/enrichmentConnectorShell";
-import { enrichWithOtx } from "../lib/otxConnector";
-import {
-  GREYNOISE_SOURCE_ID,
-  enrichWithGreynoise,
-} from "../lib/greynoiseConnector";
-import {
-  CENSYS_SOURCE_ID,
-  enrichWithCensys,
-} from "../lib/censysConnector";
-import {
-  SHODAN_SOURCE_ID,
-  enrichWithShodan,
-} from "../lib/shodanConnector";
-import {
-  URLSCAN_SOURCE_ID,
-  enrichWithUrlscan,
-} from "../lib/urlscanConnector";
 import {
   formatGlobalEnrichmentCooldownMessage,
   formatGlobalEnrichmentCooldownRetryHint,
@@ -72,6 +55,8 @@ import {
   getLocalBackendEnabled,
 } from "../lib/storage";
 
+ensureDefaultConnectorRegistry();
+
 function createGlobalCooldownSourceResult(
   sourceId: EnrichmentSourceId
 ): EnrichmentSourceResult {
@@ -87,28 +72,9 @@ async function fetchLiveSource(
   sourceId: EnrichmentSourceId,
   ioc: EnrichmentIoc
 ): Promise<EnrichmentSourceResult> {
-  if (sourceId === ABUSEIPDB_SOURCE_ID) {
-    return enrichWithAbuseIpdb(ioc);
-  }
-
-  if (sourceId === ENRICHMENT_SOURCE.OTX) {
-    return enrichWithOtx(ioc);
-  }
-
-  if (sourceId === URLSCAN_SOURCE_ID) {
-    return enrichWithUrlscan(ioc);
-  }
-
-  if (sourceId === GREYNOISE_SOURCE_ID) {
-    return enrichWithGreynoise(ioc);
-  }
-
-  if (sourceId === SHODAN_SOURCE_ID) {
-    return enrichWithShodan(ioc);
-  }
-
-  if (sourceId === CENSYS_SOURCE_ID) {
-    return enrichWithCensys(ioc);
+  const registeredResult = await enrichRegisteredLiveConnector(sourceId, ioc);
+  if (registeredResult) {
+    return registeredResult;
   }
 
   if (ENRICHMENT_SOURCE_DEFINITIONS[sourceId].liveConnector) {
@@ -218,7 +184,7 @@ async function enrichRequestedSource(
   const sourceId = message.sourceId;
   if (!sourceId) {
     return createErrorSourceResult({
-      sourceId: ABUSEIPDB_SOURCE_ID,
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
       errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
       errorMessage: "Unsupported enrichment source.",
     });
@@ -226,7 +192,7 @@ async function enrichRequestedSource(
 
   if (!isEnrichmentSourceId(sourceId)) {
     return createErrorSourceResult({
-      sourceId: ABUSEIPDB_SOURCE_ID,
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
       errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
       errorMessage: "Unsupported enrichment source.",
     });
@@ -349,7 +315,7 @@ async function enrichFromMessage(
   });
   if (!sanitized) {
     const invalid = createErrorSourceResult({
-      sourceId: ABUSEIPDB_SOURCE_ID,
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
       errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
       errorMessage: "Invalid indicator value for enrichment.",
     });

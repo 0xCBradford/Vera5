@@ -2,15 +2,21 @@ import {
   CONNECTOR_HEALTH_STATUS,
   ENRICHMENT_ERROR_CODE,
   buildRateLimitedEnrichmentError,
-  createErrorSourceResult,
-  createOkSourceResult,
-  createSkippedSourceResult,
   formatMissingKeyErrorMessage,
   type ConnectorHealthCheckResult,
   type EnrichmentConnector,
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import {
+  CONNECTOR_AUTHORITY_TIER,
+  enrichWithConnectorDefinition,
+  type ConnectorCapabilityFlags,
+  type ConnectorDefinition,
+  type ConnectorFetchContext,
+  type ConnectorFetchResult,
+  type ConnectorRateLimitPolicy,
+} from "./connectorDefinition";
 import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
 import { IOC_TYPE } from "./iocRegex";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
@@ -29,6 +35,28 @@ export const ABUSEIPDB_CHECK_API_URL =
   "https://api.abuseipdb.com/api/v2/check";
 
 export const DEFAULT_ABUSEIPDB_REQUEST_TIMEOUT_MS = 15_000;
+
+export const ABUSEIPDB_SUPPORTED_IOC_TYPES = [IOC_TYPE.IPV4] as const;
+
+export const DEFAULT_ABUSEIPDB_RATE_LIMIT_POLICY: ConnectorRateLimitPolicy = {
+  requestTimeoutMs: DEFAULT_ABUSEIPDB_REQUEST_TIMEOUT_MS,
+  quotaSummary:
+    "Typical free tier: 1,000 checks/day (resets 00:00 UTC). Confirm limits in your AbuseIPDB account.",
+  rateLimitHeaderHints: [
+    "Retry-After",
+    "X-RateLimit-Limit",
+    "X-RateLimit-Remaining",
+    "X-RateLimit-Reset",
+  ],
+};
+
+export const DEFAULT_ABUSEIPDB_CAPABILITY_FLAGS: ConnectorCapabilityFlags = {
+  liveEnrichment: true,
+  pivotOnly: false,
+  requiresApiKey: true,
+  supportsHealthCheck: true,
+  authorityTier: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
+};
 
 export type AbuseIpdbCheckData = {
   ipAddress?: string;
@@ -227,40 +255,46 @@ async function fetchAbuseIpdbCheck(
   }
 }
 
-export async function enrichWithAbuseIpdb(
+async function fetchAbuseIpdbConnectorPayload(
   ioc: EnrichmentIoc,
-  deps: AbuseIpdbConnectorDeps = {}
-): Promise<EnrichmentSourceResult> {
-  const resolveApiKey = deps.getApiKey ?? (() => getApiKey(ABUSEIPDB_SOURCE_ID));
-  const fetchImpl = deps.fetch ?? enrichmentFetch;
-  const timeoutMs = deps.timeoutMs ?? DEFAULT_ABUSEIPDB_REQUEST_TIMEOUT_MS;
+  context: ConnectorFetchContext = {}
+): Promise<ConnectorFetchResult> {
+  const resolveApiKey =
+    context.getApiKey ?? (() => getApiKey(ABUSEIPDB_SOURCE_ID));
+  const fetchImpl = context.fetch ?? enrichmentFetch;
+  const timeoutMs =
+    context.timeoutMs ?? DEFAULT_ABUSEIPDB_REQUEST_TIMEOUT_MS;
   const fetchedAt = new Date().toISOString();
 
   const sanitized = sanitizeEnrichmentIoc({ value: ioc.value, type: ioc.type });
   if (!sanitized) {
-    return createErrorSourceResult({
-      sourceId: ABUSEIPDB_SOURCE_ID,
+    return {
+      ok: false,
       errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
       errorMessage: "Invalid indicator value for enrichment.",
       fetchedAt,
-    });
+    };
   }
 
   if (sanitized.type !== IOC_TYPE.IPV4) {
-    return createSkippedSourceResult(
-      ABUSEIPDB_SOURCE_ID,
-      ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE,
-      "AbuseIPDB supports IPv4 addresses only."
-    );
+    return {
+      ok: false,
+      errorCode: ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE,
+      errorMessage: "AbuseIPDB supports IPv4 addresses only.",
+      fetchedAt,
+    };
   }
 
   const apiKey = (await resolveApiKey()).trim();
   if (!apiKey) {
-    return createSkippedSourceResult(
-      ABUSEIPDB_SOURCE_ID,
-      ENRICHMENT_ERROR_CODE.MISSING_KEY,
-      formatMissingKeyErrorMessage(ENRICHMENT_SOURCE_LABELS[ABUSEIPDB_SOURCE_ID])
-    );
+    return {
+      ok: false,
+      errorCode: ENRICHMENT_ERROR_CODE.MISSING_KEY,
+      errorMessage: formatMissingKeyErrorMessage(
+        ENRICHMENT_SOURCE_LABELS[ABUSEIPDB_SOURCE_ID]
+      ),
+      fetchedAt,
+    };
   }
 
   try {
@@ -277,57 +311,84 @@ export async function enrichWithAbuseIpdb(
           ENRICHMENT_SOURCE_LABELS[ABUSEIPDB_SOURCE_ID],
           response.headers
         );
-        return createErrorSourceResult({
-          sourceId: ABUSEIPDB_SOURCE_ID,
+        return {
+          ok: false,
           errorCode: mapped.errorCode,
           errorMessage: rateLimit.errorMessage,
-          retryHint: rateLimit.retryHint,
           fetchedAt,
-        });
+          retryHint: rateLimit.retryHint,
+        };
       }
-      const errorMessage = mapped.errorMessage;
-      return createErrorSourceResult({
-        sourceId: ABUSEIPDB_SOURCE_ID,
+      return {
+        ok: false,
         errorCode: mapped.errorCode,
-        errorMessage,
+        errorMessage: mapped.errorMessage,
         fetchedAt,
-      });
+      };
     }
 
     const payload: unknown = await response.json();
-    const normalized = normalizeAbuseIpdbCheckResponse(payload);
-    if (!normalized) {
-      return createErrorSourceResult({
-        sourceId: ABUSEIPDB_SOURCE_ID,
-        errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
-        errorMessage: "AbuseIPDB returned an unexpected response.",
-        fetchedAt,
-      });
-    }
-
-    return createOkSourceResult({
-      sourceId: ABUSEIPDB_SOURCE_ID,
-      summary: normalized.summary,
-      tags: normalized.tags,
+    return {
+      ok: true,
+      payload,
       fetchedAt,
       rawVendorJson: formatRedactedVendorJson(payload),
-    });
+    };
   } catch (error) {
     if (isAbortError(error)) {
-      return createErrorSourceResult({
-        sourceId: ABUSEIPDB_SOURCE_ID,
+      return {
+        ok: false,
         errorCode: ENRICHMENT_ERROR_CODE.TIMEOUT,
         errorMessage: "AbuseIPDB request timed out.",
         fetchedAt,
-      });
+      };
     }
-    return createErrorSourceResult({
-      sourceId: ABUSEIPDB_SOURCE_ID,
+    return {
+      ok: false,
       errorCode: ENRICHMENT_ERROR_CODE.NETWORK,
       errorMessage: "AbuseIPDB request failed.",
       fetchedAt,
-    });
+    };
   }
+}
+
+export function createAbuseIpdbConnectorDefinition(input?: {
+  rateLimitPolicy?: ConnectorRateLimitPolicy;
+  capabilities?: ConnectorCapabilityFlags;
+}): ConnectorDefinition {
+  return {
+    id: ABUSEIPDB_SOURCE_ID,
+    supportedIocTypes: ABUSEIPDB_SUPPORTED_IOC_TYPES,
+    rateLimitPolicy:
+      input?.rateLimitPolicy ?? DEFAULT_ABUSEIPDB_RATE_LIMIT_POLICY,
+    capabilities: input?.capabilities ?? DEFAULT_ABUSEIPDB_CAPABILITY_FLAGS,
+    fetch(ioc, context) {
+      return fetchAbuseIpdbConnectorPayload(ioc, context);
+    },
+    normalize(payload) {
+      return normalizeAbuseIpdbCheckResponse(payload);
+    },
+    async healthCheck(context) {
+      return checkAbuseIpdbHealth({
+        getApiKey: context?.getApiKey,
+      });
+    },
+  };
+}
+
+export async function enrichWithAbuseIpdb(
+  ioc: EnrichmentIoc,
+  deps: AbuseIpdbConnectorDeps = {}
+): Promise<EnrichmentSourceResult> {
+  return enrichWithConnectorDefinition(
+    createAbuseIpdbConnectorDefinition(),
+    ioc,
+    {
+      fetch: deps.fetch,
+      getApiKey: deps.getApiKey,
+      timeoutMs: deps.timeoutMs,
+    }
+  );
 }
 
 export async function checkAbuseIpdbHealth(

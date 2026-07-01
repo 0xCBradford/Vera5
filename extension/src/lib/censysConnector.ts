@@ -10,6 +10,13 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import {
+  CONNECTOR_AUTHORITY_TIER,
+  createLegacyConnectorDefinition,
+  type ConnectorCapabilityFlags,
+  type ConnectorDefinition,
+  type ConnectorRateLimitPolicy,
+} from "./connectorDefinition";
 import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
 import {
   formatMissingCensysCredentialsMessage,
@@ -20,7 +27,7 @@ import {
   mapCensysFieldsToUnifiedPresentation,
   type CensysUnifiedInput,
 } from "./enrichmentVendorNormalize";
-import { ENRICHMENT_SOURCE } from "./enrichmentSourceRegistry";
+import { ENRICHMENT_SOURCE, getEnrichmentSourceDefinition } from "./enrichmentSourceRegistry";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import { IOC_TYPE, type IocType } from "./iocRegex";
 import {
@@ -35,6 +42,21 @@ export const CENSYS_SOURCE_ID = ENRICHMENT_SOURCE.CENSYS;
 export const CENSYS_API_BASE_URL = "https://search.censys.io/api/v2";
 
 export const DEFAULT_CENSYS_REQUEST_TIMEOUT_MS = 15_000;
+
+export const DEFAULT_CENSYS_RATE_LIMIT_POLICY: ConnectorRateLimitPolicy = {
+  requestTimeoutMs: DEFAULT_CENSYS_REQUEST_TIMEOUT_MS,
+  quotaSummary:
+    "Plan-dependent monthly query quota on Search API accounts. Confirm limits in your Censys account.",
+  rateLimitHeaderHints: ["Retry-After"],
+};
+
+export const DEFAULT_CENSYS_CAPABILITY_FLAGS: ConnectorCapabilityFlags = {
+  liveEnrichment: true,
+  pivotOnly: false,
+  requiresApiKey: true,
+  supportsHealthCheck: true,
+  authorityTier: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
+};
 
 export const CENSYS_UNSUPPORTED_TYPE_MESSAGE =
   "Censys live enrichment supports IPv4 addresses only. Domain pivot links remain available.";
@@ -563,6 +585,21 @@ export async function checkCensysHealth(
     };
   }
   return { status: CONNECTOR_HEALTH_STATUS.OK };
+}
+
+export function createCensysConnectorDefinition(input?: {
+  rateLimitPolicy?: ConnectorRateLimitPolicy;
+  capabilities?: ConnectorCapabilityFlags;
+}): ConnectorDefinition {
+  const sourceDefinition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.CENSYS);
+  return createLegacyConnectorDefinition({
+    id: ENRICHMENT_SOURCE.CENSYS,
+    supportedIocTypes: sourceDefinition.supportedIndicatorTypes,
+    rateLimitPolicy: input?.rateLimitPolicy ?? DEFAULT_CENSYS_RATE_LIMIT_POLICY,
+    capabilities: input?.capabilities ?? DEFAULT_CENSYS_CAPABILITY_FLAGS,
+    enrich: (ioc) => enrichWithCensys(ioc),
+    healthCheck: () => checkCensysHealth(),
+  });
 }
 
 export function createCensysConnector(

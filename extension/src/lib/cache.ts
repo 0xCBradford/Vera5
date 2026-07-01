@@ -4,8 +4,10 @@ import {
   type EnrichmentSourceResult,
 } from "./enrichment";
 import type { EnrichmentSourceId } from "./hoverCardEnrichment";
+import { isEnrichmentSourceId } from "./enrichmentSourceRegistry";
 import {
   getVera5Settings,
+  SETTINGS_SCHEMA_VERSION,
   type EnrichmentSourceCacheTtlRecord,
 } from "./storage";
 
@@ -13,6 +15,10 @@ export const STORAGE_KEY_ENRICHMENT_CACHE_CLEARED_AT =
   "enrichmentCacheClearedAt";
 
 export const STORAGE_KEY_ENRICHMENT_CACHE = "enrichmentCache";
+
+export const STORAGE_KEY_ENRICHMENT_CACHE_INDEX = "enrichmentCacheIndex";
+
+export const ENRICHMENT_CACHE_INDEX_SCHEMA_VERSION = 1;
 
 export const DEFAULT_MAX_ENRICHMENT_CACHE_ENTRIES = 500;
 
@@ -201,6 +207,128 @@ export function parseEnrichmentCacheKey(
     return null;
   }
   return { iocValue, sourceId };
+}
+
+export type EnrichmentCacheIndexRecord = Partial<
+  Record<EnrichmentSourceId, readonly string[]>
+>;
+
+export type EnrichmentCacheIndexDocument = {
+  indexSchemaVersion: number;
+  bySourceId: EnrichmentCacheIndexRecord;
+};
+
+export function buildEnrichmentCacheIndex(
+  cache: EnrichmentCacheRecord
+): EnrichmentCacheIndexRecord {
+  const index: Partial<Record<EnrichmentSourceId, string[]>> = {};
+  for (const cacheKey of Object.keys(cache)) {
+    const parsed = parseEnrichmentCacheKey(cacheKey);
+    if (!parsed || !isEnrichmentSourceId(parsed.sourceId)) {
+      continue;
+    }
+    const sourceId = parsed.sourceId;
+    const bucket = index[sourceId] ?? [];
+    bucket.push(cacheKey);
+    index[sourceId] = bucket;
+  }
+  return Object.fromEntries(
+    Object.entries(index).map(([sourceId, cacheKeys]) => [
+      sourceId,
+      Object.freeze([...cacheKeys]),
+    ])
+  );
+}
+
+export function buildEnrichmentCacheIndexDocument(
+  cache: EnrichmentCacheRecord
+): EnrichmentCacheIndexDocument {
+  return {
+    indexSchemaVersion: ENRICHMENT_CACHE_INDEX_SCHEMA_VERSION,
+    bySourceId: buildEnrichmentCacheIndex(cache),
+  };
+}
+
+export function isEnrichmentCacheIndexDocument(
+  value: unknown
+): value is EnrichmentCacheIndexDocument {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.indexSchemaVersion !== "number" ||
+    !Number.isFinite(record.indexSchemaVersion)
+  ) {
+    return false;
+  }
+  if (
+    record.bySourceId === null ||
+    typeof record.bySourceId !== "object" ||
+    Array.isArray(record.bySourceId)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+export function migrateEnrichmentCacheRecord(cache: EnrichmentCacheRecord): {
+  cache: EnrichmentCacheRecord;
+  index: EnrichmentCacheIndexDocument;
+} {
+  const next = createEmptyEnrichmentCache();
+  for (const [cacheKey, entry] of Object.entries(cache)) {
+    const parsed = parseEnrichmentCacheKey(cacheKey);
+    if (!parsed || !isEnrichmentSourceId(parsed.sourceId)) {
+      continue;
+    }
+    if (
+      typeof entry.fetchedAt !== "number" ||
+      !Number.isFinite(entry.fetchedAt) ||
+      !("payload" in entry)
+    ) {
+      continue;
+    }
+    next[cacheKey] = entry;
+  }
+  return {
+    cache: next,
+    index: buildEnrichmentCacheIndexDocument(next),
+  };
+}
+
+export async function needsEnrichmentCacheIndexMigration(
+  storageSchemaVersion: number
+): Promise<boolean> {
+  if (storageSchemaVersion < SETTINGS_SCHEMA_VERSION) {
+    return true;
+  }
+  const result = await chrome.storage.local.get(
+    STORAGE_KEY_ENRICHMENT_CACHE_INDEX
+  );
+  return !isEnrichmentCacheIndexDocument(
+    result[STORAGE_KEY_ENRICHMENT_CACHE_INDEX]
+  );
+}
+
+export async function migrateEnrichmentCacheIndexStorage(): Promise<boolean> {
+  const result = await chrome.storage.local.get(STORAGE_KEY_ENRICHMENT_CACHE);
+  const { cache, index } = migrateEnrichmentCacheRecord(
+    normalizeEnrichmentCache(result[STORAGE_KEY_ENRICHMENT_CACHE])
+  );
+  await chrome.storage.local.set({
+    [STORAGE_KEY_ENRICHMENT_CACHE_INDEX]: index,
+  });
+  if (countEnrichmentCacheEntries(cache) === 0) {
+    if (typeof chrome.storage.local.remove === "function") {
+      await chrome.storage.local.remove(STORAGE_KEY_ENRICHMENT_CACHE);
+    }
+    return true;
+  }
+  await chrome.storage.local.set({
+    [STORAGE_KEY_ENRICHMENT_CACHE]: cache,
+  });
+  return true;
 }
 
 export function enrichmentCacheEntryAgeMs(

@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
 import type { EnrichmentCacheRecord } from "./cache";
 import {
+  buildEnrichmentCacheIndex,
+  buildEnrichmentCacheIndexDocument,
+  migrateEnrichmentCacheRecord,
   buildEnrichmentCacheKey,
   cacheEnrichmentSourceResult,
   clearEnrichmentCache,
@@ -156,6 +159,39 @@ describe("enrichment cache storage", () => {
         payload: { summary: "otx" },
       },
     });
+  });
+});
+
+describe("enrichment cache index", () => {
+  it("builds a per-source cache key index", () => {
+    const cache: EnrichmentCacheRecord = {
+      "8.8.8.8|abuseipdb": { fetchedAt: 1, payload: {} },
+      "8.8.8.8|otx": { fetchedAt: 2, payload: {} },
+      "1.1.1.1|abuseipdb": { fetchedAt: 3, payload: {} },
+    };
+
+    expect(buildEnrichmentCacheIndex(cache)).toEqual({
+      abuseipdb: ["8.8.8.8|abuseipdb", "1.1.1.1|abuseipdb"],
+      otx: ["8.8.8.8|otx"],
+    });
+    expect(buildEnrichmentCacheIndexDocument(cache)).toEqual({
+      indexSchemaVersion: 1,
+      bySourceId: {
+        abuseipdb: ["8.8.8.8|abuseipdb", "1.1.1.1|abuseipdb"],
+        otx: ["8.8.8.8|otx"],
+      },
+    });
+  });
+
+  it("drops invalid cache keys during migration rebuild", () => {
+    const { cache, index } = migrateEnrichmentCacheRecord({
+      "8.8.8.8|abuseipdb": { fetchedAt: 1, payload: { ok: true } },
+      invalid: { fetchedAt: 1, payload: { ok: true } },
+      "8.8.8.8|not_a_connector": { fetchedAt: 1, payload: { ok: true } },
+    });
+
+    expect(Object.keys(cache)).toEqual(["8.8.8.8|abuseipdb"]);
+    expect(index.bySourceId.abuseipdb).toEqual(["8.8.8.8|abuseipdb"]);
   });
 });
 

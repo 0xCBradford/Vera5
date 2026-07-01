@@ -11,12 +11,19 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import {
+  CONNECTOR_AUTHORITY_TIER,
+  createLegacyConnectorDefinition,
+  type ConnectorCapabilityFlags,
+  type ConnectorDefinition,
+  type ConnectorRateLimitPolicy,
+} from "./connectorDefinition";
 import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
 import {
   collectUrlscanThreatTags,
   mapUrlscanFieldsToUnifiedPresentation,
 } from "./enrichmentVendorNormalize";
-import { ENRICHMENT_SOURCE, enrichmentSourceSupportsIocType } from "./enrichmentSourceRegistry";
+import { ENRICHMENT_SOURCE, enrichmentSourceSupportsIocType, getEnrichmentSourceDefinition } from "./enrichmentSourceRegistry";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import { IOC_TYPE, type IocType } from "./iocRegex";
 import {
@@ -32,6 +39,21 @@ export const URLSCAN_SOURCE_ID = "urlscan" as const;
 export const URLSCAN_SEARCH_API_URL = "https://urlscan.io/api/v1/search/";
 
 export const DEFAULT_URLSCAN_REQUEST_TIMEOUT_MS = 15_000;
+
+export const DEFAULT_URLSCAN_RATE_LIMIT_POLICY: ConnectorRateLimitPolicy = {
+  requestTimeoutMs: DEFAULT_URLSCAN_REQUEST_TIMEOUT_MS,
+  quotaSummary:
+    "Per-action minute, hour, and day quotas vary by account (day resets midnight UTC). Confirm limits in your URLScan.io account or via GET /api/v1/quotas.",
+  rateLimitHeaderHints: ["X-Rate-Limit-Limit", "X-Rate-Limit-Remaining"],
+};
+
+export const DEFAULT_URLSCAN_CAPABILITY_FLAGS: ConnectorCapabilityFlags = {
+  liveEnrichment: true,
+  pivotOnly: false,
+  requiresApiKey: true,
+  supportsHealthCheck: true,
+  authorityTier: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
+};
 
 export const URLSCAN_SEARCH_RESULT_SIZE = 5;
 
@@ -433,6 +455,24 @@ export async function checkUrlscanHealth(
     };
   }
   return { status: CONNECTOR_HEALTH_STATUS.OK };
+}
+
+export function createUrlscanConnectorDefinition(input?: {
+  rateLimitPolicy?: ConnectorRateLimitPolicy;
+  capabilities?: ConnectorCapabilityFlags;
+}): ConnectorDefinition {
+  const sourceDefinition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.URLSCAN);
+  return createLegacyConnectorDefinition({
+    id: ENRICHMENT_SOURCE.URLSCAN,
+    supportedIocTypes: sourceDefinition.supportedIndicatorTypes,
+    rateLimitPolicy: input?.rateLimitPolicy ?? DEFAULT_URLSCAN_RATE_LIMIT_POLICY,
+    capabilities: input?.capabilities ?? DEFAULT_URLSCAN_CAPABILITY_FLAGS,
+    enrich: (ioc) => enrichWithUrlscan(ioc),
+    healthCheck: (context) =>
+      checkUrlscanHealth({
+        getApiKey: context?.getApiKey,
+      }),
+  });
 }
 
 export function createUrlscanConnector(

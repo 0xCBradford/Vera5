@@ -7,9 +7,14 @@ import {
   setEnrichmentSourceEnabled,
   setExtensionEnabled,
   setManualOnlyMode,
+  SETTINGS_SCHEMA_VERSION,
   STORAGE_KEY_API_KEYS,
   STORAGE_KEY_AUTO_SCAN_ENABLED,
+  STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
+  STORAGE_KEY_EXTENSION_ENABLED,
   STORAGE_KEY_MANUAL_ONLY_MODE,
+  STORAGE_KEY_SCHEMA_VERSION,
+  STORAGE_KEY_STORAGE_SCHEMA_VERSION,
 } from "./storage";
 import {
   buildVera5SettingsExportDocument,
@@ -21,6 +26,8 @@ import {
   serializeVera5SettingsExport,
   SettingsImportError,
 } from "./settingsExport";
+import { ENRICHMENT_SOURCE, ENRICHMENT_SOURCE_ORDER } from "./enrichmentSourceRegistry";
+import { runStorageMigrationOnExtensionUpdate } from "./storageMigration";
 import {
   TEST_FIXTURE_CURRENT_API_KEY,
   TEST_FIXTURE_IMPORTED_API_KEY,
@@ -47,6 +54,13 @@ function stubChromeStorage(store: Record<string, unknown>): void {
         },
         set: (items: Record<string, unknown>) => {
           Object.assign(store, items);
+          return Promise.resolve();
+        },
+        remove: (keys: string | string[]) => {
+          const keyList = Array.isArray(keys) ? keys : [keys];
+          for (const key of keyList) {
+            delete store[key];
+          }
           return Promise.resolve();
         },
       },
@@ -214,5 +228,102 @@ describe("settings export storage integration", () => {
       abuseipdb: "export-round-trip",
       otx: "otx-export-round-trip",
     });
+  });
+});
+
+describe("settings export/import migration round-trip", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("preserves migrated schema v5 settings through export and import", async () => {
+    store[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 4;
+    store[STORAGE_KEY_EXTENSION_ENABLED] = false;
+    store[STORAGE_KEY_AUTO_SCAN_ENABLED] = true;
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED] = {
+      abuseipdb: true,
+      otx: false,
+    };
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: "migrated-export-key",
+      otx: "migrated-otx-key",
+    };
+
+    const migration = await runStorageMigrationOnExtensionUpdate();
+    expect(migration.migrated).toBe(true);
+    expect(migration.toVersion).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(store[STORAGE_KEY_STORAGE_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+
+    const afterMigration = await getVera5Settings();
+    const exportJson = await exportVera5SettingsJson(true);
+    const exported = JSON.parse(exportJson) as {
+      settings: Record<string, unknown>;
+    };
+
+    expect(exported.settings.storageSchemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(exported.settings.settingsSchemaVersion).toBeUndefined();
+
+    await setExtensionEnabled(true);
+    await setAutoScanEnabled(false);
+    await setManualOnlyMode(true);
+    await setEnrichmentSourceEnabled("abuseipdb", false);
+    await setEnrichmentSourceEnabled("otx", true);
+    await setApiKey("abuseipdb", "");
+    await setApiKey("otx", "");
+
+    await importVera5SettingsJson(exportJson);
+    const afterImport = await getVera5Settings();
+
+    expect(afterImport.storageSchemaVersion).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(afterImport.extensionEnabled).toBe(afterMigration.extensionEnabled);
+    expect(afterImport.autoScanEnabled).toBe(afterMigration.autoScanEnabled);
+    expect(afterImport.enrichmentSourceEnabled).toEqual(
+      afterMigration.enrichmentSourceEnabled
+    );
+    expect(afterImport.apiKeys).toEqual(afterMigration.apiKeys);
+    for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
+      expect(typeof afterImport.enrichmentSourceEnabled[sourceId]).toBe("boolean");
+    }
+    expect(afterImport.enrichmentSourceEnabled[ENRICHMENT_SOURCE.OTX]).toBe(false);
+  });
+
+  it("preserves settings exported after legacy settingsSchemaVersion migration", async () => {
+    store[STORAGE_KEY_SCHEMA_VERSION] = 3;
+    store[STORAGE_KEY_MANUAL_ONLY_MODE] = true;
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED] = {
+      abuseipdb: false,
+      otx: true,
+    };
+    store[STORAGE_KEY_API_KEYS] = {
+      otx: "legacy-migrate-otx-key",
+    };
+
+    const migration = await runStorageMigrationOnExtensionUpdate();
+    expect(migration.migrated).toBe(true);
+    expect(store[STORAGE_KEY_SCHEMA_VERSION]).toBeUndefined();
+    expect(store[STORAGE_KEY_STORAGE_SCHEMA_VERSION]).toBe(SETTINGS_SCHEMA_VERSION);
+
+    const afterMigration = await getVera5Settings();
+    const exportJson = await exportVera5SettingsJson(true);
+
+    await setManualOnlyMode(false);
+    await setEnrichmentSourceEnabled("otx", false);
+    await setApiKey("otx", "");
+
+    await importVera5SettingsJson(exportJson);
+    const afterImport = await getVera5Settings();
+
+    expect(afterImport.manualOnlyMode).toBe(afterMigration.manualOnlyMode);
+    expect(afterImport.enrichmentSourceEnabled.otx).toBe(
+      afterMigration.enrichmentSourceEnabled.otx
+    );
+    expect(afterImport.apiKeys.otx).toBe("legacy-migrate-otx-key");
   });
 });
