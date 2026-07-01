@@ -4,14 +4,19 @@
 import { describe, expect, it } from "vitest";
 import { IOC_TYPE } from "../lib/iocRegex";
 import {
+  applyAttributeDetectionProvenance,
+  buildAttributeDetectionSourceTextHint,
   buildIocDedupeKey,
   collectAllowlistedAttributeValues,
+  collectAllowlistedAttributeValuesWithProfile,
+  DEFAULT_MAX_ATTRIBUTE_NODES_PER_SCAN,
   getAllowlistedAttributeValuesForElement,
   getAttributeHrefAllowlistContract,
   isAllowlistedAttributeName,
   isElementEligibleForAttributeRead,
   isElementHiddenForAttributeExtract,
   mergeVisibleTextAndAttributeIocMatches,
+  resolveMaxAttributeNodesPerScan,
   scanAllowlistedAttributesForIocs,
   scanAllowlistedAttributesForIocsWithProfile,
   shouldRejectElementSubtreeForAttributeExtract,
@@ -199,7 +204,7 @@ describe("attributeHrefExtractor IOC detection", () => {
     `);
 
     const { matches, profile } = scanAllowlistedAttributesForIocsWithProfile(root);
-    expect(profile.attributesScanned).toBeGreaterThanOrEqual(3);
+    expect(profile.attributeNodesScanned).toBeGreaterThanOrEqual(3);
     expect(hasAttributeMatch(matches, IOC_TYPE.URL, "https://malware.example.com/payload", "href")).toBe(
       true
     );
@@ -226,6 +231,119 @@ describe("attributeHrefExtractor IOC detection", () => {
         [IOC_TYPE.URL, IOC_TYPE.DOMAIN, IOC_TYPE.IPV4].includes(match.type as typeof IOC_TYPE.URL)
       )
     ).toBe(false);
+  });
+});
+
+describe("attributeHrefExtractor provenance", () => {
+  it("builds source hints with attribute name and element tag", () => {
+    const anchor = document.createElement("a");
+    expect(
+      buildAttributeDetectionSourceTextHint(
+        anchor,
+        "href",
+        "https://evil.example.com/path"
+      )
+    ).toBe('href on <a> element: https://evil.example.com/path');
+  });
+
+  it("marks attribute-sourced matches with the allowlisted attribute rule id", () => {
+    const anchor = document.createElement("a");
+    anchor.setAttribute("href", "https://evil.example.com/path");
+    const root = mount(`<a href="https://evil.example.com/path">label</a>`);
+    const matches = scanAllowlistedAttributesForIocs(root);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]?.ruleId).toBe("ioc.attribute.allowlisted");
+    expect(matches[0]?.sourceTextHint).toBe(
+      "href on <a> element: https://evil.example.com/path"
+    );
+    expect(matches[0]?.attributeName).toBe("href");
+  });
+
+  it("preserves defanged display values on attribute provenance", () => {
+    const root = mount(
+      `<span data-href="hxxps://defanged[.]example[.]com/path"></span>`
+    );
+    const matches = scanAllowlistedAttributesForIocs(root);
+    expect(matches[0]?.ruleId).toBe("ioc.attribute.allowlisted");
+    expect(matches[0]?.sourceTextHint).toContain("data-href on <span> element:");
+    expect(matches[0]?.displayValue).toBe("hxxps://defanged[.]example[.]com/path");
+    expect(matches[0]?.value).toBe("https://defanged.example.com/path");
+  });
+
+  it("applies attribute provenance without mutating unrelated match fields", () => {
+    const img = document.createElement("img");
+    const provenance = applyAttributeDetectionProvenance(
+      {
+        type: IOC_TYPE.URL,
+        value: "https://cdn.example.com/logo.png",
+        start: 0,
+        end: 32,
+        ruleId: "ioc.regex.url",
+        sourceTextHint: "https://cdn.example.com/logo.png",
+      },
+      img,
+      "src",
+      "https://cdn.example.com/logo.png"
+    );
+    expect(provenance.ruleId).toBe("ioc.attribute.allowlisted");
+    expect(provenance.sourceTextHint).toBe(
+      "src on <img> element: https://cdn.example.com/logo.png"
+    );
+    expect(provenance.value).toBe("https://cdn.example.com/logo.png");
+  });
+});
+
+describe("attributeHrefExtractor scan limits", () => {
+  it("defaults max attribute nodes per scan", () => {
+    expect(resolveMaxAttributeNodesPerScan()).toBe(
+      DEFAULT_MAX_ATTRIBUTE_NODES_PER_SCAN
+    );
+    expect(DEFAULT_MAX_ATTRIBUTE_NODES_PER_SCAN).toBeGreaterThan(0);
+  });
+
+  it("caps allowlisted attribute values collected per invocation", () => {
+    const anchors = Array.from(
+      { length: 12 },
+      (_, index) =>
+        `<a href="https://cap-${index}.example.com/path">link ${index}</a>`
+    ).join("");
+    const root = mount(anchors);
+    const capped = collectAllowlistedAttributeValuesWithProfile(root, {
+      maxAttributeNodes: 3,
+    });
+    expect(capped.values).toHaveLength(3);
+    expect(capped.attributeNodesScanned).toBe(3);
+    expect(capped.attributeNodeCap).toBe(3);
+    expect(capped.capReached).toBe(true);
+  });
+
+  it("does not report capReached when all attribute values fit", () => {
+    const root = mount(`
+      <a href="https://one.example.com">one</a>
+      <img src="https://two.example.com/x.png" />
+    `);
+    const result = collectAllowlistedAttributeValuesWithProfile(root, {
+      maxAttributeNodes: 10,
+    });
+    expect(result.values).toHaveLength(2);
+    expect(result.capReached).toBe(false);
+  });
+
+  it("applies the attribute cap during IOC scan profile reporting", () => {
+    const anchors = Array.from(
+      { length: 8 },
+      (_, index) =>
+        `<a href="https://scan-cap-${index}.example.com/path">x</a>`
+    ).join("");
+    const root = mount(anchors);
+    const { matches, profile } = scanAllowlistedAttributesForIocsWithProfile(
+      root,
+      { maxAttributeNodes: 2 }
+    );
+    expect(profile.attributeNodesScanned).toBe(2);
+    expect(profile.attributeNodeCap).toBe(2);
+    expect(profile.capReached).toBe(true);
+    expect(matches).toHaveLength(2);
   });
 });
 

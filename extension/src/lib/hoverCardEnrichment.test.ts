@@ -990,6 +990,23 @@ describe("why detected view model", () => {
     expect(cidrView?.typeLabel).toBe("IPv4 CIDR");
     expect(cidrView?.reason).toBe("Matched an IPv4 CIDR network block.");
   });
+
+  it("builds Why detected rows for allowlisted attribute matches", () => {
+    const view = buildWhyDetectedView({
+      type: IOC_TYPE.URL,
+      ruleId: IOC_RULE_ID.ATTRIBUTE,
+      sourceTextHint:
+        "href on <a> element: https://attribute-only.example.com/path",
+    });
+    expect(view).toEqual({
+      typeLabel: "URL",
+      reason:
+        "Matched an allowlisted link or attribute value on a visible page element.",
+      sourceTextHint:
+        "href on <a> element: https://attribute-only.example.com/path",
+      ignoredOverlaps: [],
+    });
+  });
 });
 
 describe("indicator value presentation", () => {

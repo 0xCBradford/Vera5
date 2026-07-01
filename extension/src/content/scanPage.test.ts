@@ -1,6 +1,9 @@
 /**
  * @vitest-environment happy-dom
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MESSAGE, scanPageMessage, scanSelectionMessage } from "../lib/messages";
 import { CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED } from "./highlightStorage";
@@ -21,6 +24,13 @@ import {
 } from "./scanPage";
 import { IOC_HIGHLIGHT_CLASS } from "./highlighter";
 import { scanTextNodesForIocs, scanTextNodesForIocsWithProfile } from "./detector";
+import { DEFAULT_MAX_ATTRIBUTE_NODES_PER_SCAN } from "./attributeHrefExtractor";
+
+const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
+
+function loadFixture(name: string): string {
+  return readFileSync(join(repoRoot, "examples", name), "utf8");
+}
 
 function mountPage(html: string): HTMLDivElement {
   const root = document.createElement("div");
@@ -315,6 +325,73 @@ describe("handleScanPageRequest", () => {
         payload: expect.objectContaining({ count: 0 }),
       })
     );
+  });
+
+  it("reports attribute node cap fields when attribute extraction is enabled", async () => {
+    store[CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED] = true;
+    const anchors = Array.from(
+      { length: 6 },
+      (_, index) =>
+        `<a href="https://profile-cap-${index}.example.com/path">x</a>`
+    ).join("");
+    const root = mountPage(anchors);
+    const response = await handleScanPageRequest(root);
+    expect(response).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({
+          count: 6,
+          profile: expect.objectContaining({
+            attributeNodesScanned: 6,
+            attributeNodeCap: expect.any(Number),
+            attributeCapReached: false,
+          }),
+        }),
+      })
+    );
+  });
+
+  it(
+    "reports attribute cap reached on sample-large-attribute-dom.html fixture",
+    async () => {
+      store[CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED] = true;
+      const root = mountPage(loadFixture("sample-large-attribute-dom.html"));
+      const response = await handleScanPageRequest(root);
+      expect(response).toEqual(
+        expect.objectContaining({
+          ok: true,
+          payload: expect.objectContaining({
+            count: 0,
+            profile: expect.objectContaining({
+              attributeNodesScanned: DEFAULT_MAX_ATTRIBUTE_NODES_PER_SCAN,
+              attributeNodeCap: DEFAULT_MAX_ATTRIBUTE_NODES_PER_SCAN,
+              attributeCapReached: true,
+              capReached: false,
+            }),
+          }),
+        })
+      );
+    },
+    15000
+  );
+
+  it("persists attribute provenance on snapshot entries when extraction is enabled", async () => {
+    store[CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED] = true;
+    const root = mountPage(
+      `<p>no visible url</p><a href="https://attribute-only.example.com/path">label</a>`
+    );
+    await handleScanPageRequest(root);
+
+    const message = sendMessage.mock.calls[0]?.[0];
+    expect(message.snapshot.entries).toEqual([
+      expect.objectContaining({
+        type: "url",
+        value: "https://attribute-only.example.com/path",
+        ruleId: "ioc.attribute.allowlisted",
+        sourceTextHint:
+          "href on <a> element: https://attribute-only.example.com/path",
+      }),
+    ]);
   });
 });
 

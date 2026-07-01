@@ -1,4 +1,5 @@
 import type { IocType } from "../lib/iocRegex";
+import { IOC_RULE_ID } from "../lib/iocRegex";
 import {
   detectIocsInText,
   resolveMaxIocsPerScan,
@@ -24,7 +25,9 @@ export type ScannableAttributeValue = {
 };
 
 export type AttributeHrefScanProfile = {
-  attributesScanned: number;
+  attributeNodesScanned: number;
+  attributeNodeCap: number;
+  capReached: boolean;
   iocCount: number;
   iocCap: number;
   iocCapReached: boolean;
@@ -67,6 +70,56 @@ const REJECT_SUBTREE_TAGS = new Set([
 ]);
 
 const HEAD_METADATA_TAGS = new Set(["meta", "title"]);
+
+export const DEFAULT_MAX_ATTRIBUTE_NODES_PER_SCAN = 1000;
+
+export function resolveMaxAttributeNodesPerScan(
+  options: { maxAttributeNodes?: number } = {}
+): number {
+  const limit = options.maxAttributeNodes ?? DEFAULT_MAX_ATTRIBUTE_NODES_PER_SCAN;
+  if (!Number.isFinite(limit) || limit < 1) {
+    return DEFAULT_MAX_ATTRIBUTE_NODES_PER_SCAN;
+  }
+  return Math.floor(limit);
+}
+
+const ATTRIBUTE_SOURCE_TEXT_HINT_MAX_LENGTH = 80;
+
+export function buildAttributeDetectionSourceTextHint(
+  element: Element,
+  attributeName: string,
+  attributeValue: string
+): string {
+  const tag = element.tagName.toLowerCase();
+  const normalizedValue =
+    attributeValue.length > ATTRIBUTE_SOURCE_TEXT_HINT_MAX_LENGTH
+      ? `${attributeValue.slice(0, ATTRIBUTE_SOURCE_TEXT_HINT_MAX_LENGTH - 3)}...`
+      : attributeValue;
+  return `${attributeName} on <${tag}> element: ${normalizedValue}`;
+}
+
+export function applyAttributeDetectionProvenance(
+  match: DetectedIoc,
+  element: Element,
+  attributeName: string,
+  attributeValue: string
+): DetectedIoc {
+  return {
+    ...match,
+    ruleId: IOC_RULE_ID.ATTRIBUTE,
+    sourceTextHint: buildAttributeDetectionSourceTextHint(
+      element,
+      attributeName,
+      attributeValue
+    ),
+  };
+}
+
+export type AttributeValueCollectionProfile = {
+  attributeNodesScanned: number;
+  attributeNodeCap: number;
+  capReached: boolean;
+};
 
 export function isAllowlistedAttributeName(attributeName: string): boolean {
   const normalized = attributeName.toLowerCase();
@@ -224,23 +277,62 @@ function createAttributeExtractTreeWalkerFilter(
 
 export function collectAllowlistedAttributeValues(
   root: Node = document.body,
-  options: TextWalkerSkipOptions = {}
+  options: TextWalkerSkipOptions & { maxAttributeNodes?: number } = {}
 ): ScannableAttributeValue[] {
+  return collectAllowlistedAttributeValuesWithProfile(root, options).values;
+}
+
+function hasRemainingScannableAttributeValues(walker: TreeWalker): boolean {
+  let current = walker.nextNode();
+  while (current) {
+    if (
+      getAllowlistedAttributeValuesForElement(current as Element).length > 0
+    ) {
+      return true;
+    }
+    current = walker.nextNode();
+  }
+  return false;
+}
+
+export function collectAllowlistedAttributeValuesWithProfile(
+  root: Node = document.body,
+  options: TextWalkerSkipOptions & { maxAttributeNodes?: number } = {}
+): AttributeValueCollectionProfile & { values: ScannableAttributeValue[] } {
+  const maxAttributeNodes = resolveMaxAttributeNodesPerScan(options);
   const ownerDocument = root.ownerDocument ?? document;
   const walker = ownerDocument.createTreeWalker(
     root,
     NodeFilter.SHOW_ELEMENT,
     createAttributeExtractTreeWalkerFilter(root, options)
   );
-  const collected: ScannableAttributeValue[] = [];
+  const values: ScannableAttributeValue[] = [];
+  let capReached = false;
   let current = walker.nextNode();
+
   while (current) {
-    collected.push(
-      ...getAllowlistedAttributeValuesForElement(current as Element)
+    const elementValues = getAllowlistedAttributeValuesForElement(
+      current as Element
     );
+    for (const value of elementValues) {
+      values.push(value);
+      if (values.length >= maxAttributeNodes) {
+        capReached = hasRemainingScannableAttributeValues(walker);
+        break;
+      }
+    }
+    if (capReached) {
+      break;
+    }
     current = walker.nextNode();
   }
-  return collected;
+
+  return {
+    values,
+    attributeNodesScanned: values.length,
+    attributeNodeCap: maxAttributeNodes,
+    capReached,
+  };
 }
 
 export function scanAllowlistedAttributesForIocs(
@@ -257,11 +349,15 @@ export function scanAllowlistedAttributesForIocsWithProfile(
   const startedAt = typeof performance !== "undefined" ? performance.now() : 0;
   const iocOptions = options.ioc ?? {};
   const maxIocs = resolveMaxIocsPerScan(options);
-  const attributeValues = collectAllowlistedAttributeValues(root, options.walker);
+  const maxAttributeNodes = resolveMaxAttributeNodesPerScan(options);
+  const collection = collectAllowlistedAttributeValuesWithProfile(root, {
+    ...(options.walker ?? {}),
+    maxAttributeNodes,
+  });
   const matches: DetectedIocInAttribute[] = [];
   let iocCapReached = false;
 
-  for (const { element, attributeName, value } of attributeValues) {
+  for (const { element, attributeName, value } of collection.values) {
     const detected = detectIocsInText(value, iocOptions);
     for (const match of detected) {
       if (matches.length >= maxIocs) {
@@ -269,7 +365,12 @@ export function scanAllowlistedAttributesForIocsWithProfile(
         break;
       }
       matches.push({
-        ...match,
+        ...applyAttributeDetectionProvenance(
+          match,
+          element,
+          attributeName,
+          value
+        ),
         element,
         attributeName,
       });
@@ -283,7 +384,9 @@ export function scanAllowlistedAttributesForIocsWithProfile(
   return {
     matches,
     profile: {
-      attributesScanned: attributeValues.length,
+      attributeNodesScanned: collection.attributeNodesScanned,
+      attributeNodeCap: collection.attributeNodeCap,
+      capReached: collection.capReached,
       iocCount: matches.length,
       iocCap: maxIocs,
       iocCapReached,

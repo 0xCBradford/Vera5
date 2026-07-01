@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phishing lure markup sample</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        margin: 2rem auto;
+        max-width: 52rem;
+        padding: 0 1rem;
+      }
+      .meta {
+        color: #444;
+        font-size: 0.9rem;
+      }
+      .panel {
+        border: 1px solid #ccc;
+        border-radius: 0.5rem;
+        margin-top: 1.25rem;
+        padding: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <article>
+      <h1>Phishing lure markup sample</h1>
+      <p class="meta">
+        Documentation-only sample for attribute extraction checks. Indicator-shaped
+        strings appear only in allowlisted link and attribute values below—not in
+        rendered page text. Values are public test data, not live incident
+        intelligence.
+      </p>
+
+      <p>
+        Analysts pasted this HTML from a ticket export. The visible labels are
+        benign; destinations live in markup attributes only.
+      </p>
+
+      <section class="panel" aria-label="Embedded navigation targets">
+        <h2>Hidden navigation targets</h2>
+        <p>
+          <a href="hxxps://malware[.]testcategory[.]com/gate">Open case details</a>
+        </p>
+        <p>
+          <a href="hxxps://example[.]com/login?ref=analyst">Review login page</a>
+        </p>
+        <p>
+          <span
+            data-href="hxxps://example[.]com/login?ref=analyst"
+            data-url="hxxp://192[.]0[.]2[.]1/resource?id=1"
+            >Widget mirror</span
+          >
+        </p>
+      </section>
+
+      <section class="panel" aria-label="Embedded resource locators">
+        <h2>Resource locators</h2>
+        <p>
+          <img
+            src="hxxps://malware[.]testcategory[.]com/static/logo.png"
+            alt="Campaign logo"
+          />
+        </p>
+        <blockquote cite="hxxps://source[.]example[.]com/report/2026-03">
+          Quoted bulletin with attribution stored in cite.
+        </blockquote>
+      </section>
+    </article>
+  </body>
+</html>

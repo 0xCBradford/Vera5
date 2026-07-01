@@ -30,6 +30,7 @@ export type IocDetectorScanOptions = {
   ioc?: IocRegexOptions;
   walker?: TextWalkerSkipOptions;
   maxIocs?: number;
+  maxAttributeNodes?: number;
 };
 
 export const DEFAULT_MAX_IOCS_PER_SCAN = 500;
@@ -38,6 +39,9 @@ export type IocScanProfile = {
   textNodesScanned: number;
   textNodeCap: number;
   capReached: boolean;
+  attributeNodesScanned?: number;
+  attributeNodeCap?: number;
+  attributeCapReached?: boolean;
   iocCount: number;
   iocCap: number;
   iocCapReached: boolean;

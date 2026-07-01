@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Help portal navigation</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        margin: 2rem auto;
+        max-width: 48rem;
+        padding: 0 1rem;
+        color: #1a1a1a;
+      }
+      nav ul {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem 1.25rem;
+        list-style: none;
+        padding: 0;
+      }
+      .card-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+        margin-top: 1.5rem;
+      }
+      .card {
+        border: 1px solid #ddd;
+        border-radius: 0.5rem;
+        padding: 1rem;
+      }
+      .card img {
+        max-width: 100%;
+        height: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Help portal navigation</h1>
+      <p>
+        Static links and asset references for manual attribute-scan checks. Page
+        copy intentionally avoids standalone indicator-shaped strings.
+      </p>
+    </header>
+
+    <nav aria-label="Primary">
+      <ul>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#getting-started">Getting started</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="help.html">Help index</a></li>
+        <li><a href="contact.html">Contact</a></li>
+        <li><a href="?view=search">Search</a></li>
+        <li><a href="javascript:void(0)">Expand menu</a></li>
+        <li><a href="about:blank">Blank preview</a></li>
+        <li><a href="tel:+18005550199">Call support</a></li>
+        <li><a href="mailto:helpdesk">Email helpdesk</a></li>
+      </ul>
+    </nav>
+
+    <section id="overview">
+      <h2>Overview</h2>
+      <p>
+        Use this page to confirm attribute extraction does not treat routine
+        navigation targets as threat indicators.
+      </p>
+    </section>
+
+    <section id="getting-started">
+      <h2>Getting started</h2>
+      <div class="card-grid">
+        <article class="card">
+          <h3>Quick tour</h3>
+          <p><a href="#faq">Jump to FAQ</a></p>
+          <p>
+            <a href="guide.html" data-href="guide.html">Open guide</a>
+          </p>
+        </article>
+        <article class="card">
+          <h3>Assets</h3>
+          <img src="logo.svg" alt="Portal logo" />
+          <p>
+            <a href="support-pack" data-url="support-pack">Download bundle</a>
+          </p>
+        </article>
+        <article class="card">
+          <h3>Related</h3>
+          <blockquote cite="release-notes.html">
+            See the release notes for UI changes.
+          </blockquote>
+          <p><area href="map.html" alt="Site map" /></p>
+        </article>
+      </div>
+    </section>
+
+    <section id="faq">
+      <h2>FAQ</h2>
+      <ul>
+        <li><a href="#overview">Back to overview</a></li>
+        <li><a href="privacy.html">Privacy policy</a></li>
+        <li><a href="terms.html">Terms of use</a></li>
+        <li>
+          <span data-src="placeholder.gif" data-testid="widget-loader"></span>
+          <a href="status.html" data-src="status.html">Status page</a>
+        </li>
+      </ul>
+    </section>
+
+    <footer>
+      <p><a href="#top">Return to top</a></p>
+    </footer>
+  </body>
+</html>

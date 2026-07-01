@@ -207,6 +207,9 @@ async function runMergedPageScan(
   const textResult = scanTextNodesForIocsWithProfile(root, scanOptions);
   let attributeMatches: DetectedIocInAttribute[] = [];
   let attributeIocCapReached = false;
+  let attributeNodesScanned: number | undefined;
+  let attributeNodeCap: number | undefined;
+  let attributeCapReached: boolean | undefined;
 
   if (await isAttributeHrefExtractionEnabledForCurrentPage()) {
     const attributeResult = scanAllowlistedAttributesForIocsWithProfile(
@@ -215,6 +218,9 @@ async function runMergedPageScan(
     );
     attributeMatches = attributeResult.matches;
     attributeIocCapReached = attributeResult.profile.iocCapReached;
+    attributeNodesScanned = attributeResult.profile.attributeNodesScanned;
+    attributeNodeCap = attributeResult.profile.attributeNodeCap;
+    attributeCapReached = attributeResult.profile.capReached;
   }
 
   const snapshotMatches = mergeVisibleTextAndAttributeIocMatches(
@@ -225,6 +231,13 @@ async function runMergedPageScan(
   const highlightMatches = pageIocScanMatchesToHighlightInput(snapshotMatches);
   const profile: IocScanProfile = {
     ...textResult.profile,
+    ...(attributeNodesScanned !== undefined
+      ? {
+          attributeNodesScanned,
+          attributeNodeCap,
+          attributeCapReached,
+        }
+      : {}),
     iocCount: snapshotMatches.length,
     iocCapReached:
       snapshotMatches.length >= maxIocs ||

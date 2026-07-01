@@ -28,6 +28,7 @@ export const IOC_RULE_ID = {
   CIDR: "ioc.regex.cidr",
   FILEPATH: "ioc.regex.filepath",
   ONION: "ioc.regex.onion",
+  ATTRIBUTE: "ioc.attribute.allowlisted",
 } as const;
 
 export type IocRuleId = (typeof IOC_RULE_ID)[keyof typeof IOC_RULE_ID];
@@ -84,6 +85,8 @@ export function formatDetectionRuleReason(ruleId: IocRuleId): string {
       return "Matched a conservative file path in visible text.";
     case IOC_RULE_ID.ONION:
       return "Matched a Tor v3 onion service hostname.";
+    case IOC_RULE_ID.ATTRIBUTE:
+      return "Matched an allowlisted link or attribute value on a visible page element.";
     default: {
       const exhaustive: never = ruleId;
       return exhaustive;
