@@ -189,8 +189,8 @@ describe("service worker scan-page command routing", () => {
     runStorageMigrationOnExtensionUpdate.mockReset();
     runStorageMigrationOnExtensionUpdate.mockResolvedValue({
       migrated: false,
-      fromVersion: 5,
-      toVersion: 5,
+      fromVersion: 8,
+      toVersion: 8,
     });
     tabsQuery.mockResolvedValue([{ id: 42 }]);
     tabsSendMessage.mockResolvedValue({ ok: true, payload: { count: 2 } });

@@ -9,6 +9,8 @@ import {
 } from "../lib/settingsExport";
 import type {
   ApiKeySlot,
+  AttributeHrefSitePreference,
+  AttributeHrefSitePreferencesRecord,
   EnrichmentSourceCacheTtlRecord,
   EnrichmentSourceEnabledRecord,
   InternalAssetVendorLabelEntry,
@@ -31,6 +33,10 @@ import {
   getAnalystModePresetId,
   getApiKey,
   getAutoScanEnabled,
+  getAttributeHrefExtractionEnabled,
+  getAttributeHrefExtractionConsentAcknowledged,
+  getAttributeHrefExtractionRememberSiteChoices,
+  getAttributeHrefExtractionSitePreferences,
   getDomainAllowlist,
   getDomainDenylist,
   getDomainPolicyEnrichGateEnabled,
@@ -59,6 +65,10 @@ import {
   readStoredCacheTtlSeconds,
   setApiKey,
   setAutoScanEnabled,
+  setAttributeHrefExtractionEnabled,
+  setAttributeHrefExtractionConsentAcknowledged,
+  setAttributeHrefExtractionRememberSiteChoices,
+  setAttributeHrefExtractionSitePreferences,
   setDomainAllowlist,
   setDomainDenylist,
   setDomainPolicyEnrichGateEnabled,
@@ -101,6 +111,9 @@ const API_KEY_FIELD_SLOTS: ApiKeySlot[] = [
 const INSTALL_QUICK_START_KEY_SLOTS = LIVE_ENRICHMENT_SOURCE_ORDER.filter(
   (sourceId): sourceId is ApiKeySlot => OPTIONS_API_KEY_SLOTS.includes(sourceId)
 );
+
+const ATTRIBUTE_HREF_EXTRACTION_SECURITY_DOC_URL =
+  "https://github.com/0xCBradford/Vera5/blob/main/docs/security-model.md#opt-in-attribute-and-href-extraction";
 
 type InstallQuickStartStep = 0 | 1 | 2 | 3;
 
@@ -750,6 +763,28 @@ export function Options() {
   const [includePrivateIpv4, setIncludePrivateIpv4State] = useState(false);
   const [localBackendEnabled, setLocalBackendEnabledState] = useState(false);
   const [localLlmSummaryEnabled, setLocalLlmSummaryEnabledState] = useState(false);
+  const [attributeHrefExtractionEnabled, setAttributeHrefExtractionEnabledState] =
+    useState(false);
+  const [
+    attributeHrefExtractionConsentAcknowledged,
+    setAttributeHrefExtractionConsentAcknowledgedState,
+  ] = useState(false);
+  const [showAttributeHrefConsentDialog, setShowAttributeHrefConsentDialog] =
+    useState(false);
+  const [rememberSiteChoicesOnConfirm, setRememberSiteChoicesOnConfirm] =
+    useState(false);
+  const [
+    attributeHrefExtractionRememberSiteChoices,
+    setAttributeHrefExtractionRememberSiteChoicesState,
+  ] = useState(false);
+  const [
+    attributeHrefExtractionSitePreferences,
+    setAttributeHrefExtractionSitePreferencesState,
+  ] = useState<AttributeHrefSitePreferencesRecord>({});
+  const [attributeHrefSitePreferenceHostDraft, setAttributeHrefSitePreferenceHostDraft] =
+    useState("");
+  const [attributeHrefSitePreferenceModeDraft, setAttributeHrefSitePreferenceModeDraft] =
+    useState<AttributeHrefSitePreference>("off");
   const [showDisabledSourcesInWorkspace, setShowDisabledSourcesInWorkspaceState] =
     useState(false);
   const [showPreQueryNotices, setShowPreQueryNoticesState] = useState(true);
@@ -815,6 +850,10 @@ export function Options() {
       getIncludePrivateIpv4(),
       getLocalBackendEnabled(),
       getLocalLlmSummaryEnabled(),
+      getAttributeHrefExtractionEnabled(),
+      getAttributeHrefExtractionConsentAcknowledged(),
+      getAttributeHrefExtractionRememberSiteChoices(),
+      getAttributeHrefExtractionSitePreferences(),
       getShowDisabledSourcesInWorkspace(),
       getShowPreQueryNotices(),
       getPreQueryNoticePreferenceConfigured(),
@@ -857,6 +896,10 @@ export function Options() {
           includePrivateIpv4Value,
           localBackendEnabledValue,
           localLlmSummaryEnabledValue,
+          attributeHrefExtractionEnabledValue,
+          attributeHrefExtractionConsentAcknowledgedValue,
+          attributeHrefExtractionRememberSiteChoicesValue,
+          attributeHrefExtractionSitePreferencesValue,
           showDisabledSourcesValue,
           showPreQueryNoticesValue,
           preQueryNoticePreferenceConfiguredValue,
@@ -881,6 +924,16 @@ export function Options() {
           setIncludePrivateIpv4State(includePrivateIpv4Value);
           setLocalBackendEnabledState(localBackendEnabledValue);
           setLocalLlmSummaryEnabledState(localLlmSummaryEnabledValue);
+          setAttributeHrefExtractionEnabledState(attributeHrefExtractionEnabledValue);
+          setAttributeHrefExtractionConsentAcknowledgedState(
+            attributeHrefExtractionConsentAcknowledgedValue
+          );
+          setAttributeHrefExtractionRememberSiteChoicesState(
+            attributeHrefExtractionRememberSiteChoicesValue
+          );
+          setAttributeHrefExtractionSitePreferencesState(
+            attributeHrefExtractionSitePreferencesValue
+          );
           setShowDisabledSourcesInWorkspaceState(showDisabledSourcesValue);
           setShowPreQueryNoticesState(showPreQueryNoticesValue);
           setPreQueryNoticePreferenceConfiguredState(
@@ -910,6 +963,23 @@ export function Options() {
         setReady(true);
       });
   }, [settingsReloadToken]);
+
+  useEffect(() => {
+    if (
+      !ready ||
+      showAttributeHrefConsentDialog ||
+      !attributeHrefExtractionEnabled ||
+      attributeHrefExtractionConsentAcknowledged
+    ) {
+      return;
+    }
+    setShowAttributeHrefConsentDialog(true);
+  }, [
+    ready,
+    showAttributeHrefConsentDialog,
+    attributeHrefExtractionEnabled,
+    attributeHrefExtractionConsentAcknowledged,
+  ]);
 
   useEffect(() => {
     if (
@@ -989,6 +1059,67 @@ export function Options() {
   const handleLocalLlmSummaryToggle = (checked: boolean) => {
     setLocalLlmSummaryEnabledState(checked);
     void setLocalLlmSummaryEnabled(checked);
+  };
+
+  const handleAttributeHrefExtractionToggle = (checked: boolean) => {
+    if (!checked) {
+      setAttributeHrefExtractionEnabledState(false);
+      void setAttributeHrefExtractionEnabled(false);
+      return;
+    }
+    if (attributeHrefExtractionConsentAcknowledged) {
+      setAttributeHrefExtractionEnabledState(true);
+      void setAttributeHrefExtractionEnabled(true);
+      return;
+    }
+    setShowAttributeHrefConsentDialog(true);
+  };
+
+  const handleAttributeHrefConsentCancel = () => {
+    setShowAttributeHrefConsentDialog(false);
+    setRememberSiteChoicesOnConfirm(false);
+    setAttributeHrefExtractionEnabledState(false);
+    void setAttributeHrefExtractionEnabled(false);
+  };
+
+  const handleAttributeHrefConsentConfirm = () => {
+    setShowAttributeHrefConsentDialog(false);
+    setAttributeHrefExtractionConsentAcknowledgedState(true);
+    setAttributeHrefExtractionEnabledState(true);
+    void setAttributeHrefExtractionConsentAcknowledged(true);
+    void setAttributeHrefExtractionEnabled(true);
+    if (rememberSiteChoicesOnConfirm) {
+      setAttributeHrefExtractionRememberSiteChoicesState(true);
+      void setAttributeHrefExtractionRememberSiteChoices(true);
+    }
+    setRememberSiteChoicesOnConfirm(false);
+  };
+
+  const handleAttributeHrefRememberSiteChoicesToggle = (checked: boolean) => {
+    setAttributeHrefExtractionRememberSiteChoicesState(checked);
+    void setAttributeHrefExtractionRememberSiteChoices(checked);
+  };
+
+  const handleAddAttributeHrefSitePreference = () => {
+    const host = normalizeDomainPolicyEntry(attributeHrefSitePreferenceHostDraft);
+    if (!host || attributeHrefExtractionSitePreferences[host]) {
+      setAttributeHrefSitePreferenceHostDraft("");
+      return;
+    }
+    const next = {
+      ...attributeHrefExtractionSitePreferences,
+      [host]: attributeHrefSitePreferenceModeDraft,
+    };
+    setAttributeHrefExtractionSitePreferencesState(next);
+    setAttributeHrefSitePreferenceHostDraft("");
+    void setAttributeHrefExtractionSitePreferences(next);
+  };
+
+  const handleRemoveAttributeHrefSitePreference = (host: string) => {
+    const next = { ...attributeHrefExtractionSitePreferences };
+    delete next[host];
+    setAttributeHrefExtractionSitePreferencesState(next);
+    void setAttributeHrefExtractionSitePreferences(next);
   };
 
   const handleShowDisabledSourcesToggle = (checked: boolean) => {
@@ -2232,6 +2363,106 @@ export function Options() {
               hidden={collapsedSections.trust}
             >
               <ToggleRow
+                label="Scan link attributes for IOCs"
+                hint="Off by default. When on, Vera5 reads allowlisted link and attribute values (for example href and src) on pages you scan—in addition to visible text. Password fields and hidden inputs are never scanned."
+                ariaLabel="Scan link attributes for IOCs"
+                checked={attributeHrefExtractionEnabled}
+                disabled={!ready}
+                onChange={handleAttributeHrefExtractionToggle}
+              />
+              <ToggleRow
+                label="Remember per-site attribute scan choices"
+                hint="Optional. When on, you can save always-on or always-off choices per hostname. Per-site rules never enable attribute scanning when the global toggle above is off."
+                ariaLabel="Remember per-site attribute scan choices"
+                checked={attributeHrefExtractionRememberSiteChoices}
+                disabled={!ready || !attributeHrefExtractionEnabled}
+                onChange={handleAttributeHrefRememberSiteChoicesToggle}
+              />
+              {attributeHrefExtractionEnabled &&
+              attributeHrefExtractionRememberSiteChoices ? (
+                <fieldset className="v5-field" disabled={!ready}>
+                  <legend className="v5-field__label">
+                    Per-site attribute scan overrides
+                  </legend>
+                  <span
+                    className="v5-status v5-status--muted"
+                    style={{ display: "block", marginBottom: 8 }}
+                  >
+                    Hostnames saved here apply only when link attribute scanning
+                    is enabled globally. Use{" "}
+                    <strong>Never scan attributes</strong> on sensitive sites or{" "}
+                    <strong>Always scan attributes</strong> on trusted CTI paste
+                    hosts.
+                  </span>
+                  <form
+                    className="v5-actions"
+                    style={{ marginBottom: 8 }}
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      handleAddAttributeHrefSitePreference();
+                    }}
+                  >
+                    <input
+                      className="v5-input v5-input--sm"
+                      type="text"
+                      aria-label="Per-site attribute scan hostname"
+                      placeholder="example.com"
+                      value={attributeHrefSitePreferenceHostDraft}
+                      onChange={(event) =>
+                        setAttributeHrefSitePreferenceHostDraft(event.target.value)
+                      }
+                    />
+                    <select
+                      className="v5-input v5-input--sm"
+                      aria-label="Per-site attribute scan choice"
+                      value={attributeHrefSitePreferenceModeDraft}
+                      onChange={(event) =>
+                        setAttributeHrefSitePreferenceModeDraft(
+                          event.target.value as AttributeHrefSitePreference
+                        )
+                      }
+                    >
+                      <option value="off">Never scan attributes</option>
+                      <option value="on">Always scan attributes</option>
+                    </select>
+                    <button
+                      type="submit"
+                      className="v5-btn v5-btn--primary"
+                      aria-label="Add per-site attribute scan override"
+                    >
+                      Add
+                    </button>
+                  </form>
+                  <ul className="v5-domain-list" aria-label="Per-site overrides">
+                    {Object.entries(attributeHrefExtractionSitePreferences)
+                      .sort(([leftHost], [rightHost]) =>
+                        leftHost.localeCompare(rightHost)
+                      )
+                      .map(([host, preference]) => (
+                        <li key={host} className="v5-domain-list__item">
+                          <span>
+                            <code>{host}</code>
+                            {" — "}
+                            {preference === "off"
+                              ? "Never scan attributes"
+                              : "Always scan attributes"}
+                          </span>
+                          <button
+                            type="button"
+                            className="v5-btn v5-btn--link"
+                            aria-label={`Remove ${host} attribute scan override`}
+                            onClick={() =>
+                              handleRemoveAttributeHrefSitePreference(host)
+                            }
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      ))}
+                  </ul>
+                </fieldset>
+              ) : null}
+              <ToggleRow
                 label="Show pre-query notices"
                 hint="When on, Vera5 shows a notice before sending an indicator value to a vendor you enabled during live enrichment."
                 ariaLabel="Show pre-query notices"
@@ -2708,6 +2939,85 @@ export function Options() {
           </section>
         </div>
       </div>
+
+      {showAttributeHrefConsentDialog ? (
+        <div
+          className="v5-consent-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              handleAttributeHrefConsentCancel();
+            }
+          }}
+        >
+          <div
+            className="v5-consent-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="attribute-href-consent-title"
+            aria-describedby="attribute-href-consent-body"
+          >
+            <h2 id="attribute-href-consent-title" className="v5-consent-dialog__title">
+              Enable link attribute scanning?
+            </h2>
+            <div id="attribute-href-consent-body" className="v5-consent-dialog__body">
+              <p>
+                Vera5 will read allowlisted link and attribute values (for example{" "}
+                <code>href</code> and <code>src</code>) on pages you scan—not only
+                visible text. Processing stays on this device; Vera5 does not upload
+                full pages or attribute dumps.
+              </p>
+              <p>
+                Live enrichment still sends only indicator values you explicitly
+                enrich to threat-intel vendors you configure. Password fields and
+                hidden inputs are never scanned.
+              </p>
+              <p>
+                Use domain denylist presets on sensitive hosts if your policy requires
+                visible-text scanning only.
+              </p>
+              <p>
+                <a
+                  className="v5-consent-dialog__link"
+                  href={ATTRIBUTE_HREF_EXTRACTION_SECURITY_DOC_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Read the Vera5 security model — attribute and href extraction
+                </a>
+              </p>
+              <label className="v5-consent-dialog__remember">
+                <input
+                  type="checkbox"
+                  checked={rememberSiteChoicesOnConfirm}
+                  onChange={(event) =>
+                    setRememberSiteChoicesOnConfirm(event.target.checked)
+                  }
+                />
+                <span>
+                  Remember always-on or always-off choices per website (optional)
+                </span>
+              </label>
+            </div>
+            <div className="v5-consent-dialog__actions">
+              <button
+                type="button"
+                className="v5-btn"
+                onClick={handleAttributeHrefConsentCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="v5-btn v5-btn--primary"
+                onClick={handleAttributeHrefConsentConfirm}
+              >
+                Enable attribute scan
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -12,6 +12,7 @@ import type { PivotProvider } from "./pivots";
 import {
   createDefaultDomainPolicy,
   DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
+  normalizeDomainPolicyEntry,
   normalizeDomainPolicyList,
   normalizeDomainPolicyMode,
   type DomainPolicy,
@@ -32,7 +33,7 @@ import {
   type ApiKeyStorageSlot,
 } from "./enrichmentSourceRegistry";
 
-export const SETTINGS_SCHEMA_VERSION = 5;
+export const SETTINGS_SCHEMA_VERSION = 8;
 
 export const STORAGE_SCHEMA_VERSION = SETTINGS_SCHEMA_VERSION;
 
@@ -48,6 +49,14 @@ export const STORAGE_KEY_MANUAL_ONLY_MODE = "manualOnlyMode";
 export const STORAGE_KEY_INCLUDE_PRIVATE_IPV4 = "includePrivateIpv4";
 export const STORAGE_KEY_LOCAL_BACKEND_ENABLED = "localBackendEnabled";
 export const STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED = "localLlmSummaryEnabled";
+export const STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED =
+  "attributeHrefExtractionEnabled";
+export const STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED =
+  "attributeHrefExtractionConsentAcknowledged";
+export const STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES =
+  "attributeHrefExtractionRememberSiteChoices";
+export const STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES =
+  "attributeHrefExtractionSitePreferences";
 export const STORAGE_KEY_API_KEYS = "apiKeys";
 export const STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED = "enrichmentSourceEnabled";
 export const STORAGE_KEY_IOC_TYPE_ENABLED = "iocTypeEnabled";
@@ -88,6 +97,14 @@ export const STORAGE_KEYS = {
   INCLUDE_PRIVATE_IPV4: STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
   LOCAL_BACKEND_ENABLED: STORAGE_KEY_LOCAL_BACKEND_ENABLED,
   LOCAL_LLM_SUMMARY_ENABLED: STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
+  ATTRIBUTE_HREF_EXTRACTION_ENABLED:
+    STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
+  ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED:
+    STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED,
+  ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES:
+    STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES,
+  ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES:
+    STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES,
   API_KEYS: STORAGE_KEY_API_KEYS,
   ENRICHMENT_SOURCE_ENABLED: STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   IOC_TYPE_ENABLED: STORAGE_KEY_IOC_TYPE_ENABLED,
@@ -129,6 +146,13 @@ export type EnrichmentSourceCacheTtlRecord = Partial<
   Record<EnrichmentSourceId, number>
 >;
 
+export type AttributeHrefSitePreference = "on" | "off";
+
+export type AttributeHrefSitePreferencesRecord = Record<
+  string,
+  AttributeHrefSitePreference
+>;
+
 export type Vera5Settings = {
   extensionEnabled: boolean;
   highlightEnabled: boolean;
@@ -138,6 +162,10 @@ export type Vera5Settings = {
   includePrivateIpv4: boolean;
   localBackendEnabled: boolean;
   localLlmSummaryEnabled: boolean;
+  attributeHrefExtractionEnabled: boolean;
+  attributeHrefExtractionConsentAcknowledged: boolean;
+  attributeHrefExtractionRememberSiteChoices: boolean;
+  attributeHrefExtractionSitePreferences: AttributeHrefSitePreferencesRecord;
   apiKeys: ApiKeysRecord;
   enrichmentSourceEnabled: EnrichmentSourceEnabledRecord;
   iocTypeEnabled: IocTypeEnabledRecord;
@@ -170,6 +198,10 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]?: unknown;
   [STORAGE_KEY_LOCAL_BACKEND_ENABLED]?: unknown;
   [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]?: unknown;
+  [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]?: unknown;
+  [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]?: unknown;
+  [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES]?: unknown;
+  [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]?: unknown;
   [STORAGE_KEY_API_KEYS]?: unknown;
   [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]?: unknown;
   [STORAGE_KEY_IOC_TYPE_ENABLED]?: unknown;
@@ -201,6 +233,10 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
   STORAGE_KEY_LOCAL_BACKEND_ENABLED,
   STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES,
   STORAGE_KEY_API_KEYS,
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_IOC_TYPE_ENABLED,
@@ -334,6 +370,10 @@ export function createDefaultVera5Settings(): Vera5Settings {
     includePrivateIpv4: false,
     localBackendEnabled: false,
     localLlmSummaryEnabled: false,
+    attributeHrefExtractionEnabled: false,
+    attributeHrefExtractionConsentAcknowledged: false,
+    attributeHrefExtractionRememberSiteChoices: false,
+    attributeHrefExtractionSitePreferences: {},
     apiKeys: createDefaultApiKeysRecord(),
     enrichmentSourceEnabled: createDefaultEnrichmentSourceEnabledRecord(),
     iocTypeEnabled: createDefaultIocTypeEnabledRecord(),
@@ -429,6 +469,59 @@ export function normalizeApiKeysRecord(value: unknown): ApiKeysRecord {
   return normalized;
 }
 
+export function normalizeAttributeHrefSitePreferenceHost(
+  hostname: string
+): string {
+  return normalizeDomainPolicyEntry(hostname);
+}
+
+export function normalizeAttributeHrefSitePreferencesRecord(
+  value: unknown
+): AttributeHrefSitePreferencesRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const record: AttributeHrefSitePreferencesRecord = {};
+  for (const [rawHost, preference] of Object.entries(value)) {
+    if (preference !== "on" && preference !== "off") {
+      continue;
+    }
+    const host = normalizeAttributeHrefSitePreferenceHost(rawHost);
+    if (host.length === 0) {
+      continue;
+    }
+    record[host] = preference;
+  }
+  return record;
+}
+
+export function resolveAttributeHrefExtractionForHost(
+  settings: Pick<
+    Vera5Settings,
+    | "attributeHrefExtractionEnabled"
+    | "attributeHrefExtractionRememberSiteChoices"
+    | "attributeHrefExtractionSitePreferences"
+  >,
+  hostname: string
+): boolean {
+  if (!settings.attributeHrefExtractionEnabled) {
+    return false;
+  }
+  if (!settings.attributeHrefExtractionRememberSiteChoices) {
+    return true;
+  }
+  const host = normalizeAttributeHrefSitePreferenceHost(hostname);
+  if (host.length === 0) {
+    return true;
+  }
+  const preference = settings.attributeHrefExtractionSitePreferences[host];
+  if (preference === "off") {
+    return false;
+  }
+  return true;
+}
+
 export function normalizeEnrichmentSourceEnabledRecord(
   value: unknown
 ): EnrichmentSourceEnabledRecord {
@@ -495,6 +588,22 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
       raw[STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED],
       defaults.localLlmSummaryEnabled
     ),
+    attributeHrefExtractionEnabled: readStoredBoolean(
+      raw[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED],
+      defaults.attributeHrefExtractionEnabled
+    ),
+    attributeHrefExtractionConsentAcknowledged: readStoredBoolean(
+      raw[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED],
+      defaults.attributeHrefExtractionConsentAcknowledged
+    ),
+    attributeHrefExtractionRememberSiteChoices: readStoredBoolean(
+      raw[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES],
+      defaults.attributeHrefExtractionRememberSiteChoices
+    ),
+    attributeHrefExtractionSitePreferences:
+      normalizeAttributeHrefSitePreferencesRecord(
+        raw[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]
+      ),
     apiKeys: normalizeApiKeysRecord(raw[STORAGE_KEY_API_KEYS]),
     enrichmentSourceEnabled: normalizeEnrichmentSourceEnabledRecord(
       raw[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]
@@ -618,6 +727,39 @@ export function migrateVera5StorageRaw(raw: Vera5StorageRaw): Vera5StorageRaw {
     );
   }
 
+  if (readStorageSchemaVersion(migrated) < 6) {
+    if (migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED] === undefined) {
+      migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED] = false;
+    }
+    migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 6;
+  }
+
+  if (readStorageSchemaVersion(migrated) < 7) {
+    if (
+      migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED] ===
+      undefined
+    ) {
+      migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED] =
+        false;
+    }
+    migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 7;
+  }
+
+  if (readStorageSchemaVersion(migrated) < 8) {
+    if (
+      migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES] ===
+      undefined
+    ) {
+      migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES] =
+        false;
+    }
+    migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES] =
+      normalizeAttributeHrefSitePreferencesRecord(
+        migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]
+      );
+    migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 8;
+  }
+
   if (readStorageSchemaVersion(migrated) >= SETTINGS_SCHEMA_VERSION) {
     return migrated;
   }
@@ -640,6 +782,14 @@ export function vera5SettingsToStoragePayload(
     [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: settings.includePrivateIpv4,
     [STORAGE_KEY_LOCAL_BACKEND_ENABLED]: settings.localBackendEnabled,
     [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: settings.localLlmSummaryEnabled,
+    [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]:
+      settings.attributeHrefExtractionEnabled,
+    [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]:
+      settings.attributeHrefExtractionConsentAcknowledged,
+    [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES]:
+      settings.attributeHrefExtractionRememberSiteChoices,
+    [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]:
+      settings.attributeHrefExtractionSitePreferences,
     [STORAGE_KEY_API_KEYS]: settings.apiKeys,
     [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: settings.enrichmentSourceEnabled,
     [STORAGE_KEY_IOC_TYPE_ENABLED]: settings.iocTypeEnabled,
@@ -850,6 +1000,59 @@ export async function getLocalLlmSummaryEnabled(): Promise<boolean> {
 export async function setLocalLlmSummaryEnabled(enabled: boolean): Promise<void> {
   await chrome.storage.local.set({
     [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: enabled,
+  });
+}
+
+export async function getAttributeHrefExtractionEnabled(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.attributeHrefExtractionEnabled;
+}
+
+export async function setAttributeHrefExtractionEnabled(
+  enabled: boolean
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]: enabled,
+  });
+}
+
+export async function getAttributeHrefExtractionConsentAcknowledged(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.attributeHrefExtractionConsentAcknowledged;
+}
+
+export async function setAttributeHrefExtractionConsentAcknowledged(
+  acknowledged: boolean
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]: acknowledged,
+  });
+}
+
+export async function getAttributeHrefExtractionRememberSiteChoices(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.attributeHrefExtractionRememberSiteChoices;
+}
+
+export async function setAttributeHrefExtractionRememberSiteChoices(
+  enabled: boolean
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES]: enabled,
+  });
+}
+
+export async function getAttributeHrefExtractionSitePreferences(): Promise<AttributeHrefSitePreferencesRecord> {
+  const settings = await getVera5Settings();
+  return settings.attributeHrefExtractionSitePreferences;
+}
+
+export async function setAttributeHrefExtractionSitePreferences(
+  preferences: AttributeHrefSitePreferencesRecord
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]:
+      normalizeAttributeHrefSitePreferencesRecord(preferences),
   });
 }
 

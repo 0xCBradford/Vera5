@@ -15,6 +15,10 @@ import {
   STORAGE_KEY_HIGHLIGHT_ENABLED,
   STORAGE_KEY_IOC_TYPE_ENABLED,
   STORAGE_KEY_SCHEMA_VERSION,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
   STORAGE_KEY_STORAGE_SCHEMA_VERSION,
   vera5SettingsToStoragePayload,
   type Vera5StorageRaw,
@@ -93,11 +97,56 @@ describe("storage migration idempotency", () => {
     };
     expectSettingsMigrationIdempotent(raw);
     const migrated = migrateVera5StorageRaw(raw);
-    expect(readStorageSchemaVersion(migrated)).toBe(5);
+    expect(readStorageSchemaVersion(migrated)).toBe(SETTINGS_SCHEMA_VERSION);
     expect(migrated[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]).toMatchObject({
       abuseipdb: true,
       otx: false,
     });
+  });
+
+  it("is idempotent when migrating from schema version 5 (v5 to v6 attribute extraction default)", () => {
+    const raw: Vera5StorageRaw = {
+      [STORAGE_KEY_STORAGE_SCHEMA_VERSION]: 5,
+      [STORAGE_KEY_EXTENSION_ENABLED]: true,
+      [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+        abuseipdb: true,
+      },
+    };
+    expectSettingsMigrationIdempotent(raw);
+    const migrated = migrateVera5StorageRaw(raw);
+    expect(readStorageSchemaVersion(migrated)).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]).toBe(false);
+  });
+
+  it("is idempotent when migrating from schema version 6 (v6 to v7 consent default)", () => {
+    const raw: Vera5StorageRaw = {
+      [STORAGE_KEY_STORAGE_SCHEMA_VERSION]: 6,
+      [STORAGE_KEY_EXTENSION_ENABLED]: true,
+      [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]: false,
+    };
+    expectSettingsMigrationIdempotent(raw);
+    const migrated = migrateVera5StorageRaw(raw);
+    expect(readStorageSchemaVersion(migrated)).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(
+      migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]
+    ).toBe(false);
+  });
+
+  it("is idempotent when migrating from schema version 7 (v7 to v8 remember-site defaults)", () => {
+    const raw: Vera5StorageRaw = {
+      [STORAGE_KEY_STORAGE_SCHEMA_VERSION]: 7,
+      [STORAGE_KEY_EXTENSION_ENABLED]: true,
+      [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]: true,
+    };
+    expectSettingsMigrationIdempotent(raw);
+    const migrated = migrateVera5StorageRaw(raw);
+    expect(readStorageSchemaVersion(migrated)).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(
+      migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES]
+    ).toBe(false);
+    expect(
+      migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]
+    ).toEqual({});
   });
 
   it("is idempotent when storage is already at the current schema version", () => {

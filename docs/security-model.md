@@ -49,7 +49,7 @@ Permission rationale below matches this behavior.
 
 - **Content scripts** run at `document_idle` on matching pages, scan visible text for IOCs when you trigger a scan (or when auto-scan is enabled), and render the on-page workspace overlay.
 - **Page text** is processed in the browser for detection. Only **indicator values you choose to enrich** are sent in API requests to third parties you configure—not full page HTML to Vera5 infrastructure.
-- **Opt-in attribute/href extraction** (default **off**): when enabled, a conservative allowlisted attribute scan merges with visible-text detection. A first-enable consent dialog explains data accessed; password fields and hidden nodes are excluded.
+- **Opt-in attribute/href extraction** (default **off**): when enabled, a conservative allowlisted attribute scan merges with visible-text detection. See [Opt-in attribute and href extraction](#opt-in-attribute-and-href-extraction) for risks, data accessed, and consent requirements.
 - **Skip rules:** ignore `script`, `style`, and `textarea` text by default; respect manual-only enrichment, quiet mode, per-source toggles, domain policy, and internal asset lists.
 
 ### Why broad host patterns
@@ -169,17 +169,197 @@ Hash and CVE indicators are not matched by these lists. Manage lists under **Tru
 
 ## Opt-in attribute and href extraction
 
-**Default: off.** Vera5 does not scan link attributes unless you explicitly enable attribute/href extraction in Settings and confirm the first-enable consent dialog.
+**Default: off.** Vera5 scans **visible text nodes** only unless you explicitly enable attribute and link extraction in Settings and confirm the first-enable consent dialog. This capability is **high-risk** relative to visible-text detection because markup can embed indicator-shaped strings that never appear in rendered page text.
+
+### Why this is default-off
+
+| Factor | Visible-text scan (default) | Attribute/href scan (opt-in) |
+|--------|----------------------------|------------------------------|
+| Data surface | Text the page renders to the user | Selected attribute values on DOM elements |
+| Analyst expectation | Matches what they read on screen | May surface URLs or tokens only in HTML markup |
+| Sensitive contexts | Still subject to domain policy | Higher risk on pages with login, checkout, or webmail links where `href` values differ from link labels |
+| False positives | Regex suppressions on visible copy | Additional benign `href`/`src` patterns (navigation, assets, placeholders) |
+| Performance | Capped text-node walk | Separate capped attribute-node pass |
+
+Vera5 never enables attribute extraction automatically on install or extension update. Existing profiles keep the feature **off** until an operator turns it on and accepts consent.
+
+### Threats and risks
+
+| Risk | Description | Mitigation |
+|------|-------------|------------|
+| **Markup-embedded IOCs** | Attackers or paste-heavy exports may place defanged URLs, hashes, or internal paths in `href`, `src`, or `data-*` attributes without equivalent visible text. | Opt-in only; conservative allowlist; provenance labels attribute-sourced matches separately from visible-text matches. |
+| **Sensitive link targets** | A benign link label can hide a sensitive destination in `href` (webmail, SSO, internal admin). Attribute scan reads those targets locally for detection—not for upload. | Default **off**; domain denylist and manual-only enrichment still apply; analysts should keep denylist presets on sensitive hosts. |
+| **Third-party widget metadata** | Embedded scripts or analytics may add `data-url`, tracking parameters, or redirect chains in attributes. | Allowlisted attribute names only; skip hidden subtrees; performance caps limit scan breadth on large DOMs. |
+| **Unintended enrich surface** | More detected IOCs increase tray and overlay noise; auto-scan (when enabled) may highlight attribute-sourced values the analyst did not read. | Same trust gates as visible-text IOCs (manual-only default, pre-query disclosure, domain policy, internal asset lists, quiet mode); dedupe merges attribute and text paths by indicator key. |
+| **Credential and input exposure** | Scanning all attributes could reach password fields, hidden inputs, or session tokens in form markup. | **Explicit exclusion:** password and hidden input types, `autocomplete` credential fields, and non-visible subtrees are out of scope; attribute pass does not read input `.value`. |
+| **Full-page exfiltration** | Broad DOM reads could be misread as uploading page HTML to Vera5. | **Out of product scope:** only allowlisted attribute **values** on in-scope elements are read locally; no full HTML serialization, no Vera5-operated upload endpoint, no change to enrichment contract (indicator values only when you enrich). |
+| **Performance degradation** | Large tables or SPAs with thousands of links could slow scans. | Separate attribute-node cap per page; attribute pass skipped when cap exceeded (visible-text scan unaffected). |
+
+Attribute-sourced IOCs follow the **same outbound enrichment boundary** as visible-text IOCs: only the **indicator value you choose to enrich** may leave the browser, and only to vendors you enable over HTTPS GET—not full pages or attribute dumps.
+
+### Data accessed when enabled
+
+When attribute/href extraction is **on** and you run a scan (manual or auto-scan on an allowed host), Vera5 reads the following **locally in the content script**:
+
+| Accessed | Not accessed |
+|----------|--------------|
+| String values of **allowlisted attributes** on elements in the scan root (see [Allowlisted attributes and exclusions](#allowlisted-attributes-and-exclusions)) | Full page HTML, outer markup trees, or serialized DOM snapshots |
+| Same page **origin** and element context used for provenance (`Why detected?`) | Input field **values** (`<input>`, `<textarea>`, `<select>`), including password, hidden, and OTP fields |
+| Merged, deduplicated indicator keys combined with visible-text matches | `script`, `style`, `textarea`, and metadata subtrees (unchanged from default scan rules) |
+| Attribute values processed with the same regex/detector pipeline as visible text | Browsing history, cookies, localStorage, or sessionStorage |
+| | Clipboard, downloads, or network response bodies |
+
+Processing stays **in-browser** for detection and highlighting. Enrichment still sends **only the selected indicator value** to configured vendor APIs when you take an explicit enrich action and trust gates pass—the same BYOK/BYOA contract as visible-text IOCs.
+
+**No Vera5-operated infrastructure** receives page content or attribute dumps. Optional localhost backend and LLM summary remain unchanged: indicator-only or normalized enrichment JSON to `127.0.0.1` only when you opt into those features separately.
+
+### Opt-in consent
+
+Enabling attribute/href extraction requires **explicit analyst consent** beyond the general extension install:
+
+| Step | Requirement |
+|------|-------------|
+| **Settings toggle** | **Off** on fresh install and after upgrade until you enable it under **Trust & consent** (or equivalent Settings section). |
+| **First-enable dialog** | Shown the first time you turn the toggle **on**. Must state: (1) Vera5 will read allowlisted link and attribute values on pages you scan—not only visible text; (2) data is processed locally and is **not** uploaded to Vera5; (3) enrichment still sends **indicator values only** to vendors you configure when you enrich; (4) recommended practice—keep the feature off on sensitive hosts or extend domain denylist; (5) link to this section in `docs/security-model.md` for full detail. |
+| **Dismissal** | Analyst must confirm to enable; cancel leaves the toggle **off**. |
+| **No silent enablement** | Extension updates must **not** turn attribute extraction on for existing users. |
+| **Optional per-site memory** | When implemented, a per-origin “do not ask again” or “always off on this site” choice may persist locally; it does not bypass global toggle off. |
+
+Consent copy is product-facing only—no maintainer telemetry records whether you enabled the feature.
+
+### Allowlisted attributes and exclusions
+
+The attribute pass reads **only** the attribute names in the allowlist below, on **in-scope elements** that pass visibility checks. Any attribute not listed is ignored even when the element is visited. Values are matched with the same IOC detector rules as visible text; Vera5 does not execute scripts or fetch attribute targets during detection.
+
+#### Allowlisted attribute names
+
+| Attribute | Elements (when visible and in scan root) | Rationale |
+|-----------|------------------------------------------|-----------|
+| `href` | `a`, `area`, `link`, `base` | Primary link and navigation targets in CTI exports, phishing HTML, and ticket paste |
+| `src` | `img`, `iframe`, `embed`, `object`, `source`, `video`, `audio`, `script` | Embedded resource locators; **script body text is never executed or scanned**—only the `src` string when the tag is in scope |
+| `data-url` | Any HTML element | Common framework mirror for link targets in pasted report markup |
+| `data-href` | Any HTML element | Alternate framework mirror for `href` |
+| `data-src` | Any HTML element | Lazy-load and widget mirrors for resource URLs |
+| `cite` | `blockquote`, `q`, `del`, `ins` | Attribution URLs in quoted alert content |
+
+No other attribute names are read during the attribute pass unless this table is updated through [Permission changes](#permission-changes) review.
+
+#### In-scope element and visibility rules
+
+Before reading an allowlisted attribute, the extractor applies the same subtree rules as visible-text scan, plus attribute-specific gates:
+
+| Rule | Behavior |
+|------|----------|
+| Scan root | Same root as visible-text scan (active page body subtree; not extension UI hosts) |
+| Skip tags | `script`, `style`, `textarea`, `noscript`, `template`, `svg:script`—no attribute pass inside these subtrees |
+| Hidden subtree | Skip elements with `hidden`, `aria-hidden="true"`, `display:none`, or `visibility:hidden`, and their descendants |
+| Off-screen collapse | Skip subtrees marked inert or `hidden` by the browser accessibility tree when detectable without layout thrash |
+| Input surface | **Never** visit `input`, `textarea`, `select`, `option`, or `button` for attribute extraction (see exclusions) |
+
+#### Explicit exclusions (never scanned)
+
+| Category | Excluded surface | Reason |
+|----------|------------------|--------|
+| **Form controls** | All `<input>` (every `type`, including `password`, `hidden`, `email`, `search`, `tel`, `url`, `text`), `<textarea>`, `<select>`, `<option>`, `<button>` | Out of scope per product policy; avoids credential and PII field values |
+| **Input values** | The DOM `.value` property on any form control | Attribute pass reads declared attributes only—never live input state |
+| **Credential autocomplete** | Fields with `autocomplete` tokens such as `current-password`, `new-password`, `username`, `one-time-code` | Reduces accidental capture of auth flows |
+| **Unlisted attributes** | `value`, `name`, `id`, `class`, `style`, `title`, `alt`, `placeholder`, `formaction`, `action`, `poster`, `manifest`, `content`, `xlink:href`, and any `data-*` key not in the allowlist | Conservative default; `class`/`id` drive false positives; `formaction`/`action` touch submit surfaces |
+| **Event handlers** | `onclick`, `onload`, `onerror`, `onmouseover`, and all `on*` attributes | Inline script surface—not treated as IOC locators |
+| **ARIA and presentation** | `aria-*`, `role`, `tabindex`, `slot` | Accessibility metadata, not indicator carriers |
+| **Metadata-only tags** | `meta`, `head` children except `link[href]` | Avoids duplicating page metadata noise; `link[href]` remains allowlisted via `href` row |
+| **Executable bodies** | Text inside `<script>`, stylesheets, and `javascript:` URL execution | Detection reads static `src`/`href` strings only; does not run page code |
+| **Storage and network** | `localStorage`, `sessionStorage`, cookies, IndexedDB, fetch/XHR responses | Not DOM attributes; never accessed |
+
+#### Allowlist change policy
+
+The table above is the **authoritative** contract for implementation and privacy review. Adding an attribute or element type requires:
+
+1. Update to this section with rationale
+2. [Permission changes](#permission-changes) review (manifest permissions are unchanged for attribute scan—it reuses content-script host access)
+3. False-positive and performance regression coverage before release
+
+Attribute extraction does **not** add new manifest permissions.
+
+### Trust, provenance, and performance interaction
 
 | Control | Behavior |
 |---------|----------|
 | Default on fresh install | **Off** — visible-text detection only |
-| Allowlisted attributes | Conservative set (for example `href`, `src`, `data-url`); excludes password inputs and hidden subtrees |
-| Provenance | IOCs found via attribute path are labeled separately from visible-text matches |
-| Performance | Capped attribute-node scan per page; large DOMs may skip attribute pass |
-| Trust interaction | Same domain policy, quiet mode, and enrich gates apply to attribute-sourced IOCs |
+| Provenance | Attribute-sourced IOCs show a distinct detection path in **Why detected?** (for example attribute name and element hint) |
+| Dedupe | Same indicator value from visible text and attributes merges to one tray row |
+| Domain policy | Denylisted hosts skip attribute pass when auto-scan or enrich gates block the origin |
+| Quiet mode | Blocks live vendor calls; local attribute detection may still run unless policy combines with scan disable |
+| Manual-only enrichment | Default; attribute-sourced highlights do not auto-fetch vendor data |
+| Performance | Capped attribute-node scan per page; large DOMs may skip attribute pass while visible-text scan completes |
 
-Enabling this feature increases passive indicator handling in page markup; combine with domain denylist entries on sensitive hosts.
+Enabling this feature increases passive indicator handling in page markup. Combine with domain denylist entries on sensitive hosts and keep manual-only enrichment on until you accept the broader detection surface.
+
+### Legal and privacy review note (IOC-only, no full-page upload)
+
+This subsection is for **privacy, legal, and security reviewers** assessing opt-in attribute and href extraction. It states product boundaries in plain language; it is not legal advice.
+
+#### Summary for reviewers
+
+| Question | Answer |
+|----------|--------|
+| Does Vera5 upload full web pages or HTML dumps to Vera5-operated infrastructure? | **No.** There is no Vera5-operated enrichment cloud, telemetry sink, or page-archive service. |
+| What does attribute extraction read? | **IOC-shaped strings only** from an explicit [allowlist of attribute names](#allowlisted-attributes-and-exclusions) on in-scope, visible DOM elements—processed locally in the browser during a scan you trigger or allow via auto-scan. |
+| What can leave the browser? | **Only indicator values you explicitly enrich**, sent over HTTPS to threat-intel vendors **you** configure (BYOK/BYOA)—same contract as visible-text IOCs. Pivot links are user-initiated navigation, not automatic uploads. |
+| Is the feature on by default? | **No.** Default-off; requires Settings toggle plus first-enable consent. Extension updates do not enable it silently. |
+| Is this page monitoring or behavioral analytics? | **No.** No usage analytics, session replay to Vera5, fingerprinting, or ML training on page content. Detection is regex/rule-based and local. |
+
+#### IOC-only processing
+
+Attribute and href extraction is **indicator detection only**:
+
+- Allowlisted attribute **values** are matched against the same local IOC grammar as visible text (IPv4, domains, URLs, hashes, CVEs, and other supported types).
+- Vera5 does **not** collect arbitrary page text, form submissions, authentication tokens, or full document markup for transmission to Vera5.
+- Non-matching attribute strings are discarded after the scan pass; they are not cached as page content.
+- Enrichment cache stores **normalized vendor responses per indicator and per source** when you enrich—not snapshots of pages or attribute trees.
+
+#### No full-page upload
+
+The following are **explicitly out of scope** and must not be sent to Vera5-operated endpoints (none exist for this purpose):
+
+| Never uploaded to Vera5 | Notes |
+|-------------------------|-------|
+| Full page HTML or DOM serialization | Content scripts read targeted text nodes and allowlisted attributes only |
+| Bulk attribute dumps or “page context” packages | No batch exfiltration channel |
+| Browsing history, tab URLs outside active scan, or cross-tab aggregates | Tab-scoped behavior only |
+| Screenshots, clipboard, downloads, or network traffic | Not accessed for this feature |
+| API keys or session cookies | Keys stay in local extension storage; not included in detection reads |
+
+Optional **user-operated** localhost services (backend aggregator, local LLM summary) follow separate documented contracts: indicator-only or normalized enrichment JSON to `127.0.0.1` when you opt in—they do not change the no–Vera5-cloud posture.
+
+#### Third-party disclosure
+
+When you enrich an attribute-sourced IOC:
+
+- The **refanged indicator value** (and vendor-required query fields) may be sent to APIs you enabled with your own keys.
+- Vera5 does not proxy those calls through maintainer infrastructure.
+- Pre-query disclosure (when enabled) names vendors and the indicator before the first fetch.
+- Domain policy, internal asset lists, quiet mode, and manual-only mode can block outbound calls before any third party receives data.
+
+Reviewers should map this to their vendor due-diligence process for AbuseIPDB, OTX, URLScan.io, GreyNoise, Shodan, Censys, VirusTotal, and other sources the analyst enables—not to a Vera5 data processor agreement, because Vera5 does not receive the indicator on behalf of the user.
+
+#### Local retention
+
+| Data class | Where it lives | Page content? |
+|------------|----------------|---------------|
+| Detected IOC rows (text or attribute provenance) | In-memory and local storage for tray, overlay, sessions | Indicator values and provenance hints only |
+| Enrichment cache | `chrome.storage.local` (or Firefox equivalent) | Normalized vendor JSON per indicator—no full page |
+| Settings and consent flags | Local extension storage | Toggle and consent state only |
+| Settings Backup export | User-initiated file download | User chooses whether to include API keys; never automatic upload |
+
+Clear-cache and uninstall remove local enrichment cache on the profile; Vera5 does not operate a remote retention schedule for page data.
+
+#### Operator and organizational practice
+
+- Treat enabled attribute extraction as an **expanded local read** of allowlisted markup fields on pages the analyst scans—comparable to viewing selective “page source” lines—not as enterprise-wide web monitoring.
+- Keep the feature **off** on sensitive origins unless policy requires it; use domain denylist presets for webmail, banking, and health portals.
+- Document internal approval if your organization separates “visible text triage” from “markup attribute triage” in data-handling policies.
+
+For trust-gate validation steps, use the [Trust and query checklist](../SECURITY.md#trust-and-query-checklist). For technical allowlist and exclusion detail, see [Allowlisted attributes and exclusions](#allowlisted-attributes-and-exclusions) above.
 
 ## Quiet mode
 

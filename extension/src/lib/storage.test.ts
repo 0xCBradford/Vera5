@@ -5,6 +5,10 @@ import {
   createDefaultVera5Settings,
   DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
   getApiKey,
+  getAttributeHrefExtractionEnabled,
+  getAttributeHrefExtractionConsentAcknowledged,
+  getAttributeHrefExtractionRememberSiteChoices,
+  getAttributeHrefExtractionSitePreferences,
   getAutoScanEnabled,
   getDomainAllowlist,
   getDomainDenylist,
@@ -23,6 +27,10 @@ import {
   getLocalLlmSummaryEnabled,
   getVera5Settings,
   listDisabledEnrichmentSources,
+  setAttributeHrefExtractionEnabled,
+  setAttributeHrefExtractionConsentAcknowledged,
+  setAttributeHrefExtractionRememberSiteChoices,
+  setAttributeHrefExtractionSitePreferences,
   setAutoScanEnabled,
   setDomainAllowlist,
   setDomainDenylist,
@@ -38,6 +46,10 @@ import {
   setPreQueryNoticePreference,
   STORAGE_KEY_MANUAL_ONLY_MODE,
   STORAGE_KEY_LOCAL_BACKEND_ENABLED,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES,
   STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
   hasApiKey,
   isMaskedApiKeyDisplay,
@@ -49,7 +61,9 @@ import {
   isIocTypeEnabledRecord,
   migrateVera5StorageRaw,
   needsStorageMigration,
+  normalizeAttributeHrefSitePreferencesRecord,
   normalizeVera5Settings,
+  resolveAttributeHrefExtractionForHost,
   SETTINGS_SCHEMA_VERSION,
   setEnrichmentSourceCacheTtlSeconds,
   setExtensionEnabled,
@@ -381,6 +395,157 @@ describe("local LLM summary enabled storage", () => {
   });
 });
 
+describe("attribute href extraction enabled storage", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults to disabled when unset", async () => {
+    await expect(getAttributeHrefExtractionEnabled()).resolves.toBe(false);
+  });
+
+  it("persists enabled state", async () => {
+    await setAttributeHrefExtractionEnabled(true);
+    expect(store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]).toBe(true);
+    await expect(getAttributeHrefExtractionEnabled()).resolves.toBe(true);
+  });
+});
+
+describe("attribute href site preferences", () => {
+  it("normalizes hostname keys and preference values", () => {
+    expect(
+      normalizeAttributeHrefSitePreferencesRecord({
+        " Mail.Example.com ": "off",
+        invalid: "maybe",
+        "soc.example.com": "on",
+      })
+    ).toEqual({
+      "mail.example.com": "off",
+      "soc.example.com": "on",
+    });
+  });
+
+  it("blocks attribute scan when global is off", () => {
+    expect(
+      resolveAttributeHrefExtractionForHost(
+        {
+          attributeHrefExtractionEnabled: false,
+          attributeHrefExtractionRememberSiteChoices: true,
+          attributeHrefExtractionSitePreferences: { "soc.example.com": "on" },
+        },
+        "soc.example.com"
+      )
+    ).toBe(false);
+  });
+
+  it("honors per-site never-scan overrides when remember is on", () => {
+    expect(
+      resolveAttributeHrefExtractionForHost(
+        {
+          attributeHrefExtractionEnabled: true,
+          attributeHrefExtractionRememberSiteChoices: true,
+          attributeHrefExtractionSitePreferences: {
+            "mail.example.com": "off",
+          },
+        },
+        "mail.example.com"
+      )
+    ).toBe(false);
+  });
+
+  it("uses global on when remember is off", () => {
+    expect(
+      resolveAttributeHrefExtractionForHost(
+        {
+          attributeHrefExtractionEnabled: true,
+          attributeHrefExtractionRememberSiteChoices: false,
+          attributeHrefExtractionSitePreferences: {
+            "mail.example.com": "off",
+          },
+        },
+        "mail.example.com"
+      )
+    ).toBe(true);
+  });
+});
+
+describe("attribute href extraction consent storage", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults consent to false when unset", async () => {
+    await expect(getAttributeHrefExtractionConsentAcknowledged()).resolves.toBe(
+      false
+    );
+  });
+
+  it("persists consent acknowledgment", async () => {
+    await setAttributeHrefExtractionConsentAcknowledged(true);
+    expect(
+      store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]
+    ).toBe(true);
+    await expect(getAttributeHrefExtractionConsentAcknowledged()).resolves.toBe(
+      true
+    );
+  });
+});
+
+describe("attribute href remember site choices storage", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults remember site choices to false when unset", async () => {
+    await expect(getAttributeHrefExtractionRememberSiteChoices()).resolves.toBe(
+      false
+    );
+  });
+
+  it("persists remember site choices flag", async () => {
+    await setAttributeHrefExtractionRememberSiteChoices(true);
+    expect(
+      store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES]
+    ).toBe(true);
+    await expect(getAttributeHrefExtractionRememberSiteChoices()).resolves.toBe(
+      true
+    );
+  });
+
+  it("persists per-site preference records", async () => {
+    await setAttributeHrefExtractionSitePreferences({
+      "mail.example.com": "off",
+    });
+    expect(store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]).toEqual({
+      "mail.example.com": "off",
+    });
+    await expect(getAttributeHrefExtractionSitePreferences()).resolves.toEqual({
+      "mail.example.com": "off",
+    });
+  });
+});
+
 describe("highlight enabled storage", () => {
   let store: Record<string, unknown>;
 
@@ -513,6 +678,10 @@ describe("migrate-safe defaults", () => {
     expect(defaults.includePrivateIpv4).toBe(false);
     expect(defaults.localBackendEnabled).toBe(false);
     expect(defaults.localLlmSummaryEnabled).toBe(false);
+    expect(defaults.attributeHrefExtractionEnabled).toBe(false);
+    expect(defaults.attributeHrefExtractionConsentAcknowledged).toBe(false);
+    expect(defaults.attributeHrefExtractionRememberSiteChoices).toBe(false);
+    expect(defaults.attributeHrefExtractionSitePreferences).toEqual({});
     expect(defaults.showPreQueryNotices).toBe(true);
     expect(defaults.preQueryNoticePreferenceConfigured).toBe(false);
     expect(defaults.domainPolicyMode).toBe("allow_by_default");
@@ -646,6 +815,10 @@ describe("migrate-safe defaults", () => {
         [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: false,
         [STORAGE_KEY_LOCAL_BACKEND_ENABLED]: false,
         [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: false,
+        [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]: false,
+        [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]: false,
+        [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES]: false,
+        [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]: {},
         [STORAGE_KEY_API_KEYS]: {},
         [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]:
           createDefaultVera5Settings().enrichmentSourceEnabled,
@@ -708,6 +881,16 @@ describe("getVera5Settings", () => {
     expect(store[STORAGE_KEY_SCHEMA_VERSION]).toBeUndefined();
     expect(store[STORAGE_KEY_MANUAL_ONLY_MODE]).toBe(true);
     expect(store[STORAGE_KEY_AUTO_SCAN_ENABLED]).toBe(false);
+    expect(store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]).toBe(false);
+    expect(store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]).toBe(
+      false
+    );
+    expect(store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES]).toBe(
+      false
+    );
+    expect(store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]).toEqual(
+      {}
+    );
   });
 
   it("does not rewrite storage when already migrated", async () => {

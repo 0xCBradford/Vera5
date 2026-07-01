@@ -168,6 +168,120 @@ describe("Options API key inputs", () => {
     expect((manualOnlyToggle as HTMLInputElement).checked).toBe(true);
   });
 
+  it("renders the attribute href extraction toggle off by default", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const attributeToggle = mounted.container.querySelector(
+      'input[aria-label="Scan link attributes for IOCs"]'
+    );
+    expect(attributeToggle).not.toBeNull();
+    expect((attributeToggle as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("shows first-enable consent before turning on attribute href extraction", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const attributeToggle = mounted.container.querySelector(
+      'input[aria-label="Scan link attributes for IOCs"]'
+    ) as HTMLInputElement;
+    attributeToggle.click();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector('[role="dialog"]')
+    ).not.toBeNull();
+    expect(mounted.container.textContent).toContain(
+      "Enable link attribute scanning?"
+    );
+    expect(
+      mounted.container.querySelector(
+        'a[href*="docs/security-model.md#opt-in-attribute-and-href-extraction"]'
+      )
+    ).not.toBeNull();
+    expect(attributeToggle.checked).toBe(false);
+
+    const cancelButton = Array.from(
+      mounted.container.querySelectorAll("button")
+    ).find((button) => button.textContent === "Cancel");
+    cancelButton?.click();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.querySelector('[role="dialog"]')).toBeNull();
+    expect(attributeToggle.checked).toBe(false);
+  });
+
+  it("enables attribute href extraction after consent confirmation", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const attributeToggle = mounted.container.querySelector(
+      'input[aria-label="Scan link attributes for IOCs"]'
+    ) as HTMLInputElement;
+    attributeToggle.click();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const confirmButton = Array.from(
+      mounted.container.querySelectorAll("button")
+    ).find((button) => button.textContent === "Enable attribute scan");
+    confirmButton?.click();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.querySelector('[role="dialog"]')).toBeNull();
+    expect(attributeToggle.checked).toBe(true);
+    expect(store.attributeHrefExtractionEnabled).toBe(true);
+    expect(store.attributeHrefExtractionConsentAcknowledged).toBe(true);
+  });
+
+  it("can opt into per-site remember from the first-enable consent dialog", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const attributeToggle = mounted.container.querySelector(
+      'input[aria-label="Scan link attributes for IOCs"]'
+    ) as HTMLInputElement;
+    attributeToggle.click();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const rememberCheckbox = mounted.container.querySelector(
+      ".v5-consent-dialog__remember input"
+    ) as HTMLInputElement;
+    rememberCheckbox.click();
+
+    const confirmButton = Array.from(
+      mounted.container.querySelectorAll("button")
+    ).find((button) => button.textContent === "Enable attribute scan");
+    confirmButton?.click();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(store.attributeHrefExtractionRememberSiteChoices).toBe(true);
+    const rememberToggle = mounted.container.querySelector(
+      'input[aria-label="Remember per-site attribute scan choices"]'
+    ) as HTMLInputElement;
+    expect(rememberToggle.checked).toBe(true);
+  });
+
   it("renders the auto-scan toggle", async () => {
     mounted = renderOptions();
     await act(async () => {

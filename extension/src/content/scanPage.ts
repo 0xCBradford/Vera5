@@ -12,6 +12,14 @@ import {
   type TabScanSnapshotPayload,
 } from "../lib/tabScanSnapshot";
 import {
+  mergeVisibleTextAndAttributeIocMatches,
+  pageIocScanMatchesToHighlightInput,
+  scanAllowlistedAttributesForIocsWithProfile,
+  type DetectedIocInAttribute,
+  type PageIocScanMatch,
+} from "./attributeHrefExtractor";
+import { isAttributeHrefExtractionEnabledForCurrentPage } from "./attributeHrefExtractionStorage";
+import {
   CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED,
   getHighlightEnabledForContent,
 } from "./highlightStorage";
@@ -20,6 +28,7 @@ import { getIocTypeEnabledForContent } from "./iocTypeEnabledStorage";
 import { CONTENT_MESSAGE } from "./constants";
 import { logIocDetectionCount, logIocScanProfile } from "./devLog";
 import {
+  resolveMaxIocsPerScan,
   scanTextNodesForIocsInRangeWithProfile,
   scanTextNodesForIocsWithProfile,
   type DetectedIocInTextNode,
@@ -85,11 +94,14 @@ export async function resolveIocDetectorScanOptions(): Promise<IocDetectorScanOp
 }
 
 function buildScanSnapshotEntries(
-  matches: ReadonlyArray<DetectedIocInTextNode>,
+  snapshotMatches: ReadonlyArray<PageIocScanMatch>,
   anchorLinks: ReadonlyArray<HighlightAnchorLink>
 ): TabScanSnapshotEntry[] {
   if (anchorLinks.length > 0) {
-    return anchorLinks.map(
+    const linkedKeys = new Set(
+      anchorLinks.map((entry) => `${entry.type}:${entry.value}`)
+    );
+    const entries = anchorLinks.map(
       ({
         type,
         value,
@@ -110,9 +122,20 @@ function buildScanSnapshotEntries(
           : {}),
       })
     );
+
+    const attributeOnlyMatches = snapshotMatches.filter(
+      (match) => !linkedKeys.has(`${match.type}:${match.value}`)
+    );
+    if (attributeOnlyMatches.length > 0) {
+      entries.push(
+        ...buildTabScanSnapshotEntriesFromMatches(attributeOnlyMatches)
+      );
+    }
+
+    return entries;
   }
 
-  return buildTabScanSnapshotEntriesFromMatches(matches);
+  return buildTabScanSnapshotEntriesFromMatches(snapshotMatches);
 }
 
 export type ScanPageResultPayload = {
@@ -148,18 +171,23 @@ export async function publishTabScanSnapshot(
 }
 
 async function finalizeScanResponse(
-  matches: ReadonlyArray<DetectedIocInTextNode>,
+  highlightMatches: ReadonlyArray<DetectedIocInTextNode>,
   highlightRoot: Node,
-  profile: IocScanProfile
+  profile: IocScanProfile,
+  snapshotMatches: ReadonlyArray<PageIocScanMatch>
 ): Promise<MessageResponse> {
   const highlightEnabled = await getHighlightEnabledForContent();
-  const anchorLinks = applyHighlightForScan(matches, highlightRoot, highlightEnabled);
-  const snapshotEntries = buildScanSnapshotEntries(matches, anchorLinks);
+  const anchorLinks = applyHighlightForScan(
+    highlightMatches,
+    highlightRoot,
+    highlightEnabled
+  );
+  const snapshotEntries = buildScanSnapshotEntries(snapshotMatches, anchorLinks);
   const { tabId, snapshot } = await publishTabScanSnapshot(snapshotEntries);
-  logIocDetectionCount(matches.length);
+  logIocDetectionCount(snapshotMatches.length);
   logIocScanProfile(profile);
   const payload: ScanPageResultPayload = {
-    count: matches.length,
+    count: snapshotMatches.length,
     tabId,
     snapshot,
     profile,
@@ -167,12 +195,55 @@ async function finalizeScanResponse(
   return { ok: true, payload };
 }
 
+async function runMergedPageScan(
+  root: Node,
+  scanOptions: IocDetectorScanOptions
+): Promise<{
+  highlightMatches: DetectedIocInTextNode[];
+  snapshotMatches: PageIocScanMatch[];
+  profile: IocScanProfile;
+}> {
+  const maxIocs = resolveMaxIocsPerScan(scanOptions);
+  const textResult = scanTextNodesForIocsWithProfile(root, scanOptions);
+  let attributeMatches: DetectedIocInAttribute[] = [];
+  let attributeIocCapReached = false;
+
+  if (await isAttributeHrefExtractionEnabledForCurrentPage()) {
+    const attributeResult = scanAllowlistedAttributesForIocsWithProfile(
+      root,
+      scanOptions
+    );
+    attributeMatches = attributeResult.matches;
+    attributeIocCapReached = attributeResult.profile.iocCapReached;
+  }
+
+  const snapshotMatches = mergeVisibleTextAndAttributeIocMatches(
+    textResult.matches,
+    attributeMatches,
+    maxIocs
+  );
+  const highlightMatches = pageIocScanMatchesToHighlightInput(snapshotMatches);
+  const profile: IocScanProfile = {
+    ...textResult.profile,
+    iocCount: snapshotMatches.length,
+    iocCapReached:
+      snapshotMatches.length >= maxIocs ||
+      textResult.profile.iocCapReached ||
+      attributeIocCapReached,
+  };
+
+  return { highlightMatches, snapshotMatches, profile };
+}
+
 export async function handleScanPageRequest(
   root: Node = document.body
 ): Promise<MessageResponse> {
   const scanOptions = await resolveIocDetectorScanOptions();
-  const { matches, profile } = scanTextNodesForIocsWithProfile(root, scanOptions);
-  return finalizeScanResponse(matches, root, profile);
+  const { highlightMatches, snapshotMatches, profile } = await runMergedPageScan(
+    root,
+    scanOptions
+  );
+  return finalizeScanResponse(highlightMatches, root, profile, snapshotMatches);
 }
 
 export async function handleScanSelectionRequest(
@@ -193,7 +264,7 @@ export async function handleScanSelectionRequest(
   if (highlightRoot.nodeType === Node.TEXT_NODE) {
     highlightRoot = highlightRoot.parentNode ?? root;
   }
-  return finalizeScanResponse(matches, highlightRoot, profile);
+  return finalizeScanResponse(matches, highlightRoot, profile, matches);
 }
 
 export function setupScanPageListener(): void {

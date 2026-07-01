@@ -6,6 +6,11 @@ import { MESSAGE, scanPageMessage, scanSelectionMessage } from "../lib/messages"
 import { CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED } from "./highlightStorage";
 import { CONTENT_STORAGE_KEY_INCLUDE_PRIVATE_IPV4 } from "./includePrivateIpv4Storage";
 import { CONTENT_STORAGE_KEY_IOC_TYPE_ENABLED } from "./iocTypeEnabledStorage";
+import {
+  CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
+  CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES,
+  CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES,
+} from "./attributeHrefExtractionStorage";
 import { CONTENT_MESSAGE } from "./constants";
 import { logIocDetectionCount } from "./devLog";
 import {
@@ -68,7 +73,10 @@ describe("handleScanPageRequest", () => {
     stubChromeForScanPageTests(store, sendMessage);
     Object.defineProperty(window, "location", {
       configurable: true,
-      value: { href: "https://example.com/alert" },
+      value: {
+        href: "https://example.com/alert",
+        hostname: "example.com",
+      },
     });
   });
 
@@ -246,6 +254,68 @@ describe("handleScanPageRequest", () => {
       })
     );
   });
+
+  it("does not merge attribute IOCs when attribute extraction is disabled", async () => {
+    const root = mountPage(`
+      <p>Visible only</p>
+      <a href="https://attribute-only.example.com/path">label</a>
+    `);
+    const response = await handleScanPageRequest(root);
+    expect(response).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 0 }),
+      })
+    );
+  });
+
+  it("merges attribute IOCs and dedupes duplicate type-value keys when enabled", async () => {
+    store[CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED] = true;
+    const root = mountPage(`
+      <a href="https://duplicate.example.com/path">https://duplicate.example.com/path</a>
+      <img src="https://attribute-only.example.com/logo.png" />
+    `);
+    const response = await handleScanPageRequest(root);
+    expect(response).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 2 }),
+      })
+    );
+
+    const message = sendMessage.mock.calls[0]?.[0];
+    const values = message.snapshot.entries.map(
+      (entry: { value: string }) => entry.value
+    );
+    expect(values).toEqual(
+      expect.arrayContaining([
+        "https://duplicate.example.com/path",
+        "https://attribute-only.example.com/logo.png",
+      ])
+    );
+    expect(
+      values.filter((value: string) => value === "https://duplicate.example.com/path")
+    ).toHaveLength(1);
+  });
+
+  it("honors per-site off preference when remember choices is enabled", async () => {
+    store[CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED] = true;
+    store[CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES] =
+      true;
+    store[CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES] = {
+      "example.com": "off",
+    };
+    const root = mountPage(
+      `<a href="https://attribute-only.example.com/path">label</a>`
+    );
+    const response = await handleScanPageRequest(root);
+    expect(response).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 0 }),
+      })
+    );
+  });
 });
 
 describe("handleScanSelectionRequest", () => {
@@ -258,7 +328,10 @@ describe("handleScanSelectionRequest", () => {
     stubChromeForScanPageTests(store, sendMessage);
     Object.defineProperty(window, "location", {
       configurable: true,
-      value: { href: "https://example.com/alert" },
+      value: {
+        href: "https://example.com/alert",
+        hostname: "example.com",
+      },
     });
   });
 
@@ -411,7 +484,10 @@ describe("setupScanPageListener", () => {
 
     Object.defineProperty(window, "location", {
       configurable: true,
-      value: { href: "https://example.com/alert" },
+      value: {
+        href: "https://example.com/alert",
+        hostname: "example.com",
+      },
     });
 
     mountPage("<p>Contact 8.8.8.8 today.</p>");
@@ -491,7 +567,10 @@ describe("setupScanPageListener", () => {
 
     Object.defineProperty(window, "location", {
       configurable: true,
-      value: { href: "https://example.com/alert" },
+      value: {
+        href: "https://example.com/alert",
+        hostname: "example.com",
+      },
     });
 
     const root = mountPage(`
