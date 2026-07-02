@@ -1,6 +1,12 @@
 import { normalizeIocNoteKey } from "./analystNotesStorage";
 import { IOC_TYPE, type IocType } from "./iocRegex";
 import { countIocsByType } from "./tabScanSummary";
+import {
+  filterTimelineEventsForAppend,
+  normalizeTimelineEvent,
+  pruneInvestigationSessionTimelineEvents,
+  type TimelineEvent,
+} from "./timelineEvent";
 
 export const INVESTIGATION_SESSION_ID_PREFIX = "vera5-inv-";
 
@@ -54,6 +60,7 @@ export type InvestigationSession = {
   notes?: string;
   iocTimelines?: InvestigationSessionIocTimelines;
   pinnedIocs?: InvestigationSessionPinnedIocs;
+  timelineEvents?: TimelineEvent[];
 };
 
 export type InvestigationSessionIocRollup = {
@@ -74,6 +81,7 @@ export type CreateInvestigationSessionInput = {
   exportCount?: number;
   iocTimelines?: InvestigationSessionIocTimelines;
   pinnedIocs?: InvestigationSessionPinnedIocs;
+  timelineEvents?: TimelineEvent[];
 };
 
 export type UpdateInvestigationSessionInput = {
@@ -87,6 +95,7 @@ export type UpdateInvestigationSessionInput = {
   exportCount?: number;
   iocTimelines?: InvestigationSessionIocTimelines | null;
   pinnedIocs?: InvestigationSessionPinnedIocs | null;
+  timelineEvents?: TimelineEvent[] | null;
 };
 
 const IOC_TYPES = new Set<string>(Object.values(IOC_TYPE));
@@ -436,6 +445,44 @@ export function applyInvestigationSessionIocTimelineEvent(
   return { ...session, iocTimelines: timelines };
 }
 
+function normalizeInvestigationSessionTimelineEvents(
+  value: unknown
+): TimelineEvent[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const events: TimelineEvent[] = [];
+  for (const entry of value) {
+    const normalized = normalizeTimelineEvent(entry);
+    if (normalized) {
+      events.push(normalized);
+    }
+  }
+  const pruned = pruneInvestigationSessionTimelineEvents(events);
+  return pruned.length > 0 ? pruned : undefined;
+}
+
+export function appendInvestigationSessionTimelineEvents(
+  session: InvestigationSession,
+  events: ReadonlyArray<TimelineEvent>
+): InvestigationSession {
+  if (events.length === 0) {
+    return session;
+  }
+
+  const existing = session.timelineEvents ?? [];
+  const accepted = filterTimelineEventsForAppend(existing, events);
+  if (accepted.length === 0) {
+    return session;
+  }
+
+  return {
+    ...session,
+    timelineEvents: pruneInvestigationSessionTimelineEvents([...existing, ...accepted]),
+  };
+}
+
 export function getInvestigationSessionIocTimeline(
   session: InvestigationSession,
   iocValue: string
@@ -745,6 +792,7 @@ export function createInvestigationSession(
   const notes = normalizeInvestigationSessionNotes(input.notes);
   const iocTimelines = normalizeInvestigationSessionIocTimelines(input.iocTimelines);
   const pinnedIocs = normalizeInvestigationSessionPinnedIocs(input.pinnedIocs);
+  const timelineEvents = normalizeInvestigationSessionTimelineEvents(input.timelineEvents);
   const session: InvestigationSession = {
     id,
     title,
@@ -764,6 +812,9 @@ export function createInvestigationSession(
   }
   if (pinnedIocs !== undefined) {
     session.pinnedIocs = pinnedIocs;
+  }
+  if (timelineEvents !== undefined) {
+    session.timelineEvents = timelineEvents;
   }
   return session;
 }
@@ -845,6 +896,17 @@ export function updateInvestigationSession(
     nextPinnedIocs = normalizeInvestigationSessionPinnedIocs(input.pinnedIocs);
   }
 
+  let nextTimelineEvents: TimelineEvent[] | undefined;
+  if (input.timelineEvents === null) {
+    nextTimelineEvents = undefined;
+  } else if (input.timelineEvents === undefined) {
+    nextTimelineEvents = session.timelineEvents
+      ? [...session.timelineEvents]
+      : undefined;
+  } else {
+    nextTimelineEvents = normalizeInvestigationSessionTimelineEvents(input.timelineEvents);
+  }
+
   const next: InvestigationSession = {
     id: session.id,
     title: nextTitle,
@@ -864,6 +926,9 @@ export function updateInvestigationSession(
   }
   if (nextPinnedIocs !== undefined) {
     next.pinnedIocs = nextPinnedIocs;
+  }
+  if (nextTimelineEvents !== undefined) {
+    next.timelineEvents = nextTimelineEvents;
   }
   return next;
 }
@@ -925,6 +990,15 @@ export function isInvestigationSession(value: unknown): value is InvestigationSe
       return false;
     }
   }
+  if (record.timelineEvents !== undefined) {
+    const timelineEvents = normalizeInvestigationSessionTimelineEvents(record.timelineEvents);
+    if (
+      !timelineEvents ||
+      JSON.stringify(timelineEvents) !== JSON.stringify(record.timelineEvents)
+    ) {
+      return false;
+    }
+  }
 
   if (record.notes === undefined) {
     return true;
@@ -960,6 +1034,7 @@ export function normalizeInvestigationSession(
   const notes = normalizeInvestigationSessionNotes(value.notes);
   const iocTimelines = normalizeInvestigationSessionIocTimelines(value.iocTimelines);
   const pinnedIocs = normalizeInvestigationSessionPinnedIocs(value.pinnedIocs);
+  const timelineEvents = normalizeInvestigationSessionTimelineEvents(value.timelineEvents);
   const normalized: InvestigationSession = {
     id: value.id.trim(),
     title: normalizeInvestigationSessionTitle(value.title) ?? value.title.trim(),
@@ -979,6 +1054,9 @@ export function normalizeInvestigationSession(
   }
   if (pinnedIocs !== undefined) {
     normalized.pinnedIocs = pinnedIocs;
+  }
+  if (timelineEvents !== undefined) {
+    normalized.timelineEvents = timelineEvents;
   }
   return normalized;
 }

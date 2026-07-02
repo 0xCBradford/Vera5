@@ -1,3 +1,7 @@
+import { rethrowUnlessStaleExtensionError } from "./extensionContext";
+import type { IocType } from "./iocRegex";
+import { recordActiveInvestigationSessionMacroRunEvent } from "./investigationSessionStorage";
+
 export const MACRO_STEP_TYPE_OPEN_FROM_SELECTION = "openFromSelection" as const;
 
 export type MacroContextMenuStepType =
@@ -25,6 +29,27 @@ export function listRegisteredMacroStepContextMenuActionIds(): ReadonlyMap<
   string
 > {
   return macroStepContextMenuActionIds;
+}
+
+export function emitInvestigationSessionMacroRunTimelineEvent(input: {
+  stepType: string;
+  macroId?: string;
+  iocValue?: string;
+  iocType?: IocType;
+  now?: number;
+}): void {
+  const stepType = input.stepType.trim();
+  if (stepType.length === 0) {
+    return;
+  }
+
+  void recordActiveInvestigationSessionMacroRunEvent({
+    stepType,
+    macroId: input.macroId,
+    iocValue: input.iocValue,
+    iocType: input.iocType,
+    now: input.now,
+  }).catch(rethrowUnlessStaleExtensionError);
 }
 
 registerMacroStepContextMenuActionId(

@@ -6,6 +6,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IOC_RULE_ID, IOC_TYPE } from "../lib/iocRegex";
 import { createInvestigationSession } from "../lib/investigationSession";
+import {
+  createTimelineEvent,
+  TIMELINE_EVENT_TYPE,
+} from "../lib/timelineEvent";
 import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
 import { ENRICHMENT_SOURCE } from "../lib/enrichmentSourceRegistry";
 import { createEmptyEnrichmentCache } from "../lib/cache";
@@ -26,6 +30,11 @@ import {
 } from "../lib/popupPanelFocus";
 import { STORAGE_KEY_ANALYST_NOTES } from "../lib/analystNotesStorage";
 import { Popup } from "./Popup";
+import * as copyText from "../lib/copyText";
+import {
+  INVESTIGATION_TIMELINE_EXPORT_APPENDIX_HEADING,
+  INVESTIGATION_TIMELINE_EXPORT_SCHEMA_VERSION,
+} from "../lib/investigationTimelineExport";
 
 const sampleCollection = createIocCollection({
   id: "vera5-col-popup-test",
@@ -60,6 +69,28 @@ const sampleActiveSession = createInvestigationSession({
       iocType: IOC_TYPE.DOMAIN,
     },
   },
+  timelineEvents: [
+    createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.SCAN,
+      sessionId: "vera5-inv-popup-test",
+      iocKey: "8.8.8.8",
+      timestamp: 100,
+    }),
+    createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.ENRICH,
+      sessionId: "vera5-inv-popup-test",
+      iocKey: "8.8.8.8",
+      timestamp: 250,
+      sourceAttributionSummary: "Source: AbuseIPDB · live",
+    }),
+    createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.EXPORT,
+      sessionId: "vera5-inv-popup-test",
+      iocKey: "example.com",
+      timestamp: 400,
+      templateId: "jira-comment",
+    }),
+  ],
 });
 
 const sampleRecentSession = createInvestigationSession({
@@ -576,6 +607,186 @@ describe("Popup IOC tray", () => {
     expect(mounted?.container.textContent).toContain("Download Markdown");
     expect(mounted?.container.textContent).toContain("Download JSON");
     expect(mounted?.container.textContent).toContain("Download CSV");
+  });
+
+  it("shows the active session timeline in chronological order", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Session timeline");
+    });
+
+    const timelineList = mounted?.container.querySelector(
+      '[aria-label="Session timeline events"]'
+    );
+    expect(timelineList).not.toBeNull();
+    expect(timelineList?.textContent).toMatch(/First seen[\s\S]*8\.8\.8\.8/);
+    expect(timelineList?.textContent).toMatch(/Enriched[\s\S]*Source: AbuseIPDB · live/);
+    expect(timelineList?.textContent).toMatch(/Exported[\s\S]*example\.com/);
+    expect(timelineList?.textContent).toMatch(/Template: Jira comment/);
+
+    const rows = timelineList?.querySelectorAll("li") ?? [];
+    expect(rows.length).toBe(3);
+    expect(rows[0]?.textContent).toMatch(/First seen/);
+    expect(rows[1]?.textContent).toMatch(/Enriched/);
+    expect(rows[2]?.textContent).toMatch(/Exported/);
+  });
+
+  it("navigates to the page highlight when a timeline row is clicked", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Session timeline");
+    });
+
+    const timelineList = mounted?.container.querySelector(
+      '[aria-label="Session timeline events"]'
+    );
+    expect(timelineList).not.toBeNull();
+
+    const firstSeenRow = Array.from(timelineList?.querySelectorAll('[role="button"]') ?? []).find(
+      (element) =>
+        element.getAttribute("aria-label") === "View 8.8.8.8 on page. First seen"
+    );
+    expect(firstSeenRow).toBeDefined();
+    firstSeenRow?.click();
+
+    await vi.waitFor(() => {
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+        7,
+        {
+          type: "NAVIGATE_TO_IOC_ANCHOR",
+          anchorId: "vera5-hl-1",
+        }
+      );
+    });
+  });
+
+  it("shows feedback when a timeline indicator is not on the current page", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: createInvestigationSession({
+        ...sampleActiveSession,
+        timelineEvents: [
+          createTimelineEvent({
+            type: TIMELINE_EVENT_TYPE.SCAN,
+            sessionId: sampleActiveSession.id,
+            iocKey: "missing.example",
+            timestamp: 100,
+          }),
+        ],
+      }),
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Session timeline");
+    });
+
+    const row = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
+      (element) =>
+        element.getAttribute("aria-label") === "View missing.example on page. First seen"
+    );
+    expect(row).toBeDefined();
+    row?.click();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "missing.example is not on the current page. Scan again to refresh the list."
+      );
+    });
+    expect(chrome.tabs.sendMessage).not.toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ type: "NAVIGATE_TO_IOC_ANCHOR" })
+    );
+  });
+
+  it("exposes session timeline event-type filter controls", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Session timeline");
+    });
+
+    const typeFilter = mounted?.container.querySelector(
+      'select[aria-label="Event type"]'
+    ) as HTMLSelectElement | null;
+    expect(typeFilter).not.toBeNull();
+    const optionValues = Array.from(typeFilter!.options).map((option) => option.value);
+    expect(optionValues).toContain(TIMELINE_EVENT_TYPE.ENRICH);
+    expect(optionValues).toContain(TIMELINE_EVENT_TYPE.EXPORT);
+
+    const timelineList = mounted?.container.querySelector(
+      '[aria-label="Session timeline events"]'
+    );
+    expect(timelineList?.querySelectorAll("li").length).toBe(3);
+  });
+
+  it("copies the filtered timeline slice as a markdown appendix", async () => {
+    const copy = vi.spyOn(copyText, "copyTextToClipboard").mockResolvedValue(true);
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Export timeline appendix");
+    });
+
+    const copyButton = Array.from(mounted!.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Copy appendix"
+    );
+    expect(copyButton).toBeDefined();
+    copyButton?.click();
+
+    await vi.waitFor(() => {
+      expect(copy).toHaveBeenCalled();
+    });
+    expect(String(copy.mock.calls[0]?.[0])).toContain(
+      INVESTIGATION_TIMELINE_EXPORT_APPENDIX_HEADING
+    );
+  });
+
+  it("copies the filtered timeline slice as JSON with schemaVersion", async () => {
+    const copy = vi.spyOn(copyText, "copyTextToClipboard").mockResolvedValue(true);
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Copy JSON");
+    });
+
+    const copyButton = Array.from(mounted!.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Copy JSON"
+    );
+    expect(copyButton).toBeDefined();
+    copyButton?.click();
+
+    await vi.waitFor(() => {
+      expect(copy).toHaveBeenCalled();
+    });
+    const payload = JSON.parse(String(copy.mock.calls[0]?.[0])) as {
+      schemaVersion: number;
+      events: Array<{ type: string }>;
+    };
+    expect(payload.schemaVersion).toBe(INVESTIGATION_TIMELINE_EXPORT_SCHEMA_VERSION);
+    expect(payload.events.length).toBeGreaterThan(0);
   });
 
   it("shows recent sessions with reopen, rename, archive, and delete actions", async () => {

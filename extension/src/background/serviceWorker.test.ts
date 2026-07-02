@@ -8,6 +8,7 @@ import {
   scanPageMessage,
   toggleCommandPaletteMessage,
 } from "../lib/messages";
+import { MACRO_STEP_TYPE_OPEN_FROM_SELECTION } from "../lib/macroStepActions";
 import {
   DECLARED_ENRICHMENT_API_HOSTS,
   MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS,
@@ -23,6 +24,18 @@ vi.mock("../lib/storageMigration", () => ({
   runStorageMigrationOnExtensionUpdate: (...args: unknown[]) =>
     runStorageMigrationOnExtensionUpdate(...args),
 }));
+
+const emitInvestigationSessionMacroRunTimelineEvent = vi.fn();
+
+vi.mock("../lib/macroStepActions", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/macroStepActions")>();
+  return {
+    ...actual,
+    emitInvestigationSessionMacroRunTimelineEvent: (
+      ...args: Parameters<typeof actual.emitInvestigationSessionMacroRunTimelineEvent>
+    ) => emitInvestigationSessionMacroRunTimelineEvent(...args),
+  };
+});
 
 const extensionRoot = join(
   fileURLToPath(new URL(".", import.meta.url)),
@@ -187,6 +200,7 @@ describe("service worker scan-page command routing", () => {
     });
     openOptionsPage.mockReset();
     runStorageMigrationOnExtensionUpdate.mockReset();
+    emitInvestigationSessionMacroRunTimelineEvent.mockReset();
     runStorageMigrationOnExtensionUpdate.mockResolvedValue({
       migrated: false,
       fromVersion: 8,
@@ -322,6 +336,9 @@ describe("service worker scan-page command routing", () => {
 
     await vi.waitFor(() => {
       expect(tabsSendMessage).toHaveBeenCalledWith(77, enrichSelectionMessage());
+    });
+    expect(emitInvestigationSessionMacroRunTimelineEvent).toHaveBeenCalledWith({
+      stepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
     });
     expect(enrichSelectionMessage().type).toBe(MESSAGE.ENRICH_SELECTION);
   });

@@ -5,6 +5,7 @@ import {
   setStoredIocLabel,
 } from "./iocLabelStorage";
 import { type IocLabelId, normalizeIocLabelId } from "./iocLabel";
+import { recordActiveInvestigationSessionWatchlistTagEvent } from "./investigationSessionStorage";
 import {
   isExtensionContextInvalidated,
   rethrowUnlessStaleExtensionError,
@@ -46,6 +47,12 @@ export function getSessionIocLabel(value: string): IocLabelId | null {
 export function setSessionIocLabel(value: string, label: IocLabelId | null): void {
   const normalizedLabel = label ? normalizeIocLabelId(label) : null;
   setCachedIocLabel(value, normalizedLabel);
+  if (normalizedLabel) {
+    void recordActiveInvestigationSessionWatchlistTagEvent({
+      iocValue: value,
+      label: normalizedLabel,
+    }).catch(rethrowUnlessStaleExtensionError);
+  }
   if (!canPersistIocLabels()) {
     return;
   }

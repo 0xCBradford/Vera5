@@ -27,6 +27,7 @@ import {
   getExportTemplateLabel,
   isExportTemplateId,
   listExportTemplateIds,
+  type ExportTemplateId,
 } from "../lib/exportTemplates";
 import { getTabScanTrayFilter } from "../lib/tabScanSnapshotStorage";
 import {
@@ -154,10 +155,20 @@ export {
 export const HOVER_CARD_HOST_ID = "vera5-hover-card-host";
 
 function notifyInvestigationSessionExportRecorded(
-  iocs?: ReadonlyArray<{ value: string; type?: IocType }>
+  iocs?: ReadonlyArray<{ value: string; type?: IocType }>,
+  options?: { templateId?: ExportTemplateId }
 ): void {
   void recordActiveInvestigationSessionExportEvent(
-    iocs && iocs.length > 0 ? { iocs } : undefined
+    iocs && iocs.length > 0
+      ? {
+          iocs,
+          ...(options?.templateId !== undefined
+            ? { templateId: options.templateId }
+            : {}),
+        }
+      : options?.templateId !== undefined
+        ? { templateId: options.templateId }
+        : undefined
   );
 }
 
@@ -1316,7 +1327,8 @@ function runTraySubsetExport(
     downloadTraySubsetExportFile(cache.records, format, doc);
   }
   notifyInvestigationSessionExportRecorded(
-    mapEnrichmentRecordsToTimelineIocs(cache.records)
+    mapEnrichmentRecordsToTimelineIocs(cache.records),
+    format === "markdown" ? { templateId: "markdown-report" } : undefined
   );
   return true;
 }
@@ -1410,7 +1422,8 @@ function buildScanListTemplateCopyDropdownActions(
           );
           if (copied) {
             notifyInvestigationSessionExportRecorded(
-              mapEnrichmentRecordsToTimelineIocs(cache.records)
+              mapEnrichmentRecordsToTimelineIocs(cache.records),
+              format === "markdown" ? { templateId: "markdown-report" } : undefined
             );
           }
         },
@@ -1479,6 +1492,10 @@ function createTemplateExportRow(
         }
 
         downloadTrayTemplateExportFile(selectedTemplate, cache.records, doc);
+        notifyInvestigationSessionExportRecorded(
+          mapEnrichmentRecordsToTimelineIocs(cache.records),
+          { templateId: selectedTemplate }
+        );
         setScanExportStatus(
           statusEl,
           resolveTrayTemplateExportFeedback({
@@ -1541,7 +1558,8 @@ function createTemplateExportRow(
         );
         if (copied) {
           notifyInvestigationSessionExportRecorded(
-            mapEnrichmentRecordsToTimelineIocs(cache.records)
+            mapEnrichmentRecordsToTimelineIocs(cache.records),
+            { templateId: selectedTemplate }
           );
         }
       },

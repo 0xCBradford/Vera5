@@ -343,6 +343,95 @@ The popup **Source operations** section summarizes enrichment health: global rat
 | Cross-tab “seen elsewhere” alerts | Re-scan or reopen the session on the relevant tab. |
 | Full hosted case management | Local session + export only. |
 
+## Investigation timeline event schema
+
+Vera5 records a **versioned, ordered event log** per investigation session for mini-DFIR timelines: when indicators were first seen, enriched, exported, tagged, re-detected, or touched by operator macros. Events stay in **local extension storage** on your profile—no Vera5 cloud sync or SIEM relay.
+
+This schema is the shared contract for:
+
+- **Session timeline UI** (chronological list with filters in the extension workspace)
+- **Timeline export** (Markdown or JSON appendix alongside case artifacts)
+- **Investigation replay** (step-through playback of the same captured events)
+
+Capture uses **one pipeline**—scan, enrich, export, label, macro, and re-detection paths emit the same `TimelineEvent` shape so replay and export never duplicate or diverge on field names.
+
+### Per-IOC Session timeline vs session event log
+
+The hover card **Session timeline** (first seen, enrich, export timestamps for one indicator) remains a compact per-IOC view on the active session. The **`TimelineEvent`** schema below is the full session-scoped log that powers the investigation timeline feature, exports, and replay. Both are local-only; neither uploads page HTML or API keys.
+
+### Event types (`type`)
+
+| `type` value | When emitted | Typical `sourceAttributionSummary` |
+|--------------|--------------|-------------------------------------|
+| `scan` | An indicator is first detected on a page scan for the session | Empty, or scan context when available |
+| `enrich` | Live or cached enrichment completes for an indicator | Vendor attribution line (for example `Source: AbuseIPDB · live`) |
+| `export` | An indicator or session export action completes | Empty, or export context |
+| `watchlistTag` | A **Label** or watchlist-style tag is applied to an indicator | Tag or label name |
+| `macroRun` | An operator macro step runs against an indicator (when macros are enabled) | Macro or step identifier summary |
+| `redetect` | The same indicator value is detected again on a later scan in the session | Empty, or prior context |
+
+Stable type strings match the extension registry: `scan`, `enrich`, `export`, `watchlistTag`, `macroRun`, `redetect`.
+
+### Field contract
+
+Every event includes:
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `schemaVersion` | number | Yes | Event schema version. Current value: **1**. |
+| `type` | string | Yes | One of the event types in the table above. |
+| `sessionId` | string | Yes | Investigation session id (for example `vera5-inv-…`). |
+| `iocKey` | string | Yes | Normalized indicator key (trimmed value; same normalization as analyst notes and session IOC memory). May be empty for session-scoped macro events. |
+| `timestamp` | number | Yes | Unix epoch milliseconds when the event occurred. |
+| `sourceAttributionSummary` | string | Yes | Human-readable attribution or context line (max **500** characters after trim). May be empty when no vendor or template context applies. |
+| `templateId` | string | No | Present on **`export`** events when a ticket template was used. One of: `jira-comment`, `thehive-case-note`, `analyst-update`, `obsidian-note`, `markdown-report`, `csv-row`. |
+
+Events **never** include API keys, raw vendor JSON secrets, or full page content—only indicator keys and short attribution summaries you would already see on the hover card or export menus.
+
+### JSON examples
+
+Enrichment event:
+
+```json
+{
+  "schemaVersion": 1,
+  "type": "enrich",
+  "sessionId": "vera5-inv-a1b2c3d4",
+  "iocKey": "8.8.8.8",
+  "timestamp": 1700000000000,
+  "sourceAttributionSummary": "Source: AbuseIPDB · live"
+}
+```
+
+Export with template:
+
+```json
+{
+  "schemaVersion": 1,
+  "type": "export",
+  "sessionId": "vera5-inv-a1b2c3d4",
+  "iocKey": "8.8.8.8",
+  "timestamp": 1700000001000,
+  "sourceAttributionSummary": "",
+  "templateId": "jira-comment"
+}
+```
+
+Re-detection after a rescan:
+
+```json
+{
+  "schemaVersion": 1,
+  "type": "redetect",
+  "sessionId": "vera5-inv-a1b2c3d4",
+  "iocKey": "malware.testcategory.com",
+  "timestamp": 1700000002000,
+  "sourceAttributionSummary": ""
+}
+```
+
+Timeline JSON export (future) will be an array of these objects with a top-level export `schemaVersion`, redacting any secret-shaped fields before write—same redaction rules as session and enrichment exports.
+
 ## Session vs IOC collection
 
 Vera5 offers two local grouping models. They complement each other; neither replaces your external case platform.

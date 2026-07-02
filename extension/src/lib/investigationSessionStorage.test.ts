@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IOC_TYPE } from "./iocRegex";
 import { createInvestigationSession } from "./investigationSession";
 import {
+  TIMELINE_EVENT_SCHEMA_VERSION,
+  TIMELINE_EVENT_TYPE,
+  MAX_INVESTIGATION_SESSION_TIMELINE_EVENTS,
+} from "./timelineEvent";
+import {
   archiveInvestigationSession,
   createEmptyInvestigationSessionsStore,
   deleteStoredInvestigationSession,
@@ -16,6 +21,8 @@ import {
   persistInvestigationSessionsStore,
   recordActiveInvestigationSessionEnrichmentEvent,
   recordActiveInvestigationSessionExportEvent,
+  recordActiveInvestigationSessionMacroRunEvent,
+  recordActiveInvestigationSessionWatchlistTagEvent,
   renameActiveInvestigationSession,
   renameInvestigationSession,
   reopenInvestigationSession,
@@ -524,5 +531,155 @@ describe("investigationSessionStorage", () => {
     });
     expect(unpinned?.pinnedIocs).toBeUndefined();
     expect(await getActiveInvestigationSession()).toEqual(unpinned);
+  });
+
+  it("appends TimelineEvent records for scan, enrich, export, watchlist tag, and redetect", async () => {
+    const firstScan = await syncActiveInvestigationSessionFromScan({
+      pageUrl: "https://example.com/alert",
+      entries: [{ type: IOC_TYPE.IPV4, value: "8.8.8.8" }],
+      now: 100,
+    });
+    expect(firstScan?.timelineEvents).toEqual([
+      expect.objectContaining({
+        schemaVersion: TIMELINE_EVENT_SCHEMA_VERSION,
+        type: TIMELINE_EVENT_TYPE.SCAN,
+        iocKey: "8.8.8.8",
+        timestamp: 100,
+      }),
+    ]);
+
+    await recordActiveInvestigationSessionEnrichmentEvent({
+      iocValue: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      now: 200,
+      sourceAttributionSummary: "Source: AbuseIPDB · live",
+    });
+    await recordActiveInvestigationSessionExportEvent({
+      iocValue: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      now: 300,
+      templateId: "jira-comment",
+    });
+    await recordActiveInvestigationSessionWatchlistTagEvent({
+      iocValue: "8.8.8.8",
+      label: "case-important",
+      now: 400,
+    });
+
+    const rescan = await syncActiveInvestigationSessionFromScan({
+      pageUrl: "https://example.com/alert",
+      entries: [{ type: IOC_TYPE.IPV4, value: "8.8.8.8" }],
+      now: 500,
+    });
+
+    expect(rescan?.timelineEvents).toEqual([
+      expect.objectContaining({ type: TIMELINE_EVENT_TYPE.SCAN, timestamp: 100 }),
+      expect.objectContaining({
+        type: TIMELINE_EVENT_TYPE.ENRICH,
+        timestamp: 200,
+        sourceAttributionSummary: "Source: AbuseIPDB · live",
+      }),
+      expect.objectContaining({
+        type: TIMELINE_EVENT_TYPE.EXPORT,
+        timestamp: 300,
+        templateId: "jira-comment",
+      }),
+      expect.objectContaining({
+        type: TIMELINE_EVENT_TYPE.WATCHLIST_TAG,
+        timestamp: 400,
+        sourceAttributionSummary: "Case important",
+      }),
+      expect.objectContaining({ type: TIMELINE_EVENT_TYPE.REDETECT, timestamp: 500 }),
+    ]);
+  });
+
+  it("records macroRun timeline events on the active session", async () => {
+    await startNewInvestigationSession({
+      title: "Macro case",
+      pageUrl: "https://example.com",
+      now: 100,
+    });
+
+    const updated = await recordActiveInvestigationSessionMacroRunEvent({
+      stepType: "openFromSelection",
+      macroId: "triage-selection",
+      iocValue: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      now: 200,
+    });
+
+    expect(updated?.timelineEvents).toEqual([
+      expect.objectContaining({
+        schemaVersion: TIMELINE_EVENT_SCHEMA_VERSION,
+        type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+        iocKey: "8.8.8.8",
+        timestamp: 200,
+        sourceAttributionSummary: "triage-selection: openFromSelection",
+      }),
+    ]);
+  });
+
+  it("deduplicates rapid duplicate timeline events for the same IOC and type", async () => {
+    await startNewInvestigationSession({
+      title: "Dedup case",
+      pageUrl: "https://example.com",
+      now: 100,
+    });
+
+    await recordActiveInvestigationSessionEnrichmentEvent({
+      iocValue: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      now: 200,
+      sourceAttributionSummary: "Source: AbuseIPDB · live",
+    });
+    await recordActiveInvestigationSessionEnrichmentEvent({
+      iocValue: "8.8.8.8",
+      iocType: IOC_TYPE.IPV4,
+      now: 200 + 2_000,
+      sourceAttributionSummary: "Source: AbuseIPDB · cached",
+    });
+
+    const active = await getActiveInvestigationSession();
+    expect(active?.timelineEvents).toEqual([
+      expect.objectContaining({
+        type: TIMELINE_EVENT_TYPE.ENRICH,
+        iocKey: "8.8.8.8",
+        timestamp: 200,
+      }),
+    ]);
+    expect(active?.enrichmentCount).toBe(2);
+  });
+
+  it("caps timeline events per session and prunes the oldest entries", async () => {
+    await startNewInvestigationSession({
+      title: "Cap case",
+      pageUrl: "https://example.com",
+      now: 100,
+    });
+
+    for (let index = 0; index < MAX_INVESTIGATION_SESSION_TIMELINE_EVENTS + 5; index += 1) {
+      await recordActiveInvestigationSessionEnrichmentEvent({
+        iocValue: `10.0.0.${index + 1}`,
+        iocType: IOC_TYPE.IPV4,
+        now: 1_000 + index * 6_000,
+        sourceAttributionSummary: `Source: Vendor-${index}`,
+      });
+    }
+
+    const active = await getActiveInvestigationSession();
+    expect(active?.timelineEvents).toHaveLength(MAX_INVESTIGATION_SESSION_TIMELINE_EVENTS);
+    expect(active?.timelineEvents?.[0]).toEqual(
+      expect.objectContaining({
+        type: TIMELINE_EVENT_TYPE.ENRICH,
+        iocKey: "10.0.0.6",
+        timestamp: 1_000 + 5 * 6_000,
+      })
+    );
+    expect(active?.timelineEvents?.at(-1)).toEqual(
+      expect.objectContaining({
+        iocKey: "10.0.0.105",
+        timestamp: 1_000 + 104 * 6_000,
+      })
+    );
   });
 });

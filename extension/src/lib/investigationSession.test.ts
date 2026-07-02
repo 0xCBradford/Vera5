@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { IOC_TYPE } from "./iocRegex";
 import {
   applyInvestigationSessionIocTimelineEvent,
+  appendInvestigationSessionTimelineEvents,
   buildInvestigationSessionIocTimelineSummaryLines,
   computeInvestigationSessionRollups,
   createInvestigationSession,
@@ -32,6 +33,12 @@ import {
   normalizeInvestigationSessionTitle,
   updateInvestigationSession,
 } from "./investigationSession";
+import {
+  createTimelineEvent,
+  MAX_INVESTIGATION_SESSION_TIMELINE_EVENTS,
+  TIMELINE_EVENT_DEDUP_WINDOW_MS,
+  TIMELINE_EVENT_TYPE,
+} from "./timelineEvent";
 
 describe("investigationSession schema", () => {
   it("creates a session with required fields and empty rollups", () => {
@@ -644,5 +651,128 @@ describe("investigationSession pinned IOCs", () => {
         iocType: IOC_TYPE.IPV4,
       },
     });
+  });
+});
+
+describe("investigationSession timeline event append", () => {
+  const sessionId = "vera5-inv-timeline-append";
+
+  const baseSession = createInvestigationSession({
+    id: sessionId,
+    title: "Timeline append test",
+    pageUrl: "https://example.com/alert",
+    createdAt: 100,
+    updatedAt: 100,
+    totalIocCount: 0,
+    iocCountByType: {},
+    timelineEvents: [],
+  })!;
+
+  it("preserves chronological append order for timeline events", () => {
+    const scan = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.SCAN,
+      sessionId,
+      iocKey: "8.8.8.8",
+      timestamp: 100,
+    });
+    const enrich = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.ENRICH,
+      sessionId,
+      iocKey: "8.8.8.8",
+      timestamp: 200,
+      sourceAttributionSummary: "Source: AbuseIPDB · live",
+    });
+    const exported = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.EXPORT,
+      sessionId,
+      iocKey: "8.8.8.8",
+      timestamp: 300,
+      templateId: "jira-comment",
+    });
+
+    const withScan = appendInvestigationSessionTimelineEvents(baseSession, [scan]);
+    const withEnrich = appendInvestigationSessionTimelineEvents(withScan, [enrich]);
+    const withExport = appendInvestigationSessionTimelineEvents(withEnrich, [exported]);
+
+    expect(withExport.timelineEvents?.map((event) => event.type)).toEqual([
+      "scan",
+      "enrich",
+      "export",
+    ]);
+    expect(withExport.timelineEvents?.map((event) => event.timestamp)).toEqual([
+      100, 200, 300,
+    ]);
+  });
+
+  it("deduplicates rapid duplicate timeline events during append", () => {
+    const first = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.ENRICH,
+      sessionId,
+      iocKey: "8.8.8.8",
+      timestamp: 1_000,
+    });
+    const duplicate = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.ENRICH,
+      sessionId,
+      iocKey: "8.8.8.8",
+      timestamp: 1_000 + TIMELINE_EVENT_DEDUP_WINDOW_MS,
+    });
+    const later = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.ENRICH,
+      sessionId,
+      iocKey: "8.8.8.8",
+      timestamp: 1_000 + TIMELINE_EVENT_DEDUP_WINDOW_MS + 1,
+    });
+
+    const updated = appendInvestigationSessionTimelineEvents(baseSession, [
+      first,
+      duplicate,
+      later,
+    ]);
+
+    expect(updated.timelineEvents).toEqual([first, later]);
+  });
+
+  it("prunes oldest timeline events when append exceeds the session cap", () => {
+    const existing = Array.from(
+      { length: MAX_INVESTIGATION_SESSION_TIMELINE_EVENTS - 1 },
+      (_, index) =>
+        createTimelineEvent({
+          type: TIMELINE_EVENT_TYPE.SCAN,
+          sessionId,
+          iocKey: `10.0.0.${index + 1}`,
+          timestamp: 100 + index,
+        })
+    );
+    const session = {
+      ...baseSession,
+      timelineEvents: existing,
+    };
+    const incoming = [
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.ENRICH,
+        sessionId,
+        iocKey: "10.0.0.99",
+        timestamp: 500,
+      }),
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.ENRICH,
+        sessionId,
+        iocKey: "10.0.0.100",
+        timestamp: 600,
+      }),
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.ENRICH,
+        sessionId,
+        iocKey: "10.0.0.101",
+        timestamp: 700,
+      }),
+    ];
+
+    const updated = appendInvestigationSessionTimelineEvents(session, incoming);
+
+    expect(updated.timelineEvents).toHaveLength(MAX_INVESTIGATION_SESSION_TIMELINE_EVENTS);
+    expect(updated.timelineEvents?.[0]?.iocKey).toBe("10.0.0.3");
+    expect(updated.timelineEvents?.at(-1)?.iocKey).toBe("10.0.0.101");
   });
 });

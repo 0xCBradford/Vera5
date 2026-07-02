@@ -93,6 +93,7 @@ export function registerCoreCommandPaletteCommands(): void {
           value: record.value,
           type: record.type,
         })),
+        templateId: "markdown-report",
       });
     },
   });
@@ -113,6 +114,7 @@ export function registerCoreCommandPaletteCommands(): void {
           value: record.value,
           type: record.type,
         })),
+        templateId: "markdown-report",
       });
     },
   });

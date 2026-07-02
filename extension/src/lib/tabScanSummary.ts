@@ -21,6 +21,7 @@ import {
   normalizeIocCollectionMemberValue,
   type IocCollectionMemberInput,
 } from "./iocCollection";
+import { normalizeIocNoteKey } from "./analystNotesStorage";
 import {
   API_KEY_SLOTS,
   getVera5Settings,
@@ -469,6 +470,26 @@ export function findTabScanSummaryEntryForCollectionMember(
   return (
     summary.entries.find(
       (entry) => entry.type === member.iocType && entry.value === normalizedValue
+    ) ?? null
+  );
+}
+
+export function findTabScanSummaryEntryForIndicatorValue(
+  summary: TabScanSummary | null | undefined,
+  indicatorValue: string
+): TabScanSummaryEntry | null {
+  if (!summary) {
+    return null;
+  }
+
+  const normalized = normalizeIocNoteKey(indicatorValue);
+  if (normalized.length === 0) {
+    return null;
+  }
+
+  return (
+    summary.entries.find(
+      (entry) => normalizeIocNoteKey(entry.value) === normalized
     ) ?? null
   );
 }

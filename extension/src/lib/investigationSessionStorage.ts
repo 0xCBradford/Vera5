@@ -5,17 +5,27 @@ import {
   safeStorageLocalSet,
 } from "./extensionContext";
 import type { IocType } from "./iocRegex";
+import { formatIocLabelDisplay, type IocLabelId } from "./iocLabel";
+import type { ExportTemplateId } from "./exportTemplates";
 import {
   applyInvestigationSessionIocTimelineEvent,
+  appendInvestigationSessionTimelineEvents,
   buildDefaultInvestigationSessionTitle,
   computeInvestigationSessionRollups,
   createInvestigationSession,
+  getInvestigationSessionIocTimeline,
   normalizeInvestigationSession,
   toggleInvestigationSessionIocPin,
   updateInvestigationSession,
   type InvestigationSession,
   type InvestigationSessionIocTimelineEventKind,
 } from "./investigationSession";
+import {
+  createTimelineEvent,
+  formatMacroRunTimelineSourceAttribution,
+  TIMELINE_EVENT_TYPE,
+  type TimelineEvent,
+} from "./timelineEvent";
 
 export const INVESTIGATION_SESSIONS_SCHEMA_VERSION = 1;
 export const STORAGE_KEY_INVESTIGATION_SESSIONS = "investigationSessions";
@@ -471,12 +481,41 @@ export async function syncActiveInvestigationSessionFromScan(input: {
     if (!value) {
       continue;
     }
-    workingSession = applyInvestigationSessionIocTimelineEvent(workingSession, {
-      iocKey: value,
-      iocType: entry.type,
-      event: "first-seen",
-      at: now,
-    });
+
+    const alreadySeen =
+      getInvestigationSessionIocTimeline(workingSession, value) !== null;
+    const timelineEvents: TimelineEvent[] = [];
+
+    if (!alreadySeen) {
+      workingSession = applyInvestigationSessionIocTimelineEvent(workingSession, {
+        iocKey: value,
+        iocType: entry.type,
+        event: "first-seen",
+        at: now,
+      });
+      timelineEvents.push(
+        createTimelineEvent({
+          type: TIMELINE_EVENT_TYPE.SCAN,
+          sessionId: workingSession.id,
+          iocKey: value,
+          timestamp: now,
+        })
+      );
+    } else {
+      timelineEvents.push(
+        createTimelineEvent({
+          type: TIMELINE_EVENT_TYPE.REDETECT,
+          sessionId: workingSession.id,
+          iocKey: value,
+          timestamp: now,
+        })
+      );
+    }
+
+    workingSession = appendInvestigationSessionTimelineEvents(
+      workingSession,
+      timelineEvents
+    );
   }
 
   const saved = await saveStoredInvestigationSession(workingSession, { setActive: true });
@@ -527,6 +566,7 @@ async function incrementActiveInvestigationSessionActivityCount(input: {
     iocType?: IocType;
     event: Extract<InvestigationSessionIocTimelineEventKind, "enrich" | "export">;
   }>;
+  sessionTimelineEvents?: ReadonlyArray<TimelineEvent>;
 }): Promise<InvestigationSession | null> {
   const now = input.now ?? Date.now();
   const store = await getInvestigationSessionsStore();
@@ -549,10 +589,18 @@ async function incrementActiveInvestigationSessionActivityCount(input: {
     });
   }
 
+  if (input.sessionTimelineEvents && input.sessionTimelineEvents.length > 0) {
+    workingSession = appendInvestigationSessionTimelineEvents(
+      workingSession,
+      input.sessionTimelineEvents
+    );
+  }
+
   const updated = updateInvestigationSession(workingSession, {
     [input.field]: session[input.field] + 1,
     updatedAt: now,
     iocTimelines: workingSession.iocTimelines,
+    timelineEvents: workingSession.timelineEvents ?? null,
   });
   if (!updated) {
     return null;
@@ -567,7 +615,29 @@ export type RecordInvestigationSessionIocActivityInput = {
   iocType?: IocType;
   iocs?: ReadonlyArray<{ value: string; type?: IocType }>;
   now?: number;
+  sourceAttributionSummary?: string;
+  templateId?: ExportTemplateId;
 };
+
+function listRecordInvestigationSessionIocValues(
+  input: RecordInvestigationSessionIocActivityInput | undefined
+): ReadonlyArray<{ iocValue: string; iocType?: IocType }> {
+  if (input?.iocs && input.iocs.length > 0) {
+    return input.iocs.map((ioc) => ({
+      iocValue: ioc.value,
+      iocType: ioc.type,
+    }));
+  }
+  if (input?.iocValue?.trim()) {
+    return [
+      {
+        iocValue: input.iocValue,
+        iocType: input.iocType,
+      },
+    ];
+  }
+  return [];
+}
 
 function buildInvestigationSessionTimelineEvents(
   input: RecordInvestigationSessionIocActivityInput | undefined,
@@ -596,24 +666,158 @@ function buildInvestigationSessionTimelineEvents(
   return [];
 }
 
+function buildSessionTimelineEventsForActivity(
+  sessionId: string,
+  input: RecordInvestigationSessionIocActivityInput | undefined,
+  type: typeof TIMELINE_EVENT_TYPE.ENRICH | typeof TIMELINE_EVENT_TYPE.EXPORT,
+  now: number
+): TimelineEvent[] {
+  const iocs = listRecordInvestigationSessionIocValues(input);
+  const sourceAttributionSummary = input?.sourceAttributionSummary ?? "";
+  const templateId = type === TIMELINE_EVENT_TYPE.EXPORT ? input?.templateId : undefined;
+
+  return iocs.map((ioc) =>
+    createTimelineEvent({
+      type,
+      sessionId,
+      iocKey: ioc.iocValue,
+      timestamp: now,
+      sourceAttributionSummary,
+      ...(templateId !== undefined ? { templateId } : {}),
+    })
+  );
+}
+
 export async function recordActiveInvestigationSessionEnrichmentEvent(
   input?: RecordInvestigationSessionIocActivityInput
 ): Promise<InvestigationSession | null> {
+  const now = input?.now ?? Date.now();
+  const store = await getInvestigationSessionsStore();
+  if (!store.activeSessionId) {
+    return null;
+  }
+
   return incrementActiveInvestigationSessionActivityCount({
     field: "enrichmentCount",
-    now: input?.now,
+    now,
     timelineEvents: buildInvestigationSessionTimelineEvents(input, "enrich"),
+    sessionTimelineEvents: buildSessionTimelineEventsForActivity(
+      store.activeSessionId,
+      input,
+      TIMELINE_EVENT_TYPE.ENRICH,
+      now
+    ),
   });
 }
 
 export async function recordActiveInvestigationSessionExportEvent(
   input?: RecordInvestigationSessionIocActivityInput
 ): Promise<InvestigationSession | null> {
+  const now = input?.now ?? Date.now();
+  const store = await getInvestigationSessionsStore();
+  if (!store.activeSessionId) {
+    return null;
+  }
+
   return incrementActiveInvestigationSessionActivityCount({
     field: "exportCount",
-    now: input?.now,
+    now,
     timelineEvents: buildInvestigationSessionTimelineEvents(input, "export"),
+    sessionTimelineEvents: buildSessionTimelineEventsForActivity(
+      store.activeSessionId,
+      input,
+      TIMELINE_EVENT_TYPE.EXPORT,
+      now
+    ),
   });
+}
+
+export async function recordActiveInvestigationSessionWatchlistTagEvent(input: {
+  iocValue: string;
+  iocType?: IocType;
+  label: IocLabelId;
+  now?: number;
+}): Promise<InvestigationSession | null> {
+  const iocValue = input.iocValue.trim();
+  if (iocValue.length === 0) {
+    return null;
+  }
+
+  const now = input.now ?? Date.now();
+  const store = await getInvestigationSessionsStore();
+  if (!store.activeSessionId) {
+    return null;
+  }
+
+  const session = store.sessions.find((entry) => entry.id === store.activeSessionId);
+  if (!session || store.archivedSessionIds?.includes(session.id)) {
+    return null;
+  }
+
+  const timelineEvent = createTimelineEvent({
+    type: TIMELINE_EVENT_TYPE.WATCHLIST_TAG,
+    sessionId: session.id,
+    iocKey: iocValue,
+    timestamp: now,
+    sourceAttributionSummary: formatIocLabelDisplay(input.label),
+  });
+  const withTimeline = appendInvestigationSessionTimelineEvents(session, [timelineEvent]);
+  const updated = updateInvestigationSession(withTimeline, {
+    updatedAt: now,
+    timelineEvents: withTimeline.timelineEvents ?? null,
+  });
+  if (!updated) {
+    return null;
+  }
+
+  const saved = await saveStoredInvestigationSession(updated, { setActive: true });
+  return saved ? updated : null;
+}
+
+export async function recordActiveInvestigationSessionMacroRunEvent(input: {
+  stepType: string;
+  macroId?: string;
+  iocValue?: string;
+  iocType?: IocType;
+  now?: number;
+}): Promise<InvestigationSession | null> {
+  const stepType = input.stepType.trim();
+  if (stepType.length === 0) {
+    return null;
+  }
+
+  const now = input.now ?? Date.now();
+  const store = await getInvestigationSessionsStore();
+  if (!store.activeSessionId) {
+    return null;
+  }
+
+  const session = store.sessions.find((entry) => entry.id === store.activeSessionId);
+  if (!session || store.archivedSessionIds?.includes(session.id)) {
+    return null;
+  }
+
+  const timelineEvent = createTimelineEvent({
+    type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+    sessionId: session.id,
+    iocKey: input.iocValue?.trim() ?? "",
+    timestamp: now,
+    sourceAttributionSummary: formatMacroRunTimelineSourceAttribution({
+      stepType,
+      macroId: input.macroId,
+    }),
+  });
+  const withTimeline = appendInvestigationSessionTimelineEvents(session, [timelineEvent]);
+  const updated = updateInvestigationSession(withTimeline, {
+    updatedAt: now,
+    timelineEvents: withTimeline.timelineEvents ?? null,
+  });
+  if (!updated) {
+    return null;
+  }
+
+  const saved = await saveStoredInvestigationSession(updated, { setActive: true });
+  return saved ? updated : null;
 }
 
 export async function toggleActiveInvestigationSessionIocPin(input: {

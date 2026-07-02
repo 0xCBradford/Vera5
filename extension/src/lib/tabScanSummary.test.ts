@@ -11,6 +11,7 @@ import {
   countIocsByType,
   filterTabScanSummaryEntries,
   findTabScanSummaryEntryForCollectionMember,
+  findTabScanSummaryEntryForIndicatorValue,
   formatTrayRowEnrichmentHint,
   IOC_TYPE_TRAY_LABEL,
   isTabScanSummary,
@@ -361,5 +362,16 @@ describe("tabScanSummary", () => {
         value: "8.8.8.8",
       })
     ).toBeNull();
+  });
+
+  it("finds a tab scan entry by normalized indicator value", () => {
+    const summary = buildTabScanSummary(snapshot);
+    expect(findTabScanSummaryEntryForIndicatorValue(summary, "  8.8.8.8 ")).toMatchObject({
+      type: IOC_TYPE.IPV4,
+      value: "8.8.8.8",
+      anchorId: "vera5-hl-1",
+    });
+    expect(findTabScanSummaryEntryForIndicatorValue(summary, "missing.example")).toBeNull();
+    expect(findTabScanSummaryEntryForIndicatorValue(null, "8.8.8.8")).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
 import "../lib/browserCompat";
 import {
   CONTEXT_MENU_ENRICH_SELECTION_ID,
+  emitInvestigationSessionMacroRunTimelineEvent,
   getMacroStepContextMenuActionId,
   MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
 } from "../lib/macroStepActions";
@@ -97,6 +98,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
   if (!tab?.id) {
     return;
   }
+  emitInvestigationSessionMacroRunTimelineEvent({
+    stepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+  });
   void sendEnrichSelectionToTab(tab.id);
 });
 

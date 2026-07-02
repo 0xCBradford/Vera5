@@ -199,6 +199,11 @@ exports[`golden: investigation session export JSON snapshots > full session expo
           "provider": "urlhaus",
           "label": "URLHaus",
           "href": "https://urlhaus.abuse.ch/browse.php?search=example.com"
+        },
+        {
+          "provider": "rdap_whois",
+          "label": "RDAP/WHOIS",
+          "href": "https://rdap.org/domain/example.com"
         }
       ]
     }

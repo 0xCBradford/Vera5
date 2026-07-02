@@ -19,6 +19,7 @@ import {
   buildTrayRowNavigationAriaLabel,
   filterTabScanSummaryEntries,
   findTabScanSummaryEntryForCollectionMember,
+  findTabScanSummaryEntryForIndicatorValue,
   formatTrayRowEnrichmentHint,
   IOC_TYPE_TRAY_LABEL,
   listIocTypesPresentInSummary,
@@ -83,7 +84,60 @@ import {
   downloadInvestigationSessionExportFile,
   type InvestigationSessionExportFormat,
 } from "../lib/investigationSessionExport";
+import {
+  copyInvestigationTimelineExportAppendixToClipboard,
+  copyInvestigationTimelineExportJsonToClipboard,
+  downloadInvestigationTimelineExportAppendixFile,
+  downloadInvestigationTimelineExportJsonFile,
+  INVESTIGATION_TIMELINE_MARKDOWN_TEMPLATE_IDS,
+  resolveInvestigationTimelineExportCopyFeedback,
+  resolveInvestigationTimelineExportDownloadFeedback,
+  resolveInvestigationTimelineJsonExportCopyFeedback,
+  resolveInvestigationTimelineJsonExportDownloadFeedback,
+  SESSION_TIMELINE_COPY_APPENDIX_LABEL,
+  SESSION_TIMELINE_COPY_JSON_LABEL,
+  SESSION_TIMELINE_DOWNLOAD_APPENDIX_LABEL,
+  SESSION_TIMELINE_DOWNLOAD_JSON_LABEL,
+  SESSION_TIMELINE_EXPORT_GROUP_ARIA_LABEL,
+  SESSION_TIMELINE_EXPORT_SECTION_LABEL,
+  SESSION_TIMELINE_EXPORT_TEMPLATE_LABEL,
+  SESSION_TIMELINE_JSON_EXPORT_GROUP_ARIA_LABEL,
+  type InvestigationTimelineMarkdownTemplateId,
+  type InvestigationTimelineExportInput,
+} from "../lib/investigationTimelineExport";
 import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
+import { getExportTemplateLabel } from "../lib/exportTemplates";
+import {
+  buildTimelineEventNavigationAriaLabel,
+  buildTimelineEventRowAriaLabel,
+  createDefaultTimelineEventFilter,
+  filterTimelineEvents,
+  formatTimelineEventIocLabel,
+  formatTimelineEventTimestamp,
+  formatTimelineEventTypeLabel,
+  isTimelineEventNavigable,
+  listTimelineEventIocFilterOptions,
+  readTimelineEventFilterDateTimeLocal,
+  SESSION_TIMELINE_EMPTY_TEXT,
+  SESSION_TIMELINE_FILTER_ALL_IOCS_LABEL,
+  SESSION_TIMELINE_FILTER_ALL_TYPES_LABEL,
+  SESSION_TIMELINE_FILTER_GROUP_ARIA_LABEL,
+  SESSION_TIMELINE_FILTER_NO_MATCHES_TEXT,
+  SESSION_TIMELINE_IOC_FILTER_LABEL,
+  SESSION_TIMELINE_LIST_ARIA_LABEL,
+  SESSION_TIMELINE_SECTION_LABEL,
+  SESSION_TIMELINE_TIME_RANGE_END_LABEL,
+  SESSION_TIMELINE_TIME_RANGE_START_LABEL,
+  SESSION_TIMELINE_TYPE_FILTER_LABEL,
+  sortTimelineEventsChronologically,
+  TIMELINE_EVENT_IOC_FILTER_ALL,
+  TIMELINE_EVENT_IOC_FILTER_SESSION_SCOPE,
+  TIMELINE_EVENT_TYPE_FILTER_ALL,
+  TIMELINE_EVENT_TYPE_ORDER,
+  timelineEventHasSessionScopeEntries,
+  type TimelineEvent,
+  type TimelineEventTypeFilter,
+} from "../lib/timelineEvent";
 import {
   buildInvestigationHistoryRowAriaLabel,
   buildInvestigationHistorySessionLinkSummary,
@@ -856,6 +910,470 @@ function PromoteSessionToCollectionPanel({
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function InvestigationSessionTimelinePanel({
+  sessionId,
+  sessionTitle,
+  sessionPageUrl,
+  events,
+  onActivateEvent,
+  navigationMessage,
+}: {
+  sessionId: string;
+  sessionTitle: string;
+  sessionPageUrl: string;
+  events: readonly TimelineEvent[];
+  onActivateEvent?: (event: TimelineEvent) => void;
+  navigationMessage?: string | null;
+}) {
+  const [filter, setFilter] = useState(createDefaultTimelineEventFilter);
+  const [timeRangeStartInput, setTimeRangeStartInput] = useState("");
+  const [timeRangeEndInput, setTimeRangeEndInput] = useState("");
+  const [exportTemplateId, setExportTemplateId] =
+    useState<InvestigationTimelineMarkdownTemplateId>("markdown-report");
+  const [timelineExportMessage, setTimelineExportMessage] = useState<string | null>(
+    null
+  );
+
+  useEffect(() => {
+    setFilter(createDefaultTimelineEventFilter());
+    setTimeRangeStartInput("");
+    setTimeRangeEndInput("");
+    setExportTemplateId("markdown-report");
+    setTimelineExportMessage(null);
+  }, [sessionId]);
+
+  const iocOptions = useMemo(() => listTimelineEventIocFilterOptions(events), [events]);
+  const showSessionScopeOption = useMemo(
+    () => timelineEventHasSessionScopeEntries(events),
+    [events]
+  );
+  const filteredEvents = useMemo(
+    () => filterTimelineEvents(events, filter),
+    [events, filter]
+  );
+
+  const buildTimelineExportInput = (): InvestigationTimelineExportInput => ({
+    session: {
+      id: sessionId,
+      title: sessionTitle,
+      pageUrl: sessionPageUrl,
+    },
+    events: filteredEvents,
+  });
+
+  const handleCopyTimelineAppendix = () => {
+    const exportInput = buildTimelineExportInput();
+
+    void (async () => {
+      const copied = await copyInvestigationTimelineExportAppendixToClipboard(
+        exportTemplateId,
+        exportInput
+      );
+      setTimelineExportMessage(
+        resolveInvestigationTimelineExportCopyFeedback({
+          copied,
+          eventCount: filteredEvents.length,
+          templateId: exportTemplateId,
+        })
+      );
+    })();
+  };
+
+  const handleDownloadTimelineAppendix = () => {
+    const exportInput = buildTimelineExportInput();
+
+    const downloaded = downloadInvestigationTimelineExportAppendixFile(
+      exportTemplateId,
+      exportInput
+    );
+    setTimelineExportMessage(
+      resolveInvestigationTimelineExportDownloadFeedback({
+        downloaded,
+        eventCount: filteredEvents.length,
+        templateId: exportTemplateId,
+      })
+    );
+  };
+
+  const handleCopyTimelineJson = () => {
+    const exportInput = buildTimelineExportInput();
+
+    void (async () => {
+      const copied = await copyInvestigationTimelineExportJsonToClipboard(exportInput);
+      setTimelineExportMessage(
+        resolveInvestigationTimelineJsonExportCopyFeedback({
+          copied,
+          eventCount: filteredEvents.length,
+        })
+      );
+    })();
+  };
+
+  const handleDownloadTimelineJson = () => {
+    const exportInput = buildTimelineExportInput();
+
+    const downloaded = downloadInvestigationTimelineExportJsonFile(exportInput);
+    setTimelineExportMessage(
+      resolveInvestigationTimelineJsonExportDownloadFeedback({
+        downloaded,
+        eventCount: filteredEvents.length,
+      })
+    );
+  };
+
+  const filterFieldStyle: CSSProperties = {
+    display: "block",
+    width: "100%",
+    marginTop: 4,
+    padding: "6px 8px",
+    borderRadius: 6,
+    border: `1px solid ${POPUP_THEME.border}`,
+    backgroundColor: POPUP_THEME.buttonBg,
+    color: POPUP_THEME.text,
+    boxSizing: "border-box",
+    fontSize: 12,
+  };
+
+  const renderTimelineEvent = (event: TimelineEvent, index: number) => {
+    const navigable = isTimelineEventNavigable(event) && onActivateEvent !== undefined;
+
+    return (
+      <li
+        key={`${event.timestamp}-${event.type}-${event.iocKey}-${index}`}
+        role={navigable ? "button" : undefined}
+        tabIndex={navigable ? 0 : undefined}
+        aria-label={
+          navigable
+            ? buildTimelineEventNavigationAriaLabel(event)
+            : buildTimelineEventRowAriaLabel(event)
+        }
+        onClick={
+          navigable
+            ? () => {
+                onActivateEvent?.(event);
+              }
+            : undefined
+        }
+        onKeyDown={
+          navigable
+            ? (keyboardEvent) => {
+                if (keyboardEvent.key !== "Enter" && keyboardEvent.key !== " ") {
+                  return;
+                }
+                keyboardEvent.preventDefault();
+                onActivateEvent?.(event);
+              }
+            : undefined
+        }
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          padding: "6px 8px",
+          borderRadius: 6,
+          backgroundColor: POPUP_THEME.trayRowBg,
+          fontSize: 12,
+          lineHeight: 1.4,
+          cursor: navigable ? "pointer" : "default",
+        }}
+      >
+        <span style={{ color: POPUP_THEME.muted }}>
+          {formatTimelineEventTimestamp(event.timestamp)}
+        </span>
+        <span style={{ color: POPUP_THEME.text }}>
+          {formatTimelineEventTypeLabel(event.type)} ·{" "}
+          <span style={{ fontFamily: VERA5_FONT.mono, wordBreak: "break-all" }}>
+            {formatTimelineEventIocLabel(event.iocKey)}
+          </span>
+        </span>
+        {event.sourceAttributionSummary ? (
+          <span style={{ color: POPUP_THEME.muted }}>
+            {event.sourceAttributionSummary}
+          </span>
+        ) : null}
+        {event.templateId ? (
+          <span style={{ color: POPUP_THEME.muted }}>
+            Template: {getExportTemplateLabel(event.templateId)}
+          </span>
+        ) : null}
+      </li>
+    );
+  };
+
+  return (
+    <div style={{ marginTop: 10, marginBottom: 10 }}>
+      <h3
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          margin: "0 0 8px",
+          color: POPUP_THEME.accentText,
+        }}
+      >
+        {SESSION_TIMELINE_SECTION_LABEL}
+      </h3>
+      {events.length === 0 ? (
+        <p style={{ ...trayStatusStyle(), margin: 0 }} aria-live="polite">
+          {SESSION_TIMELINE_EMPTY_TEXT}
+        </p>
+      ) : (
+        <>
+          <div
+            role="group"
+            aria-label={SESSION_TIMELINE_FILTER_GROUP_ARIA_LABEL}
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              marginBottom: 8,
+            }}
+          >
+            <label
+              style={{
+                display: "block",
+                fontSize: 12,
+                color: POPUP_THEME.text,
+              }}
+            >
+              {SESSION_TIMELINE_IOC_FILTER_LABEL}
+              <select
+                value={filter.iocKey}
+                aria-label={SESSION_TIMELINE_IOC_FILTER_LABEL}
+                onChange={(event) => {
+                  setFilter((current) => ({
+                    ...current,
+                    iocKey: event.target.value,
+                  }));
+                }}
+                style={filterFieldStyle}
+              >
+                <option value={TIMELINE_EVENT_IOC_FILTER_ALL}>
+                  {SESSION_TIMELINE_FILTER_ALL_IOCS_LABEL}
+                </option>
+                {showSessionScopeOption ? (
+                  <option value={TIMELINE_EVENT_IOC_FILTER_SESSION_SCOPE}>
+                    Session scope
+                  </option>
+                ) : null}
+                {iocOptions.map((iocKey) => (
+                  <option key={iocKey} value={iocKey}>
+                    {iocKey}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              style={{
+                display: "block",
+                fontSize: 12,
+                color: POPUP_THEME.text,
+              }}
+            >
+              {SESSION_TIMELINE_TYPE_FILTER_LABEL}
+              <select
+                value={filter.eventType}
+                aria-label={SESSION_TIMELINE_TYPE_FILTER_LABEL}
+                onChange={(event) => {
+                  setFilter((current) => ({
+                    ...current,
+                    eventType: event.target.value as TimelineEventTypeFilter,
+                  }));
+                }}
+                style={filterFieldStyle}
+              >
+                <option value={TIMELINE_EVENT_TYPE_FILTER_ALL}>
+                  {SESSION_TIMELINE_FILTER_ALL_TYPES_LABEL}
+                </option>
+                {TIMELINE_EVENT_TYPE_ORDER.map((type) => (
+                  <option key={type} value={type}>
+                    {formatTimelineEventTypeLabel(type)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label
+              style={{
+                display: "block",
+                fontSize: 12,
+                color: POPUP_THEME.text,
+              }}
+            >
+              {SESSION_TIMELINE_TIME_RANGE_START_LABEL}
+              <input
+                type="datetime-local"
+                value={timeRangeStartInput}
+                aria-label={SESSION_TIMELINE_TIME_RANGE_START_LABEL}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setTimeRangeStartInput(value);
+                  setFilter((current) => ({
+                    ...current,
+                    timeRangeStart: readTimelineEventFilterDateTimeLocal(value),
+                  }));
+                }}
+                style={filterFieldStyle}
+              />
+            </label>
+            <label
+              style={{
+                display: "block",
+                fontSize: 12,
+                color: POPUP_THEME.text,
+              }}
+            >
+              {SESSION_TIMELINE_TIME_RANGE_END_LABEL}
+              <input
+                type="datetime-local"
+                value={timeRangeEndInput}
+                aria-label={SESSION_TIMELINE_TIME_RANGE_END_LABEL}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setTimeRangeEndInput(value);
+                  setFilter((current) => ({
+                    ...current,
+                    timeRangeEnd: readTimelineEventFilterDateTimeLocal(value),
+                  }));
+                }}
+                style={filterFieldStyle}
+              />
+            </label>
+          </div>
+          {filteredEvents.length === 0 ? (
+            <p style={{ ...trayStatusStyle(), margin: 0 }} aria-live="polite">
+              {SESSION_TIMELINE_FILTER_NO_MATCHES_TEXT}
+            </p>
+          ) : (
+            <>
+              <ol
+                aria-label={SESSION_TIMELINE_LIST_ARIA_LABEL}
+                style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  maxHeight: 220,
+                  overflowY: "auto",
+                }}
+              >
+                {filteredEvents.map((event, index) => renderTimelineEvent(event, index))}
+              </ol>
+              {navigationMessage ? (
+                <p
+                  aria-live="polite"
+                  style={{ ...trayStatusStyle(), margin: "8px 0 0" }}
+                >
+                  {navigationMessage}
+                </p>
+              ) : null}
+            </>
+          )}
+          <div style={{ marginTop: 10 }}>
+            <h4
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                margin: "0 0 8px",
+                color: POPUP_THEME.accentText,
+              }}
+            >
+              {SESSION_TIMELINE_EXPORT_SECTION_LABEL}
+            </h4>
+            <label
+              style={{
+                display: "block",
+                fontSize: 12,
+                color: POPUP_THEME.text,
+                marginBottom: 8,
+              }}
+            >
+              {SESSION_TIMELINE_EXPORT_TEMPLATE_LABEL}
+              <select
+                value={exportTemplateId}
+                aria-label={SESSION_TIMELINE_EXPORT_TEMPLATE_LABEL}
+                onChange={(event) => {
+                  setTimelineExportMessage(null);
+                  setExportTemplateId(
+                    event.target.value as InvestigationTimelineMarkdownTemplateId
+                  );
+                }}
+                style={filterFieldStyle}
+              >
+                {INVESTIGATION_TIMELINE_MARKDOWN_TEMPLATE_IDS.map((templateId) => (
+                  <option key={templateId} value={templateId}>
+                    {getExportTemplateLabel(templateId)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div
+              role="group"
+              aria-label={SESSION_TIMELINE_EXPORT_GROUP_ARIA_LABEL}
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                marginBottom: timelineExportMessage ? 8 : 0,
+              }}
+            >
+              <button
+                type="button"
+                disabled={filteredEvents.length === 0}
+                onClick={handleCopyTimelineAppendix}
+                style={sessionActionButtonStyle()}
+              >
+                {SESSION_TIMELINE_COPY_APPENDIX_LABEL}
+              </button>
+              <button
+                type="button"
+                disabled={filteredEvents.length === 0}
+                onClick={handleDownloadTimelineAppendix}
+                style={sessionActionButtonStyle()}
+              >
+                {SESSION_TIMELINE_DOWNLOAD_APPENDIX_LABEL}
+              </button>
+            </div>
+            <div
+              role="group"
+              aria-label={SESSION_TIMELINE_JSON_EXPORT_GROUP_ARIA_LABEL}
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+                marginTop: 8,
+                marginBottom: timelineExportMessage ? 8 : 0,
+              }}
+            >
+              <button
+                type="button"
+                disabled={filteredEvents.length === 0}
+                onClick={handleCopyTimelineJson}
+                style={sessionActionButtonStyle()}
+              >
+                {SESSION_TIMELINE_COPY_JSON_LABEL}
+              </button>
+              <button
+                type="button"
+                disabled={filteredEvents.length === 0}
+                onClick={handleDownloadTimelineJson}
+                style={sessionActionButtonStyle()}
+              >
+                {SESSION_TIMELINE_DOWNLOAD_JSON_LABEL}
+              </button>
+            </div>
+            {timelineExportMessage ? (
+              <p aria-live="polite" style={{ ...trayStatusStyle(), margin: 0 }}>
+                {timelineExportMessage}
+              </p>
+            ) : null}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1808,6 +2326,9 @@ export function Popup() {
   const [trayNavigationMessage, setTrayNavigationMessage] = useState<string | null>(
     null
   );
+  const [timelineNavigationMessage, setTimelineNavigationMessage] = useState<
+    string | null
+  >(null);
   const [trayEnrichmentStatuses, setTrayEnrichmentStatuses] = useState<
     Record<string, TrayEntryEnrichmentStatus>
   >({});
@@ -2106,6 +2627,13 @@ export function Popup() {
       return "";
     }
     return buildInvestigationSessionActivitySummaryText(activeSession);
+  }, [activeSession]);
+
+  const sessionTimelineEvents = useMemo(() => {
+    if (!activeSession?.timelineEvents?.length) {
+      return [];
+    }
+    return sortTimelineEventsChronologically(activeSession.timelineEvents);
   }, [activeSession]);
 
   const investigationSessionTitlesById = useMemo(() => {
@@ -2468,11 +2996,64 @@ export function Popup() {
       });
   };
 
+  const navigateToTimelineEntry = (entry: TabScanSummaryEntry) => {
+    void chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .then(async ([tab]) => {
+        if (!tab?.id) {
+          setTimelineNavigationMessage(
+            resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: entry.value })
+          );
+          return;
+        }
+        try {
+          const response = await chrome.tabs.sendMessage(
+            tab.id,
+            navigateToIocAnchorMessage(entry.anchorId)
+          );
+          setTimelineNavigationMessage(
+            resolveTrayNavigationFeedback({
+              tabId: tab.id,
+              response,
+              indicatorValue: entry.value,
+            })
+          );
+        } catch {
+          setTimelineNavigationMessage(
+            resolveTrayNavigationFeedback({
+              tabId: tab.id,
+              sendFailed: true,
+              indicatorValue: entry.value,
+            })
+          );
+        }
+      });
+  };
+
   // Activating a tray row both opens the detail pane (the side panel's primary
   // analyst surface) and highlights the indicator on the page.
   const handleTrayRowActivate = (entry: TabScanSummaryEntry) => {
     setSelectedDetailEntry(entry);
     navigateToTrayEntry(entry);
+  };
+
+  const handleTimelineEventActivate = (event: TimelineEvent) => {
+    if (!isTimelineEventNavigable(event)) {
+      return;
+    }
+
+    const entry = findTabScanSummaryEntryForIndicatorValue(scanSummary, event.iocKey);
+    if (!entry) {
+      setTimelineNavigationMessage(
+        scanSummary
+          ? `${event.iocKey} is not on the current page. Scan again to refresh the list.`
+          : `Scan this page to locate ${event.iocKey} on the page.`
+      );
+      return;
+    }
+
+    setSelectedDetailEntry(entry);
+    navigateToTimelineEntry(entry);
   };
 
   const handleAnalystNoteChange = (value: string) => {
@@ -3155,6 +3736,14 @@ export function Popup() {
               }}
               feedback={promoteSessionToCollectionFeedback}
               onFeedback={setPromoteSessionToCollectionFeedback}
+            />
+            <InvestigationSessionTimelinePanel
+              sessionId={activeSession.id}
+              sessionTitle={activeSession.title}
+              sessionPageUrl={activeSession.pageUrl}
+              events={sessionTimelineEvents}
+              onActivateEvent={handleTimelineEventActivate}
+              navigationMessage={timelineNavigationMessage}
             />
           </>
         ) : null}

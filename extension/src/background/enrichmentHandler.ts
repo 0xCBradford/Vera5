@@ -34,6 +34,8 @@ import {
   isEnrichmentSourceId,
 } from "../lib/enrichmentSourceRegistry";
 import { recordActiveInvestigationSessionEnrichmentEvent } from "../lib/investigationSessionStorage";
+import { formatEnrichmentSourceAttribution } from "../lib/hoverCardEnrichment";
+import type { EnrichmentSourceResult } from "../lib/enrichment";
 import { recordEnrichmentSourceLastStatuses } from "../lib/enrichmentSourceOps";
 import type { EnrichIocMessage, MessageResponse } from "../lib/messages";
 import { isEnrichIocMessage } from "../lib/messages";
@@ -384,8 +386,22 @@ export async function handleEnrichIocMessage(
   await recordEnrichmentSourceLastStatuses(sources);
   await recordActiveInvestigationSessionEnrichmentEvent(
     sanitized
-      ? { iocValue: sanitized.value, iocType: sanitized.type }
+      ? {
+          iocValue: sanitized.value,
+          iocType: sanitized.type,
+          sourceAttributionSummary: buildEnrichmentTimelineAttribution(source),
+        }
       : undefined
   );
   return { ok: true, payload: { source, sources } };
+}
+
+function buildEnrichmentTimelineAttribution(source: EnrichmentSourceResult): string {
+  return formatEnrichmentSourceAttribution(
+    {
+      sourceLabel: source.sourceLabel,
+      fromCache: source.fromCache,
+    },
+    source.status === "error" ? "error" : "ready"
+  );
 }
