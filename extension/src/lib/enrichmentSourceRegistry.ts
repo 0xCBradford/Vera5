@@ -14,6 +14,7 @@ export const ENRICHMENT_SOURCE = {
   CENSYS: "censys",
   THREATFOX: "threatfox",
   URLHAUS: "urlhaus",
+  RDAP_WHOIS: "rdap_whois",
 } as const;
 
 export type EnrichmentSourceId =
@@ -32,6 +33,7 @@ export const ENRICHMENT_SOURCE_ORDER: readonly EnrichmentSourceId[] = [
   ENRICHMENT_SOURCE.CENSYS,
   ENRICHMENT_SOURCE.THREATFOX,
   ENRICHMENT_SOURCE.URLHAUS,
+  ENRICHMENT_SOURCE.RDAP_WHOIS,
 ];
 
 export const ENRICHMENT_SOURCE_ID_SET = new Set<string>(ENRICHMENT_SOURCE_ORDER);
@@ -237,6 +239,13 @@ function buildUrlHausPivotUrl(type: IocType, value: string): string | null {
   return `https://urlhaus.abuse.ch/browse.php?search=${encodeURIComponent(trimmed)}`;
 }
 
+function buildRdapWhoisPivotUrl(type: IocType, value: string): string | null {
+  if (type !== IOC_TYPE.DOMAIN) {
+    return null;
+  }
+  return `https://rdap.org/domain/${encodePathSegment(value.trim().toLowerCase())}`;
+}
+
 export const ENRICHMENT_SOURCE_DEFINITIONS: Record<
   EnrichmentSourceId,
   EnrichmentSourceDefinition
@@ -385,6 +394,18 @@ export const ENRICHMENT_SOURCE_DEFINITIONS: Record<
     enabledDefault: false,
     liveConnector: false,
     buildPivotUrl: buildUrlHausPivotUrl,
+  },
+  [ENRICHMENT_SOURCE.RDAP_WHOIS]: {
+    id: ENRICHMENT_SOURCE.RDAP_WHOIS,
+    displayName: "RDAP/WHOIS",
+    description: "Domain registration context from public RDAP and HTTPS WHOIS fallback. No API key required.",
+    supportedIndicatorTypes: [IOC_TYPE.DOMAIN],
+    requiresApiKey: false,
+    settingsKeyName: "RDAP_WHOIS_API_KEY",
+    cacheKeyNamespace: "rdap_whois",
+    enabledDefault: false,
+    liveConnector: true,
+    buildPivotUrl: buildRdapWhoisPivotUrl,
   },
 };
 

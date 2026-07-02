@@ -5,6 +5,7 @@ import {
 } from "./analystNotesSession";
 import { IOC_TYPE } from "./iocRegex";
 import {
+  buildHoverCardLastUpdatedLine,
   buildHoverCardSourceEntries,
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
@@ -412,6 +413,40 @@ describe("buildEnrichmentExportSourceAttributionLines", () => {
 
     expect(lines).toContain("Source: AbuseIPDB · live");
     expect(lines).toContain("42 abuse confidence");
+  });
+
+  it("renders RDAP/WHOIS single-source attribution with fetch timestamp", () => {
+    const fetchedAt = "2026-06-30T12:00:00.000Z";
+    const sourceResults = buildHoverCardSourceEntries([
+      {
+        sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+        sourceLabel: "RDAP/WHOIS",
+        status: "ok",
+        summary:
+          "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+        fetchedAt,
+      },
+    ]);
+
+    const record = buildNormalizedEnrichmentRecord({
+      value: "example.com",
+      iocType: IOC_TYPE.DOMAIN,
+      sourceResults,
+      exportedAt: EXPORTED_AT,
+    });
+    const lastUpdatedLine = buildHoverCardLastUpdatedLine(fetchedAt);
+
+    expect(sourceResults).toHaveLength(1);
+    expect(sourceResults[0]?.lastUpdatedLine).toBe(lastUpdatedLine);
+    expect(record.sources[0]?.lastUpdatedLine).toBe(lastUpdatedLine);
+
+    const lines = buildEnrichmentExportSourceAttributionLines(record);
+
+    expect(lines).toContain("Source: RDAP/WHOIS · live");
+    expect(lines).toContain(
+      "Example Registrar · registered 1995-08-14 · expires 2024-08-13"
+    );
+    expect(lines).toContain(lastUpdatedLine);
   });
 
   it("includes disabled source placeholders", () => {

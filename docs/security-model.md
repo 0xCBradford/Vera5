@@ -475,7 +475,7 @@ Vera5 does not add `unsafe-eval`, `unsafe-inline`, or remote `https://` entries 
 | `https://www.virustotal.com/…` | `fetch()` GET (connector) | VirusTotal v3 object lookup when enabled and keyed | No — BYOK to vendor |
 | `https://api.shodan.io/…` | `fetch()` GET (connector) | Shodan host/DNS lookup when enabled and keyed | No — BYOK to vendor |
 | `https://search.censys.io/…` | `fetch()` GET (connector) | Censys host lookup when enabled and credentialed | No — BYOK to vendor |
-| RDAP/WHOIS endpoints (declared per connector) | `fetch()` GET | Domain registration context when RDAP connector enabled | No — to public RDAP or configured resolver |
+| `https://rdap.org/…`, `https://data.iana.org/…`, registry RDAP/WHOIS HTTPS endpoints (declared per connector) | `fetch()` GET | Domain registration context when RDAP/WHOIS connector enabled — primary RDAP, then registry RDAP, then HTTPS WHOIS fallback per [api-integrations.md — RDAP/WHOIS domain registration lookup](api-integrations.md#rdapwhois-domain-registration-lookup) | No — domain string only to public registry services; no Vera5 relay |
 | `http://127.0.0.1:<port>/…` | `fetch()` (optional bridge) | Local backend enrich or summarize when toggled on | No — localhost only |
 | `http://127.0.0.1:<llm-port>/…` | `fetch()` (opt-in summary) | Local LLM summary when explicitly requested | No — normalized JSON only |
 | `https://…` pivot URLs | `chrome.tabs.create` / user navigation | Analyst opens vendor search pages from pivot actions | No live API call from extension |

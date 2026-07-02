@@ -1809,7 +1809,9 @@ export function Options() {
                       </li>
                       <li className="v5-domain-list__item">
                         Live enrichment sources: none enabled until you save a
-                        key and turn a source on
+                        key and turn a source on, or enable keyless{" "}
+                        <strong>RDAP/WHOIS</strong> for domain registration
+                        lookups
                       </li>
                     </ul>
                   </div>

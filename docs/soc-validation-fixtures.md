@@ -109,6 +109,42 @@ Automated regression in `fixtureTuning.test.ts` asserts these decoys stay unhigh
 
 ---
 
+## Link attribute scanning (opt-in)
+
+Link attribute scanning is **off by default**. Week 10 SOC dashboard fixtures below were authored for **visible-text** validation; allowlisted `href` values on a subset of pages duplicate indicators already present in rendered text.
+
+### Default off (unchanged SOC expectations)
+
+| Check | Automated coverage |
+|-------|-------------------|
+| Visible-text IOC sets and decoy suppressions | `fixtureTuning.test.ts` |
+| Page scan tray matches visible-text deduped keys; no attribute profile fields | `attributeHrefRegression.test.ts` — **Week 10 SOC fixtures with attribute extraction disabled** |
+
+Tray counts and indicator types in the tables above remain authoritative when link attribute scanning is disabled.
+
+### Enabled (documented merge results)
+
+Enable **Scan link attributes for IOCs** in Settings (requires first-enable consent). Re-scan each Week 10 SOC fixture. Automated regression in `attributeHrefRegression.test.ts` — **Week 10 SOC fixtures with attribute extraction enabled** — documents:
+
+| Fixture | Allowlisted attributes scanned | Deduped tray vs visible-text-only | Attribute-only snapshot rows |
+|---------|-------------------------------|-----------------------------------|------------------------------|
+| `sample-alert.html` | 2 (`href`: login URL, `mailto:` contact) | **Identical** deduped IOC set | **None** — duplicates merge with visible text |
+| `sample-blog.html` | 1 (`href`: resource URL) | **Identical** | **None** |
+| `sample-splunk-export.html` | 0 (no allowlisted link attributes in markup) | **Identical** | **None** |
+| `sample-security-onion-alert.html` | 1 (`href`: login URL) | **Identical** | **None** |
+
+When enabled on these pages, attribute nodes are scanned locally, duplicate `type:value` keys collapse into the existing visible-text match, and tray counts stay the same. Attribute provenance (`ioc.attribute.allowlisted`) does not appear in snapshot rows because every attribute-detected value duplicates visible text.
+
+For attribute-only IOC pages (no visible-text match), see [`sample-malicious-attribute-iocs.html`](../examples/sample-malicious-attribute-iocs.html) and [`sample-benign-href-anchors.html`](../examples/sample-benign-href-anchors.html).
+
+**Regression gate (attribute + SOC):** from `extension/`, run:
+
+```bash
+npx vitest run src/content/fixtureTuning.test.ts src/content/attributeHrefRegression.test.ts
+```
+
+---
+
 ## Extended indicator regression (SOC dashboard fixtures)
 
 After email, ASN, CIDR, file path, and onion detectors ship, **`sample-splunk-export.html`** and **`sample-security-onion-alert.html`** remain **MVP-only** pages: they embed no extended-type tokens in visible text. Automated regression re-runs the SOC fixture tests and asserts:
@@ -142,7 +178,8 @@ Use the same order for manual SOC checks and pre-release smoke:
 3. **Dense table** — `http://localhost:8080/sample-splunk-export.html`: scan completes without hanging; tray shows elevated IOC count; spot-check IPv4, URL, and CVE highlights in table cells.
 4. **SOC grid + logs** — `http://localhost:8080/sample-security-onion-alert.html`: confirm IOCs in field grid and Zeek excerpt; open overlay on one IPv4 and one hash row.
 5. **Extended detector regression** — confirm SOC dashboard fixtures (`sample-splunk-export.html`, `sample-security-onion-alert.html`) still highlight the same MVP types and do not surface new email, ASN, CIDR, file path, or onion highlights.
-6. **Regression gate** — from `extension/`, run `npm run check` (includes `fixtureTuning.test.ts`).
+6. **Link attribute scanning (optional)** — with **Scan link attributes for IOCs** enabled, re-scan the four Week 10 SOC fixtures; tray deduped counts should match step 1–4 baselines (see [Link attribute scanning (opt-in)](#link-attribute-scanning-opt-in)).
+7. **Regression gate** — from `extension/`, run `npm run check` (includes `fixtureTuning.test.ts` and `attributeHrefRegression.test.ts`).
 
 When adding or changing fixture HTML, update this document, `fixtureTuning.test.ts`, and the fixture tables in [architecture.md](architecture.md) and [contributors/detection-engine.md](contributors/detection-engine.md).
 

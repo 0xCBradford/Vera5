@@ -117,6 +117,8 @@ export const DECLARED_ENRICHMENT_API_HOSTS = [
   "www.virustotal.com",
   "api.shodan.io",
   "search.censys.io",
+  "rdap.org",
+  "data.iana.org",
 ] as const;
 
 export const MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS =

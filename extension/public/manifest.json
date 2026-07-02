@@ -13,7 +13,9 @@
     "https://api.greynoise.io/*",
     "https://www.virustotal.com/*",
     "https://api.shodan.io/*",
-    "https://search.censys.io/*"
+    "https://search.censys.io/*",
+    "https://rdap.org/*",
+    "https://data.iana.org/*"
   ],
   "icons": {
     "16": "icons/icon16.png",

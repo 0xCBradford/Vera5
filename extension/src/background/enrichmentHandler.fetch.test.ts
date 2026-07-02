@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   ENRICHMENT_ERROR_CODE,
   ENRICHMENT_SOURCE_STATUS,
@@ -19,7 +22,19 @@ import {
   TEST_FIXTURE_SECONDARY_API_KEY,
   TEST_FIXTURE_URLSCAN_API_KEY,
 } from "../lib/fixtureSecrets";
+import { RDAP_ORG_DOMAIN_BASE_URL } from "../lib/rdapClient";
+import { resetRdapClientRateLimitState } from "../lib/rdapClient";
 import { handleEnrichIocMessage } from "./enrichmentHandler";
+
+const rdapFixturesDir = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "../lib/fixtures"
+);
+
+function loadRdapFixture(relativePath: string): unknown {
+  const raw = readFileSync(join(rdapFixturesDir, relativePath), "utf8");
+  return JSON.parse(raw) as unknown;
+}
 
 vi.mock("../lib/storage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/storage")>();
@@ -89,6 +104,7 @@ describe("enrichment handler with mocked fetch", () => {
 
   afterEach(() => {
     clearGlobalEnrichmentCooldown();
+    resetRdapClientRateLimitState();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     for (const key of Object.keys(store)) {
@@ -1220,6 +1236,7 @@ describe("disabled source and partial success regression", () => {
 
   afterEach(() => {
     clearGlobalEnrichmentCooldown();
+    resetRdapClientRateLimitState();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
     for (const key of Object.keys(store)) {
@@ -2335,6 +2352,182 @@ describe("disabled source and partial success regression", () => {
           errorCode: ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE,
         },
       },
+    });
+  });
+
+  it("returns RDAP/WHOIS enrichment with source label and fetch timestamp for domain IOCs", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      rdap_whois: true,
+    });
+    const payload = loadRdapFixture("rdap/domain-example-com.json");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe(`${RDAP_ORG_DOMAIN_BASE_URL}example.com`);
+        return Response.json(payload, {
+          status: 200,
+          headers: { "Content-Type": "application/rdap+json" },
+        });
+      })
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "rdap_whois",
+      })
+    );
+
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "rdap_whois",
+          sourceLabel: "RDAP/WHOIS",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary:
+            "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+          tags: [
+            "client delete prohibited",
+            "client transfer prohibited",
+            "ns1.example.com",
+            "ns2.example.com",
+          ],
+          fetchedAt: expect.any(String),
+          rawVendorJson: expect.stringContaining("Example Registrar"),
+        },
+        sources: [
+          {
+            sourceId: "rdap_whois",
+            sourceLabel: "RDAP/WHOIS",
+            status: ENRICHMENT_SOURCE_STATUS.OK,
+            summary:
+              "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+            tags: [
+              "client delete prohibited",
+              "client transfer prohibited",
+              "ns1.example.com",
+              "ns2.example.com",
+            ],
+            fetchedAt: expect.any(String),
+            rawVendorJson: expect.stringContaining("Example Registrar"),
+          },
+        ],
+      },
+    });
+  });
+
+  it("surfaces RDAP/WHOIS NXDOMAIN through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      rdap_whois: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          { errorCode: "404", title: "Not Found" },
+          { status: 404, headers: { "Content-Type": "application/rdap+json" } }
+        )
+      )
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "missing.example",
+        iocType: "domain",
+        sourceId: "rdap_whois",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "rdap_whois",
+      sourceLabel: "RDAP/WHOIS",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
+      errorMessage:
+        "RDAP/WHOIS: no registration record found (NXDOMAIN).",
+      fetchedAt: expect.any(String),
+    });
+  });
+
+  it("surfaces RDAP/WHOIS rate limit through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      rdap_whois: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          { errorCode: "429", title: "Too Many Requests" },
+          {
+            status: 429,
+            headers: {
+              "Content-Type": "application/rdap+json",
+              "Retry-After": "45",
+            },
+          }
+        )
+      )
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "rdap_whois",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "rdap_whois",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
+      errorMessage:
+        "RDAP/WHOIS rate limit reached. Back off before retrying.",
+      retryHint: "Retry after 45 seconds.",
+    });
+  });
+
+  it("surfaces RDAP/WHOIS timeout through the handler", async () => {
+    vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
+      rdap_whois: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Promise<Response>((_resolve, reject) => {
+            const error = new Error("aborted");
+            error.name = "AbortError";
+            reject(error);
+          })
+      )
+    );
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "example.com",
+        iocType: "domain",
+        sourceId: "rdap_whois",
+      })
+    );
+
+    expect(response.ok).toBe(true);
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
+    expect(source).toMatchObject({
+      sourceId: "rdap_whois",
+      status: ENRICHMENT_SOURCE_STATUS.ERROR,
+      errorCode: ENRICHMENT_ERROR_CODE.TIMEOUT,
+      errorMessage: "RDAP/WHOIS request timed out.",
+      fetchedAt: expect.any(String),
     });
   });
 });

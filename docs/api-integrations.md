@@ -208,6 +208,80 @@ Censys may return **HTTP 429** when Search API quota is exhausted. The Censys co
 
 VirusTotal public API tiers enforce daily and per-minute lookup caps and may return **HTTP 429** when exceeded. The VirusTotal connector applies `Retry-After` when present and the same user-facing backoff pattern when live enrichment is enabled in the extension.
 
+## RDAP/WHOIS domain registration lookup
+
+Vera5 adds an optional **RDAP/WHOIS** connector for **domain** indicators only. It returns registrar, registration dates, nameserver, and status fields on the enrichment card—not threat-intel verdicts. There is **no Vera5-operated relay**; lookups use public registry services over HTTPS from the extension background worker when you enable the connector.
+
+**Bring-your-own keys:** Public RDAP and most registry WHOIS-over-HTTPS endpoints do **not** require an API key. If you configure a private resolver or paid WHOIS gateway later, keys stay in local Settings storage like other connectors.
+
+### Primary path — RDAP bootstrap resolver
+
+| Step | Request | Notes |
+|------|---------|-------|
+| 1 | `GET https://rdap.org/domain/{domain}` | Primary lookup implemented in `extension/src/lib/rdapClient.ts`. Accepts `application/rdap+json`. Follows redirects to the authoritative registry RDAP server. |
+
+The domain value is normalized with the same IOC sanitizer used for enrichment (exact domain match only). Requests use **GET** with no body; only the domain string appears in the URL path.
+
+### WHOIS fallback when RDAP is unavailable
+
+When the primary RDAP resolver cannot return a domain object, the connector tries a **structured fallback chain** before surfacing an error on the enrichment card. Fallback applies on:
+
+| Primary RDAP outcome | Fallback action |
+|----------------------|-----------------|
+| HTTP **404** / RDAP `not_found` | Try registry RDAP (step 2), then WHOIS (step 3) when the TLD still publishes registration data |
+| **Timeout** (15 s abort) | Retry once on registry RDAP base URL for the TLD; if still failing, WHOIS (step 3) |
+| **Rate limit** (HTTP 429/503 with `Retry-After`) | Honor backoff; do not start WHOIS until RDAP retry window expires or manual refresh |
+| **Invalid RDAP payload** (non-domain object) | Registry RDAP (step 2), then WHOIS (step 3) |
+| **Vendor HTTP error** (5xx, connection failure) | Registry RDAP (step 2), then WHOIS (step 3) |
+
+**Step 2 — Registry RDAP (IANA bootstrap):**
+
+| Step | Request | Notes |
+|------|---------|-------|
+| 2a | `GET https://data.iana.org/rdap/dns.json` | Cached locally for the browser session; used to map the domain TLD to registry RDAP base URLs |
+| 2b | `GET {registryRdapBaseUrl}/domain/{domain}` | HTTPS GET to the authoritative RDAP server for the TLD (for example Verisign, Nominet, or ccTLD operator endpoints returned by the bootstrap file) |
+
+**Step 3 — WHOIS text fallback (HTTPS only):**
+
+| Step | Request | Notes |
+|------|---------|-------|
+| 3 | HTTPS WHOIS query to the registry or registrar endpoint for the TLD | Used only when steps 1–2 do not yield parseable registration data |
+
+WHOIS fallback constraints (product contract):
+
+- **No WHOIS port 43** from the extension — browser extensions cannot open raw TCP WHOIS sockets reliably; fallback uses **HTTPS** registry or registrar query endpoints where available.
+- **No full raw WHOIS transcript in the overlay by default** — the connector parses registrar, created/updated/expires dates, nameservers, and status fields into the same normalized enrichment card shape as RDAP. Analysts who need the full transcript can use pivot links to the registry site.
+- **Same IOC boundary** — only the **domain string** is sent; no page content or unrelated hostnames.
+- **Attribution** — enrichment rows label the source **RDAP/WHOIS** with fetch timestamp; WHOIS-sourced fields note parsed WHOIS provenance separately from RDAP JSON when both formats appear in the pipeline.
+
+When all steps fail (for example truly unregistered domains, unsupported TLDs, or registry maintenance), the connector returns an explicit error state (NXDOMAIN / timeout / rate limit) on the enrichment card rather than silent empty success.
+
+### Rate limits and timeouts (RDAP/WHOIS client)
+
+| Control | Value | Behavior |
+|---------|-------|----------|
+| Per-request timeout | **15 seconds** | Each RDAP or HTTPS WHOIS hop aborts independently (`DEFAULT_RDAP_REQUEST_TIMEOUT_MS`) |
+| Client spacing | **1 second** minimum between RDAP/WHOIS client requests | Reduces accidental hammering of public registry infrastructure |
+| Server rate limits | HTTP **429** / **503** | Honors `Retry-After`; blocks further RDAP/WHOIS attempts until the window expires |
+| Global enrichment cooldown | Same as other live connectors | After HTTP 429 during live fetch, automatic enrichment pauses until cooldown expires; manual **›** refresh may bypass cooldown per existing connector rules |
+
+Public RDAP operators publish varying quotas; treat registry responses as authoritative. Use manual-only enrichment (default) when triaging many domains on one page.
+
+### Declared hosts (connector registration)
+
+Live RDAP/WHOIS `fetch()` calls require HTTPS hosts on the connector allowlist (see [Declared enrichment API hosts](#declared-enrichment-api-hosts)). Expected entries when the connector ships include at minimum:
+
+| Host pattern | Role |
+|--------------|------|
+| `rdap.org` | Primary RDAP bootstrap resolver |
+| `data.iana.org` | IANA RDAP bootstrap (`dns.json`) |
+| Registry RDAP bases | Authoritative per-TLD RDAP servers returned by bootstrap (for example `rdap.verisign.com`, `rdap.nic.{tld}`) |
+| Registry HTTPS WHOIS endpoints | TLD-specific HTTPS WHOIS fallback when RDAP is unavailable |
+
+Pivot links to registrar or IANA web WHOIS pages remain user-initiated browser navigation and do not consume connector quota.
+
+See [security-model.md — Remote origins matrix](security-model.md#remote-origins-matrix) for privacy posture (domain-only query, no Vera5 upload).
+
 ### Other HTTP outcomes
 
 | Status | Typical Vera5 mapping |
@@ -262,5 +336,6 @@ Vendor URLs and policies change without notice. If a link breaks, search the ven
 ## Related documentation
 
 - [architecture.md](architecture.md) — MVP connector order, BYOK, parallel fetch, [Connector SDK](architecture.md#connector-sdk) registry ids
+- [api-integrations.md — RDAP/WHOIS domain registration lookup](api-integrations.md#rdapwhois-domain-registration-lookup) — primary RDAP path, registry RDAP fallback, HTTPS WHOIS fallback when RDAP unavailable
 - [local-mode.md](local-mode.md) — local-first enrichment and quota expectations
 - [security-model.md](security-model.md) — credential handling and user responsibilities

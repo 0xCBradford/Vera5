@@ -37,6 +37,8 @@ const FETCH_ALLOWED_SOURCE_BASENAMES = new Set([
   "virustotalConnector.ts",
   "shodanConnector.ts",
   "censysConnector.ts",
+  "rdapWhoisConnector.ts",
+  "rdapClient.ts",
 ]);
 
 const FETCH_GUARD_SOURCE_BASENAMES = new Set([

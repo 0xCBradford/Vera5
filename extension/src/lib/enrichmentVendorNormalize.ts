@@ -448,3 +448,72 @@ export function mapCensysFieldsToUnifiedPresentation(
     tags: buildCensysUnifiedTags(input),
   };
 }
+
+export type RdapWhoisUnifiedInput = {
+  domainName: string;
+  registrar?: string;
+  registrationDate?: string;
+  expirationDate?: string;
+  statusValues?: readonly string[];
+  nameservers?: readonly string[];
+};
+
+export function buildRdapWhoisUnifiedSummary(
+  input: RdapWhoisUnifiedInput
+): string {
+  const parts: string[] = [];
+  const registrar = input.registrar?.trim();
+  if (registrar) {
+    parts.push(registrar);
+  } else {
+    parts.push(input.domainName.trim());
+  }
+  if (input.registrationDate) {
+    parts.push(`registered ${input.registrationDate}`);
+  }
+  if (input.expirationDate) {
+    parts.push(`expires ${input.expirationDate}`);
+  }
+  return parts.join(" · ");
+}
+
+export function buildRdapWhoisUnifiedTags(
+  input: Pick<RdapWhoisUnifiedInput, "statusValues" | "nameservers">
+): readonly string[] {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+
+  for (const status of input.statusValues ?? []) {
+    appendUniqueTag(tags, seen, status);
+    if (tags.length >= UNIFIED_TAG_LIMIT) {
+      return tags;
+    }
+  }
+
+  for (const nameserver of input.nameservers ?? []) {
+    appendUniqueTag(tags, seen, nameserver);
+    if (tags.length >= UNIFIED_TAG_LIMIT) {
+      break;
+    }
+  }
+
+  return tags;
+}
+
+export function mapRdapWhoisFieldsToUnifiedPresentation(
+  input: RdapWhoisUnifiedInput
+): UnifiedEnrichmentPresentation | null {
+  const domainName = input.domainName.trim();
+  if (!domainName) {
+    return null;
+  }
+  const summary = buildRdapWhoisUnifiedSummary(input).trim();
+  if (!summary) {
+    return null;
+  }
+  const tags = buildRdapWhoisUnifiedTags(input);
+  return {
+    summary,
+    tags: tags.length > 0 ? tags : [],
+  };
+}

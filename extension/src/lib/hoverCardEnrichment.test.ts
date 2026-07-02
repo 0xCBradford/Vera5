@@ -449,6 +449,50 @@ describe("hover card enrichment placeholders", () => {
     expect(timedOut?.detail).toBe("URLScan.io request timed out.");
   });
 
+  it("surfaces RDAP/WHOIS connector error copy on source entries", () => {
+    const notFound = buildHoverCardSourceEntries([
+      {
+        sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+        sourceLabel: "RDAP/WHOIS",
+        status: "error",
+        errorCode: "vendor_error",
+        errorMessage:
+          "RDAP/WHOIS: no registration record found (NXDOMAIN).",
+      },
+    ])[0];
+    expect(notFound?.detail).toBe(
+      "RDAP/WHOIS: no registration record found (NXDOMAIN)."
+    );
+    expect(notFound?.badgeText).toBe("Error");
+
+    const rateLimited = buildHoverCardSourceEntries([
+      {
+        sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+        sourceLabel: "RDAP/WHOIS",
+        status: "error",
+        errorCode: "rate_limited",
+        errorMessage:
+          "RDAP/WHOIS rate limit reached. Back off before retrying.",
+        retryHint: "Retry after 30 seconds.",
+      },
+    ])[0];
+    expect(rateLimited?.detail).toBe(
+      "RDAP/WHOIS rate limit reached. Back off before retrying."
+    );
+    expect(rateLimited?.retryHint).toBe("Retry after 30 seconds.");
+
+    const timedOut = buildHoverCardSourceEntries([
+      {
+        sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+        sourceLabel: "RDAP/WHOIS",
+        status: "error",
+        errorCode: "timeout",
+        errorMessage: "RDAP/WHOIS request timed out.",
+      },
+    ])[0];
+    expect(timedOut?.detail).toBe("RDAP/WHOIS request timed out.");
+  });
+
   it("surfaces unsupported indicator type copy for Phase 2 enrichment rows", () => {
     const view = resolveMultiSourceEnrichmentView([
       {
@@ -596,6 +640,86 @@ describe("hover card enrichment placeholders", () => {
     ]);
     expect(getSingleSourceLastUpdatedLine(entries)).toBeUndefined();
     expect(entries.every((entry) => entry.lastUpdatedLine)).toBe(true);
+  });
+
+  it("builds RDAP/WHOIS source attribution row with fetch timestamp", () => {
+    const fetchedAt = "2026-06-30T12:00:00.000Z";
+    const entries = buildHoverCardSourceEntries([
+      {
+        sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+        sourceLabel: "RDAP/WHOIS",
+        status: "ok",
+        summary:
+          "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+        fetchedAt,
+      },
+    ]);
+
+    expect(entries[0]?.label).toBe("RDAP/WHOIS");
+    expect(entries[0]?.lastUpdatedLine).toBe(
+      buildHoverCardLastUpdatedLine(fetchedAt)
+    );
+    expect(getSingleSourceLastUpdatedLine(entries)).toBe(
+      entries[0]?.lastUpdatedLine
+    );
+  });
+
+  it("resolves single-source RDAP/WHOIS enrichment with attribution footer and timestamp", () => {
+    const fetchedAt = "2026-06-30T12:00:00.000Z";
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+        sourceLabel: "RDAP/WHOIS",
+        status: "ok",
+        summary:
+          "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+        fetchedAt,
+      },
+    ]);
+
+    expect(view.sourceAttribution).toEqual({
+      sourceLabel: "RDAP/WHOIS",
+      fromCache: false,
+    });
+    expect(formatEnrichmentSourceAttribution(view.sourceAttribution!, "ready")).toBe(
+      "Source: RDAP/WHOIS · live"
+    );
+    expect(view.sourceResults[0]?.lastUpdatedLine).toBe(
+      buildHoverCardLastUpdatedLine(fetchedAt)
+    );
+  });
+
+  it("shows RDAP/WHOIS attribution on multi-source rows with per-source timestamps", () => {
+    const fetchedAt = "2026-06-30T12:00:00.000Z";
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: ENRICHMENT_SOURCE.OTX,
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+        fetchedAt: "2026-06-30T11:00:00.000Z",
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+        sourceLabel: "RDAP/WHOIS",
+        status: "ok",
+        summary:
+          "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+        fetchedAt,
+      },
+    ]);
+
+    expect(view.sourceResults.map((entry) => entry.label)).toEqual([
+      "OTX",
+      "RDAP/WHOIS",
+    ]);
+    expect(view.sourceResults[1]?.lastUpdatedLine).toBe(
+      buildHoverCardLastUpdatedLine(fetchedAt)
+    );
+    expect(shouldShowMultiSourceResults(view.sourceResults)).toBe(true);
+    expect(
+      shouldShowEnrichmentSourceAttribution("ready", view.sourceAttribution, view.sourceResults)
+    ).toBe(false);
   });
 
   it("includes redacted raw vendor JSON on successful source entries", () => {

@@ -1,0 +1,41 @@
+{
+  "objectClassName": "domain",
+  "handle": "EXAMPLE.COM-DN",
+  "ldhName": "example.com",
+  "unicodeName": "example.com",
+  "status": ["client delete prohibited", "client transfer prohibited"],
+  "events": [
+    {
+      "eventAction": "registration",
+      "eventDate": "1995-08-14T04:00:00Z"
+    },
+    {
+      "eventAction": "expiration",
+      "eventDate": "2024-08-13T04:00:00Z"
+    }
+  ],
+  "nameservers": [
+    {
+      "objectClassName": "nameserver",
+      "ldhName": "ns1.example.com"
+    },
+    {
+      "objectClassName": "nameserver",
+      "ldhName": "ns2.example.com"
+    }
+  ],
+  "entities": [
+    {
+      "objectClassName": "entity",
+      "handle": "EXAMPLE-REG",
+      "roles": ["registrar"],
+      "vcardArray": [
+        "vcard",
+        [
+          ["version", {}, "text", "4.0"],
+          ["fn", {}, "text", "Example Registrar"]
+        ]
+      ]
+    }
+  ]
+}

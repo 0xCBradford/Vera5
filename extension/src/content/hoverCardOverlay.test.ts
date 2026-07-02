@@ -1255,6 +1255,100 @@ describe("hover card overlay", () => {
     expect(panel.textContent).toContain("GreyNoise:");
   });
 
+  it("shows RDAP/WHOIS attribution with fetch timestamp on single-source domain enrichment", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const sourceResults = buildHoverCardSourceEntries([
+      {
+        sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+        sourceLabel: "RDAP/WHOIS",
+        status: "ok",
+        summary:
+          "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+        fetchedAt: "2026-06-30T12:00:00.000Z",
+      },
+    ]);
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "example.com",
+      type: IOC_TYPE.DOMAIN,
+      enrichmentState: "ready",
+      summary:
+        "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+      sourceResults,
+      sourceAttribution: { sourceLabel: "RDAP/WHOIS" },
+    });
+
+    expect(panel.textContent).toContain("Source: RDAP/WHOIS · live");
+    expect(panel.textContent).toContain("Last updated:");
+    expect(panel.textContent).toContain("Example Registrar");
+  });
+
+  it("shows RDAP/WHOIS attribution on multi-source rows with fetch timestamp", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "example.com",
+      type: IOC_TYPE.DOMAIN,
+      enrichmentState: "ready",
+      summary: "2 threat pulses",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          status: "ok",
+          summary: "2 threat pulses",
+          fetchedAt: "2026-06-30T11:00:00.000Z",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+          sourceLabel: "RDAP/WHOIS",
+          status: "ok",
+          summary:
+            "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+          fetchedAt: "2026-06-30T12:00:00.000Z",
+        },
+      ]),
+    });
+
+    const sourceItems = panel.querySelectorAll(`.${HOVER_CARD_SOURCE_ITEM_CLASS}`);
+    expect(sourceItems).toHaveLength(2);
+    expect(panel.textContent).toContain("OTX · Live");
+    expect(panel.textContent).toContain("RDAP/WHOIS · Live");
+    expect(panel.textContent).toContain("Last updated:");
+    expect(
+      panel.querySelector(`.${HOVER_CARD_ATTRIBUTION_CLASS}`)
+    ).toBeNull();
+  });
+
   it("shows VT, Shodan, and Censys attribution on multi-source rows alongside AbuseIPDB and OTX", () => {
     const anchor = document.createElement("span");
     document.body.appendChild(anchor);

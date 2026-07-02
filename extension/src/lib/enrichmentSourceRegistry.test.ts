@@ -37,6 +37,7 @@ describe("enrichmentSourceRegistry", () => {
       "censys",
       "threatfox",
       "urlhaus",
+      "rdap_whois",
     ]);
   });
 
@@ -48,6 +49,7 @@ describe("enrichmentSourceRegistry", () => {
       "greynoise",
       "shodan",
       "censys",
+      "rdap_whois",
     ]);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.URLSCAN);
     expect(OPTIONS_API_KEY_SLOTS).toContain(ENRICHMENT_SOURCE.GREYNOISE);
@@ -68,6 +70,16 @@ describe("enrichmentSourceRegistry", () => {
     expect(definition.enabledDefault).toBe(false);
     expect(definition.liveConnector).toBe(true);
     expect(LIVE_ENRICHMENT_SOURCE_ORDER).toContain(ENRICHMENT_SOURCE.CENSYS);
+  });
+
+  it("registers RDAP/WHOIS as a live domain connector without an API key", () => {
+    const definition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.RDAP_WHOIS);
+    expect(definition.enabledDefault).toBe(false);
+    expect(definition.liveConnector).toBe(true);
+    expect(definition.requiresApiKey).toBe(false);
+    expect(definition.supportedIndicatorTypes).toEqual([IOC_TYPE.DOMAIN]);
+    expect(LIVE_ENRICHMENT_SOURCE_ORDER).toContain(ENRICHMENT_SOURCE.RDAP_WHOIS);
+    expect(OPTIONS_API_KEY_SLOTS).not.toContain(ENRICHMENT_SOURCE.RDAP_WHOIS);
   });
 
   it("keeps VirusTotal disabled by default and outside live connector order", () => {

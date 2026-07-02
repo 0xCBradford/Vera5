@@ -7,6 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
 import { STORAGE_KEY_API_KEYS } from "../lib/storage";
+import { STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED } from "../lib/storage";
 import {
   STORAGE_KEY_INSTALL_QUICK_START_COMPLETED,
   STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED,
@@ -134,6 +135,9 @@ describe("Options API key inputs", () => {
     expect(
       mounted.container.querySelector('input[aria-label="Enable Censys"]')
     ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('input[aria-label="Enable RDAP/WHOIS"]')
+    ).not.toBeNull();
   });
 
   it("points source health to the popup instead of a duplicate panel", async () => {
@@ -190,14 +194,16 @@ describe("Options API key inputs", () => {
     const attributeToggle = mounted.container.querySelector(
       'input[aria-label="Scan link attributes for IOCs"]'
     ) as HTMLInputElement;
-    attributeToggle.click();
+    await vi.waitFor(() => {
+      expect(attributeToggle.disabled).toBe(false);
+    });
     await act(async () => {
-      await Promise.resolve();
+      attributeToggle.click();
     });
 
-    expect(
-      mounted.container.querySelector('[role="dialog"]')
-    ).not.toBeNull();
+    await vi.waitFor(() => {
+      expect(mounted!.container.querySelector('[role="dialog"]')).not.toBeNull();
+    });
     expect(mounted.container.textContent).toContain(
       "Enable link attribute scanning?"
     );
@@ -860,6 +866,52 @@ describe("Options API key inputs", () => {
 
     expect(censysSource?.textContent).toContain("Saved");
     expect(censysSource?.textContent).not.toContain("No API key");
+  });
+
+  it("enables RDAP/WHOIS without an API key and persists the toggle", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const rdapToggle = mounted.container.querySelector(
+      'input[aria-label="Enable RDAP/WHOIS"]'
+    ) as HTMLInputElement;
+    expect(rdapToggle).not.toBeNull();
+    expect(rdapToggle.checked).toBe(false);
+
+    await act(async () => {
+      rdapToggle.click();
+      await Promise.resolve();
+    });
+
+    expect(rdapToggle.checked).toBe(true);
+    expect(store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]).toEqual(
+      expect.objectContaining({ rdap_whois: true })
+    );
+
+    const rdapSource = Array.from(
+      mounted.container.querySelectorAll(".v5-source")
+    ).find((element) => element.textContent?.includes("RDAP/WHOIS"));
+
+    expect(rdapSource?.textContent).toContain("No API key required");
+    expect(rdapSource?.querySelector(".v5-badge")?.textContent).toContain(
+      "Enabled"
+    );
+  });
+
+  it("does not show RDAP/WHOIS in the API keys section", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector('input[aria-label="RDAP/WHOIS API key"]')
+    ).toBeNull();
+    expect(
+      mounted.container.querySelector('input[aria-label="Enable RDAP/WHOIS"]')
+    ).not.toBeNull();
   });
 
   it("exports settings without API keys by default", async () => {

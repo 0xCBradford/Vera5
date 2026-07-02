@@ -7,6 +7,7 @@ import {
   mapCensysFieldsToUnifiedPresentation,
   mapGreyNoiseFieldsToUnifiedPresentation,
   mapOtxFieldsToUnifiedPresentation,
+  mapRdapWhoisFieldsToUnifiedPresentation,
   mapShodanFieldsToUnifiedPresentation,
   mapUrlscanFieldsToUnifiedPresentation,
   mapVirustotalFieldsToUnifiedPresentation,
@@ -236,6 +237,46 @@ describe("unified enrichment vendor normalization", () => {
     ).toEqual({
       summary: "2 open services",
       tags: ["US", "Google LLC", "nginx", "https", "443/tcp"],
+    });
+  });
+});
+
+describe("RDAP/WHOIS unified enrichment card", () => {
+  it("maps registrar, dates, nameservers, and status into summary and tags", () => {
+    expect(
+      mapRdapWhoisFieldsToUnifiedPresentation({
+        domainName: "example.com",
+        registrar: "Example Registrar",
+        registrationDate: "1995-08-14",
+        expirationDate: "2024-08-13",
+        statusValues: [
+          "client delete prohibited",
+          "client transfer prohibited",
+        ],
+        nameservers: ["ns1.example.com", "ns2.example.com"],
+      })
+    ).toEqual({
+      summary:
+        "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+      tags: [
+        "client delete prohibited",
+        "client transfer prohibited",
+        "ns1.example.com",
+        "ns2.example.com",
+      ],
+    });
+  });
+
+  it("falls back to domain name when registrar is absent", () => {
+    expect(
+      mapRdapWhoisFieldsToUnifiedPresentation({
+        domainName: "example.com",
+        registrationDate: "1995-08-14",
+        statusValues: ["active"],
+      })
+    ).toEqual({
+      summary: "example.com · registered 1995-08-14",
+      tags: ["active"],
     });
   });
 });

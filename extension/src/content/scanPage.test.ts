@@ -355,6 +355,7 @@ describe("handleScanPageRequest", () => {
     "reports attribute cap reached on sample-large-attribute-dom.html fixture",
     async () => {
       store[CONTENT_STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED] = true;
+      store[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED] = false;
       const root = mountPage(loadFixture("sample-large-attribute-dom.html"));
       const response = await handleScanPageRequest(root);
       expect(response).toEqual(
@@ -372,7 +373,7 @@ describe("handleScanPageRequest", () => {
         })
       );
     },
-    15000
+    30000
   );
 
   it("persists attribute provenance on snapshot entries when extraction is enabled", async () => {

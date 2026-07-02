@@ -15,6 +15,7 @@ import {
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
 } from "./hoverCardEnrichment";
 import { DEFAULT_OTX_REQUEST_TIMEOUT_MS } from "./otxConnector";
+import { DEFAULT_RDAP_REQUEST_TIMEOUT_MS } from "./rdapClient";
 import { DEFAULT_SHODAN_REQUEST_TIMEOUT_MS } from "./shodanConnector";
 import { DEFAULT_URLSCAN_REQUEST_TIMEOUT_MS } from "./urlscanConnector";
 import {
@@ -175,6 +176,13 @@ const SOURCE_RATE_LIMIT_METADATA: Record<
     quotaSummary:
       "Live enrichment not available. Pivot links only; see abuse.ch API fair-use terms.",
     rateLimitHeaderHints: [],
+  },
+  [ENRICHMENT_SOURCE.RDAP_WHOIS]: {
+    liveEnrichment: true,
+    requestTimeoutSeconds: DEFAULT_RDAP_REQUEST_TIMEOUT_MS / 1000,
+    quotaSummary:
+      "Public RDAP resolvers publish varying quotas. Vera5 spaces requests at least 1 second apart and honors Retry-After when registries rate limit.",
+    rateLimitHeaderHints: ["Retry-After"],
   },
 };
 
