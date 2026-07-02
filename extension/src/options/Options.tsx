@@ -7,6 +7,14 @@ import {
   exportVera5SettingsJson,
   importVera5SettingsJson,
 } from "../lib/settingsExport";
+import {
+  buildSettingsPackImportPreview,
+  downloadSettingsPackExport,
+  exportSettingsPackJson,
+  importSettingsPackJson,
+  SETTINGS_PACK_THREAT_PROFILE_PRECEDENCE_NOTE,
+  type SettingsPackImportPreview,
+} from "../lib/settingsPack";
 import type {
   ApiKeySlot,
   AttributeHrefSitePreference,
@@ -46,6 +54,7 @@ import {
   getEnrichmentSourceEnabled,
   getIncludePrivateIpv4,
   getInstallQuickStartCompleted,
+  getVera5Settings,
   getLocalBackendEnabled,
   getLocalLlmSummaryEnabled,
   getInternalAssetCidrRanges,
@@ -737,6 +746,7 @@ function createEmptyApiKeyFieldStates(): Record<ApiKeySlot, ApiKeyFieldState> {
 
 export function Options() {
   const importInputRef = useRef<HTMLInputElement>(null);
+  const settingsPackImportInputRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [activeSection, setActiveSection] = useState("overview");
   const [collapsedSections, setCollapsedSections] = useState<
@@ -832,6 +842,17 @@ export function Options() {
   >("idle");
   const [exportState, setExportState] = useState<
     "idle" | "exporting" | "exported" | "error"
+  >("idle");
+  const [settingsPackExportState, setSettingsPackExportState] = useState<
+    "idle" | "exporting" | "exported" | "error"
+  >("idle");
+  const [settingsPackImportPreview, setSettingsPackImportPreview] =
+    useState<SettingsPackImportPreview | null>(null);
+  const [settingsPackImportRawJson, setSettingsPackImportRawJson] = useState<
+    string | null
+  >(null);
+  const [settingsPackImportState, setSettingsPackImportState] = useState<
+    "idle" | "importing" | "imported" | "error"
   >("idle");
   const [importState, setImportState] = useState<
     "idle" | "importing" | "imported" | "error"
@@ -1361,6 +1382,80 @@ export function Options() {
       .catch(() => {
         setExportState("error");
       });
+  };
+
+  const handleExportSettingsPack = () => {
+    setSettingsPackExportState("exporting");
+    void exportSettingsPackJson()
+      .then((json) => {
+        downloadSettingsPackExport(json);
+        setSettingsPackExportState("exported");
+      })
+      .catch(() => {
+        setSettingsPackExportState("error");
+      });
+  };
+
+  const handleSettingsPackImportClick = () => {
+    settingsPackImportInputRef.current?.click();
+  };
+
+  const clearSettingsPackImportPreview = () => {
+    setSettingsPackImportPreview(null);
+    setSettingsPackImportRawJson(null);
+  };
+
+  const handleSettingsPackImportCancel = () => {
+    clearSettingsPackImportPreview();
+    setSettingsPackImportState("idle");
+  };
+
+  const handleSettingsPackImportConfirm = () => {
+    if (!settingsPackImportRawJson) {
+      return;
+    }
+
+    setSettingsPackImportState("importing");
+    void importSettingsPackJson(settingsPackImportRawJson)
+      .then(() => {
+        clearSettingsPackImportPreview();
+        setSettingsPackImportState("imported");
+        setSettingsReloadToken((current) => current + 1);
+      })
+      .catch(() => {
+        setSettingsPackImportState("error");
+      });
+  };
+
+  const handleSettingsPackImportFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    setSettingsPackImportState("idle");
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rawJson = typeof reader.result === "string" ? reader.result : "";
+      void getVera5Settings()
+        .then((current) => {
+          const preview = buildSettingsPackImportPreview(current, rawJson);
+          setSettingsPackImportPreview(preview);
+          setSettingsPackImportRawJson(rawJson);
+        })
+        .catch(() => {
+          clearSettingsPackImportPreview();
+          setSettingsPackImportState("error");
+        });
+    };
+    reader.onerror = () => {
+      clearSettingsPackImportPreview();
+      setSettingsPackImportState("error");
+    };
+    reader.readAsText(file);
   };
 
   const handleImportClick = () => {
@@ -2809,8 +2904,10 @@ export function Options() {
               </h2>
               <p className="v5-card__desc">
                 Export your preferences as JSON to move them between profiles or
-                keep a backup. API keys are excluded unless you choose to include
-                them.
+                keep a backup. Export a settings pack to share connector toggles,
+                cache TTL, domain policy, and analyst mode without API keys. API
+                keys are excluded from settings packs and from full settings
+                exports unless you choose to include them.
               </p>
             </div>
             <div
@@ -2839,6 +2936,28 @@ export function Options() {
                 <button
                   type="button"
                   className="v5-btn v5-btn--primary"
+                  disabled={!ready || settingsPackExportState === "exporting"}
+                  onClick={handleExportSettingsPack}
+                  aria-label="Export settings pack JSON"
+                >
+                  {settingsPackExportState === "exporting"
+                    ? "Exporting…"
+                    : "Export settings pack"}
+                </button>
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--primary"
+                  disabled={!ready || settingsPackImportState === "importing"}
+                  onClick={handleSettingsPackImportClick}
+                  aria-label="Import settings pack JSON"
+                >
+                  {settingsPackImportState === "importing"
+                    ? "Importing…"
+                    : "Import settings pack"}
+                </button>
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--primary"
                   disabled={!ready || importState === "importing"}
                   onClick={handleImportClick}
                   aria-label="Import settings JSON"
@@ -2854,6 +2973,16 @@ export function Options() {
                   style={{ display: "none" }}
                   onChange={handleImportFileChange}
                 />
+                <input
+                  ref={settingsPackImportInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  aria-label="Import settings pack JSON file"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={{ display: "none" }}
+                  onChange={handleSettingsPackImportFileChange}
+                />
               </div>
               {exportState === "exported" ? (
                 <span className="v5-status v5-status--success" role="status">
@@ -2861,9 +2990,31 @@ export function Options() {
                   Settings exported.
                 </span>
               ) : null}
+              {settingsPackExportState === "exported" ? (
+                <span className="v5-status v5-status--success" role="status">
+                  <CheckIcon />
+                  Settings pack exported.
+                </span>
+              ) : null}
               {exportState === "error" ? (
                 <span className="v5-status v5-status--error" role="status">
                   Could not export settings. Try again.
+                </span>
+              ) : null}
+              {settingsPackExportState === "error" ? (
+                <span className="v5-status v5-status--error" role="status">
+                  Could not export settings pack. Try again.
+                </span>
+              ) : null}
+              {settingsPackImportState === "imported" ? (
+                <span className="v5-status v5-status--success" role="status">
+                  <CheckIcon />
+                  Settings pack imported.
+                </span>
+              ) : null}
+              {settingsPackImportState === "error" ? (
+                <span className="v5-status v5-status--error" role="status">
+                  Could not import settings pack. Check the file and try again.
                 </span>
               ) : null}
               {importState === "imported" ? (
@@ -2941,6 +3092,78 @@ export function Options() {
           </section>
         </div>
       </div>
+
+      {settingsPackImportPreview ? (
+        <div
+          className="v5-consent-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              handleSettingsPackImportCancel();
+            }
+          }}
+        >
+          <div
+            className="v5-consent-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-pack-import-title"
+            aria-describedby="settings-pack-import-body"
+          >
+            <h2
+              id="settings-pack-import-title"
+              className="v5-consent-dialog__title"
+            >
+              Review settings pack import
+            </h2>
+            <div id="settings-pack-import-body" className="v5-consent-dialog__body">
+              <p>
+                Applying this pack updates connector toggles, cache TTL, domain
+                policy, and analyst mode. API keys on this profile stay
+                unchanged.
+              </p>
+              <p>{SETTINGS_PACK_THREAT_PROFILE_PRECEDENCE_NOTE}</p>
+              {settingsPackImportPreview.changes.length === 0 ? (
+                <p>This pack matches your current settings.</p>
+              ) : (
+                <ul className="v5-settings-pack-diff">
+                  {settingsPackImportPreview.changes.map((change) => (
+                    <li key={change.field} className="v5-settings-pack-diff__item">
+                      <span className="v5-settings-pack-diff__label">
+                        {change.label}
+                      </span>
+                      <span className="v5-settings-pack-diff__values">
+                        {change.currentValue} → {change.incomingValue}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="v5-consent-dialog__actions">
+              <button
+                type="button"
+                className="v5-btn"
+                disabled={settingsPackImportState === "importing"}
+                onClick={handleSettingsPackImportCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="v5-btn v5-btn--primary"
+                disabled={settingsPackImportState === "importing"}
+                onClick={handleSettingsPackImportConfirm}
+                aria-label="Apply settings pack import"
+              >
+                {settingsPackImportState === "importing"
+                  ? "Applying…"
+                  : "Apply pack"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {showAttributeHrefConsentDialog ? (
         <div

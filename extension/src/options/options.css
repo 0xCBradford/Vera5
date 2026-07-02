@@ -1271,3 +1271,32 @@ body {
 .v5-consent-dialog__remember input {
   margin-top: 3px;
 }
+
+.v5-settings-pack-diff {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.v5-settings-pack-diff__item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+  border-top: 1px solid var(--v5-border);
+}
+
+.v5-settings-pack-diff__item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.v5-settings-pack-diff__label {
+  font-weight: 600;
+  color: var(--v5-text);
+}
+
+.v5-settings-pack-diff__values {
+  color: var(--v5-text-muted);
+  font-family: var(--v5-font-mono, monospace);
+  font-size: 13px;
+}

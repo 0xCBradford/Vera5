@@ -71,6 +71,32 @@ Defaults are **on** for every type. Upgrading from schema version 2 merges missi
 - Carries `preferences` (IOC-type and source toggles, manual-only mode, cache TTL), static `rateLimitMetadata`, and overlay `privacyWarnings`.
 - Import merges preferences into current settings and **never** overwrites stored API keys (see `connectorProfileExport.test.ts`).
 
+### Settings pack export (`settingsPack.ts`)
+
+- File name default: `vera5-settings-pack.json`; schema version `1`.
+- Carries connector toggles, global/per-source cache TTL, domain policy, and analyst mode—**never** API keys.
+- Export runs `validateSettingsPackExport()`; import rejects secret key names and threat-profile-shaped JSON.
+- Options **Import settings pack** shows a diff preview before apply; stored API keys are unchanged.
+- See [Threat profile vs settings pack precedence](#threat-profile-vs-settings-pack-precedence) below.
+
+### Threat profile vs settings pack precedence
+
+Threat profiles (portable workflow bundles) supersede **overlapping** settings pack fields when both are in play. Settings packs remain authoritative for **cache TTL** and **domain policy** unless a profile later defines those areas.
+
+| Overlapping (profile wins) | Pack-only (pack wins) |
+|----------------------------|------------------------|
+| Connector enablement | Global enrichment cache TTL |
+| Analyst mode preset / manual-only / workspace display toggles | Per-source cache TTL overrides |
+| Default export template | Domain policy mode, allowlist, denylist, enrich gate |
+| Pivot emphasis or recipe set | |
+| Quiet mode default (profiles only) | |
+
+Implementation notes:
+
+- `isThreatProfileDocument()` / `assertSettingsPackNotThreatProfile()` in `settingsPack.ts` keep profile JSON out of the pack importer until threat profile import ships.
+- `SETTINGS_PACK_THREAT_PROFILE_PRECEDENCE_NOTE` is surfaced in the Options pack import dialog.
+- Full analyst-facing merge order: [security-model.md](../security-model.md) (Portable profiles section).
+
 ## Content script sync
 
 Several flags sync on load and on `chrome.storage.onChanged`:

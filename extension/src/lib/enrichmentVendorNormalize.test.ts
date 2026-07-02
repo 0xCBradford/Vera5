@@ -12,6 +12,7 @@ import {
   mapUrlscanFieldsToUnifiedPresentation,
   mapVirustotalFieldsToUnifiedPresentation,
   UNIFIED_SUMMARY_METRIC,
+  UNIFIED_TAG_LIMIT,
 } from "./enrichmentVendorNormalize";
 import {
   buildHoverCardSourceEntries,
@@ -278,6 +279,27 @@ describe("RDAP/WHOIS unified enrichment card", () => {
       summary: "example.com · registered 1995-08-14",
       tags: ["active"],
     });
+  });
+
+  it("caps mocked status and nameserver tags at the unified tag limit", () => {
+    const presentation = mapRdapWhoisFieldsToUnifiedPresentation({
+      domainName: "tagged.example",
+      statusValues: ["status-1", "status-2", "status-3", "status-4"],
+      nameservers: [
+        "ns1.tagged.example",
+        "ns2.tagged.example",
+        "ns3.tagged.example",
+      ],
+    });
+
+    expect(presentation?.tags).toEqual([
+      "status-1",
+      "status-2",
+      "status-3",
+      "status-4",
+      "ns1.tagged.example",
+    ]);
+    expect(presentation?.tags).toHaveLength(UNIFIED_TAG_LIMIT);
   });
 });
 

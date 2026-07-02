@@ -21,6 +21,7 @@ import {
   createRdapWhoisConnectorDefinition,
   enrichWithRdapWhois,
   normalizeRdapDomainPayload,
+  parseRdapDomainData,
   RDAP_WHOIS_NOT_FOUND_MESSAGE,
   RDAP_WHOIS_TIMEOUT_MESSAGE,
 } from "./rdapWhoisConnector";
@@ -49,6 +50,151 @@ describe("rdapWhoisConnector normalization", () => {
         "ns1.example.com",
         "ns2.example.com",
       ],
+    });
+  });
+});
+
+describe("rdapWhoisConnector mocked normalization", () => {
+  it("parses mocked RDAP domain payloads into unified field inputs", () => {
+    expect(parseRdapDomainData(loadRdapFixture("rdap/domain-example-com.json"))).toEqual({
+      domainName: "example.com",
+      registrar: "Example Registrar",
+      registrationDate: "1995-08-14",
+      expirationDate: "2024-08-13",
+      statusValues: [
+        "client delete prohibited",
+        "client transfer prohibited",
+      ],
+      nameservers: ["ns1.example.com", "ns2.example.com"],
+    });
+  });
+
+  it("normalizes mocked minimal domain payloads without registrar or nameservers", () => {
+    const payload = {
+      objectClassName: "domain",
+      ldhName: "minimal.example",
+      events: [
+        {
+          eventAction: "registration",
+          eventDate: "2020-01-01T00:00:00Z",
+        },
+        {
+          eventAction: "expiration",
+          eventDate: "2030-12-31T00:00:00Z",
+        },
+      ],
+      status: ["active"],
+    };
+
+    expect(parseRdapDomainData(payload)).toEqual({
+      domainName: "minimal.example",
+      registrar: undefined,
+      registrationDate: "2020-01-01",
+      expirationDate: "2030-12-31",
+      statusValues: ["active"],
+      nameservers: [],
+    });
+    expect(normalizeRdapDomainPayload(payload)).toEqual({
+      summary: "minimal.example · registered 2020-01-01 · expires 2030-12-31",
+      tags: ["active"],
+    });
+  });
+
+  it("reads registrar from nested mocked entity records", () => {
+    const payload = {
+      objectClassName: "domain",
+      ldhName: "nested.example",
+      entities: [
+        {
+          objectClassName: "entity",
+          roles: ["registrant"],
+          entities: [
+            {
+              objectClassName: "entity",
+              roles: ["registrar"],
+              vcardArray: [
+                "vcard",
+                [["org", {}, "text", "Nested Registrar LLC"]],
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(parseRdapDomainData(payload)?.registrar).toBe("Nested Registrar LLC");
+    expect(normalizeRdapDomainPayload(payload)).toEqual({
+      summary: "Nested Registrar LLC",
+      tags: undefined,
+    });
+  });
+
+  it("dedupes mocked nameserver hosts case-insensitively", () => {
+    const payload = {
+      objectClassName: "domain",
+      ldhName: "ns.example",
+      nameservers: [
+        { ldhName: "NS1.example" },
+        { ldhName: "ns1.example" },
+        { unicodeName: "ns2.example" },
+      ],
+    };
+
+    expect(parseRdapDomainData(payload)?.nameservers).toEqual([
+      "ns1.example",
+      "ns2.example",
+    ]);
+  });
+
+  it("returns null for mocked non-domain RDAP payloads", () => {
+    expect(parseRdapDomainData({ objectClassName: "nameserver" })).toBeNull();
+    expect(parseRdapDomainData(null)).toBeNull();
+    expect(normalizeRdapDomainPayload({ objectClassName: "entity" })).toBeNull();
+    expect(normalizeRdapDomainPayload({ objectClassName: "domain" })).toBeNull();
+  });
+
+  it("normalizes mocked payloads through enrichWithRdapWhois with a fetch mock", async () => {
+    const payload = {
+      objectClassName: "domain",
+      ldhName: "mocked.example",
+      events: [
+        {
+          eventAction: "registration",
+          eventDate: "2019-06-15T12:00:00Z",
+        },
+      ],
+      entities: [
+        {
+          objectClassName: "entity",
+          roles: ["registrar"],
+          vcardArray: [
+            "vcard",
+            [["fn", {}, "text", "Mock Registrar"]],
+          ],
+        },
+      ],
+      nameservers: [{ ldhName: "ns.mocked.example" }],
+      status: ["ok"],
+    };
+
+    const result = await enrichWithRdapWhois(
+      { value: "mocked.example", type: IOC_TYPE.DOMAIN },
+      {
+        fetch: vi.fn(async () =>
+          Response.json(payload, {
+            status: 200,
+            headers: { "Content-Type": "application/rdap+json" },
+          })
+        ),
+      }
+    );
+
+    expect(result).toMatchObject({
+      sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+      sourceLabel: "RDAP/WHOIS",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "Mock Registrar · registered 2019-06-15",
+      tags: ["ok", "ns.mocked.example"],
     });
   });
 });

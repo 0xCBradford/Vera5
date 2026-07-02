@@ -6,7 +6,8 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
-import { STORAGE_KEY_API_KEYS } from "../lib/storage";
+import { serializeSettingsPack } from "../lib/settingsPack";
+import { STORAGE_KEY_API_KEYS, createDefaultVera5Settings } from "../lib/storage";
 import { STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED } from "../lib/storage";
 import {
   STORAGE_KEY_INSTALL_QUICK_START_COMPLETED,
@@ -15,6 +16,7 @@ import {
   STORAGE_KEY_DOMAIN_ALLOWLIST,
   STORAGE_KEY_DOMAIN_DENYLIST,
   STORAGE_KEY_DOMAIN_POLICY_MODE,
+  STORAGE_KEY_MANUAL_ONLY_MODE,
   STORAGE_KEY_ANALYST_MODE_PRESET_ID,
   STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
   STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
@@ -952,6 +954,164 @@ describe("Options API key inputs", () => {
     expect(mounted.container.textContent).toContain("Settings exported.");
 
     clickSpy.mockRestore();
+  });
+
+  it("exports settings pack JSON without API keys from options", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    };
+
+    const createObjectURL = vi.fn(() => "blob:settings-pack");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL,
+    });
+
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const exportButton = mounted.container.querySelector(
+      'button[aria-label="Export settings pack JSON"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      exportButton.click();
+      await Promise.resolve();
+    });
+
+    expect(createObjectURL).toHaveBeenCalled();
+    const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+    const exportedJson = await blob.text();
+    const parsed = JSON.parse(exportedJson) as Record<string, unknown>;
+
+    expect(parsed.schemaVersion).toBe(1);
+    expect(exportedJson).not.toContain(TEST_FIXTURE_STORED_API_KEY);
+    expect(parsed.apiKeys).toBeUndefined();
+    expect(mounted.container.textContent).toContain("Settings pack exported.");
+
+    clickSpy.mockRestore();
+  });
+
+  it("renders settings pack import control", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector(
+        'button[aria-label="Import settings pack JSON"]'
+      )
+    ).not.toBeNull();
+  });
+
+  it("shows a diff preview and applies pack import after confirmation", async () => {
+    store[STORAGE_KEY_MANUAL_ONLY_MODE] = true;
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    };
+
+    const packJson = serializeSettingsPack({
+      ...createDefaultVera5Settings(),
+      manualOnlyMode: false,
+    });
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const fileInput = mounted.container.querySelector(
+      'input[aria-label="Import settings pack JSON file"]'
+    ) as HTMLInputElement;
+    const file = new File([packJson], "vera5-settings-pack.json", {
+      type: "application/json",
+    });
+
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", {
+        configurable: true,
+        value: [file],
+      });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(mounted.container.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(mounted.container.textContent).toContain("Review settings pack import");
+    expect(mounted.container.textContent).toContain("Manual-only enrichment");
+    expect(mounted.container.textContent).toContain("Enabled → Disabled");
+    expect(mounted.container.textContent).toContain(
+      "the threat profile wins for overlapping workflow fields"
+    );
+
+    const applyButton = mounted.container.querySelector(
+      'button[aria-label="Apply settings pack import"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      applyButton.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_MANUAL_ONLY_MODE]).toBe(false);
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    });
+    expect(mounted.container.textContent).toContain("Settings pack imported.");
+    expect(mounted.container.querySelector('[role="dialog"]')).toBeNull();
+  });
+
+  it("closes the diff preview without applying when canceled", async () => {
+    store[STORAGE_KEY_MANUAL_ONLY_MODE] = true;
+
+    const packJson = serializeSettingsPack({
+      ...createDefaultVera5Settings(),
+      manualOnlyMode: false,
+    });
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const fileInput = mounted.container.querySelector(
+      'input[aria-label="Import settings pack JSON file"]'
+    ) as HTMLInputElement;
+    const file = new File([packJson], "vera5-settings-pack.json", {
+      type: "application/json",
+    });
+
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", {
+        configurable: true,
+        value: [file],
+      });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const dialog = mounted.container.querySelector(
+      '[aria-labelledby="settings-pack-import-title"]'
+    );
+    const cancelButton = dialog?.querySelector(
+      ".v5-consent-dialog__actions .v5-btn:not(.v5-btn--primary)"
+    ) as HTMLButtonElement | undefined;
+
+    await act(async () => {
+      cancelButton?.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_MANUAL_ONLY_MODE]).toBe(true);
+    expect(mounted.container.querySelector('[role="dialog"]')).toBeNull();
   });
 });
 

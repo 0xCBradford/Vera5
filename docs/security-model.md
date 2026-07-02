@@ -423,6 +423,29 @@ Threat profiles and settings packs import connector toggles, TTL, domain policy,
 | Merge preview | Diff before apply for settings packs and profiles |
 | Trust | Verify source before import; Vera5 does not host a profile marketplace |
 
+### Threat profile vs settings pack precedence
+
+Portable **threat profiles** are richer workflow bundles (connectors, pivot recipes, export templates, analyst mode, quiet-mode default, optional noise-list references). **Settings packs** are narrower handoff files focused on connector toggles, cache TTL, domain policy, and analyst mode—without API keys.
+
+| Preference area | Settings pack | Threat profile | Winner when both apply |
+|-----------------|---------------|----------------|------------------------|
+| Connector enablement | Yes | Yes | Threat profile |
+| Analyst mode preset and related toggles | Yes | Yes | Threat profile |
+| Default export template | Yes | Yes | Threat profile |
+| Pivot emphasis / recipe set | Yes | Yes | Threat profile |
+| Quiet mode default | No | Yes | Threat profile |
+| Optional noise-list reference | No | Yes | Threat profile |
+| Global and per-source cache TTL | Yes | No (unless profile adds later) | Settings pack |
+| Domain policy mode, lists, enrich gate | Yes | No (unless profile adds later) | Settings pack |
+| Stored API keys | Never exported | Never exported | Local profile only |
+
+Merge order when importing:
+
+1. **Stored API keys** always stay on the local profile unless you explicitly export/import full settings with keys enabled.
+2. **Settings pack import** applies pack fields after the diff preview and your confirmation.
+3. **Threat profile import or switch** supersedes overlapping fields from the last pack apply. Pack-only fields (cache TTL, domain policy) remain until you change them manually or import another pack.
+4. Import a **threat profile JSON** through threat profile import—not the settings pack importer. The pack importer rejects profile-shaped files.
+
 Profiles cannot bypass pre-query disclosure, domain deny, quiet mode, or internal asset gates.
 
 ## Local noise rules and known-good lists

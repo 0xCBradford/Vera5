@@ -587,6 +587,27 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | MDR alert revisit after restart | Popup **Recent sessions** → **Reopen**; confirm rollups match the alert page you scan again. |
 | Sensitive / classified work | Manual-only on; enable only approved sources; do not export settings with keys unless policy allows. |
 
+## Settings packs and threat profiles
+
+Use **settings packs** to share connector toggles, cache TTL, domain policy, and analyst mode between browser profiles or teammates—without sharing API keys. Use **threat profiles** (when available) for fuller workflow bundles: pivot recipes, export templates, quiet-mode defaults, and optional noise-list references.
+
+### Settings pack handoff
+
+1. On the source profile, open **Settings → Settings Backup → Export settings pack**.
+2. Transfer `vera5-settings-pack.json` through your approved channel.
+3. On the target profile, choose **Import settings pack**, review the diff, and confirm **Apply pack**.
+4. Re-enter API keys locally on the target profile; packs never include credentials.
+
+### Precedence when both exist
+
+| If both define… | Which value applies |
+|-----------------|---------------------|
+| Connector toggles, analyst mode, export template, pivots | Active **threat profile** |
+| Cache TTL, domain allow/deny lists | **Settings pack** (until you change them or a profile adds those fields) |
+| API keys | **Local profile only**—never from pack or profile JSON |
+
+Import threat profile files through threat profile import, not the settings pack importer. See [security-model.md](security-model.md) for the full merge table.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | What to try |
