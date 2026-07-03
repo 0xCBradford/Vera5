@@ -67,6 +67,9 @@ import {
   HOVER_CARD_IOC_TIMELINE_EMPTY_TEXT,
   HOVER_CARD_IOC_TIMELINE_LABEL,
   HOVER_CARD_IOC_TIMELINE_SECTION_ARIA_LABEL,
+  HOVER_CARD_CO_OCCURRENCE_EMPTY_TEXT,
+  HOVER_CARD_CO_OCCURRENCE_LABEL,
+  HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL,
   HOVER_CARD_IOC_PIN_ARIA_LABEL,
   HOVER_CARD_IOC_PIN_LABEL,
   HOVER_CARD_IOC_PINNED_LABEL,
@@ -99,6 +102,10 @@ import {
   type HoverCardSourceEntry,
   type WhyDetectedView,
 } from "../lib/hoverCardEnrichment";
+import {
+  formatHoverCardCoOccurrenceEntryLine,
+  loadHoverCardCoOccurrencePanelView,
+} from "../lib/hoverCardCoOccurrence";
 import { getPivotRecipes } from "../lib/pivots";
 import { getCachedAnalystModeDisplayContext } from "./analystModeStorage";
 import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
@@ -301,6 +308,12 @@ export const HOVER_CARD_IOC_TIMELINE_CLASS = "vera5-hover-card-ioc-timeline";
 export const HOVER_CARD_IOC_TIMELINE_LABEL_CLASS = "vera5-hover-card-ioc-timeline-label";
 export const HOVER_CARD_IOC_TIMELINE_LIST_CLASS = "vera5-hover-card-ioc-timeline-list";
 export const HOVER_CARD_IOC_TIMELINE_ITEM_CLASS = "vera5-hover-card-ioc-timeline-item";
+export const HOVER_CARD_CO_OCCURRENCE_CLASS = "vera5-hover-card-co-occurrence";
+export const HOVER_CARD_CO_OCCURRENCE_LABEL_CLASS = "vera5-hover-card-co-occurrence-label";
+export const HOVER_CARD_CO_OCCURRENCE_CONTEXT_CLASS =
+  "vera5-hover-card-co-occurrence-context";
+export const HOVER_CARD_CO_OCCURRENCE_LIST_CLASS = "vera5-hover-card-co-occurrence-list";
+export const HOVER_CARD_CO_OCCURRENCE_ITEM_CLASS = "vera5-hover-card-co-occurrence-item";
 export const HOVER_CARD_IOC_PIN_BUTTON_CLASS = "vera5-hover-card-ioc-pin";
 export const HOVER_CARD_IOC_PIN_BUTTON_PINNED_CLASS = "vera5-hover-card-ioc-pin--pinned";
 export const HOVER_CARD_EXPORT_SECTION_CLASS = "vera5-hover-card-export";
@@ -1808,6 +1821,68 @@ function createIocTimelineSection(value: string, doc: Document): HTMLElement {
   return section;
 }
 
+function createCoOccurrenceSection(
+  payload: Pick<HoverCardOverlayPayload, "type" | "value">,
+  doc: Document
+): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_CO_OCCURRENCE_CLASS;
+  section.setAttribute("aria-label", HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL);
+
+  const heading = createSectionHeading(HOVER_CARD_CO_OCCURRENCE_LABEL, doc);
+  heading.id = "vera5-co-occurrence-heading";
+  heading.className = HOVER_CARD_CO_OCCURRENCE_LABEL_CLASS;
+
+  const context = doc.createElement("p");
+  context.className = HOVER_CARD_CO_OCCURRENCE_CONTEXT_CLASS;
+  context.hidden = true;
+
+  const list = doc.createElement("ul");
+  list.className = HOVER_CARD_CO_OCCURRENCE_LIST_CLASS;
+  list.setAttribute("aria-labelledby", heading.id);
+
+  const emptyItem = doc.createElement("li");
+  emptyItem.className = HOVER_CARD_CO_OCCURRENCE_ITEM_CLASS;
+  emptyItem.textContent = HOVER_CARD_CO_OCCURRENCE_EMPTY_TEXT;
+  list.appendChild(emptyItem);
+
+  section.appendChild(heading);
+  section.appendChild(context);
+  section.appendChild(list);
+
+  void loadHoverCardCoOccurrencePanelView({
+    iocType: payload.type,
+    value: payload.value,
+    pageUrl: doc.defaultView?.location.href ?? "",
+  }).then((view) => {
+    list.replaceChildren();
+    if (view.contextLabel) {
+      context.textContent = view.contextLabel;
+      context.hidden = false;
+    } else {
+      context.hidden = true;
+      context.textContent = "";
+    }
+
+    if (view.entries.length === 0) {
+      const item = doc.createElement("li");
+      item.className = HOVER_CARD_CO_OCCURRENCE_ITEM_CLASS;
+      item.textContent = HOVER_CARD_CO_OCCURRENCE_EMPTY_TEXT;
+      list.appendChild(item);
+      return;
+    }
+
+    for (const entry of view.entries) {
+      const item = doc.createElement("li");
+      item.className = HOVER_CARD_CO_OCCURRENCE_ITEM_CLASS;
+      item.textContent = formatHoverCardCoOccurrenceEntryLine(entry);
+      list.appendChild(item);
+    }
+  });
+
+  return section;
+}
+
 function resetHoverCardSaveToCollectionState(): void {
   hoverCardSaveToCollectionOpen = false;
   hoverCardSaveToCollectionFeedback = null;
@@ -2370,6 +2445,7 @@ export function buildHoverCardPanel(
     doc
   );
   const iocTimelineSection = createIocTimelineSection(payload.value, doc);
+  const coOccurrenceSection = createCoOccurrenceSection(payload, doc);
   const saveToCollectionSection = createSaveToCollectionSection(payload, doc);
   const exportSection = createExportSection(payload, doc);
   const localLlmSummarySection = createLocalLlmSummarySection(payload, doc);
@@ -2505,6 +2581,8 @@ export function buildHoverCardPanel(
   }
   iocLabelSection.style.marginBottom = showFooter ? "8px" : "0";
   panel.appendChild(iocLabelSection);
+  coOccurrenceSection.style.marginBottom = showFooter ? "8px" : "0";
+  panel.appendChild(coOccurrenceSection);
   iocTimelineSection.style.marginBottom = showFooter ? "8px" : "0";
   panel.appendChild(iocTimelineSection);
   saveToCollectionSection.style.marginBottom = showFooter ? "8px" : "0";

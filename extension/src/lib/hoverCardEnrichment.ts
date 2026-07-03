@@ -89,6 +89,12 @@ export const HOVER_CARD_IOC_TIMELINE_SECTION_ARIA_LABEL =
 export const HOVER_CARD_IOC_TIMELINE_EMPTY_TEXT =
   "No session timeline for this indicator yet.";
 
+export const HOVER_CARD_CO_OCCURRENCE_LABEL = "Appeared alongside";
+export const HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL =
+  "Indicators that appeared alongside this one on the same page scan";
+export const HOVER_CARD_CO_OCCURRENCE_EMPTY_TEXT =
+  "No other indicators on this page scan.";
+
 export const HOVER_CARD_IOC_PIN_LABEL = "Pin";
 export const HOVER_CARD_IOC_PINNED_LABEL = "Pinned";
 export const HOVER_CARD_IOC_PIN_ARIA_LABEL = "Pin indicator for triage priority";

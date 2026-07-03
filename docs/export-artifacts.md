@@ -155,6 +155,27 @@ Operators can share **connector preferences** across profiles without exposing A
 
 Default filename constant: `CONNECTOR_PROFILE_EXPORT_FILENAME` (`vera5-connector-profile.json`).
 
+## Workspace snapshot Obsidian package links
+
+**Module:** `extension/src/lib/workspaceSnapshot.ts`
+
+Optional workspace snapshot export builds a vault folder with an index note, a timeline note, and one note per tray indicator. The index note links to those files with **Obsidian wikilinks** (`[[note]]`), not standard Markdown `[label](path)` links, so navigation works when the folder is copied into an Obsidian vault.
+
+| Package file | Wikilink target in index note | Example wikilink |
+|--------------|-------------------------------|------------------|
+| `timeline.md` | `timeline` | `[[timeline\|Investigation timeline appendix]]` |
+| `iocs/{slug}.md` | `iocs/{slug}` | `[[iocs/8-8-8-8\|8.8.8.8]]` |
+
+**Rules**
+
+- Wikilink targets omit the `.md` extension.
+- Nested indicator notes use forward slashes (`iocs/…`).
+- `{slug}` is a lowercase hyphenated basename derived from the indicator value; duplicate values receive a type prefix or numeric suffix.
+- Aliases (`[[target\|label]]`) use the live indicator value when it is safe for wikilink syntax; otherwise the target-only form `[[target]]` is used.
+- Package assembly and link builders are documented in code as `WORKSPACE_SNAPSHOT_OBSIDIAN_LINK_FORMAT_DOCS`.
+
+Copy the exported root folder into your vault (or open it as a vault). Obsidian resolves wikilinks relative to that vault root. No API keys or raw vendor secrets are included in package notes.
+
 ## Related documentation
 
 - [Analyst workflows](analyst-workflows.md) — overlay triage, cache, and score interpretation

@@ -572,7 +572,8 @@ export function buildVera5UiStylesCss(): string {
   padding: 0;
 }
 .vera5-workspace-tray-row .vera5-tray-save-collection-toggle,
-.vera5-workspace-tray-row .vera5-tray-why-detected summary {
+.vera5-workspace-tray-row .vera5-tray-why-detected summary,
+.vera5-workspace-tray-row .vera5-tray-co-occurrence summary {
   opacity: 0.55;
   transition: opacity 0.14s ease;
 }
@@ -581,7 +582,10 @@ export function buildVera5UiStylesCss(): string {
 .vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-save-collection-toggle,
 .vera5-workspace-tray-row:hover .vera5-tray-why-detected summary,
 .vera5-workspace-tray-row:focus-within .vera5-tray-why-detected summary,
-.vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-why-detected summary {
+.vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-why-detected summary,
+.vera5-workspace-tray-row:hover .vera5-tray-co-occurrence summary,
+.vera5-workspace-tray-row:focus-within .vera5-tray-co-occurrence summary,
+.vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-co-occurrence summary {
   opacity: 1;
 }
 .vera5-tray-save-collection-panel {
@@ -703,6 +707,34 @@ export function buildVera5UiStylesCss(): string {
   line-height: 1.5;
 }
 .vera5-hover-card-ioc-timeline-item {
+  margin: 0;
+}
+.vera5-hover-card-co-occurrence {
+  margin-top: 8px;
+}
+.vera5-hover-card-co-occurrence-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-co-occurrence-context {
+  margin: 0 0 4px;
+  color: #8f98a3;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.vera5-hover-card-co-occurrence-list {
+  margin: 0;
+  padding-left: 16px;
+  color: #a7b0ba;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.vera5-hover-card-co-occurrence-item {
   margin: 0;
 }
 .vera5-hover-card-ioc-pin {

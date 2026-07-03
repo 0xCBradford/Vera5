@@ -1206,7 +1206,8 @@ export function mergeImportedWorkspaceSnapshot(
 }
 
 export function replaceImportedWorkspaceSnapshot(
-  incoming: WorkspaceSnapshot
+  incoming: WorkspaceSnapshot,
+  current?: WorkspaceSnapshot
 ): WorkspaceSnapshot {
   return createWorkspaceSnapshot({
     exportedAt: incoming.exportedAt,
@@ -1215,7 +1216,7 @@ export function replaceImportedWorkspaceSnapshot(
     enrichmentCacheRefs: incoming.enrichmentCacheRefs,
     timelineEvents: incoming.timelineEvents,
     notebookFragments: incoming.notebookFragments,
-    settingsProfileRef: incoming.settingsProfileRef,
+    settingsProfileRef: incoming.settingsProfileRef ?? current?.settingsProfileRef,
   });
 }
 
@@ -1225,7 +1226,7 @@ export function resolveWorkspaceSnapshotImportResult(
   incoming: WorkspaceSnapshot
 ): WorkspaceSnapshot {
   if (mode === WORKSPACE_SNAPSHOT_IMPORT_MODE.REPLACE) {
-    return replaceImportedWorkspaceSnapshot(incoming);
+    return replaceImportedWorkspaceSnapshot(incoming, current);
   }
   return mergeImportedWorkspaceSnapshot(current, incoming);
 }
@@ -1368,13 +1369,15 @@ export async function persistWorkspaceSnapshotImportResult(
     }
   }
 
+  const existingState = await getWorkspaceSnapshotStoredState();
+  const settingsProfileRef =
+    snapshot.settingsProfileRef ?? existingState.settingsProfileRef;
+
   await persistWorkspaceSnapshotStoredState({
     schemaVersion: WORKSPACE_SNAPSHOT_SCHEMA_VERSION,
     enrichmentCacheRefs: snapshot.enrichmentCacheRefs,
     notebookFragments: snapshot.notebookFragments,
-    ...(snapshot.settingsProfileRef
-      ? { settingsProfileRef: snapshot.settingsProfileRef }
-      : {}),
+    ...(settingsProfileRef ? { settingsProfileRef } : {}),
   });
 
   if (options?.tabId !== undefined) {
@@ -1805,6 +1808,18 @@ export const WORKSPACE_SNAPSHOT_OBSIDIAN_TIMELINE_NOTE_BASENAME = "timeline";
 
 export const WORKSPACE_SNAPSHOT_OBSIDIAN_IOCS_FOLDER = "iocs";
 
+export const WORKSPACE_SNAPSHOT_OBSIDIAN_LINK_FORMAT_DOCS = {
+  syntax: "Obsidian wikilink",
+  pathRule:
+    "Wikilink targets use note paths without the .md extension. Nested notes use forward slashes.",
+  timelineTarget: WORKSPACE_SNAPSHOT_OBSIDIAN_TIMELINE_NOTE_BASENAME,
+  timelineLinkExample: "[[timeline|Investigation timeline appendix]]",
+  iocTargetPattern: `${WORKSPACE_SNAPSHOT_OBSIDIAN_IOCS_FOLDER}/{slug}`,
+  iocLinkExample: "[[iocs/8-8-8-8|8.8.8.8]]",
+  slugRule:
+    "IOC note slugs are lowercase alphanumeric segments separated by hyphens, derived from the indicator value with collision suffixes when needed.",
+} as const;
+
 export type WorkspaceSnapshotObsidianExportFile = {
   path: string;
   content: string;
@@ -1855,6 +1870,28 @@ export function buildWorkspaceSnapshotObsidianIocNoteBasename(
 
 export function buildWorkspaceSnapshotObsidianIocNotePath(noteBasename: string): string {
   return `${WORKSPACE_SNAPSHOT_OBSIDIAN_IOCS_FOLDER}/${noteBasename}.md`;
+}
+
+export function buildWorkspaceSnapshotObsidianWikilinkTarget(notePath: string): string {
+  return notePath.replace(/\.md$/i, "");
+}
+
+export function buildWorkspaceSnapshotObsidianWikilink(
+  notePath: string,
+  label?: string
+): string {
+  const target = buildWorkspaceSnapshotObsidianWikilinkTarget(notePath);
+  const trimmedLabel = label?.trim();
+  if (
+    trimmedLabel &&
+    trimmedLabel !== target &&
+    !trimmedLabel.includes("|") &&
+    !trimmedLabel.includes("]]")
+  ) {
+    return `[[${target}|${trimmedLabel}]]`;
+  }
+
+  return `[[${target}]]`;
 }
 
 export function buildWorkspaceSnapshotObsidianIocNoteContent(input: {
@@ -1910,7 +1947,10 @@ export function buildWorkspaceSnapshotObsidianIndexNoteContent(
     "",
     "## Package contents",
     "",
-    `- [Investigation timeline appendix](${WORKSPACE_SNAPSHOT_OBSIDIAN_TIMELINE_NOTE_BASENAME}.md)`,
+    `- ${buildWorkspaceSnapshotObsidianWikilink(
+      `${WORKSPACE_SNAPSHOT_OBSIDIAN_TIMELINE_NOTE_BASENAME}.md`,
+      "Investigation timeline appendix"
+    )}`,
   ];
 
   if (iocEntries.length === 0) {
@@ -1920,7 +1960,10 @@ export function buildWorkspaceSnapshotObsidianIndexNoteContent(
     for (const entry of iocEntries) {
       const typeLabel = formatEnrichmentExportTypeLabel(entry.trayIoc.type);
       lines.push(
-        `- [${entry.trayIoc.value}](${buildWorkspaceSnapshotObsidianIocNotePath(entry.noteBasename)}) — ${typeLabel}`
+        `- ${buildWorkspaceSnapshotObsidianWikilink(
+          buildWorkspaceSnapshotObsidianIocNotePath(entry.noteBasename),
+          entry.trayIoc.value
+        )} — ${typeLabel}`
       );
     }
   }
@@ -1996,4 +2039,266 @@ export async function buildWorkspaceSnapshotObsidianExportInput(input: {
   exportedAt?: string;
 }): Promise<WorkspaceSnapshotMarkdownExportInput> {
   return buildWorkspaceSnapshotMarkdownExportInput(input);
+}
+
+export type WorkspaceSnapshotObsidianZipEntry = {
+  path: string;
+  content: string;
+};
+
+const WORKSPACE_SNAPSHOT_ZIP_LOCAL_FILE_HEADER_SIGNATURE = 0x04034b50;
+const WORKSPACE_SNAPSHOT_ZIP_CENTRAL_DIRECTORY_SIGNATURE = 0x02014b50;
+const WORKSPACE_SNAPSHOT_ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50;
+
+const workspaceSnapshotZipCrc32Table = (() => {
+  const table = new Uint32Array(256);
+  for (let index = 0; index < 256; index += 1) {
+    let value = index;
+    for (let bit = 0; bit < 8; bit += 1) {
+      value = (value & 1) !== 0 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+    }
+    table[index] = value >>> 0;
+  }
+  return table;
+})();
+
+function computeWorkspaceSnapshotZipCrc32(data: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (let index = 0; index < data.length; index += 1) {
+    crc =
+      workspaceSnapshotZipCrc32Table[(crc ^ data[index]!)! & 0xff]! ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function encodeWorkspaceSnapshotZipPath(path: string): Uint8Array {
+  return new TextEncoder().encode(path.replace(/\\/g, "/"));
+}
+
+function writeWorkspaceSnapshotZipUint32LE(
+  view: DataView,
+  offset: number,
+  value: number
+): number {
+  view.setUint32(offset, value, true);
+  return offset + 4;
+}
+
+function writeWorkspaceSnapshotZipUint16LE(
+  view: DataView,
+  offset: number,
+  value: number
+): number {
+  view.setUint16(offset, value, true);
+  return offset + 2;
+}
+
+function buildWorkspaceSnapshotStoredZipBuffer(
+  entries: readonly WorkspaceSnapshotObsidianZipEntry[]
+): Uint8Array {
+  const chunks: Uint8Array[] = [];
+  const centralDirectoryEntries: {
+    pathBytes: Uint8Array;
+    dataBytes: Uint8Array;
+    crc32: number;
+    localHeaderOffset: number;
+  }[] = [];
+  let offset = 0;
+
+  for (const entry of entries) {
+    const pathBytes = encodeWorkspaceSnapshotZipPath(entry.path);
+    const dataBytes = new TextEncoder().encode(entry.content);
+    const crc32 = computeWorkspaceSnapshotZipCrc32(dataBytes);
+    const localHeader = new Uint8Array(30 + pathBytes.length);
+    const view = new DataView(localHeader.buffer);
+    let headerOffset = 0;
+    headerOffset = writeWorkspaceSnapshotZipUint32LE(
+      view,
+      headerOffset,
+      WORKSPACE_SNAPSHOT_ZIP_LOCAL_FILE_HEADER_SIGNATURE
+    );
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 20);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint32LE(view, headerOffset, crc32);
+    headerOffset = writeWorkspaceSnapshotZipUint32LE(view, headerOffset, dataBytes.length);
+    headerOffset = writeWorkspaceSnapshotZipUint32LE(view, headerOffset, dataBytes.length);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, pathBytes.length);
+    writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    localHeader.set(pathBytes, 30);
+
+    centralDirectoryEntries.push({
+      pathBytes,
+      dataBytes,
+      crc32,
+      localHeaderOffset: offset,
+    });
+    chunks.push(localHeader, dataBytes);
+    offset += localHeader.length + dataBytes.length;
+  }
+
+  const centralDirectoryStart = offset;
+  for (const entry of centralDirectoryEntries) {
+    const centralHeader = new Uint8Array(46 + entry.pathBytes.length);
+    const view = new DataView(centralHeader.buffer);
+    let headerOffset = 0;
+    headerOffset = writeWorkspaceSnapshotZipUint32LE(
+      view,
+      headerOffset,
+      WORKSPACE_SNAPSHOT_ZIP_CENTRAL_DIRECTORY_SIGNATURE
+    );
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 20);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 20);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint32LE(view, headerOffset, entry.crc32);
+    headerOffset = writeWorkspaceSnapshotZipUint32LE(view, headerOffset, entry.dataBytes.length);
+    headerOffset = writeWorkspaceSnapshotZipUint32LE(view, headerOffset, entry.dataBytes.length);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, entry.pathBytes.length);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint16LE(view, headerOffset, 0);
+    headerOffset = writeWorkspaceSnapshotZipUint32LE(view, headerOffset, 0);
+    writeWorkspaceSnapshotZipUint32LE(view, headerOffset, entry.localHeaderOffset);
+    centralHeader.set(entry.pathBytes, 46);
+    chunks.push(centralHeader);
+    offset += centralHeader.length;
+  }
+
+  const endRecord = new Uint8Array(22);
+  const endView = new DataView(endRecord.buffer);
+  let endOffset = 0;
+  endOffset = writeWorkspaceSnapshotZipUint32LE(
+    endView,
+    endOffset,
+    WORKSPACE_SNAPSHOT_ZIP_END_OF_CENTRAL_DIRECTORY_SIGNATURE
+  );
+  endOffset = writeWorkspaceSnapshotZipUint16LE(endView, endOffset, 0);
+  endOffset = writeWorkspaceSnapshotZipUint16LE(endView, endOffset, 0);
+  endOffset = writeWorkspaceSnapshotZipUint16LE(
+    endView,
+    endOffset,
+    centralDirectoryEntries.length
+  );
+  endOffset = writeWorkspaceSnapshotZipUint16LE(
+    endView,
+    endOffset,
+    centralDirectoryEntries.length
+  );
+  endOffset = writeWorkspaceSnapshotZipUint32LE(
+    endView,
+    endOffset,
+    offset - centralDirectoryStart
+  );
+  writeWorkspaceSnapshotZipUint32LE(endView, endOffset, centralDirectoryStart);
+  chunks.push(endRecord);
+
+  const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const output = new Uint8Array(totalLength);
+  let writeOffset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, writeOffset);
+    writeOffset += chunk.length;
+  }
+
+  return output;
+}
+
+export function buildWorkspaceSnapshotObsidianExportZipEntries(
+  pkg: WorkspaceSnapshotObsidianExportPackage
+): WorkspaceSnapshotObsidianZipEntry[] {
+  if (pkg.files.length === 0) {
+    return [];
+  }
+
+  return pkg.files.map((file) => ({
+    path: `${pkg.rootFolderName}/${file.path}`.replace(/\\/g, "/"),
+    content: file.content,
+  }));
+}
+
+export function containsWorkspaceSnapshotObsidianExportZipSecrets(
+  payload: Uint8Array | string
+): boolean {
+  const text =
+    typeof payload === "string" ? payload : new TextDecoder().decode(payload);
+  return containsWorkspaceSnapshotMarkdownSecrets(text);
+}
+
+export function buildWorkspaceSnapshotObsidianExportZipBuffer(
+  pkg: WorkspaceSnapshotObsidianExportPackage
+): Uint8Array | null {
+  if (pkg.files.length === 0 || containsWorkspaceSnapshotObsidianExportSecrets(pkg)) {
+    return null;
+  }
+
+  const entries = buildWorkspaceSnapshotObsidianExportZipEntries(pkg);
+  const buffer = buildWorkspaceSnapshotStoredZipBuffer(entries);
+  if (containsWorkspaceSnapshotObsidianExportZipSecrets(buffer)) {
+    return null;
+  }
+
+  return buffer;
+}
+
+export function buildWorkspaceSnapshotObsidianExportZipBlob(
+  pkg: WorkspaceSnapshotObsidianExportPackage
+): Blob | null {
+  const buffer = buildWorkspaceSnapshotObsidianExportZipBuffer(pkg);
+  if (!buffer) {
+    return null;
+  }
+
+  return new Blob([buffer], { type: "application/zip" });
+}
+
+export function buildWorkspaceSnapshotObsidianExportZipFilename(
+  session: WorkspaceSnapshotSessionMetadata | null,
+  exportedAt: string = new Date().toISOString()
+): string {
+  return `${buildWorkspaceSnapshotObsidianExportFolderName(session, exportedAt)}.zip`;
+}
+
+export function downloadWorkspaceSnapshotObsidianExportZipFile(
+  input: WorkspaceSnapshotMarkdownExportInput,
+  doc: Document = document
+): boolean {
+  const exportedAt = input.exportedAt ?? input.snapshot.exportedAt;
+  const pkg = buildWorkspaceSnapshotObsidianExportPackage(input);
+  const blob = buildWorkspaceSnapshotObsidianExportZipBlob(pkg);
+  if (!blob) {
+    return false;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const anchor = doc.createElement("a");
+  anchor.href = url;
+  anchor.download = buildWorkspaceSnapshotObsidianExportZipFilename(
+    input.snapshot.session,
+    exportedAt
+  );
+  doc.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+  return true;
+}
+
+export function resolveWorkspaceSnapshotObsidianExportZipDownloadFeedback(input: {
+  downloaded: boolean;
+  sessionTitle?: string | null;
+}): string {
+  const title = input.sessionTitle?.trim();
+  const subject = title ? `"${title}" Obsidian package` : "Obsidian package";
+  if (!input.downloaded) {
+    return `Could not download ${subject} zip.`;
+  }
+
+  return `Downloaded ${subject} zip. Extract into your Obsidian vault.`;
 }

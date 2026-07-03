@@ -16,7 +16,9 @@ import {
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK,
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY,
+  HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL,
 } from "../lib/hoverCardEnrichment";
+import * as hoverCardCoOccurrence from "../lib/hoverCardCoOccurrence";
 import { IOC_TYPE, IOC_RULE_ID, type IocType } from "../lib/iocRegex";
 import { getPivotRecipes } from "../lib/pivots";
 import * as copyText from "../lib/copyText";
@@ -33,6 +35,7 @@ import {
   buildHoverCardPanel,
   hideHoverCard,
   HOVER_CARD_COPY_BUTTON_CLASS,
+  HOVER_CARD_CO_OCCURRENCE_CLASS,
   HOVER_CARD_GENERATE_SUMMARY_LABEL,
   HOVER_CARD_GENERATE_SUMMARY_LOADING_LABEL,
   HOVER_CARD_HOST_ID,
@@ -191,6 +194,42 @@ const PIVOT_PANEL_GOLDEN_CASES: ReadonlyArray<{
   { type: IOC_TYPE.FILEPATH, value: "/var/log/auth.log" },
   { type: IOC_TYPE.ONION, value: `${"a".repeat(56)}.onion` },
 ];
+
+describe("co-occurrence panel", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("renders appeared alongside section and loads related IOCs", async () => {
+    vi.spyOn(hoverCardCoOccurrence, "loadHoverCardCoOccurrencePanelView").mockResolvedValue({
+      contextLabel: "Same page scan",
+      entries: [
+        {
+          iocType: IOC_TYPE.DOMAIN,
+          value: "example.com",
+          anchorId: "vera5-hl-2",
+        },
+      ],
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const section = panel.querySelector(`.${HOVER_CARD_CO_OCCURRENCE_CLASS}`);
+    expect(section).not.toBeNull();
+    expect(section?.getAttribute("aria-label")).toBe(
+      HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL
+    );
+    expect(section?.textContent).toContain("Appeared alongside");
+
+    await vi.waitFor(() => {
+      expect(section?.textContent).toContain("DOM · example.com");
+      expect(section?.textContent).toContain("Same page scan");
+    });
+  });
+});
 
 describe("match provenance exposure", () => {
   it("stores provenance on hover card panel datasets", () => {

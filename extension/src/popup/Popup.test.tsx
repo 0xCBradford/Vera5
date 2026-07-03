@@ -17,6 +17,8 @@ import { buildEnrichmentSourceOpsRows } from "../lib/enrichmentSourceOps";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import * as tabScanSummary from "../lib/tabScanSummary";
+import * as iocCoOccurrenceStorage from "../lib/iocCoOccurrenceStorage";
+import { buildPageIocCoOccurrenceIndexFromSnapshot } from "../lib/iocCoOccurrence";
 import { createIocCollection } from "../lib/iocCollection";
 import * as iocCollectionExport from "../lib/iocCollectionExport";
 import { MESSAGE } from "../lib/messages";
@@ -836,6 +838,32 @@ describe("Popup IOC tray", () => {
     expect(firstRow?.dataset.vera5SourceTextHint).toBe(
       "Contact 8.8.8.8 for details."
     );
+  });
+
+  it("shows co-occurring IOCs in tray row expanders", async () => {
+    vi.spyOn(iocCoOccurrenceStorage, "getPageIocCoOccurrenceIndexForSession").mockResolvedValue(
+      buildPageIocCoOccurrenceIndexFromSnapshot({
+        schemaVersion: 2,
+        pageUrl: sampleSummary.pageUrl,
+        scannedAt: sampleSummary.scannedAt,
+        entries: sampleSummary.entries,
+      })
+    );
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared alongside");
+    });
+
+    const expander = mounted!.container.querySelector(".vera5-tray-co-occurrence");
+    expect(expander).not.toBeNull();
+    expect(expander?.textContent).toContain("IP · 192.0.2.1");
+    expect(expander?.textContent).toContain("CVE · CVE-2021-44228");
+    expect(expander?.textContent).toContain("Same page scan");
   });
 
   it("shows Phase 2 type badges in tray rows and filter chips", async () => {

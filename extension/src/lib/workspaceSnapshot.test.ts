@@ -26,6 +26,7 @@ import {
   buildWorkspaceSnapshotExportDocument,
   buildWorkspaceSnapshotExportFilename,
   containsWorkspaceSnapshotSecrets,
+  containsWorkspaceSnapshotMarkdownSecrets,
   createWorkspaceSnapshot,
   downloadWorkspaceSnapshotExportJsonFile,
   isSupportedWorkspaceSnapshotSchemaVersion,
@@ -58,18 +59,27 @@ import {
   buildWorkspaceSnapshotMarkdownExportFilename,
   buildWorkspaceSnapshotObsidianExportFolderName,
   buildWorkspaceSnapshotObsidianExportPackage,
+  buildWorkspaceSnapshotObsidianExportZipBlob,
+  buildWorkspaceSnapshotObsidianExportZipBuffer,
+  buildWorkspaceSnapshotObsidianExportZipEntries,
+  buildWorkspaceSnapshotObsidianExportZipFilename,
   buildWorkspaceSnapshotObsidianIocNoteContent,
   buildWorkspaceSnapshotObsidianIocNotePath,
+  buildWorkspaceSnapshotObsidianWikilink,
   buildWorkspaceSnapshotTimelineAppendixMarkdown,
   buildWorkspaceSnapshotTrayIocTableLines,
   containsWorkspaceSnapshotObsidianExportSecrets,
+  containsWorkspaceSnapshotObsidianExportZipSecrets,
   copyWorkspaceSnapshotMarkdownExportToClipboard,
+  downloadWorkspaceSnapshotObsidianExportZipFile,
   normalizeWorkspaceSnapshotMarkdownTemplateId,
   resolveWorkspaceSnapshotMarkdownExportContent,
   resolveWorkspaceSnapshotMarkdownExportCopyFeedback,
   resolveWorkspaceSnapshotMarkdownExportDownloadFeedback,
+  resolveWorkspaceSnapshotObsidianExportZipDownloadFeedback,
   WORKSPACE_SNAPSHOT_OBSIDIAN_INDEX_NOTE_BASENAME,
   WORKSPACE_SNAPSHOT_OBSIDIAN_IOCS_FOLDER,
+  WORKSPACE_SNAPSHOT_OBSIDIAN_LINK_FORMAT_DOCS,
   WORKSPACE_SNAPSHOT_OBSIDIAN_TIMELINE_NOTE_BASENAME,
   buildInvestigationSessionFromSnapshotMetadata,
   confirmWorkspaceSnapshotImport,
@@ -80,6 +90,7 @@ import {
   mergeWorkspaceSnapshotTrayIocs,
   replaceImportedWorkspaceSnapshot,
   resolveWorkspaceSnapshotImportConfirmationMessage,
+  resolveWorkspaceSnapshotImportResult,
 } from "./workspaceSnapshot";
 import { createInvestigationSession } from "./investigationSession";
 import {
@@ -89,7 +100,7 @@ import {
 import { IOC_TYPE } from "./iocRegex";
 import { tabScanSnapshotStorageKey } from "./tabScanSnapshot";
 import { TEST_FIXTURE_ABUSEIPDB_API_KEY } from "./fixtureSecrets";
-import { STORAGE_KEY_API_KEYS } from "./storage";
+import { STORAGE_KEY_API_KEYS, STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID } from "./storage";
 import {
   createTimelineEvent,
   TIMELINE_EVENT_SCHEMA_VERSION,
@@ -601,6 +612,217 @@ describe("workspaceSnapshot export", () => {
   });
 });
 
+describe("workspaceSnapshot export/import round-trip", () => {
+  const exportedAt = "2026-07-02T12:00:00.000Z";
+  const cacheKey = buildEnrichmentCacheKey("8.8.8.8", "abuseipdb");
+
+  const fixtureExportInput = {
+    exportedAt,
+    session: sampleSessionMetadata,
+    trayIocs: [sampleTrayIoc],
+    enrichmentCacheRefs: [
+      {
+        cacheKey: cacheKey!,
+        iocValue: "8.8.8.8",
+        sourceId: "abuseipdb",
+        fetchedAt: 1_700_000_000_000,
+      },
+    ],
+    timelineEvents: [sampleTimelineEvent],
+    notebookFragments: [sampleNotebookFragment],
+    settingsProfileRef: "default-profile",
+  };
+
+  it("round-trips fixture session export JSON through replace import", () => {
+    const exported = buildWorkspaceSnapshotExportDocument(fixtureExportInput);
+    const json = serializeWorkspaceSnapshotExportJson(fixtureExportInput);
+    const imported = parseWorkspaceSnapshotImportJson(json);
+    const emptyWorkspace = createWorkspaceSnapshot({
+      exportedAt: "2026-07-01T00:00:00.000Z",
+    });
+    const restored = resolveWorkspaceSnapshotImportResult(
+      WORKSPACE_SNAPSHOT_IMPORT_MODE.REPLACE,
+      emptyWorkspace,
+      imported
+    );
+
+    expect(imported).toEqual(exported);
+    expect(restored).toEqual(exported);
+    expect(restored.session).toEqual(sampleSessionMetadata);
+    expect(restored.trayIocs).toEqual([sampleTrayIoc]);
+    expect(restored.timelineEvents).toEqual([sampleTimelineEvent]);
+    expect(restored.notebookFragments).toEqual([sampleNotebookFragment]);
+    expect(restored.settingsProfileRef).toBe("default-profile");
+    expect(containsWorkspaceSnapshotSecrets(json)).toBe(false);
+  });
+
+  it("persists fixture session workspace state after confirmed replace import", async () => {
+    const localStore: Record<string, unknown> = {};
+    const sessionStore: Record<string, unknown> = {};
+    stubWorkspaceSnapshotStorage(localStore, sessionStore);
+
+    const json = serializeWorkspaceSnapshotExportJson(fixtureExportInput);
+    const restored = await importWorkspaceSnapshotJson({
+      rawJson: json,
+      mode: WORKSPACE_SNAPSHOT_IMPORT_MODE.REPLACE,
+      userConfirmed: true,
+      tabId: 7,
+    });
+
+    expect(restored).toEqual(buildWorkspaceSnapshotExportDocument(fixtureExportInput));
+    expect(localStore[STORAGE_KEY_WORKSPACE_SNAPSHOT_STATE]).toMatchObject({
+      schemaVersion: WORKSPACE_SNAPSHOT_SCHEMA_VERSION,
+      settingsProfileRef: "default-profile",
+      enrichmentCacheRefs: restored.enrichmentCacheRefs,
+      notebookFragments: [sampleNotebookFragment],
+    });
+    expect(sessionStore[tabScanSnapshotStorageKey(7)]).toMatchObject({
+      entries: [sampleTrayIoc],
+    });
+
+    const sessionsStore = localStore[STORAGE_KEY_INVESTIGATION_SESSIONS] as {
+      activeSessionId?: string;
+      sessions: Array<{ id: string; title: string; timelineEvents?: unknown[] }>;
+    };
+    expect(sessionsStore.activeSessionId).toBe(sampleSessionMetadata.id);
+    expect(sessionsStore.sessions).toHaveLength(1);
+    expect(sessionsStore.sessions[0]).toMatchObject({
+      id: sampleSessionMetadata.id,
+      title: sampleSessionMetadata.title,
+      pageUrl: sampleSessionMetadata.pageUrl,
+    });
+    expect(sessionsStore.sessions[0]?.timelineEvents).toEqual([sampleTimelineEvent]);
+  });
+});
+
+describe("workspaceSnapshot export redaction", () => {
+  const exportedAt = "2026-07-02T12:00:00.000Z";
+  const leakyVendorPayload = JSON.stringify({
+    api_key: TEST_FIXTURE_ABUSEIPDB_API_KEY,
+    data: { abuseConfidenceScore: 74 },
+  });
+
+  const leakyExportInput = {
+    exportedAt,
+    session: {
+      ...sampleSessionMetadata,
+      notes: leakyVendorPayload,
+    },
+    trayIocs: [sampleTrayIoc],
+    enrichmentCacheRefs: [
+      {
+        cacheKey: buildEnrichmentCacheKey("8.8.8.8", "abuseipdb")!,
+        iocValue: "8.8.8.8",
+        sourceId: "abuseipdb",
+        fetchedAt: 1_700_000_000_000,
+      },
+    ],
+    timelineEvents: [
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.ENRICH,
+        sessionId: "vera5-inv-abc",
+        iocKey: "8.8.8.8",
+        timestamp: 1_700_000_000_000,
+        sourceAttributionSummary: leakyVendorPayload,
+      }),
+    ],
+    notebookFragments: [
+      {
+        ...sampleNotebookFragment,
+        content: leakyVendorPayload,
+      },
+    ],
+    settingsProfileRef: "default-profile",
+  };
+
+  const enrichmentRecord = buildNormalizedEnrichmentRecord({
+    value: "8.8.8.8",
+    iocType: IOC_TYPE.IPV4,
+    sourceResults: buildHoverCardSourceEntries([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "74 abuse confidence",
+        tags: ["scanner"],
+      },
+    ]),
+    exportedAt,
+  });
+
+  it("redacts secrets from JSON, markdown, and Obsidian zip exports", () => {
+    const exported = buildWorkspaceSnapshotExportDocument(leakyExportInput);
+    const json = serializeWorkspaceSnapshotExportJson(leakyExportInput);
+    const markdown = resolveWorkspaceSnapshotMarkdownExportContent({
+      snapshot: exported,
+      records: [enrichmentRecord],
+      exportedAt,
+    }).content;
+    const obsidianPackage = buildWorkspaceSnapshotObsidianExportPackage({
+      snapshot: exported,
+      records: [enrichmentRecord],
+      exportedAt,
+    });
+    const zipBuffer = buildWorkspaceSnapshotObsidianExportZipBuffer(obsidianPackage);
+
+    for (const payload of [json, markdown]) {
+      expect(payload).not.toContain(TEST_FIXTURE_ABUSEIPDB_API_KEY);
+      expect(payload).not.toContain("rawVendorJson");
+    }
+
+    expect(json).toContain(REDACTED_VALUE_PLACEHOLDER);
+    expect(markdown).toContain(REDACTED_VALUE_PLACEHOLDER);
+    expect(containsWorkspaceSnapshotSecrets(json)).toBe(false);
+    expect(containsWorkspaceSnapshotMarkdownSecrets(markdown)).toBe(false);
+    expect(containsWorkspaceSnapshotObsidianExportSecrets(obsidianPackage)).toBe(false);
+    expect(zipBuffer).not.toBeNull();
+    expect(containsWorkspaceSnapshotObsidianExportZipSecrets(zipBuffer!)).toBe(false);
+    expect(new TextDecoder().decode(zipBuffer!)).not.toContain(
+      TEST_FIXTURE_ABUSEIPDB_API_KEY
+    );
+
+    for (const field of WORKSPACE_SNAPSHOT_EXCLUDED_SECRET_ROOT_FIELDS) {
+      expect(json).not.toContain(`"${field}"`);
+    }
+    for (const field of WORKSPACE_SNAPSHOT_EXCLUDED_SECRET_PAYLOAD_FIELDS) {
+      expect(json).not.toContain(`"${field}"`);
+    }
+    for (const file of obsidianPackage.files) {
+      expect(file.content).not.toContain(TEST_FIXTURE_ABUSEIPDB_API_KEY);
+      expect(containsWorkspaceSnapshotMarkdownSecrets(file.content)).toBe(false);
+    }
+  });
+
+  it("blocks markdown and zip exports when forbidden secret markers remain", () => {
+    const blockedSnapshot = createWorkspaceSnapshot({
+      exportedAt,
+      session: {
+        ...sampleSessionMetadata,
+        notes: '"apiKey": "super-secret-key"',
+      },
+      trayIocs: [sampleTrayIoc],
+      timelineEvents: [sampleTimelineEvent],
+    });
+
+    expect(
+      resolveWorkspaceSnapshotMarkdownExportContent({
+        snapshot: blockedSnapshot,
+        records: [enrichmentRecord],
+        exportedAt,
+      }).content
+    ).toBe("");
+    expect(
+      buildWorkspaceSnapshotObsidianExportZipBuffer(
+        buildWorkspaceSnapshotObsidianExportPackage({
+          snapshot: blockedSnapshot,
+          records: [enrichmentRecord],
+          exportedAt,
+        })
+      )
+    ).toBeNull();
+  });
+});
+
 function stubWorkspaceSnapshotStorage(
   localStore: Record<string, unknown>,
   sessionStore: Record<string, unknown> = {}
@@ -889,6 +1111,109 @@ describe("workspaceSnapshot import", () => {
 
     expect(result).toBeNull();
     expect(localStore[STORAGE_KEY_WORKSPACE_SNAPSHOT_STATE]).toBeUndefined();
+  });
+
+  it("does not wipe unrelated settings when a partial snapshot import is unconfirmed", async () => {
+    const localStore: Record<string, unknown> = {
+      [STORAGE_KEY_API_KEYS]: {
+        abuseipdb: TEST_FIXTURE_ABUSEIPDB_API_KEY,
+      },
+      [STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]: "jira-comment",
+      [STORAGE_KEY_WORKSPACE_SNAPSHOT_STATE]: {
+        schemaVersion: WORKSPACE_SNAPSHOT_SCHEMA_VERSION,
+        settingsProfileRef: "operator-profile",
+        enrichmentCacheRefs: currentSnapshot.enrichmentCacheRefs,
+        notebookFragments: currentSnapshot.notebookFragments,
+      },
+    };
+    stubWorkspaceSnapshotStorage(localStore);
+
+    const partialSnapshot = createWorkspaceSnapshot({
+      exportedAt,
+      trayIocs: [incomingTrayIoc],
+    });
+
+    await expect(
+      importWorkspaceSnapshotJson({
+        rawJson: serializeWorkspaceSnapshot(partialSnapshot),
+        mode: WORKSPACE_SNAPSHOT_IMPORT_MODE.MERGE,
+        userConfirmed: false,
+      })
+    ).rejects.toThrow(WorkspaceSnapshotImportError);
+
+    expect(localStore[STORAGE_KEY_API_KEYS]).toEqual({
+      abuseipdb: TEST_FIXTURE_ABUSEIPDB_API_KEY,
+    });
+    expect(localStore[STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]).toBe("jira-comment");
+    expect(localStore[STORAGE_KEY_WORKSPACE_SNAPSHOT_STATE]).toMatchObject({
+      settingsProfileRef: "operator-profile",
+    });
+  });
+
+  it("preserves unrelated extension settings after confirmed partial snapshot import", async () => {
+    const localStore: Record<string, unknown> = {
+      [STORAGE_KEY_API_KEYS]: {
+        abuseipdb: TEST_FIXTURE_ABUSEIPDB_API_KEY,
+      },
+      [STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]: "jira-comment",
+      [STORAGE_KEY_WORKSPACE_SNAPSHOT_STATE]: {
+        schemaVersion: WORKSPACE_SNAPSHOT_SCHEMA_VERSION,
+        settingsProfileRef: "operator-profile",
+        enrichmentCacheRefs: currentSnapshot.enrichmentCacheRefs,
+        notebookFragments: currentSnapshot.notebookFragments,
+      },
+    };
+    const sessionStore: Record<string, unknown> = {};
+    stubWorkspaceSnapshotStorage(localStore, sessionStore);
+
+    const partialSnapshot = createWorkspaceSnapshot({
+      exportedAt,
+      trayIocs: [incomingTrayIoc],
+    });
+
+    const mergeResult = await importWorkspaceSnapshotJson({
+      rawJson: serializeWorkspaceSnapshot(partialSnapshot),
+      mode: WORKSPACE_SNAPSHOT_IMPORT_MODE.MERGE,
+      userConfirmed: true,
+      tabId: 11,
+    });
+    expect(mergeResult.settingsProfileRef).toBe("operator-profile");
+    expect(localStore[STORAGE_KEY_API_KEYS]).toEqual({
+      abuseipdb: TEST_FIXTURE_ABUSEIPDB_API_KEY,
+    });
+    expect(localStore[STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]).toBe("jira-comment");
+    expect(localStore[STORAGE_KEY_WORKSPACE_SNAPSHOT_STATE]).toMatchObject({
+      settingsProfileRef: "operator-profile",
+    });
+
+    const replaceResult = await importWorkspaceSnapshotJson({
+      rawJson: serializeWorkspaceSnapshot(partialSnapshot),
+      mode: WORKSPACE_SNAPSHOT_IMPORT_MODE.REPLACE,
+      userConfirmed: true,
+      tabId: 11,
+    });
+    expect(replaceResult.settingsProfileRef).toBe("operator-profile");
+    expect(localStore[STORAGE_KEY_WORKSPACE_SNAPSHOT_STATE]).toMatchObject({
+      settingsProfileRef: "operator-profile",
+    });
+  });
+
+  it("keeps stored settings profile ref when partial replace import omits it", () => {
+    const partialIncoming = createWorkspaceSnapshot({
+      exportedAt,
+      trayIocs: [incomingTrayIoc],
+    });
+
+    expect(
+      replaceImportedWorkspaceSnapshot(partialIncoming, currentSnapshot).settingsProfileRef
+    ).toBe("current-profile");
+    expect(
+      resolveWorkspaceSnapshotImportResult(
+        WORKSPACE_SNAPSHOT_IMPORT_MODE.REPLACE,
+        currentSnapshot,
+        partialIncoming
+      ).settingsProfileRef
+    ).toBe("current-profile");
   });
 });
 
@@ -1263,12 +1588,42 @@ describe("workspaceSnapshot obsidian export", () => {
     expect(index.content).toContain("artifact: workspace-snapshot-index");
     expect(index.content).toContain(WORKSPACE_SNAPSHOT_MARKDOWN_EXECUTIVE_SUMMARY_HEADING);
     expect(index.content).toContain(
-      `[8.8.8.8](${buildWorkspaceSnapshotObsidianIocNotePath("8-8-8-8")})`
+      buildWorkspaceSnapshotObsidianWikilink(
+        buildWorkspaceSnapshotObsidianIocNotePath("8-8-8-8"),
+        "8.8.8.8"
+      )
     );
+    expect(index.content).toContain("[[timeline|Investigation timeline appendix]]");
+    expect(index.content).not.toContain("](iocs/");
     expect(timeline.content).toContain("artifact: investigation-timeline-appendix");
     expect(iocNote.content).toContain("ioc: 8.8.8.8");
     expect(iocNote.content).toContain("74 abuse confidence");
     expect(containsWorkspaceSnapshotObsidianExportSecrets(pkg)).toBe(false);
+  });
+
+  it("documents and builds Obsidian-compatible wikilink targets without .md extensions", () => {
+    expect(WORKSPACE_SNAPSHOT_OBSIDIAN_LINK_FORMAT_DOCS.syntax).toBe("Obsidian wikilink");
+    expect(WORKSPACE_SNAPSHOT_OBSIDIAN_LINK_FORMAT_DOCS.iocLinkExample).toBe(
+      "[[iocs/8-8-8-8|8.8.8.8]]"
+    );
+    expect(
+      buildWorkspaceSnapshotObsidianWikilink(
+        buildWorkspaceSnapshotObsidianIocNotePath("8-8-8-8"),
+        "8.8.8.8"
+      )
+    ).toBe("[[iocs/8-8-8-8|8.8.8.8]]");
+    expect(
+      buildWorkspaceSnapshotObsidianWikilink(
+        `${WORKSPACE_SNAPSHOT_OBSIDIAN_TIMELINE_NOTE_BASENAME}.md`,
+        "Investigation timeline appendix"
+      )
+    ).toBe("[[timeline|Investigation timeline appendix]]");
+    expect(
+      buildWorkspaceSnapshotObsidianWikilink(
+        buildWorkspaceSnapshotObsidianIocNotePath("pipe-value"),
+        "8.8.8.8|internal"
+      )
+    ).toBe("[[iocs/pipe-value]]");
   });
 
   it("builds fallback Obsidian IOC notes from tray rows when enrichment records are absent", () => {
@@ -1315,5 +1670,89 @@ describe("workspaceSnapshot obsidian export", () => {
       )
     );
     expect(pkg.files).toEqual([]);
+  });
+
+  it("builds a zip package with folder paths and no secret markers", () => {
+    const exportInput = {
+      snapshot,
+      records: [enrichmentRecord],
+      exportedAt,
+    };
+    const pkg = buildWorkspaceSnapshotObsidianExportPackage(exportInput);
+    const entries = buildWorkspaceSnapshotObsidianExportZipEntries(pkg);
+    const buffer = buildWorkspaceSnapshotObsidianExportZipBuffer(pkg);
+    const blob = buildWorkspaceSnapshotObsidianExportZipBlob(pkg);
+
+    expect(entries.map((entry) => entry.path)).toEqual([
+      `${pkg.rootFolderName}/index.md`,
+      `${pkg.rootFolderName}/timeline.md`,
+      `${pkg.rootFolderName}/${buildWorkspaceSnapshotObsidianIocNotePath("8-8-8-8")}`,
+    ]);
+    expect(buffer).not.toBeNull();
+    expect(buffer![0]).toBe(0x50);
+    expect(buffer![1]).toBe(0x4b);
+    expect(buffer![2]).toBe(0x03);
+    expect(buffer![3]).toBe(0x04);
+    expect(new TextDecoder().decode(buffer!)).toContain(`${pkg.rootFolderName}/index.md`);
+    expect(new TextDecoder().decode(buffer!)).not.toContain(TEST_FIXTURE_ABUSEIPDB_API_KEY);
+    expect(containsWorkspaceSnapshotObsidianExportZipSecrets(buffer!)).toBe(false);
+    expect(blob?.type).toBe("application/zip");
+    expect(
+      buildWorkspaceSnapshotObsidianExportZipFilename(sampleSessionMetadata, exportedAt)
+    ).toBe(`${pkg.rootFolderName}.zip`);
+    expect(
+      resolveWorkspaceSnapshotObsidianExportZipDownloadFeedback({
+        downloaded: true,
+        sessionTitle: sampleSessionMetadata.title,
+      })
+    ).toContain("Extract into your Obsidian vault");
+  });
+
+  it("downloads the Obsidian zip package and blocks packages with secret markers", () => {
+    const exportInput = {
+      snapshot,
+      records: [enrichmentRecord],
+      exportedAt,
+    };
+    const click = vi.fn();
+    const anchor = {
+      href: "",
+      download: "",
+      click,
+      remove: vi.fn(),
+    } as unknown as HTMLAnchorElement;
+    const doc = {
+      createElement: vi.fn(() => anchor),
+      body: { appendChild: vi.fn() },
+    } as unknown as Document;
+
+    vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:workspace-obsidian-zip");
+    vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+
+    expect(downloadWorkspaceSnapshotObsidianExportZipFile(exportInput, doc)).toBe(true);
+    expect(anchor.download).toBe(
+      buildWorkspaceSnapshotObsidianExportZipFilename(sampleSessionMetadata, exportedAt)
+    );
+    expect(click).toHaveBeenCalledTimes(1);
+
+    const blockedSnapshot = createWorkspaceSnapshot({
+      exportedAt,
+      session: {
+        ...sampleSessionMetadata,
+        notes: '"apiKey": "super-secret-key"',
+      },
+      trayIocs: [sampleTrayIoc],
+      timelineEvents: [sampleTimelineEvent],
+    });
+
+    expect(
+      buildWorkspaceSnapshotObsidianExportZipBuffer(
+        buildWorkspaceSnapshotObsidianExportPackage({
+          snapshot: blockedSnapshot,
+          records: [],
+          exportedAt,
+        })
+      )
+    ).toBeNull();
   });
 });

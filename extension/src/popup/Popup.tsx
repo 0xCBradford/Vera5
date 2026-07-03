@@ -41,8 +41,16 @@ import {
   HOVER_CARD_ANALYST_NOTES_PLACEHOLDER,
   HOVER_CARD_REFANGED_VALUE_LABEL,
   HOVER_CARD_WHY_DETECTED_HEADING,
+  HOVER_CARD_CO_OCCURRENCE_LABEL,
   resolveIndicatorValuePresentation,
 } from "../lib/hoverCardEnrichment";
+import {
+  buildHoverCardCoOccurrencePanelView,
+  formatHoverCardCoOccurrenceEntryLine,
+  shouldShowTrayCoOccurrenceExpander,
+} from "../lib/hoverCardCoOccurrence";
+import { getPageIocCoOccurrenceIndexForSession } from "../lib/iocCoOccurrenceStorage";
+import type { PageIocCoOccurrenceIndex } from "../lib/iocCoOccurrence";
 import {
   getStoredAnalystNote,
   normalizeAnalystNotesRecord,
@@ -1940,6 +1948,56 @@ function WhyDetectedTrayDetails({
   );
 }
 
+function CoOccurrenceTrayDetails({
+  entry,
+  pageIndex,
+}: {
+  entry: TabScanSummaryEntry;
+  pageIndex: PageIocCoOccurrenceIndex | null;
+}) {
+  const view = buildHoverCardCoOccurrencePanelView({
+    iocType: entry.type,
+    value: entry.value,
+    pageIndex,
+  });
+  if (!shouldShowTrayCoOccurrenceExpander(view)) {
+    return null;
+  }
+
+  return (
+    <details
+      className="vera5-tray-co-occurrence"
+      style={trayWhyDetectedDetailsStyle()}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <summary
+        style={{
+          cursor: "pointer",
+          color: POPUP_THEME.muted,
+          fontWeight: 600,
+        }}
+      >
+        {HOVER_CARD_CO_OCCURRENCE_LABEL}
+      </summary>
+      <div style={{ marginTop: 4 }}>
+        {view.contextLabel ? (
+          <p style={{ margin: "0 0 4px" }}>{view.contextLabel}</p>
+        ) : null}
+        <ul style={{ margin: 0, paddingLeft: 16 }}>
+          {view.entries.map((relatedEntry) => (
+            <li
+              key={`${relatedEntry.iocType}-${relatedEntry.value}-${relatedEntry.anchorId}`}
+            >
+              {formatHoverCardCoOccurrenceEntryLine(relatedEntry)}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
+  );
+}
+
 type AnalystNoteSaveStatus = "idle" | "saving" | "saved";
 type DetailEnrichState = "idle" | "enriching";
 
@@ -2384,6 +2442,8 @@ export function Popup() {
   const [promoteSessionToCollectionOpen, setPromoteSessionToCollectionOpen] = useState(false);
   const [promoteSessionToCollectionFeedback, setPromoteSessionToCollectionFeedback] =
     useState<string | null>(null);
+  const [trayPageCoOccurrenceIndex, setTrayPageCoOccurrenceIndex] =
+    useState<PageIocCoOccurrenceIndex | null>(null);
 
   const refreshSourceOps = async () => {
     const snapshot = await requestEnrichmentSourceOps();
@@ -2586,6 +2646,27 @@ export function Popup() {
       cancelled = true;
     };
   }, [scanSummary]);
+
+  useEffect(() => {
+    if (!activeSession || !scanSummary?.pageUrl) {
+      setTrayPageCoOccurrenceIndex(null);
+      return;
+    }
+
+    let cancelled = false;
+    void getPageIocCoOccurrenceIndexForSession({
+      sessionId: activeSession.id,
+      pageUrl: scanSummary.pageUrl,
+    }).then((pageIndex) => {
+      if (!cancelled) {
+        setTrayPageCoOccurrenceIndex(pageIndex);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSession, scanSummary?.pageUrl, scanSummary?.scannedAt]);
 
   useEffect(() => {
     if (!scanSummary || !trayFilterReady) {
@@ -4686,6 +4767,10 @@ export function Popup() {
                         }}
                       />
                       <WhyDetectedTrayDetails entry={entry} />
+                      <CoOccurrenceTrayDetails
+                        entry={entry}
+                        pageIndex={trayPageCoOccurrenceIndex}
+                      />
                     </li>
                     );
                   })}

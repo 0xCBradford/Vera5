@@ -17,6 +17,7 @@ import {
   safeStorageSessionSet,
 } from "./extensionContext";
 import { syncActiveInvestigationSessionFromScan } from "./investigationSessionStorage";
+import { syncSessionIocCoOccurrenceFromSnapshot } from "./iocCoOccurrenceStorage";
 
 export async function saveTabScanSnapshot(
   tabId: number,
@@ -92,6 +93,7 @@ export async function handleTabScanSnapshotMessage(
     pageUrl: snapshot.pageUrl,
     entries: snapshot.entries,
   });
+  await syncSessionIocCoOccurrenceFromSnapshot(snapshot);
   return { ok: true, payload: { tabId } };
 }
 
