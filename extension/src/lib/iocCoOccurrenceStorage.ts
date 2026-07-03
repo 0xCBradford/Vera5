@@ -9,6 +9,7 @@ import {
   buildPageIocCoOccurrenceIndexFromSnapshot,
   IOC_CO_OCCURRENCE_SCHEMA_VERSION,
   normalizePageIocCoOccurrenceIndex,
+  shouldSkipCoOccurrenceRecomputeForSnapshot,
   upsertPageIocCoOccurrenceIndex,
   type IocCoOccurrenceLimits,
   type PageIocCoOccurrenceIndex,
@@ -236,6 +237,9 @@ export async function saveSessionPageIocCoOccurrenceFromSnapshot(input: {
   limits?: IocCoOccurrenceLimits;
 }): Promise<SessionIocCoOccurrenceRecord | null> {
   const limits = input.limits ?? (await getIocCoOccurrenceLimits());
+  if (shouldSkipCoOccurrenceRecomputeForSnapshot(input.snapshot, limits)) {
+    return getSessionIocCoOccurrenceRecord(input.sessionId);
+  }
   const pageIndex = buildPageIocCoOccurrenceIndexFromSnapshot(input.snapshot, limits);
   return saveSessionPageIocCoOccurrenceIndex({
     sessionId: input.sessionId,

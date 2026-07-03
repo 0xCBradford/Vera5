@@ -727,6 +727,12 @@ export function buildVera5UiStylesCss(): string {
   font-size: 11px;
   line-height: 1.4;
 }
+.vera5-hover-card-co-occurrence-feedback {
+  margin: 0 0 4px;
+  color: #f0b429;
+  font-size: 11px;
+  line-height: 1.4;
+}
 .vera5-hover-card-co-occurrence-list {
   margin: 0;
   padding-left: 16px;
@@ -736,6 +742,40 @@ export function buildVera5UiStylesCss(): string {
 }
 .vera5-hover-card-co-occurrence-item {
   margin: 0;
+}
+.vera5-hover-card-co-occurrence-item-button {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vera5-hover-card-co-occurrence-item-button:hover,
+.vera5-hover-card-co-occurrence-item-button:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+.vera5-tray-co-occurrence-item {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.vera5-tray-co-occurrence-item:hover,
+.vera5-tray-co-occurrence-item:focus-visible {
+  text-decoration: underline;
+  outline: none;
 }
 .vera5-hover-card-ioc-pin {
   border: 1px solid var(--vera5-border);

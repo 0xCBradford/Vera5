@@ -60,6 +60,9 @@ export function normalizeIocCoOccurrenceLimitsStore(
   const limits = normalizeIocCoOccurrenceLimits({
     minGroupSize: record.minGroupSize,
     maxGroupsPerPage: record.maxGroupsPerPage,
+    maxMembersForComputation: record.maxMembersForComputation,
+    maxPairsPerPage: record.maxPairsPerPage,
+    skipRecomputePageIocCountThreshold: record.skipRecomputePageIocCountThreshold,
   });
 
   return {
@@ -82,6 +85,9 @@ export async function getIocCoOccurrenceLimits(): Promise<IocCoOccurrenceLimits>
   return {
     minGroupSize: store.minGroupSize,
     maxGroupsPerPage: store.maxGroupsPerPage,
+    maxMembersForComputation: store.maxMembersForComputation,
+    maxPairsPerPage: store.maxPairsPerPage,
+    skipRecomputePageIocCountThreshold: store.skipRecomputePageIocCountThreshold,
   };
 }
 
@@ -100,7 +106,11 @@ export async function setIocCoOccurrenceLimits(
   const defaults = createDefaultIocCoOccurrenceLimits();
   if (
     limits.minGroupSize === defaults.minGroupSize &&
-    limits.maxGroupsPerPage === defaults.maxGroupsPerPage
+    limits.maxGroupsPerPage === defaults.maxGroupsPerPage &&
+    limits.maxMembersForComputation === defaults.maxMembersForComputation &&
+    limits.maxPairsPerPage === defaults.maxPairsPerPage &&
+    limits.skipRecomputePageIocCountThreshold ===
+      defaults.skipRecomputePageIocCountThreshold
   ) {
     await safeStorageLocalRemove(STORAGE_KEY_IOC_CO_OCCURRENCE_LIMITS);
     return limits;
@@ -126,7 +136,11 @@ export async function hydrateIocCoOccurrenceLimitsStore(
   const defaults = createDefaultIocCoOccurrenceLimits();
   if (
     normalized.minGroupSize === defaults.minGroupSize &&
-    normalized.maxGroupsPerPage === defaults.maxGroupsPerPage
+    normalized.maxGroupsPerPage === defaults.maxGroupsPerPage &&
+    normalized.maxMembersForComputation === defaults.maxMembersForComputation &&
+    normalized.maxPairsPerPage === defaults.maxPairsPerPage &&
+    normalized.skipRecomputePageIocCountThreshold ===
+      defaults.skipRecomputePageIocCountThreshold
   ) {
     await safeStorageLocalRemove(STORAGE_KEY_IOC_CO_OCCURRENCE_LIMITS);
     return;

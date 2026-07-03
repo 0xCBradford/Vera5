@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { IOC_RULE_ID } from "./iocRegex";
 import {
+  buildCoOccurrenceEntryDisplay,
+  buildCoOccurrenceEntryDisplaysForView,
   buildHoverCardCoOccurrencePanelView,
+  formatCoOccurrenceEntryAccessibleLabel,
+  formatCoOccurrenceEntryDisplayLine,
+  formatCoOccurrenceEntryNavigateAriaLabel,
   formatHoverCardCoOccurrenceEntryLine,
+  resolveAdjacentCoOccurrenceListIndex,
+  resolveCoOccurrenceListKeyAction,
   resolveCoOccurrenceContextLabelForMember,
   shouldShowTrayCoOccurrenceExpander,
+  truncateCoOccurrenceDisplayValue,
 } from "./hoverCardCoOccurrence";
 import {
   buildPageIocCoOccurrenceIndexFromSnapshot,
@@ -49,6 +57,37 @@ describe("hoverCardCoOccurrence", () => {
     ).toBe("IP · 8.8.8.8");
   });
 
+  it("truncates long IOC values for co-occurrence display", () => {
+    const longSha256 = "e".repeat(80);
+    expect(truncateCoOccurrenceDisplayValue(longSha256)).toBe(`${"e".repeat(63)}…`);
+    expect(
+      formatCoOccurrenceEntryDisplayLine(
+        buildCoOccurrenceEntryDisplay({
+          anchorId: "vera5-hl-sha",
+          iocType: "sha256",
+          value: longSha256,
+        })
+      )
+    ).toBe(`SHA256 · ${"e".repeat(63)}…`);
+  });
+
+  it("includes shared context in accessible labels", () => {
+    const display = buildCoOccurrenceEntryDisplay({
+      anchorId: "vera5-hl-1",
+      iocType: "ipv4",
+      value: "8.8.8.8",
+      contextLabel: "Same page scan",
+    });
+
+    expect(formatCoOccurrenceEntryAccessibleLabel(display)).toBe(
+      "IP, 8.8.8.8, Same page scan"
+    );
+    expect(formatCoOccurrenceEntryDisplayLine(display)).toBe("IP · 8.8.8.8");
+    expect(formatCoOccurrenceEntryNavigateAriaLabel(display)).toBe(
+      "View 8.8.8.8 on page"
+    );
+  });
+
   it("lists co-occurring members for the active IOC", () => {
     const pageIndex = buildPageIocCoOccurrenceIndexFromSnapshot(snapshot);
     const view = buildHoverCardCoOccurrencePanelView({
@@ -65,6 +104,16 @@ describe("hoverCardCoOccurrence", () => {
       },
     ]);
     expect(view.contextLabel).toBe("Same page scan");
+    expect(buildCoOccurrenceEntryDisplaysForView(view)).toEqual([
+      {
+        anchorId: "vera5-hl-2",
+        iocType: "domain",
+        typeLabel: "DOM",
+        displayValue: "example.com",
+        fullValue: "example.com",
+        contextLabel: "Same page scan",
+      },
+    ]);
   });
 
   it("returns an empty view when no page index is available", () => {
@@ -104,5 +153,19 @@ describe("hoverCardCoOccurrence", () => {
 
     expect(shouldShowTrayCoOccurrenceExpander(populated)).toBe(true);
     expect(shouldShowTrayCoOccurrenceExpander(empty)).toBe(false);
+  });
+
+  it("resolves keyboard navigation between co-occurrence list items", () => {
+    expect(resolveCoOccurrenceListKeyAction("ArrowDown")).toBe("focus-next");
+    expect(resolveCoOccurrenceListKeyAction("ArrowUp")).toBe("focus-previous");
+    expect(resolveCoOccurrenceListKeyAction("Home")).toBe("focus-first");
+    expect(resolveCoOccurrenceListKeyAction("End")).toBe("focus-last");
+    expect(resolveCoOccurrenceListKeyAction("Enter")).toBeNull();
+
+    expect(resolveAdjacentCoOccurrenceListIndex(0, "focus-next", 3)).toBe(1);
+    expect(resolveAdjacentCoOccurrenceListIndex(2, "focus-next", 3)).toBe(0);
+    expect(resolveAdjacentCoOccurrenceListIndex(0, "focus-previous", 3)).toBe(2);
+    expect(resolveAdjacentCoOccurrenceListIndex(1, "focus-first", 3)).toBe(0);
+    expect(resolveAdjacentCoOccurrenceListIndex(1, "focus-last", 3)).toBe(2);
   });
 });

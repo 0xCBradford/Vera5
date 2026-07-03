@@ -1,28 +1,40 @@
 import type { MessageResponse } from "../lib/messages";
+import { isNavigateToIocAnchorMessage } from "../lib/messages";
+import type { IocType } from "../lib/iocRegex";
 import { rethrowUnlessStaleExtensionError } from "../lib/extensionContext";
-import { CONTENT_MESSAGE } from "./constants";
-import { findHighlightByAnchorId } from "./highlighter";
+import { findHighlightByAnchorId, findHighlightByIoc } from "./highlighter";
 import { openHoverCardForHighlight } from "./hoverCardTrigger";
 
-export function isNavigateToIocAnchorMessage(
-  raw: unknown
-): raw is { type: typeof CONTENT_MESSAGE.NAVIGATE_TO_IOC_ANCHOR; anchorId: string } {
-  return (
-    raw !== null &&
-    typeof raw === "object" &&
-    "type" in raw &&
-    (raw as { type: unknown }).type === CONTENT_MESSAGE.NAVIGATE_TO_IOC_ANCHOR &&
-    typeof (raw as { anchorId?: unknown }).anchorId === "string" &&
-    (raw as { anchorId: string }).anchorId.length > 0
-  );
+export type NavigateToIocAnchorTarget = {
+  anchorId: string;
+  iocType?: IocType;
+  value?: string;
+};
+
+export function resolveHighlightForNavigation(
+  target: NavigateToIocAnchorTarget,
+  root: ParentNode = document.body
+): HTMLElement | null {
+  const byAnchor = findHighlightByAnchorId(target.anchorId, root);
+  if (byAnchor?.isConnected) {
+    return byAnchor;
+  }
+
+  if (target.iocType && target.value) {
+    return findHighlightByIoc(target.value, target.iocType, root);
+  }
+
+  return null;
 }
 
 export function handleNavigateToIocAnchorRequest(
-  anchorId: string,
+  target: string | NavigateToIocAnchorTarget,
   root: ParentNode = document.body,
   doc: Document = document
 ): MessageResponse {
-  const highlight = findHighlightByAnchorId(anchorId, root);
+  const resolved =
+    typeof target === "string" ? { anchorId: target } : target;
+  const highlight = resolveHighlightForNavigation(resolved, root);
   if (!highlight) {
     return { ok: false, error: "highlight not found" };
   }
@@ -39,10 +51,18 @@ export function setupNavigateToIocAnchorListener(): void {
       return false;
     }
     try {
-      sendResponse(handleNavigateToIocAnchorRequest(message.anchorId));
+      sendResponse(
+        handleNavigateToIocAnchorRequest({
+          anchorId: message.anchorId,
+          iocType: message.iocType,
+          value: message.value,
+        })
+      );
     } catch (error) {
       rethrowUnlessStaleExtensionError(error);
     }
     return true;
   });
 }
+
+export { isNavigateToIocAnchorMessage };

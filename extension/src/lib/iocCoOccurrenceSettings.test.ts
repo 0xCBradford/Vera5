@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE,
+  DEFAULT_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION,
+  DEFAULT_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE,
   DEFAULT_IOC_CO_OCCURRENCE_MIN_GROUP_SIZE,
+  DEFAULT_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD,
 } from "./iocCoOccurrence";
 import {
   getIocCoOccurrenceLimits,
@@ -60,6 +63,10 @@ describe("iocCoOccurrenceSettings", () => {
     await expect(getIocCoOccurrenceLimits()).resolves.toEqual({
       minGroupSize: DEFAULT_IOC_CO_OCCURRENCE_MIN_GROUP_SIZE,
       maxGroupsPerPage: DEFAULT_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE,
+      maxMembersForComputation: DEFAULT_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION,
+      maxPairsPerPage: DEFAULT_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE,
+      skipRecomputePageIocCountThreshold:
+        DEFAULT_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD,
     });
   });
 
@@ -73,10 +80,18 @@ describe("iocCoOccurrenceSettings", () => {
       schemaVersion: IOC_CO_OCCURRENCE_LIMITS_SCHEMA_VERSION,
       minGroupSize: 4,
       maxGroupsPerPage: 2,
+      maxMembersForComputation: DEFAULT_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION,
+      maxPairsPerPage: DEFAULT_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE,
+      skipRecomputePageIocCountThreshold:
+        DEFAULT_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD,
     });
     await expect(getIocCoOccurrenceLimits()).resolves.toEqual({
       minGroupSize: 4,
       maxGroupsPerPage: 2,
+      maxMembersForComputation: DEFAULT_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION,
+      maxPairsPerPage: DEFAULT_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE,
+      skipRecomputePageIocCountThreshold:
+        DEFAULT_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD,
     });
   });
 
@@ -90,6 +105,10 @@ describe("iocCoOccurrenceSettings", () => {
     await expect(getIocCoOccurrenceLimits()).resolves.toEqual({
       minGroupSize: DEFAULT_IOC_CO_OCCURRENCE_MIN_GROUP_SIZE,
       maxGroupsPerPage: 64,
+      maxMembersForComputation: DEFAULT_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION,
+      maxPairsPerPage: DEFAULT_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE,
+      skipRecomputePageIocCountThreshold:
+        DEFAULT_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD,
     });
   });
 

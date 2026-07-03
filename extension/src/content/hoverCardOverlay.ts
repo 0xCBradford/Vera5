@@ -103,9 +103,14 @@ import {
   type WhyDetectedView,
 } from "../lib/hoverCardEnrichment";
 import {
-  formatHoverCardCoOccurrenceEntryLine,
+  buildCoOccurrenceEntryDisplaysForView,
+  formatCoOccurrenceEntryDisplayLine,
+  formatCoOccurrenceEntryNavigateAriaLabel,
+  handleCoOccurrenceListItemKeyDown,
   loadHoverCardCoOccurrencePanelView,
 } from "../lib/hoverCardCoOccurrence";
+import { resolveTrayNavigationFeedback } from "../lib/workspaceTrayState";
+import { handleNavigateToIocAnchorRequest } from "./iocTrayNavigation";
 import { getPivotRecipes } from "../lib/pivots";
 import { getCachedAnalystModeDisplayContext } from "./analystModeStorage";
 import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
@@ -314,6 +319,10 @@ export const HOVER_CARD_CO_OCCURRENCE_CONTEXT_CLASS =
   "vera5-hover-card-co-occurrence-context";
 export const HOVER_CARD_CO_OCCURRENCE_LIST_CLASS = "vera5-hover-card-co-occurrence-list";
 export const HOVER_CARD_CO_OCCURRENCE_ITEM_CLASS = "vera5-hover-card-co-occurrence-item";
+export const HOVER_CARD_CO_OCCURRENCE_ITEM_BUTTON_CLASS =
+  "vera5-hover-card-co-occurrence-item-button";
+export const HOVER_CARD_CO_OCCURRENCE_FEEDBACK_CLASS =
+  "vera5-hover-card-co-occurrence-feedback";
 export const HOVER_CARD_IOC_PIN_BUTTON_CLASS = "vera5-hover-card-ioc-pin";
 export const HOVER_CARD_IOC_PIN_BUTTON_PINNED_CLASS = "vera5-hover-card-ioc-pin--pinned";
 export const HOVER_CARD_EXPORT_SECTION_CLASS = "vera5-hover-card-export";
@@ -1837,6 +1846,11 @@ function createCoOccurrenceSection(
   context.className = HOVER_CARD_CO_OCCURRENCE_CONTEXT_CLASS;
   context.hidden = true;
 
+  const feedback = doc.createElement("p");
+  feedback.className = HOVER_CARD_CO_OCCURRENCE_FEEDBACK_CLASS;
+  feedback.hidden = true;
+  feedback.setAttribute("aria-live", "polite");
+
   const list = doc.createElement("ul");
   list.className = HOVER_CARD_CO_OCCURRENCE_LIST_CLASS;
   list.setAttribute("aria-labelledby", heading.id);
@@ -1848,6 +1862,7 @@ function createCoOccurrenceSection(
 
   section.appendChild(heading);
   section.appendChild(context);
+  section.appendChild(feedback);
   section.appendChild(list);
 
   void loadHoverCardCoOccurrencePanelView({
@@ -1872,10 +1887,56 @@ function createCoOccurrenceSection(
       return;
     }
 
-    for (const entry of view.entries) {
+    for (const display of buildCoOccurrenceEntryDisplaysForView(view)) {
       const item = doc.createElement("li");
       item.className = HOVER_CARD_CO_OCCURRENCE_ITEM_CLASS;
-      item.textContent = formatHoverCardCoOccurrenceEntryLine(entry);
+
+      const button = doc.createElement("button");
+      button.type = "button";
+      button.className = HOVER_CARD_CO_OCCURRENCE_ITEM_BUTTON_CLASS;
+      button.textContent = formatCoOccurrenceEntryDisplayLine(display);
+      button.setAttribute("aria-label", formatCoOccurrenceEntryNavigateAriaLabel(display));
+      if (display.displayValue !== display.fullValue) {
+        button.title = display.fullValue;
+      }
+      const activateNavigation = () => {
+        feedback.hidden = true;
+        feedback.textContent = "";
+        const response = handleNavigateToIocAnchorRequest(
+          {
+            anchorId: display.anchorId,
+            iocType: display.iocType,
+            value: display.fullValue,
+          },
+          doc.body,
+          doc
+        );
+        const navigationFeedback = resolveTrayNavigationFeedback({
+          response,
+          indicatorValue: display.fullValue,
+        });
+        if (navigationFeedback) {
+          feedback.textContent = navigationFeedback;
+          feedback.hidden = false;
+        }
+      };
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        activateNavigation();
+      });
+      button.addEventListener("keydown", (event) => {
+        if (
+          handleCoOccurrenceListItemKeyDown(
+            event,
+            `.${HOVER_CARD_CO_OCCURRENCE_ITEM_BUTTON_CLASS}`
+          )
+        ) {
+          return;
+        }
+      });
+
+      item.appendChild(button);
       list.appendChild(item);
     }
   });

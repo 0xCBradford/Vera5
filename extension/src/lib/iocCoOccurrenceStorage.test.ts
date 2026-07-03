@@ -260,4 +260,79 @@ describe("iocCoOccurrenceStorage", () => {
     );
     expect(pageIndex?.groups).toEqual([]);
   });
+
+  it("skips co-occurrence recompute when the page IOC count exceeds the threshold", async () => {
+    const sessionId = "session-co-occur-skip";
+    await saveSessionPageIocCoOccurrenceFromSnapshot({ sessionId, snapshot });
+
+    const largeSnapshot: TabScanSnapshot = {
+      ...snapshot,
+      scannedAt: snapshot.scannedAt + 5_000,
+      entries: Array.from({ length: 260 }, (_, index) => ({
+        type: "ipv4" as const,
+        value: `10.0.${Math.floor(index / 256)}.${index % 256}`,
+        anchorId: `vera5-hl-large-${index}`,
+        ruleId: IOC_RULE_ID.IPV4,
+        sourceTextHint: `10.0.${Math.floor(index / 256)}.${index % 256}`,
+      })),
+    };
+
+    await saveSessionPageIocCoOccurrenceFromSnapshot({
+      sessionId,
+      snapshot: largeSnapshot,
+      limits: {
+        minGroupSize: 2,
+        maxGroupsPerPage: 1,
+        maxMembersForComputation: 128,
+        maxPairsPerPage: 4096,
+        skipRecomputePageIocCountThreshold: 256,
+      },
+    });
+
+    const pageIndex = await getPageIocCoOccurrenceIndexForSession({
+      sessionId,
+      pageUrl: snapshot.pageUrl,
+    });
+    expect(pageIndex).toEqual(buildPageIocCoOccurrenceIndexFromSnapshot(snapshot));
+    expect(pageIndex?.members).toHaveLength(2);
+    expect(pageIndex?.scannedAt).toBe(snapshot.scannedAt);
+  });
+
+  it("does not store a co-occurrence index on first scan when the page exceeds the skip threshold", async () => {
+    const sessionId = "session-co-occur-skip-first";
+    const largeSnapshot: TabScanSnapshot = {
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/huge",
+        scannedAt: 1_700_000_010_000,
+        entries: Array.from({ length: 260 }, (_, index) => ({
+          type: "ipv4" as const,
+          value: `10.0.${Math.floor(index / 256)}.${index % 256}`,
+          anchorId: `vera5-hl-huge-${index}`,
+          ruleId: IOC_RULE_ID.IPV4,
+          sourceTextHint: `10.0.${Math.floor(index / 256)}.${index % 256}`,
+        })),
+      }),
+      tabId: 9,
+    };
+
+    const saved = await saveSessionPageIocCoOccurrenceFromSnapshot({
+      sessionId,
+      snapshot: largeSnapshot,
+      limits: {
+        minGroupSize: 2,
+        maxGroupsPerPage: 1,
+        maxMembersForComputation: 128,
+        maxPairsPerPage: 4096,
+        skipRecomputePageIocCountThreshold: 256,
+      },
+    });
+
+    expect(saved).toBeNull();
+    expect(
+      await getPageIocCoOccurrenceIndexForSession({
+        sessionId,
+        pageUrl: largeSnapshot.pageUrl,
+      })
+    ).toBeNull();
+  });
 });

@@ -5,14 +5,19 @@ import {
   buildIocCoOccurrenceMemberKey,
   buildIocCoOccurrencePairsFromMembers,
   buildPageIocCoOccurrenceIndexFromSnapshot,
+  capIocCoOccurrenceMembersForComputation,
   dedupeTabScanSnapshotEntriesForCoOccurrence,
   DEFAULT_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE,
+  DEFAULT_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION,
+  DEFAULT_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE,
   DEFAULT_IOC_CO_OCCURRENCE_MIN_GROUP_SIZE,
+  DEFAULT_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD,
   IOC_CO_OCCURRENCE_PAGE_GROUP_CONTEXT_LABEL,
   IOC_CO_OCCURRENCE_SCHEMA_VERSION,
   listCoOccurrencePairsForKey,
   listCoOccurringMembersForKey,
   normalizeIocCoOccurrenceLimits,
+  shouldSkipCoOccurrenceRecomputeForSnapshot,
 } from "./iocCoOccurrence";
 import {
   buildTabScanSnapshotPayload,
@@ -146,6 +151,10 @@ describe("iocCoOccurrence", () => {
     expect(normalizeIocCoOccurrenceLimits()).toEqual({
       minGroupSize: DEFAULT_IOC_CO_OCCURRENCE_MIN_GROUP_SIZE,
       maxGroupsPerPage: DEFAULT_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE,
+      maxMembersForComputation: DEFAULT_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION,
+      maxPairsPerPage: DEFAULT_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE,
+      skipRecomputePageIocCountThreshold:
+        DEFAULT_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD,
     });
   });
 
@@ -201,5 +210,65 @@ describe("iocCoOccurrence", () => {
     expect(applyIocCoOccurrenceLimitsToGroups(groups, { maxGroupsPerPage: 0 })).toHaveLength(
       1
     );
+  });
+
+  it("caps member lists before pair computation on large pages", () => {
+    const members = Array.from({ length: 150 }, (_, index) => ({
+      memberKey: `ipv4:10.0.${Math.floor(index / 256)}.${index % 256}`,
+      iocType: "ipv4" as const,
+      value: `10.0.${Math.floor(index / 256)}.${index % 256}`,
+      anchorId: `vera5-hl-${index}`,
+    })).sort((left, right) => left.memberKey.localeCompare(right.memberKey));
+
+    const capped = capIocCoOccurrenceMembersForComputation(members, {
+      maxMembersForComputation: 128,
+    });
+    expect(capped.members).toHaveLength(128);
+    expect(capped.computationCapped).toBe(true);
+
+    const index = buildPageIocCoOccurrenceIndexFromSnapshot(
+      {
+        pageUrl: "https://example.com/large",
+        scannedAt: 1,
+        entries: members.map((member) => ({
+          type: member.iocType,
+          value: member.value,
+          anchorId: member.anchorId,
+        })),
+      },
+      { maxMembersForComputation: 128, maxPairsPerPage: 4096 }
+    );
+    expect(index.members).toHaveLength(128);
+    expect(index.computationCapped).toBe(true);
+    expect(index.pairs.length).toBeLessThanOrEqual(4096);
+  });
+
+  it("caps stored pairs when pair count exceeds the configured limit", () => {
+    const members = dedupeTabScanSnapshotEntriesForCoOccurrence(snapshot.entries);
+    expect(buildIocCoOccurrencePairsFromMembers(members, 2)).toHaveLength(2);
+  });
+
+  it("skips recompute when unique page IOC count exceeds the configured threshold", () => {
+    const largeSnapshot = {
+      pageUrl: "https://example.com/large",
+      scannedAt: 1,
+      entries: Array.from({ length: 260 }, (_, index) => ({
+        type: "ipv4" as const,
+        value: `10.0.${Math.floor(index / 256)}.${index % 256}`,
+        anchorId: `vera5-hl-${index}`,
+      })),
+    };
+
+    expect(
+      shouldSkipCoOccurrenceRecomputeForSnapshot(largeSnapshot, {
+        skipRecomputePageIocCountThreshold: 256,
+      })
+    ).toBe(true);
+    expect(
+      shouldSkipCoOccurrenceRecomputeForSnapshot(largeSnapshot, {
+        skipRecomputePageIocCountThreshold: 512,
+      })
+    ).toBe(false);
+    expect(shouldSkipCoOccurrenceRecomputeForSnapshot(snapshot)).toBe(false);
   });
 });

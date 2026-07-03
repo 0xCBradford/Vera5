@@ -11,6 +11,7 @@ import { HOVER_CARD_HOST_ID, HOVER_CARD_PANEL_CLASS } from "./hoverCardOverlay";
 import {
   handleNavigateToIocAnchorRequest,
   isNavigateToIocAnchorMessage,
+  resolveHighlightForNavigation,
 } from "./iocTrayNavigation";
 
 function stubContentChrome(): void {
@@ -104,6 +105,90 @@ describe("iocTrayNavigation", () => {
     expect(handleNavigateToIocAnchorRequest("missing-anchor")).toEqual({
       ok: false,
       error: "highlight not found",
+    });
+  });
+
+  it("opens the hover card for the requested IOC when navigating between highlights", async () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent =
+      "Contact 8.8.8.8 and review malware.testcategory.com on the same page.";
+    document.body.appendChild(paragraph);
+    highlightDetectedIocs(scanTextNodesForIocs(document.body), {
+      root: document.body,
+    });
+
+    const highlights = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-vera5-anchor-id]")
+    );
+    const focusHighlight = highlights.find(
+      (highlight) => highlight.dataset.vera5Value === "8.8.8.8"
+    );
+    const relatedHighlight = highlights.find(
+      (highlight) => highlight.dataset.vera5Value === "malware.testcategory.com"
+    );
+    expect(focusHighlight).toBeDefined();
+    expect(relatedHighlight).toBeDefined();
+
+    expect(
+      handleNavigateToIocAnchorRequest(focusHighlight!.dataset.vera5AnchorId!)
+    ).toEqual({ ok: true });
+
+    await vi.waitFor(() => {
+      const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+      expect(panel?.getAttribute("aria-label")).toBe("Indicator details for 8.8.8.8");
+      expect(panel?.textContent).toContain("8.8.8.8");
+    });
+
+    expect(
+      handleNavigateToIocAnchorRequest({
+        anchorId: relatedHighlight!.dataset.vera5AnchorId!,
+        iocType: "domain",
+        value: "malware.testcategory.com",
+      })
+    ).toEqual({ ok: true });
+
+    await vi.waitFor(() => {
+      const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+      expect(panel?.getAttribute("aria-label")).toBe(
+        "Indicator details for malware.testcategory.com"
+      );
+      expect(panel?.textContent).toContain("malware.testcategory.com");
+      expect(panel?.getAttribute("aria-label")).not.toBe("Indicator details for 8.8.8.8");
+    });
+  });
+
+  it("falls back to IOC type and value when the stored anchor id is stale", async () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 8.8.8.8 and evil.example today.";
+    document.body.appendChild(paragraph);
+    highlightDetectedIocs(scanTextNodesForIocs(document.body), {
+      root: document.body,
+    });
+
+    const highlight = document.querySelector<HTMLElement>("[data-vera5-anchor-id]");
+    expect(highlight).not.toBeNull();
+    const staleAnchorId = "vera5-hl-stale";
+
+    const scrollIntoView = vi.spyOn(highlight!, "scrollIntoView");
+    const response = handleNavigateToIocAnchorRequest({
+      anchorId: staleAnchorId,
+      iocType: "ipv4",
+      value: "8.8.8.8",
+    });
+
+    expect(response).toEqual({ ok: true });
+    expect(resolveHighlightForNavigation({ anchorId: staleAnchorId })).toBeNull();
+    expect(
+      resolveHighlightForNavigation({
+        anchorId: staleAnchorId,
+        iocType: "ipv4",
+        value: "8.8.8.8",
+      })
+    ).toBe(highlight);
+    expect(scrollIntoView).toHaveBeenCalled();
+
+    await vi.waitFor(() => {
+      expect(document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)).not.toBeNull();
     });
   });
 });

@@ -450,6 +450,37 @@ Vera5 offers two local grouping models. They complement each other; neither repl
 
 You can run both at once: enrich and label in an active session, then **Save to collection…** or **Promote session to collection…** when you need a durable list for export or cross-session review.
 
+## Appeared alongside (same-page co-occurrence)
+
+The hover card and popup tray can show **Appeared alongside**—other indicators detected on the **same page scan** as the IOC you opened. Vera5 builds this view locally from the tab scan snapshot stored on your investigation session. It does not upload page HTML and does not correlate indicators across tabs or sessions.
+
+| Surface | Where to find it |
+|---------|------------------|
+| **Hover card** | **Appeared alongside** section below session controls when at least one other indicator shares the page scan. |
+| **Popup / workspace tray** | Expand **Appeared alongside** on a tray row for the same list. |
+
+Click or keyboard-activate a related row to scroll to that highlight and open its hover card. Arrow keys move between related entries when the list has focus.
+
+### Co-occurrence limits (performance)
+
+Pair computation grows with the number of unique indicators on a page. Vera5 caps work so dense CTI pages stay responsive:
+
+| Limit | Default | What it does |
+|-------|---------|--------------|
+| **Minimum group size** | 2 | Requires at least two unique indicators before a co-occurrence group is emitted. |
+| **Max groups per page** | 1 | Keeps one same-page group per scan (shared context label **Same page scan**). |
+| **Max members for computation** | 128 | Uses at most 128 unique type+value members when building pairs and groups. Additional indicators on the scan are omitted from co-occurrence math. |
+| **Max pairs per page** | 4096 | Stops pair enumeration after 4096 pairs even when more combinations exist. |
+| **Skip recompute threshold** | 256 | When a page scan has more than 256 unique indicators, Vera5 skips co-occurrence index updates for that scan. An existing index for the same page URL is kept; otherwise **Appeared alongside** stays empty until a smaller scan fits under the threshold. |
+
+When a cap applies, the stored page index is marked **computation capped**. **Appeared alongside** still works for indicators inside the capped set; related IOCs beyond the cap may not appear until you filter the page (for example with tray type filters) or scan a smaller visible subset.
+
+When the skip threshold applies, Vera5 does not run pair or group math at all for that scan—use tray filters or a narrower page view if you need co-occurrence on very dense pages.
+
+Limits persist in extension local storage under the co-occurrence settings key. Defaults apply on fresh install; partial limit overrides merge with defaults for unspecified fields.
+
+**Not in scope:** cross-session correlation, global threat graphs, or ML-inferred relationships—those are separate product areas.
+
 ## IOC collections (persistent indicator groupings)
 
 An **IOC collection** is a locally stored, named set of indicators—for example **Phishing Campaign** or **APT29 Research**. Collections live in **extension local storage** on your machine. There is no Vera5 cloud sync, team-shared collection, or server push in the current release.
@@ -674,6 +705,7 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | Phishing case handoff | Name session, enrich key IOCs, label/pin priorities, **Export session** Markdown or JSON; verify denylist if webmail blocked enrich. |
 | Campaign or hunt corpus across sessions | **Save to collection…** or **Add filtered to collection…** as you triage; **Export CSV** from **IOC collections** for ticket paste; collections survive **New session**. |
 | MDR alert revisit after restart | Popup **Recent sessions** → **Reopen**; confirm rollups match the alert page you scan again. |
+| Dense page missing related IOCs in **Appeared alongside** | Page exceeded co-occurrence member or pair caps, or skip threshold | Use tray filters to focus on a subset; rescan; expect partial lists when hundreds of unique indicators share one page scan. Pages above the skip threshold keep a prior index or show no co-occurrence panel. |
 | Sensitive / classified work | Manual-only on; enable only approved sources; do not export settings with keys unless policy allows. |
 
 ## Settings packs and threat profiles

@@ -58,12 +58,30 @@ describe("Vera5 message envelopes", () => {
       type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
       anchorId: "vera5-hl-1",
     });
+    expect(
+      navigateToIocAnchorMessage("vera5-hl-1", {
+        iocType: "ipv4",
+        value: "8.8.8.8",
+      })
+    ).toEqual({
+      type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
+      anchorId: "vera5-hl-1",
+      iocType: "ipv4",
+      value: "8.8.8.8",
+    });
     expect(isNavigateToIocAnchorMessage(navigateToIocAnchorMessage("vera5-hl-1"))).toBe(
       true
     );
     expect(isNavigateToIocAnchorMessage({ type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR, anchorId: "" })).toBe(
       false
     );
+    expect(
+      isNavigateToIocAnchorMessage({
+        type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
+        anchorId: "vera5-hl-1",
+        iocType: "ipv4",
+      })
+    ).toBe(false);
   });
 
   it("accepts known service worker envelopes", () => {

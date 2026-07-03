@@ -64,6 +64,12 @@ describe("resolveTrayNavigationFeedback", () => {
         indicatorValue: "8.8.8.8",
       })
     ).toBe("Could not find 8.8.8.8 on the page. Scan again to refresh the list.");
+    expect(
+      resolveTrayNavigationFeedback({
+        response: { ok: false, error: "highlight not found" },
+        indicatorValue: "8.8.8.8",
+      })
+    ).toBe("Could not find 8.8.8.8 on the page. Scan again to refresh the list.");
   });
 });
 

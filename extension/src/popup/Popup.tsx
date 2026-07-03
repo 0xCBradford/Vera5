@@ -45,8 +45,11 @@ import {
   resolveIndicatorValuePresentation,
 } from "../lib/hoverCardEnrichment";
 import {
+  buildCoOccurrenceEntryDisplaysForView,
   buildHoverCardCoOccurrencePanelView,
-  formatHoverCardCoOccurrenceEntryLine,
+  formatCoOccurrenceEntryDisplayLine,
+  formatCoOccurrenceEntryNavigateAriaLabel,
+  handleCoOccurrenceListItemKeyDown,
   shouldShowTrayCoOccurrenceExpander,
 } from "../lib/hoverCardCoOccurrence";
 import { getPageIocCoOccurrenceIndexForSession } from "../lib/iocCoOccurrenceStorage";
@@ -1951,9 +1954,15 @@ function WhyDetectedTrayDetails({
 function CoOccurrenceTrayDetails({
   entry,
   pageIndex,
+  onNavigateToRelated,
 }: {
   entry: TabScanSummaryEntry;
   pageIndex: PageIocCoOccurrenceIndex | null;
+  onNavigateToRelated: (input: {
+    anchorId: string;
+    value: string;
+    iocType: TabScanSummaryEntry["type"];
+  }) => void;
 }) {
   const view = buildHoverCardCoOccurrencePanelView({
     iocType: entry.type,
@@ -1985,11 +1994,31 @@ function CoOccurrenceTrayDetails({
           <p style={{ margin: "0 0 4px" }}>{view.contextLabel}</p>
         ) : null}
         <ul style={{ margin: 0, paddingLeft: 16 }}>
-          {view.entries.map((relatedEntry) => (
-            <li
-              key={`${relatedEntry.iocType}-${relatedEntry.value}-${relatedEntry.anchorId}`}
-            >
-              {formatHoverCardCoOccurrenceEntryLine(relatedEntry)}
+          {buildCoOccurrenceEntryDisplaysForView(view).map((display) => (
+            <li key={`${display.anchorId}-${display.typeLabel}`}>
+              <button
+                type="button"
+                className="vera5-tray-co-occurrence-item"
+                aria-label={formatCoOccurrenceEntryNavigateAriaLabel(display)}
+                title={
+                  display.displayValue !== display.fullValue
+                    ? display.fullValue
+                    : undefined
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onNavigateToRelated({
+                    anchorId: display.anchorId,
+                    value: display.fullValue,
+                    iocType: display.iocType,
+                  });
+                }}
+                onKeyDown={(event) => {
+                  handleCoOccurrenceListItemKeyDown(event, ".vera5-tray-co-occurrence-item");
+                }}
+              >
+                {formatCoOccurrenceEntryDisplayLine(display)}
+              </button>
             </li>
           ))}
         </ul>
@@ -3043,26 +3072,35 @@ export function Popup() {
     })();
   };
 
-  const navigateToTrayEntry = (entry: TabScanSummaryEntry) => {
+  const sendNavigateToIocAnchor = (input: {
+    anchorId: string;
+    value: string;
+    iocType?: TabScanSummaryEntry["type"];
+  }) => {
     void chrome.tabs
       .query({ active: true, currentWindow: true })
       .then(async ([tab]) => {
         if (!tab?.id) {
           setTrayNavigationMessage(
-            resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: entry.value })
+            resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: input.value })
           );
           return;
         }
         try {
           const response = await chrome.tabs.sendMessage(
             tab.id,
-            navigateToIocAnchorMessage(entry.anchorId)
+            navigateToIocAnchorMessage(
+              input.anchorId,
+              input.iocType
+                ? { iocType: input.iocType, value: input.value }
+                : undefined
+            )
           );
           setTrayNavigationMessage(
             resolveTrayNavigationFeedback({
               tabId: tab.id,
               response,
-              indicatorValue: entry.value,
+              indicatorValue: input.value,
             })
           );
         } catch {
@@ -3070,11 +3108,19 @@ export function Popup() {
             resolveTrayNavigationFeedback({
               tabId: tab.id,
               sendFailed: true,
-              indicatorValue: entry.value,
+              indicatorValue: input.value,
             })
           );
         }
       });
+  };
+
+  const navigateToTrayEntry = (entry: TabScanSummaryEntry) => {
+    sendNavigateToIocAnchor({
+      anchorId: entry.anchorId,
+      value: entry.value,
+      iocType: entry.type,
+    });
   };
 
   const navigateToTimelineEntry = (entry: TabScanSummaryEntry) => {
@@ -4770,6 +4816,7 @@ export function Popup() {
                       <CoOccurrenceTrayDetails
                         entry={entry}
                         pageIndex={trayPageCoOccurrenceIndex}
+                        onNavigateToRelated={sendNavigateToIocAnchor}
                       />
                     </li>
                     );

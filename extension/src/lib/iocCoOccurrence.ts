@@ -12,20 +12,36 @@ export const IOC_CO_OCCURRENCE_PAGE_GROUP_CONTEXT_LABEL = "Same page scan";
 
 export const DEFAULT_IOC_CO_OCCURRENCE_MIN_GROUP_SIZE = 2;
 export const DEFAULT_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE = 1;
+export const DEFAULT_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION = 128;
+export const DEFAULT_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE = 4096;
+export const DEFAULT_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD = 256;
 export const MIN_IOC_CO_OCCURRENCE_MIN_GROUP_SIZE = 2;
 export const MAX_IOC_CO_OCCURRENCE_MIN_GROUP_SIZE = 128;
 export const MIN_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE = 1;
 export const MAX_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE = 64;
+export const MIN_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION = 2;
+export const MAX_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION = 512;
+export const MIN_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE = 0;
+export const MAX_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE = 65536;
+export const MIN_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD = 0;
+export const MAX_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD = 2048;
 
 export type IocCoOccurrenceLimits = {
   minGroupSize: number;
   maxGroupsPerPage: number;
+  maxMembersForComputation: number;
+  maxPairsPerPage: number;
+  skipRecomputePageIocCountThreshold: number;
 };
 
 export function createDefaultIocCoOccurrenceLimits(): IocCoOccurrenceLimits {
   return {
     minGroupSize: DEFAULT_IOC_CO_OCCURRENCE_MIN_GROUP_SIZE,
     maxGroupsPerPage: DEFAULT_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE,
+    maxMembersForComputation: DEFAULT_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION,
+    maxPairsPerPage: DEFAULT_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE,
+    skipRecomputePageIocCountThreshold:
+      DEFAULT_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD,
   };
 }
 
@@ -60,6 +76,24 @@ export function normalizeIocCoOccurrenceLimits(
       defaults.maxGroupsPerPage,
       MIN_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE,
       MAX_IOC_CO_OCCURRENCE_MAX_GROUPS_PER_PAGE
+    ),
+    maxMembersForComputation: clampIocCoOccurrenceLimit(
+      value.maxMembersForComputation,
+      defaults.maxMembersForComputation,
+      MIN_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION,
+      MAX_IOC_CO_OCCURRENCE_MAX_MEMBERS_FOR_COMPUTATION
+    ),
+    maxPairsPerPage: clampIocCoOccurrenceLimit(
+      value.maxPairsPerPage,
+      defaults.maxPairsPerPage,
+      MIN_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE,
+      MAX_IOC_CO_OCCURRENCE_MAX_PAIRS_PER_PAGE
+    ),
+    skipRecomputePageIocCountThreshold: clampIocCoOccurrenceLimit(
+      value.skipRecomputePageIocCountThreshold,
+      defaults.skipRecomputePageIocCountThreshold,
+      MIN_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD,
+      MAX_IOC_CO_OCCURRENCE_SKIP_RECOMPUTE_PAGE_IOC_COUNT_THRESHOLD
     ),
   };
 }
@@ -104,6 +138,7 @@ export type PageIocCoOccurrenceIndex = {
   members: IocCoOccurrenceMember[];
   pairs: IocCoOccurrencePair[];
   groups: IocCoOccurrenceGroup[];
+  computationCapped?: boolean;
 };
 
 export function buildIocCoOccurrenceMemberKey(
@@ -157,13 +192,51 @@ export function dedupeTabScanSnapshotEntriesForCoOccurrence(
   );
 }
 
+export function countUniqueCoOccurrenceMembersFromSnapshot(
+  snapshot: TabScanSnapshot | TabScanSnapshotPayload
+): number {
+  return dedupeTabScanSnapshotEntriesForCoOccurrence(snapshot.entries).length;
+}
+
+export function shouldSkipCoOccurrenceRecomputeForSnapshot(
+  snapshot: TabScanSnapshot | TabScanSnapshotPayload,
+  limits?: Partial<IocCoOccurrenceLimits> | null
+): boolean {
+  const normalizedLimits = normalizeIocCoOccurrenceLimits(limits);
+  if (normalizedLimits.skipRecomputePageIocCountThreshold <= 0) {
+    return false;
+  }
+  return (
+    countUniqueCoOccurrenceMembersFromSnapshot(snapshot) >
+    normalizedLimits.skipRecomputePageIocCountThreshold
+  );
+}
+
+export function capIocCoOccurrenceMembersForComputation(
+  members: readonly IocCoOccurrenceMember[],
+  limits?: Partial<IocCoOccurrenceLimits> | null
+): { members: IocCoOccurrenceMember[]; computationCapped: boolean } {
+  const normalizedLimits = normalizeIocCoOccurrenceLimits(limits);
+  if (members.length <= normalizedLimits.maxMembersForComputation) {
+    return { members: [...members], computationCapped: false };
+  }
+  return {
+    members: members.slice(0, normalizedLimits.maxMembersForComputation),
+    computationCapped: true,
+  };
+}
+
 export function buildIocCoOccurrencePairsFromMembers(
-  members: readonly IocCoOccurrenceMember[]
+  members: readonly IocCoOccurrenceMember[],
+  maxPairs: number = Number.MAX_SAFE_INTEGER
 ): IocCoOccurrencePair[] {
   const pairs: IocCoOccurrencePair[] = [];
-  for (let indexA = 0; indexA < members.length; indexA += 1) {
+  outer: for (let indexA = 0; indexA < members.length; indexA += 1) {
     const memberA = members[indexA]!;
     for (let indexB = indexA + 1; indexB < members.length; indexB += 1) {
+      if (pairs.length >= maxPairs) {
+        break outer;
+      }
       const memberB = members[indexB]!;
       const [memberKeyA, memberKeyB] = orderIocCoOccurrenceMemberKeys(
         memberA.memberKey,
@@ -227,14 +300,21 @@ export function buildPageIocCoOccurrenceIndexFromSnapshot(
   snapshot: TabScanSnapshot | TabScanSnapshotPayload,
   limits?: Partial<IocCoOccurrenceLimits> | null
 ): PageIocCoOccurrenceIndex {
-  const members = dedupeTabScanSnapshotEntriesForCoOccurrence(snapshot.entries);
-  const pairs = buildIocCoOccurrencePairsFromMembers(members);
+  const normalizedLimits = normalizeIocCoOccurrenceLimits(limits);
+  const dedupedMembers = dedupeTabScanSnapshotEntriesForCoOccurrence(snapshot.entries);
+  const { members, computationCapped: memberCapReached } =
+    capIocCoOccurrenceMembersForComputation(dedupedMembers, normalizedLimits);
+  const pairs = buildIocCoOccurrencePairsFromMembers(
+    members,
+    normalizedLimits.maxPairsPerPage
+  );
+  const pairCapReached = pairs.length >= normalizedLimits.maxPairsPerPage;
   const groups = buildIocCoOccurrenceGroupsFromMembers({
     pageUrl: snapshot.pageUrl,
     scannedAt: snapshot.scannedAt,
     members,
     pairs,
-    limits,
+    limits: normalizedLimits,
   });
 
   return {
@@ -244,6 +324,7 @@ export function buildPageIocCoOccurrenceIndexFromSnapshot(
     members,
     pairs,
     groups,
+    ...(memberCapReached || pairCapReached ? { computationCapped: true } : {}),
   };
 }
 
@@ -424,6 +505,7 @@ export function normalizePageIocCoOccurrenceIndex(
     members,
     pairs,
     groups,
+    ...(record.computationCapped === true ? { computationCapped: true } : {}),
   };
 }
 

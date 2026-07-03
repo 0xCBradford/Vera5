@@ -25,7 +25,7 @@ export function resolveTrayNavigationFeedback(input: {
   sendFailed?: boolean;
   indicatorValue?: string;
 }): string | null {
-  if (input.sendFailed || input.tabId === undefined) {
+  if (input.sendFailed) {
     return "Could not open this indicator on the page. Reload the tab and rescan.";
   }
 
@@ -43,6 +43,10 @@ export function resolveTrayNavigationFeedback(input: {
       }
       return "This indicator is no longer on the page. Scan again to refresh the list.";
     }
+  }
+
+  if (input.tabId === undefined) {
+    return "Could not open this indicator on the page. Reload the tab and rescan.";
   }
 
   return null;

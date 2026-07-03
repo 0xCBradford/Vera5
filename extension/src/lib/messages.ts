@@ -59,6 +59,8 @@ export type GetSelectionActionStateMessage = {
 export type NavigateToIocAnchorMessage = {
   type: typeof MESSAGE.NAVIGATE_TO_IOC_ANCHOR;
   anchorId: string;
+  iocType?: IocType;
+  value?: string;
 };
 export type ReopenInvestigationHistoryMessage = {
   type: typeof MESSAGE.REOPEN_INVESTIGATION_HISTORY;
@@ -218,9 +220,18 @@ export function getSelectionActionStateMessage(): GetSelectionActionStateMessage
 }
 
 export function navigateToIocAnchorMessage(
-  anchorId: string
+  anchorId: string,
+  fallback?: { iocType: IocType; value: string }
 ): NavigateToIocAnchorMessage {
-  return { type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR, anchorId };
+  const message: NavigateToIocAnchorMessage = {
+    type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
+    anchorId,
+  };
+  if (fallback) {
+    message.iocType = fallback.iocType;
+    message.value = fallback.value.trim();
+  }
+  return message;
 }
 
 export function reopenInvestigationHistoryMessage(input: {
@@ -246,7 +257,26 @@ export function isNavigateToIocAnchorMessage(
   if (record.type !== MESSAGE.NAVIGATE_TO_IOC_ANCHOR) {
     return false;
   }
-  return typeof record.anchorId === "string" && record.anchorId.length > 0;
+  if (typeof record.anchorId !== "string" || record.anchorId.length === 0) {
+    return false;
+  }
+  const hasIocType = record.iocType !== undefined;
+  const hasValue = record.value !== undefined;
+  if (hasIocType !== hasValue) {
+    return false;
+  }
+  if (hasIocType && hasValue) {
+    if (
+      typeof record.iocType !== "string" ||
+      !Object.values(IOC_TYPE).includes(record.iocType as IocType)
+    ) {
+      return false;
+    }
+    if (typeof record.value !== "string" || record.value.trim().length === 0) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export function isReopenInvestigationHistoryMessage(

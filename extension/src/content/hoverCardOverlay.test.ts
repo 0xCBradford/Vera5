@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { describe, expect, it, afterEach, vi } from "vitest";
+import { describe, expect, it, afterEach, beforeEach, vi } from "vitest";
 import {
   clearSessionAnalystNotes,
   getSessionAnalystNote,
@@ -19,6 +19,16 @@ import {
   HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL,
 } from "../lib/hoverCardEnrichment";
 import * as hoverCardCoOccurrence from "../lib/hoverCardCoOccurrence";
+import {
+  focusAdjacentCoOccurrenceListItem,
+  handleCoOccurrenceListItemKeyDown,
+} from "../lib/hoverCardCoOccurrence";
+import * as iocTrayNavigation from "./iocTrayNavigation";
+import { setAutoEnrichmentFetcherForTests } from "./enrichmentAutoFetch";
+import { CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED } from "./enrichmentSourceStorage";
+import { CONTENT_STORAGE_KEY_MANUAL_ONLY_MODE } from "./manualOnlyStorage";
+import { scanTextNodesForIocs } from "./detector";
+import { highlightDetectedIocs } from "./highlighter";
 import { IOC_TYPE, IOC_RULE_ID, type IocType } from "../lib/iocRegex";
 import { getPivotRecipes } from "../lib/pivots";
 import * as copyText from "../lib/copyText";
@@ -196,8 +206,17 @@ const PIVOT_PANEL_GOLDEN_CASES: ReadonlyArray<{
 ];
 
 describe("co-occurrence panel", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+    document.getElementById(HOVER_CARD_HOST_ID)?.remove();
+  });
+
   afterEach(() => {
+    setAutoEnrichmentFetcherForTests(null);
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
+    document.body.replaceChildren();
+    document.getElementById(HOVER_CARD_HOST_ID)?.remove();
   });
 
   it("renders appeared alongside section and loads related IOCs", async () => {
@@ -207,7 +226,7 @@ describe("co-occurrence panel", () => {
         {
           iocType: IOC_TYPE.DOMAIN,
           value: "example.com",
-          anchorId: "vera5-hl-2",
+          anchorId: "vera5-hl-missing-co-occur",
         },
       ],
     });
@@ -227,6 +246,223 @@ describe("co-occurrence panel", () => {
     await vi.waitFor(() => {
       expect(section?.textContent).toContain("DOM · example.com");
       expect(section?.textContent).toContain("Same page scan");
+    });
+  });
+
+  it("navigates to a related IOC when its co-occurrence entry is clicked", async () => {
+    const navigateSpy = vi
+      .spyOn(iocTrayNavigation, "handleNavigateToIocAnchorRequest")
+      .mockReturnValue({ ok: true });
+
+    vi.spyOn(hoverCardCoOccurrence, "loadHoverCardCoOccurrencePanelView").mockResolvedValue({
+      contextLabel: "Same page scan",
+      entries: [
+        {
+          iocType: IOC_TYPE.DOMAIN,
+          value: "example.com",
+          anchorId: "vera5-hl-missing-co-occur",
+        },
+      ],
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        panel.querySelector(".vera5-hover-card-co-occurrence-item-button")
+      ).not.toBeNull();
+    });
+
+    const button = panel.querySelector<HTMLButtonElement>(
+      ".vera5-hover-card-co-occurrence-item-button"
+    );
+    expect(button?.getAttribute("aria-label")).toBe("View example.com on page");
+    button?.click();
+
+    expect(navigateSpy).toHaveBeenCalledWith(
+      {
+        anchorId: "vera5-hl-missing-co-occur",
+        iocType: IOC_TYPE.DOMAIN,
+        value: "example.com",
+      },
+      document.body,
+      document
+    );
+  });
+
+  it("opens the target IOC hover card when a co-occurrence entry is activated", async () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 8.8.8.8 and review example.com on the same page.";
+    document.body.appendChild(paragraph);
+
+    setAutoEnrichmentFetcherForTests(null);
+    vi.stubGlobal("chrome", {
+      runtime: {
+        sendMessage: vi.fn().mockResolvedValue({ ok: false, error: "test stub" }),
+      },
+      storage: {
+        local: {
+          get: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key === CONTENT_STORAGE_KEY_MANUAL_ONLY_MODE) {
+                result[key] = true;
+              }
+              if (key === CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED) {
+                result[key] = {
+                  abuseipdb: false,
+                  otx: false,
+                  urlscan: false,
+                  greynoise: false,
+                };
+              }
+            }
+            return Promise.resolve(result);
+          },
+        },
+      },
+    });
+
+    highlightDetectedIocs(scanTextNodesForIocs(document.body), {
+      root: document.body,
+    });
+
+    const relatedHighlight = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-vera5-anchor-id]")
+    ).find((highlight) => highlight.dataset.vera5Value === "example.com");
+    expect(relatedHighlight).toBeDefined();
+
+    vi.spyOn(hoverCardCoOccurrence, "loadHoverCardCoOccurrencePanelView").mockResolvedValue({
+      contextLabel: "Same page scan",
+      entries: [
+        {
+          iocType: IOC_TYPE.DOMAIN,
+          value: "example.com",
+          anchorId: relatedHighlight!.dataset.vera5AnchorId!,
+        },
+      ],
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        panel.querySelector(".vera5-hover-card-co-occurrence-item-button")
+      ).not.toBeNull();
+    });
+
+    panel
+      .querySelector<HTMLButtonElement>(".vera5-hover-card-co-occurrence-item-button")
+      ?.click();
+
+    await vi.waitFor(() => {
+      const openedPanel = document
+        .getElementById(HOVER_CARD_HOST_ID)
+        ?.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+      expect(openedPanel?.getAttribute("aria-label")).toBe(
+        "Indicator details for example.com"
+      );
+      expect(openedPanel?.textContent).toContain("example.com");
+    });
+  });
+
+  it("moves focus between co-occurrence entries with arrow keys", async () => {
+    vi.spyOn(hoverCardCoOccurrence, "loadHoverCardCoOccurrencePanelView").mockResolvedValue({
+      contextLabel: "Same page scan",
+      entries: [
+        {
+          iocType: IOC_TYPE.DOMAIN,
+          value: "example.com",
+          anchorId: "vera5-hl-missing-co-occur",
+        },
+        {
+          iocType: IOC_TYPE.IPV4,
+          value: "192.0.2.1",
+          anchorId: "vera5-hl-3",
+        },
+      ],
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    document.body.appendChild(panel);
+
+    await vi.waitFor(() => {
+      expect(
+        panel.querySelectorAll(".vera5-hover-card-co-occurrence-item-button").length
+      ).toBe(2);
+    });
+
+    const buttons = Array.from(
+      panel.querySelectorAll<HTMLButtonElement>(
+        ".vera5-hover-card-co-occurrence-item-button"
+      )
+    );
+    const preventDefault = vi.fn();
+    const stopPropagation = vi.fn();
+    expect(
+      handleCoOccurrenceListItemKeyDown(
+        {
+          key: "ArrowDown",
+          currentTarget: buttons[0]!,
+          preventDefault,
+          stopPropagation,
+        },
+        ".vera5-hover-card-co-occurrence-item-button"
+      )
+    ).toBe(true);
+    expect(preventDefault).toHaveBeenCalled();
+    expect(document.activeElement).toBe(buttons[1]);
+
+    focusAdjacentCoOccurrenceListItem(
+      buttons[1]!,
+      "focus-previous",
+      ".vera5-hover-card-co-occurrence-item-button"
+    );
+    expect(document.activeElement).toBe(buttons[0]);
+  });
+
+  it("shows feedback when co-occurrence navigation cannot find the highlight", async () => {
+    vi.spyOn(hoverCardCoOccurrence, "loadHoverCardCoOccurrencePanelView").mockResolvedValue({
+      contextLabel: "Same page scan",
+      entries: [
+        {
+          iocType: IOC_TYPE.DOMAIN,
+          value: "example.com",
+          anchorId: "vera5-hl-missing-co-occur",
+        },
+      ],
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        panel.querySelector(".vera5-hover-card-co-occurrence-item-button")
+      ).not.toBeNull();
+    });
+
+    const button = panel.querySelector<HTMLButtonElement>(
+      ".vera5-hover-card-co-occurrence-item-button"
+    );
+    button?.click();
+
+    await vi.waitFor(() => {
+      expect(
+        panel.querySelector(".vera5-hover-card-co-occurrence-feedback")?.textContent
+      ).toBe("Could not find example.com on the page. Scan again to refresh the list.");
     });
   });
 });

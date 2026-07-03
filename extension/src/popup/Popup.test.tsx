@@ -866,6 +866,106 @@ describe("Popup IOC tray", () => {
     expect(expander?.textContent).toContain("Same page scan");
   });
 
+  it("navigates to a related IOC when a tray co-occurrence entry is clicked", async () => {
+    vi.spyOn(iocCoOccurrenceStorage, "getPageIocCoOccurrenceIndexForSession").mockResolvedValue(
+      buildPageIocCoOccurrenceIndexFromSnapshot({
+        schemaVersion: 2,
+        pageUrl: sampleSummary.pageUrl,
+        scannedAt: sampleSummary.scannedAt,
+        entries: sampleSummary.entries,
+      })
+    );
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared alongside");
+    });
+
+    const relatedButton = Array.from(
+      mounted!.container.querySelectorAll<HTMLButtonElement>(".vera5-tray-co-occurrence-item")
+    ).find((button) => button.getAttribute("aria-label") === "View 192.0.2.1 on page");
+    expect(relatedButton).toBeDefined();
+    relatedButton?.click();
+
+    await vi.waitFor(() => {
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+        7,
+        {
+          type: "NAVIGATE_TO_IOC_ANCHOR",
+          anchorId: "vera5-hl-2",
+          iocType: "ipv4",
+          value: "192.0.2.1",
+        }
+      );
+    });
+  });
+
+  it("moves focus between tray co-occurrence entries with arrow keys", async () => {
+    vi.spyOn(iocCoOccurrenceStorage, "getPageIocCoOccurrenceIndexForSession").mockResolvedValue(
+      buildPageIocCoOccurrenceIndexFromSnapshot({
+        schemaVersion: 2,
+        pageUrl: sampleSummary.pageUrl,
+        scannedAt: sampleSummary.scannedAt,
+        entries: sampleSummary.entries,
+      })
+    );
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared alongside");
+    });
+
+    const buttons = Array.from(
+      mounted!.container.querySelectorAll<HTMLButtonElement>(".vera5-tray-co-occurrence-item")
+    );
+    expect(buttons.length).toBeGreaterThan(1);
+    buttons[0]?.focus();
+    buttons[0]?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
+    );
+    expect(document.activeElement).toBe(buttons[1]);
+  });
+
+  it("shows stale-highlight feedback when co-occurrence navigation cannot find the anchor", async () => {
+    vi.spyOn(iocCoOccurrenceStorage, "getPageIocCoOccurrenceIndexForSession").mockResolvedValue(
+      buildPageIocCoOccurrenceIndexFromSnapshot({
+        schemaVersion: 2,
+        pageUrl: sampleSummary.pageUrl,
+        scannedAt: sampleSummary.scannedAt,
+        entries: sampleSummary.entries,
+      })
+    );
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+      navigateResponse: { ok: false, error: "highlight not found" },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared alongside");
+    });
+
+    const relatedButton = Array.from(
+      mounted!.container.querySelectorAll<HTMLButtonElement>(".vera5-tray-co-occurrence-item")
+    ).find((button) => button.getAttribute("aria-label") === "View 192.0.2.1 on page");
+    relatedButton?.click();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "Could not find 192.0.2.1 on the page. Scan again to refresh the list."
+      );
+    });
+  });
+
   it("shows Phase 2 type badges in tray rows and filter chips", async () => {
     stubChrome({ initialSummary: phase2TraySummary });
     mounted = renderPopup();
@@ -924,10 +1024,12 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
         7,
-        {
+        expect.objectContaining({
           type: "NAVIGATE_TO_IOC_ANCHOR",
           anchorId: "vera5-hl-1",
-        }
+          iocType: "ipv4",
+          value: "8.8.8.8",
+        })
       );
     });
   });
@@ -949,10 +1051,12 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
         7,
-        {
+        expect.objectContaining({
           type: "NAVIGATE_TO_IOC_ANCHOR",
           anchorId: "vera5-hl-1",
-        }
+          iocType: "ipv4",
+          value: "8.8.8.8",
+        })
       );
     });
   });
