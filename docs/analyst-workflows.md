@@ -479,7 +479,29 @@ When the skip threshold applies, Vera5 does not run pair or group math at all fo
 
 Limits persist in extension local storage under the co-occurrence settings key. Defaults apply on fresh install; partial limit overrides merge with defaults for unspecified fields.
 
-**Not in scope:** cross-session correlation, global threat graphs, or ML-inferred relationships—those are separate product areas.
+### Same-page adjacency, cross-session correlation, and relationship memory
+
+Vera5 separates “appeared together” intelligence into three layers. Each layer stays **local-only** on your browser profile: no Vera5-hosted graph, no cross-user intelligence, and no machine-learned entity resolution.
+
+| Layer | Operator surface | Question it answers | Data source | In current release |
+|-------|------------------|---------------------|-------------|-------------------|
+| **Same-page adjacency** | **Appeared alongside** on the hover card and tray | Which other indicators share **this page scan**? | Tab scan snapshot on the active investigation session | Yes |
+| **Cross-session correlation** | Correlation packs and cross-session cluster lists (when available) | Which **other investigation sessions** saw a similar IOC set? | Merged IOC sets from saved investigation sessions | No |
+| **Relationship memory** | **Previously appeared with** on the hover card and tray (when available) | Which **entities** (IP, domain, hash, …) co-appeared across my past work? | Rolled-up relationship edges from scan and enrich events across sessions | No |
+
+**Same-page adjacency (`Appeared alongside`)** — Shipped today. Builds pairs and groups from one scan on one page URL while your investigation session is active. Jump navigation stays on the current tab. Performance caps in the table above apply. It does not read other tabs, archived sessions, or historical investigations.
+
+**Cross-session correlation** — A separate capability, not bundled in the current extension build. When available, it clusters IOC sets that appeared together across multiple investigation sessions, shows list or adjacency views (not a force-directed graph or global threat map), exports correlation packs as markdown or JSON appendices, and can link to **Appeared alongside** for the current tab’s scan context. Correlation is advisory—shared indicators across sessions are not a detection verdict.
+
+**Relationship memory** — A separate capability, not bundled in the current extension build. When available, it rolls up co-seen entity pairs (for example IP ↔ domain ↔ hash) across sessions, surfaces **Previously appeared with** on the hover card and tray, links to prior investigation sessions and analyst notebook fragments, and honors known-good deprioritization when that policy is enabled. It is deeper than cross-session IOC-set clusters: entity-level edges with retention limits and clear-all controls, not overlap of whole scan snapshots alone.
+
+**Shared out-of-scope boundaries (all three layers):**
+
+- Global threat graph or maintainer-operated correlation cloud
+- ML-inferred relationships or automated campaign attribution from co-occurrence alone
+- Cross-user or shared-team relationship intelligence
+
+**What to use today for cross-session handoff:** **Investigation history**, **Investigation session timeline**, **Session export**, **IOC collections**, and **Promote session to collection…**—see [Session vs IOC collection](#session-vs-ioc-collection). Those paths do not replace future correlation packs or relationship memory; they give durable lists and exports without cross-session IOC-set clustering.
 
 ## IOC collections (persistent indicator groupings)
 

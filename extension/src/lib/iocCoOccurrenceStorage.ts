@@ -7,7 +7,6 @@ import {
 import { getActiveInvestigationSession } from "./investigationSessionStorage";
 import {
   buildPageIocCoOccurrenceIndexFromSnapshot,
-  IOC_CO_OCCURRENCE_SCHEMA_VERSION,
   normalizePageIocCoOccurrenceIndex,
   shouldSkipCoOccurrenceRecomputeForSnapshot,
   upsertPageIocCoOccurrenceIndex,

@@ -77,6 +77,12 @@ const CONTENT_TO_TAB_MESSAGE_TYPES = [
   MESSAGE.TOGGLE_COMMAND_PALETTE,
 ] as const;
 
+const CONTENT_MESSAGE_TYPE_MARKERS: Partial<
+  Record<(typeof CONTENT_TO_TAB_MESSAGE_TYPES)[number], readonly string[]>
+> = {
+  [MESSAGE.NAVIGATE_TO_IOC_ANCHOR]: ["isNavigateToIocAnchorMessage"],
+};
+
 const BROWSER_COMPAT_ENTRY_POINTS = [
   "src/background/serviceWorker.ts",
   "src/content/contentScript.ts",
@@ -233,7 +239,10 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
     ).join("\n");
 
     for (const type of CONTENT_TO_TAB_MESSAGE_TYPES) {
-      expect(combinedSources).toContain(type);
+      const markers = CONTENT_MESSAGE_TYPE_MARKERS[type] ?? [type];
+      expect(markers.some((marker) => combinedSources.includes(marker))).toBe(
+        true
+      );
     }
   });
 

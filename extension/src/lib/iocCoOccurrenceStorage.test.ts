@@ -4,7 +4,6 @@ import {
   getActiveInvestigationSession,
   hydrateInvestigationSessionsStore,
   INVESTIGATION_SESSIONS_SCHEMA_VERSION,
-  STORAGE_KEY_INVESTIGATION_SESSIONS,
 } from "./investigationSessionStorage";
 import {
   buildPageIocCoOccurrenceIndexFromSnapshot,

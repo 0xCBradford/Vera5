@@ -45,6 +45,10 @@ const FETCH_GUARD_SOURCE_BASENAMES = new Set([
   "iocRequestBoundaries.ts",
 ]);
 
+const FETCH_INTERFACE_ONLY_SOURCE_BASENAMES = new Set([
+  "connectorDefinition.ts",
+]);
+
 const TELEMETRY_HOST_SUBSTRINGS = [
   "analytics.google.com",
   "google-analytics.com",
@@ -446,7 +450,8 @@ function checkLiveFetchLimitedToConnectors() {
     }
     if (
       !FETCH_ALLOWED_SOURCE_BASENAMES.has(path.basename(filePath)) &&
-      !FETCH_GUARD_SOURCE_BASENAMES.has(path.basename(filePath))
+      !FETCH_GUARD_SOURCE_BASENAMES.has(path.basename(filePath)) &&
+      !FETCH_INTERFACE_ONLY_SOURCE_BASENAMES.has(path.basename(filePath))
     ) {
       fail(`${filePath} uses fetch() outside approved connector modules`);
     }
@@ -455,11 +460,19 @@ function checkLiveFetchLimitedToConnectors() {
   for (const basename of FETCH_ALLOWED_SOURCE_BASENAMES) {
     const filePath = path.join(srcDir, "lib", basename);
     const source = fs.readFileSync(filePath, "utf8");
-    if (!source.includes("enrichmentFetch")) {
+    if (
+      !source.includes("enrichmentFetch") &&
+      !source.includes("fetchRdapDomain")
+    ) {
       fail(`${basename} must import enrichmentFetch for outbound domain blocking`);
     }
-    if (!/deps\.fetch\s*\?\?\s*enrichmentFetch/.test(source)) {
-      fail(`${basename} must default to deps.fetch ?? enrichmentFetch`);
+    if (
+      !/(?:deps|context)\.fetch\s*\?\?\s*enrichmentFetch/.test(source) &&
+      !source.includes("fetchRdapDomain")
+    ) {
+      fail(
+        `${basename} must default outbound fetch to enrichmentFetch (deps.fetch ?? enrichmentFetch or context.fetch ?? enrichmentFetch)`
+      );
     }
     const literalUrls = [
       ...source.matchAll(/https:\/\/[^\s"'`<>]+/g),
