@@ -19,6 +19,7 @@ import {
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES,
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES,
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
+  STORAGE_KEY_QUIET_MODE,
   STORAGE_KEY_STORAGE_SCHEMA_VERSION,
   vera5SettingsToStoragePayload,
   type Vera5StorageRaw,
@@ -147,6 +148,17 @@ describe("storage migration idempotency", () => {
     expect(
       migrated[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]
     ).toEqual({});
+  });
+
+  it("is idempotent when migrating from schema version 8 (v8 to v9 quiet mode default)", () => {
+    const raw: Vera5StorageRaw = {
+      [STORAGE_KEY_STORAGE_SCHEMA_VERSION]: 8,
+      [STORAGE_KEY_EXTENSION_ENABLED]: true,
+    };
+    expectSettingsMigrationIdempotent(raw);
+    const migrated = migrateVera5StorageRaw(raw);
+    expect(readStorageSchemaVersion(migrated)).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(migrated[STORAGE_KEY_QUIET_MODE]).toBe(false);
   });
 
   it("is idempotent when storage is already at the current schema version", () => {

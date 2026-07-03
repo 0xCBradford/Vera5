@@ -33,7 +33,7 @@ import {
   type ApiKeyStorageSlot,
 } from "./enrichmentSourceRegistry";
 
-export const SETTINGS_SCHEMA_VERSION = 8;
+export const SETTINGS_SCHEMA_VERSION = 9;
 
 export const STORAGE_SCHEMA_VERSION = SETTINGS_SCHEMA_VERSION;
 
@@ -49,6 +49,7 @@ export const STORAGE_KEY_MANUAL_ONLY_MODE = "manualOnlyMode";
 export const STORAGE_KEY_INCLUDE_PRIVATE_IPV4 = "includePrivateIpv4";
 export const STORAGE_KEY_LOCAL_BACKEND_ENABLED = "localBackendEnabled";
 export const STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED = "localLlmSummaryEnabled";
+export const STORAGE_KEY_QUIET_MODE = "quietMode";
 export const STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED =
   "attributeHrefExtractionEnabled";
 export const STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED =
@@ -97,6 +98,7 @@ export const STORAGE_KEYS = {
   INCLUDE_PRIVATE_IPV4: STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
   LOCAL_BACKEND_ENABLED: STORAGE_KEY_LOCAL_BACKEND_ENABLED,
   LOCAL_LLM_SUMMARY_ENABLED: STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
+  QUIET_MODE: STORAGE_KEY_QUIET_MODE,
   ATTRIBUTE_HREF_EXTRACTION_ENABLED:
     STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
   ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED:
@@ -162,6 +164,7 @@ export type Vera5Settings = {
   includePrivateIpv4: boolean;
   localBackendEnabled: boolean;
   localLlmSummaryEnabled: boolean;
+  quietMode: boolean;
   attributeHrefExtractionEnabled: boolean;
   attributeHrefExtractionConsentAcknowledged: boolean;
   attributeHrefExtractionRememberSiteChoices: boolean;
@@ -198,6 +201,7 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]?: unknown;
   [STORAGE_KEY_LOCAL_BACKEND_ENABLED]?: unknown;
   [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]?: unknown;
+  [STORAGE_KEY_QUIET_MODE]?: unknown;
   [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]?: unknown;
   [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]?: unknown;
   [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES]?: unknown;
@@ -233,6 +237,7 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
   STORAGE_KEY_LOCAL_BACKEND_ENABLED,
   STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
+  STORAGE_KEY_QUIET_MODE,
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED,
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES,
@@ -370,6 +375,7 @@ export function createDefaultVera5Settings(): Vera5Settings {
     includePrivateIpv4: false,
     localBackendEnabled: false,
     localLlmSummaryEnabled: false,
+    quietMode: false,
     attributeHrefExtractionEnabled: false,
     attributeHrefExtractionConsentAcknowledged: false,
     attributeHrefExtractionRememberSiteChoices: false,
@@ -588,6 +594,10 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
       raw[STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED],
       defaults.localLlmSummaryEnabled
     ),
+    quietMode: readStoredBoolean(
+      raw[STORAGE_KEY_QUIET_MODE],
+      defaults.quietMode
+    ),
     attributeHrefExtractionEnabled: readStoredBoolean(
       raw[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED],
       defaults.attributeHrefExtractionEnabled
@@ -760,6 +770,13 @@ export function migrateVera5StorageRaw(raw: Vera5StorageRaw): Vera5StorageRaw {
     migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 8;
   }
 
+  if (readStorageSchemaVersion(migrated) < 9) {
+    if (migrated[STORAGE_KEY_QUIET_MODE] === undefined) {
+      migrated[STORAGE_KEY_QUIET_MODE] = false;
+    }
+    migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 9;
+  }
+
   if (readStorageSchemaVersion(migrated) >= SETTINGS_SCHEMA_VERSION) {
     return migrated;
   }
@@ -782,6 +799,7 @@ export function vera5SettingsToStoragePayload(
     [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: settings.includePrivateIpv4,
     [STORAGE_KEY_LOCAL_BACKEND_ENABLED]: settings.localBackendEnabled,
     [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: settings.localLlmSummaryEnabled,
+    [STORAGE_KEY_QUIET_MODE]: settings.quietMode,
     [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]:
       settings.attributeHrefExtractionEnabled,
     [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]:
@@ -1000,6 +1018,17 @@ export async function getLocalLlmSummaryEnabled(): Promise<boolean> {
 export async function setLocalLlmSummaryEnabled(enabled: boolean): Promise<void> {
   await chrome.storage.local.set({
     [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: enabled,
+  });
+}
+
+export async function getQuietMode(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.quietMode;
+}
+
+export async function setQuietMode(enabled: boolean): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_QUIET_MODE]: enabled,
   });
 }
 

@@ -25,6 +25,7 @@ import {
   getIncludePrivateIpv4,
   getLocalBackendEnabled,
   getLocalLlmSummaryEnabled,
+  getQuietMode,
   getVera5Settings,
   listDisabledEnrichmentSources,
   setAttributeHrefExtractionEnabled,
@@ -41,6 +42,7 @@ import {
   setIncludePrivateIpv4,
   setLocalBackendEnabled,
   setLocalLlmSummaryEnabled,
+  setQuietMode,
   setIocTypeEnabled,
   setManualOnlyMode,
   setPreQueryNoticePreference,
@@ -51,6 +53,7 @@ import {
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES,
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES,
   STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
+  STORAGE_KEY_QUIET_MODE,
   hasApiKey,
   isMaskedApiKeyDisplay,
   maskApiKeyForDisplay,
@@ -395,6 +398,36 @@ describe("local LLM summary enabled storage", () => {
   });
 });
 
+describe("quiet mode storage", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults to disabled when unset", async () => {
+    await expect(getQuietMode()).resolves.toBe(false);
+  });
+
+  it("persists enabled state", async () => {
+    await setQuietMode(true);
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(true);
+    await expect(getQuietMode()).resolves.toBe(true);
+  });
+
+  it("persists disabled state after enabling", async () => {
+    await setQuietMode(true);
+    await setQuietMode(false);
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(false);
+    await expect(getQuietMode()).resolves.toBe(false);
+  });
+});
+
 describe("attribute href extraction enabled storage", () => {
   let store: Record<string, unknown>;
 
@@ -678,6 +711,7 @@ describe("migrate-safe defaults", () => {
     expect(defaults.includePrivateIpv4).toBe(false);
     expect(defaults.localBackendEnabled).toBe(false);
     expect(defaults.localLlmSummaryEnabled).toBe(false);
+    expect(defaults.quietMode).toBe(false);
     expect(defaults.attributeHrefExtractionEnabled).toBe(false);
     expect(defaults.attributeHrefExtractionConsentAcknowledged).toBe(false);
     expect(defaults.attributeHrefExtractionRememberSiteChoices).toBe(false);
@@ -797,6 +831,17 @@ describe("migrate-safe defaults", () => {
     });
   });
 
+  it("backfills quiet mode when upgrading from schema version 8", () => {
+    const migrated = migrateVera5StorageRaw({
+      [STORAGE_KEY_STORAGE_SCHEMA_VERSION]: 8,
+      [STORAGE_KEY_EXTENSION_ENABLED]: true,
+    });
+    expect(migrated[STORAGE_KEY_QUIET_MODE]).toBe(false);
+    expect(migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION]).toBe(
+      SETTINGS_SCHEMA_VERSION
+    );
+  });
+
   it("detects when storage migration is required", () => {
     expect(needsStorageMigration({})).toBe(true);
     expect(
@@ -815,6 +860,7 @@ describe("migrate-safe defaults", () => {
         [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: false,
         [STORAGE_KEY_LOCAL_BACKEND_ENABLED]: false,
         [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: false,
+        [STORAGE_KEY_QUIET_MODE]: false,
         [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]: false,
         [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED]: false,
         [STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES]: false,
@@ -891,6 +937,7 @@ describe("getVera5Settings", () => {
     expect(store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES]).toEqual(
       {}
     );
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(false);
   });
 
   it("does not rewrite storage when already migrated", async () => {
