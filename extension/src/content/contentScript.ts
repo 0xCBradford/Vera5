@@ -27,6 +27,10 @@ import { setupHighlightStorageListener, setupScanPageListener } from "./scanPage
 import { setupNavigateToIocAnchorListener } from "./iocTrayNavigation";
 import { setupReopenInvestigationHistoryListener } from "./investigationHistoryReopen";
 import { setupExamplesFixtureBridge } from "./examplesFixtureBridge";
+import {
+  setupQuietModeBannerStorageListener,
+  syncQuietModeBannerWithStorage,
+} from "./quietModeBanner";
 
 const contentScriptAlreadyInitialized =
   document.documentElement.dataset.vera5ContentInit === "1";
@@ -49,8 +53,10 @@ if (!contentScriptAlreadyInitialized) {
   setupAnalystModeStorageListener();
   setupLocalLlmSummaryStorageListener();
   setupLocalBackendStorageListener();
+  setupQuietModeBannerStorageListener();
   void runWithExtensionContextAsync(syncLocalLlmSummaryWithStorage);
   void runWithExtensionContextAsync(syncLocalBackendWithStorage);
+  void runWithExtensionContextAsync(syncQuietModeBannerWithStorage);
   void runWithExtensionContextAsync(syncAnalystNotesWithStorage);
   void runWithExtensionContextAsync(syncIocLabelsWithStorage);
   setupBackgroundEnrichmentRouting();

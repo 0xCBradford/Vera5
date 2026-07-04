@@ -1,13 +1,41 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as storage from "../lib/storage";
+import { TRAY_ENRICH_QUEUE_QUIET_MODE_ABORT_MESSAGE } from "../lib/storage";
 import {
   cancelTrayEnrichQueue,
   getTrayEnrichQueueSnapshot,
   isTrayEnrichQueueRunning,
   resetTrayEnrichQueueForTests,
+  resolveTrayEnrichQueueQuietModeGate,
   runSequentialTrayEnrichQueue,
 } from "./trayEnrichQueue";
 
+vi.mock("../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/storage")>();
+  return {
+    ...actual,
+    getQuietMode: vi.fn(async () => false),
+  };
+});
+
+describe("resolveTrayEnrichQueueQuietModeGate", () => {
+  it("allows bulk enrich when quiet mode is off", () => {
+    expect(resolveTrayEnrichQueueQuietModeGate(false)).toEqual({ allowed: true });
+  });
+
+  it("blocks bulk enrich with a clear message when quiet mode is on", () => {
+    expect(resolveTrayEnrichQueueQuietModeGate(true)).toEqual({
+      allowed: false,
+      message: TRAY_ENRICH_QUEUE_QUIET_MODE_ABORT_MESSAGE,
+    });
+  });
+});
+
 describe("runSequentialTrayEnrichQueue", () => {
+  beforeEach(() => {
+    vi.mocked(storage.getQuietMode).mockResolvedValue(false);
+  });
+
   afterEach(() => {
     resetTrayEnrichQueueForTests();
   });
@@ -63,5 +91,25 @@ describe("runSequentialTrayEnrichQueue", () => {
 
     expect(result).toEqual({ completedCount: 0, cancelled: false });
     expect(enrichAnchor).not.toHaveBeenCalled();
+  });
+
+  it("aborts before starting when quiet mode is active", async () => {
+    vi.mocked(storage.getQuietMode).mockResolvedValue(true);
+    const enrichAnchor = vi.fn(async () => undefined);
+
+    const result = await runSequentialTrayEnrichQueue(
+      ["a-1", "a-2"],
+      enrichAnchor
+    );
+
+    expect(result).toEqual({
+      completedCount: 0,
+      cancelled: false,
+      aborted: true,
+      abortMessage: TRAY_ENRICH_QUEUE_QUIET_MODE_ABORT_MESSAGE,
+    });
+    expect(enrichAnchor).not.toHaveBeenCalled();
+    expect(isTrayEnrichQueueRunning()).toBe(false);
+    expect(getTrayEnrichQueueSnapshot()).toBeNull();
   });
 });

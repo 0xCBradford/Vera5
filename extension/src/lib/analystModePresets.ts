@@ -24,6 +24,7 @@ export type AnalystModePresetSettings = {
   showPreQueryNotices: boolean;
   showDisabledSourcesInWorkspace: boolean;
   includePrivateIpv4: boolean;
+  quietMode: boolean;
   enrichmentSourceEnabled: Partial<Record<EnrichmentSourceId, boolean>>;
 };
 
@@ -66,6 +67,7 @@ export const ANALYST_MODE_PRESET_SOC: AnalystModePreset = {
     showPreQueryNotices: true,
     showDisabledSourcesInWorkspace: false,
     includePrivateIpv4: false,
+    quietMode: false,
     enrichmentSourceEnabled: { ...LIVE_ENRICHMENT_SOURCES_ONLY },
   },
 };
@@ -93,6 +95,7 @@ export const ANALYST_MODE_PRESET_CTI: AnalystModePreset = {
     showPreQueryNotices: true,
     showDisabledSourcesInWorkspace: true,
     includePrivateIpv4: false,
+    quietMode: false,
     enrichmentSourceEnabled: { ...LIVE_ENRICHMENT_SOURCES_ONLY },
   },
 };
@@ -101,7 +104,7 @@ export const ANALYST_MODE_PRESET_DFIR: AnalystModePreset = {
   id: ANALYST_MODE_PRESET_DFIR_ID,
   label: "DFIR investigation",
   description:
-    "Case-note exports, private-space IPv4 detection, and hash-first pivot ordering for forensic review.",
+    "Case-note exports, private-space IPv4 detection, hash-first pivot ordering, and quiet mode for sensitive forensic review.",
   defaultExportTemplateId: "thehive-case-note",
   pivotEmphasis: [
     PIVOT_PROVIDER.VIRUSTOTAL,
@@ -120,6 +123,7 @@ export const ANALYST_MODE_PRESET_DFIR: AnalystModePreset = {
     showPreQueryNotices: true,
     showDisabledSourcesInWorkspace: false,
     includePrivateIpv4: true,
+    quietMode: true,
     enrichmentSourceEnabled: { ...LIVE_ENRICHMENT_SOURCES_ONLY },
   },
 };
@@ -200,6 +204,7 @@ export function applyAnalystModePresetToSettings(
     showDisabledSourcesInWorkspace:
       preset.settings.showDisabledSourcesInWorkspace,
     includePrivateIpv4: preset.settings.includePrivateIpv4,
+    quietMode: preset.settings.quietMode,
     enrichmentSourceEnabled,
   };
 }

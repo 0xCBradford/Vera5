@@ -1596,6 +1596,38 @@ html.vera5-workspace-open {
   --vera5-copy-success-bg: color-mix(in srgb, #22c7a9 16%, #12171e);
   --vera5-shadow: none;
 }
+.vera5-quiet-mode-banner-host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2147483644;
+  pointer-events: none;
+}
+.vera5-quiet-mode-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #6b5a2e;
+  color: #f5f7fa;
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  pointer-events: auto;
+}
+.vera5-quiet-mode-banner__label {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+.vera5-quiet-mode-banner__message {
+  color: #f5f7fa;
+}
 .vera5-command-palette-backdrop {
   position: fixed;
   inset: 0;

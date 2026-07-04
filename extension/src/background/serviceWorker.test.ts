@@ -335,7 +335,12 @@ describe("service worker scan-page command routing", () => {
     );
 
     await vi.waitFor(() => {
-      expect(tabsSendMessage).toHaveBeenCalledWith(77, enrichSelectionMessage());
+      expect(tabsSendMessage).toHaveBeenCalledWith(
+        77,
+        enrichSelectionMessage({
+          macroStepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+        })
+      );
     });
     expect(emitInvestigationSessionMacroRunTimelineEvent).toHaveBeenCalledWith({
       stepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,

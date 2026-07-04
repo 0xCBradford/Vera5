@@ -36,6 +36,23 @@ export const SETTINGS_PACK_EXPORT_FILENAME = "vera5-settings-pack.json";
 export const SETTINGS_PACK_THREAT_PROFILE_PRECEDENCE_NOTE =
   "When an active threat profile and a settings pack both define the same preference, the threat profile wins for overlapping workflow fields (connectors, analyst mode, export template, pivot emphasis, quiet mode). Settings packs still apply cache TTL and domain policy unless a profile defines those fields. Neither overwrites stored API keys.";
 
+export const THREAT_PROFILE_SCHEMA_VERSION = 1;
+
+export type ThreatProfileDocument = {
+  threatProfileSchemaVersion: typeof THREAT_PROFILE_SCHEMA_VERSION;
+  id?: string;
+  label?: string;
+  quietModeDefault?: boolean;
+  enabledConnectors?: readonly string[];
+  pivotRecipeSetId?: string;
+  noiseListRef?: string;
+};
+
+export type ThreatProfileImportPreview = {
+  profile: ThreatProfileDocument;
+  changes: SettingsPackImportDiffEntry[];
+};
+
 export type SettingsPackDomainPolicy = {
   mode: DomainPolicyMode;
   allowlist: string[];
@@ -156,6 +173,144 @@ export function assertSettingsPackNotThreatProfile(value: unknown): void {
       "This file is a threat profile, not a settings pack. Use threat profile import instead."
     );
   }
+}
+
+function normalizeThreatProfileEnabledConnectors(
+  value: unknown
+): readonly string[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const connectors: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") {
+      continue;
+    }
+    const trimmed = entry.trim();
+    if (trimmed.length > 0) {
+      connectors.push(trimmed);
+    }
+  }
+  return connectors.length > 0 ? connectors : [];
+}
+
+export function normalizeThreatProfileDocument(value: unknown): ThreatProfileDocument {
+  if (!isRecord(value)) {
+    throw new SettingsPackImportError("Threat profile must be a JSON object.");
+  }
+
+  if (!isThreatProfileDocument(value)) {
+    throw new SettingsPackImportError("Unsupported threat profile format.");
+  }
+
+  assertNoSecretsInSettingsPack(value);
+
+  if (
+    value.threatProfileSchemaVersion !== undefined &&
+    value.threatProfileSchemaVersion !== THREAT_PROFILE_SCHEMA_VERSION
+  ) {
+    throw new SettingsPackImportError("Unsupported threat profile format.");
+  }
+
+  const profile: ThreatProfileDocument = {
+    threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+  };
+
+  if (typeof value.id === "string" && value.id.trim().length > 0) {
+    profile.id = value.id.trim();
+  }
+
+  if (typeof value.label === "string" && value.label.trim().length > 0) {
+    profile.label = value.label.trim();
+  }
+
+  if (typeof value.pivotRecipeSetId === "string" && value.pivotRecipeSetId.trim()) {
+    profile.pivotRecipeSetId = value.pivotRecipeSetId.trim();
+  }
+
+  if (typeof value.noiseListRef === "string" && value.noiseListRef.trim()) {
+    profile.noiseListRef = value.noiseListRef.trim();
+  }
+
+  const enabledConnectors = normalizeThreatProfileEnabledConnectors(
+    value.enabledConnectors
+  );
+  if (enabledConnectors !== undefined) {
+    profile.enabledConnectors = enabledConnectors;
+  }
+
+  if (typeof value.quietModeDefault === "boolean") {
+    profile.quietModeDefault = value.quietModeDefault;
+  }
+
+  return profile;
+}
+
+export function parseThreatProfileDocument(rawJson: string): ThreatProfileDocument {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawJson);
+  } catch {
+    throw new SettingsPackImportError("Invalid JSON.");
+  }
+  return normalizeThreatProfileDocument(parsed);
+}
+
+export function mergeImportedThreatProfile(
+  current: Vera5Settings,
+  profile: ThreatProfileDocument
+): Vera5Settings {
+  const next: Vera5Settings = {
+    ...current,
+    apiKeys: { ...current.apiKeys },
+  };
+
+  if (typeof profile.quietModeDefault === "boolean") {
+    next.quietMode = profile.quietModeDefault;
+  }
+
+  return next;
+}
+
+export function buildThreatProfileImportDiff(
+  current: Vera5Settings,
+  profile: ThreatProfileDocument
+): SettingsPackImportDiffEntry[] {
+  if (typeof profile.quietModeDefault !== "boolean") {
+    return [];
+  }
+
+  const merged = mergeImportedThreatProfile(current, profile);
+  const changes: SettingsPackImportDiffEntry[] = [];
+
+  if (current.quietMode !== merged.quietMode) {
+    changes.push({
+      field: "quietMode",
+      label: "Quiet mode",
+      currentValue: formatSettingsPackBoolean(current.quietMode),
+      incomingValue: formatSettingsPackBoolean(merged.quietMode),
+    });
+  }
+
+  return changes;
+}
+
+export function buildThreatProfileImportPreview(
+  current: Vera5Settings,
+  rawJson: string
+): ThreatProfileImportPreview {
+  const profile = parseThreatProfileDocument(rawJson);
+  return {
+    profile,
+    changes: buildThreatProfileImportDiff(current, profile),
+  };
+}
+
+export async function importThreatProfileJson(rawJson: string): Promise<void> {
+  const current = await getVera5Settings();
+  const profile = parseThreatProfileDocument(rawJson);
+  const merged = mergeImportedThreatProfile(current, profile);
+  await chrome.storage.local.set(vera5SettingsToStoragePayload(merged));
 }
 
 function normalizeSettingsPackDomainPolicy(value: unknown): SettingsPackDomainPolicy {

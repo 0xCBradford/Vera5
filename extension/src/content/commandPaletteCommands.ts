@@ -6,6 +6,7 @@ import {
 import { safeOpenOptionsPage, safeRuntimeSendMessage } from "../lib/extensionContext";
 import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
 import { ENRICHMENT_SOURCE_OPS_SECTION_TITLE } from "../lib/enrichmentSourceOps";
+import { getQuietMode, setQuietMode } from "../lib/storage";
 import { openExtensionPopupMessage } from "../lib/messages";
 import { POPUP_PANEL } from "../lib/popupPanelFocus";
 import { handleEnrichSelectionRequest } from "./enrichSelection";
@@ -22,6 +23,7 @@ export const CORE_COMMAND_PALETTE_COMMAND_IDS = {
   EXPORT_TRAY_SUBSET: "export-tray-subset",
   CLEAR_HIGHLIGHTS: "clear-highlights",
   OPEN_OPTIONS: "open-options",
+  TOGGLE_QUIET_MODE: "toggle-quiet-mode",
 } as const;
 
 function hasNonCollapsedTextSelection(doc: Document = document): boolean {
@@ -136,6 +138,17 @@ export function registerCoreCommandPaletteCommands(): void {
     keywords: ["options", "preferences", "settings"],
     run: () => {
       safeOpenOptionsPage();
+    },
+  });
+
+  registerCommandPaletteCommand({
+    id: CORE_COMMAND_PALETTE_COMMAND_IDS.TOGGLE_QUIET_MODE,
+    label: "Toggle quiet mode",
+    description: "Block or restore live vendor enrichment calls",
+    keywords: ["quiet", "silent", "vendor", "enrich", "block", "sensitive"],
+    run: async () => {
+      const quietModeActive = await getQuietMode();
+      await setQuietMode(!quietModeActive);
     },
   });
 }

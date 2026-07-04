@@ -52,7 +52,10 @@ export type ContentRegisterMessage = {
 };
 export type ScanPageMessage = { type: typeof MESSAGE.SCAN_PAGE };
 export type ScanSelectionMessage = { type: typeof MESSAGE.SCAN_SELECTION };
-export type EnrichSelectionMessage = { type: typeof MESSAGE.ENRICH_SELECTION };
+export type EnrichSelectionMessage = {
+  type: typeof MESSAGE.ENRICH_SELECTION;
+  macroStepType?: string;
+};
 export type GetSelectionActionStateMessage = {
   type: typeof MESSAGE.GET_SELECTION_ACTION_STATE;
 };
@@ -211,8 +214,15 @@ export function scanSelectionMessage(): ScanSelectionMessage {
   return { type: MESSAGE.SCAN_SELECTION };
 }
 
-export function enrichSelectionMessage(): EnrichSelectionMessage {
-  return { type: MESSAGE.ENRICH_SELECTION };
+export function enrichSelectionMessage(input?: {
+  macroStepType?: string;
+}): EnrichSelectionMessage {
+  const message: EnrichSelectionMessage = { type: MESSAGE.ENRICH_SELECTION };
+  const macroStepType = input?.macroStepType?.trim();
+  if (macroStepType && macroStepType.length > 0) {
+    message.macroStepType = macroStepType;
+  }
+  return message;
 }
 
 export function getSelectionActionStateMessage(): GetSelectionActionStateMessage {

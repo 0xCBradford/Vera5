@@ -64,8 +64,11 @@ import {
 import {
   getExtensionEnabled,
   getHighlightEnabled,
+  getQuietMode,
+  POPUP_QUIET_MODE_STATUS_LABEL,
   setExtensionEnabled,
   setHighlightEnabled,
+  STORAGE_KEY_QUIET_MODE,
 } from "../lib/storage";
 import { openExtensionSitePermissionsPage } from "../lib/extensionSitePermissions";
 import {
@@ -2403,6 +2406,7 @@ const INVESTIGATION_SESSION_EXPORT_ACTIONS: readonly {
 export function Popup() {
   const [enabled, setEnabled] = useState(true);
   const [highlightEnabled, setHighlightEnabledState] = useState(true);
+  const [quietModeActive, setQuietModeActive] = useState(false);
   const [ready, setReady] = useState(false);
   const [scanState, setScanState] = useState<"idle" | "scanning" | "done" | "error">(
     "idle"
@@ -2503,13 +2507,16 @@ export function Popup() {
   };
 
   useEffect(() => {
-    void Promise.all([getExtensionEnabled(), getHighlightEnabled()]).then(
-      ([extensionValue, highlightValue]) => {
-        setEnabled(extensionValue);
-        setHighlightEnabledState(highlightValue);
-        setReady(true);
-      }
-    );
+    void Promise.all([
+      getExtensionEnabled(),
+      getHighlightEnabled(),
+      getQuietMode(),
+    ]).then(([extensionValue, highlightValue, quietModeValue]) => {
+      setEnabled(extensionValue);
+      setHighlightEnabledState(highlightValue);
+      setQuietModeActive(quietModeValue);
+      setReady(true);
+    });
     void requestTabScanSummaryForActiveTab().then((summary) => {
       if (summary) {
         setScanSummary(summary);
@@ -2535,6 +2542,31 @@ export function Popup() {
         void clearPopupPanelFocus();
       }
     });
+  }, []);
+
+  useEffect(() => {
+    if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
+      return;
+    }
+
+    const handleStorageChange = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => {
+      if (areaName !== "local") {
+        return;
+      }
+      const change = changes[STORAGE_KEY_QUIET_MODE];
+      if (!change) {
+        return;
+      }
+      setQuietModeActive(Boolean(change.newValue));
+    };
+
+    chrome.storage.onChanged.addListener(handleStorageChange);
+    return () => {
+      chrome.storage.onChanged.removeListener(handleStorageChange);
+    };
   }, []);
 
   useEffect(() => {
@@ -3500,6 +3532,30 @@ export function Popup() {
             5
           </span>
         </span>
+        {quietModeActive ? (
+          <span
+            role="status"
+            aria-label="Quiet mode active. Live vendor enrichment is blocked."
+            style={{
+              marginLeft: 8,
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "3px 8px",
+              borderRadius: 999,
+              border: `1px solid ${POPUP_THEME.accent}`,
+              background: "rgba(255, 178, 36, 0.12)",
+              color: POPUP_THEME.accent,
+              fontFamily: VERA5_FONT.sans,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              lineHeight: 1.2,
+            }}
+          >
+            {POPUP_QUIET_MODE_STATUS_LABEL}
+          </span>
+        ) : null}
         <a
           href="https://www.vera5.io/how-to"
           target="_blank"

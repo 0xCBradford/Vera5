@@ -1,5 +1,10 @@
+import { ENRICHMENT_ERROR_CODE } from "../lib/enrichment";
 import type { MessageResponse } from "../lib/messages";
 import { MESSAGE } from "../lib/messages";
+import {
+  isMacroEnrichStepType,
+  resolveMacroEnrichStepQuietModeGateForStep,
+} from "../lib/macroStepActions";
 import { extractExactIocValue } from "../lib/iocRequestBoundaries";
 import { IOC_TYPE, ruleIdForIocType, type IocMatch, type IocRegexOptions, type IocType } from "../lib/iocRegex";
 import {
@@ -330,7 +335,8 @@ export async function openEnrichmentForResolvedSelection(
 }
 
 export async function handleEnrichSelectionRequest(
-  doc: Document = document
+  doc: Document = document,
+  options: { macroStepType?: string } = {}
 ): Promise<MessageResponse> {
   const selection = doc.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
@@ -379,6 +385,31 @@ export async function handleEnrichSelectionRequest(
     };
   }
 
+  const macroStepType = options.macroStepType?.trim() ?? "";
+  if (macroStepType.length > 0 && isMacroEnrichStepType(macroStepType)) {
+    const quietGate = await resolveMacroEnrichStepQuietModeGateForStep(macroStepType);
+    if (!quietGate.allowed) {
+      const opened = await presentSelectionTrustGateBlocked(
+        resolved,
+        {
+          errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+          errorMessage: quietGate.message,
+        },
+        doc
+      );
+      if (!opened) {
+        return { ok: false, error: "No indicator found in selection." };
+      }
+      return {
+        ok: true,
+        payload: {
+          value: resolved.value,
+          type: resolved.type,
+        },
+      };
+    }
+  }
+
   const opened = await openEnrichmentForResolvedSelection(resolved, doc, {
     enrichmentTrigger: "manual",
   });
@@ -409,7 +440,14 @@ export function setupEnrichSelectionListener(): void {
     if (!isEnrichSelectionMessage(message)) {
       return false;
     }
-    void handleEnrichSelectionRequest()
+    const macroStepType =
+      typeof message === "object" &&
+      message !== null &&
+      "macroStepType" in message &&
+      typeof (message as { macroStepType?: unknown }).macroStepType === "string"
+        ? (message as { macroStepType: string }).macroStepType
+        : undefined;
+    void handleEnrichSelectionRequest(document, { macroStepType })
       .then(sendResponse)
       .catch((error) => {
         logUnlessBenignExtensionError(error);

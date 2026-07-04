@@ -33,6 +33,11 @@ import {
 import { STORAGE_KEY_ANALYST_NOTES } from "../lib/analystNotesStorage";
 import { Popup } from "./Popup";
 import * as copyText from "../lib/copyText";
+import * as storage from "../lib/storage";
+import {
+  POPUP_QUIET_MODE_STATUS_LABEL,
+  STORAGE_KEY_QUIET_MODE,
+} from "../lib/storage";
 import {
   INVESTIGATION_TIMELINE_EXPORT_APPENDIX_HEADING,
   INVESTIGATION_TIMELINE_EXPORT_SCHEMA_VERSION,
@@ -201,6 +206,13 @@ const sampleSourceOpsSnapshot = {
   }),
 };
 
+const storageOnChangedListeners: Array<
+  (
+    changes: Record<string, chrome.storage.StorageChange>,
+    areaName: string
+  ) => void
+> = [];
+
 function stubChrome(options: {
   initialSummary?: ReturnType<typeof buildTabScanSummary> | null;
   postScanSummary?: ReturnType<typeof buildTabScanSummary> | null;
@@ -216,8 +228,30 @@ function stubChrome(options: {
   const collections = [...(options.collections ?? [])];
   const localStore = options.localStore ?? {};
   const sessionStore = options.sessionStore ?? {};
+  storageOnChangedListeners.length = 0;
   vi.stubGlobal("chrome", {
     storage: {
+      onChanged: {
+        addListener: (
+          listener: (
+            changes: Record<string, chrome.storage.StorageChange>,
+            areaName: string
+          ) => void
+        ) => {
+          storageOnChangedListeners.push(listener);
+        },
+        removeListener: (
+          listener: (
+            changes: Record<string, chrome.storage.StorageChange>,
+            areaName: string
+          ) => void
+        ) => {
+          const index = storageOnChangedListeners.indexOf(listener);
+          if (index >= 0) {
+            storageOnChangedListeners.splice(index, 1);
+          }
+        },
+      },
       local: {
         get: (keys: string | string[] | Record<string, unknown>) => {
           const keyList = Array.isArray(keys)
@@ -1907,5 +1941,81 @@ describe("Popup operator UX surfaces", () => {
     expect(
       mounted?.container.querySelector("#popup-history-body")?.hasAttribute("hidden")
     ).toBe(false);
+  });
+});
+
+describe("Popup quiet mode header", () => {
+  let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+  afterEach(() => {
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  beforeEach(() => {
+    vi.spyOn(tabScanSummary, "loadTrayEntryEnrichmentStatuses").mockResolvedValue({});
+    vi.spyOn(storage, "getExtensionEnabled").mockResolvedValue(true);
+    vi.spyOn(storage, "getHighlightEnabled").mockResolvedValue(true);
+  });
+
+  it("shows quiet mode status in the popup header when quiet mode is on", async () => {
+    vi.spyOn(storage, "getQuietMode").mockResolvedValue(true);
+    stubChrome({ initialSummary: null });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        POPUP_QUIET_MODE_STATUS_LABEL
+      );
+    });
+    expect(
+      mounted?.container.querySelector('[role="status"][aria-label*="Quiet mode active"]')
+    ).not.toBeNull();
+  });
+
+  it("hides quiet mode status in the popup header when quiet mode is off", async () => {
+    vi.spyOn(storage, "getQuietMode").mockResolvedValue(false);
+    stubChrome({ initialSummary: null });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Extension enabled");
+    });
+    expect(mounted?.container.textContent).not.toContain(
+      POPUP_QUIET_MODE_STATUS_LABEL
+    );
+  });
+
+  it("updates the header when quiet mode changes in storage", async () => {
+    vi.spyOn(storage, "getQuietMode").mockResolvedValue(false);
+    stubChrome({ initialSummary: null });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Extension enabled");
+    });
+
+    const listener = storageOnChangedListeners.at(-1);
+    expect(listener).toBeDefined();
+    flushSync(() => {
+      listener?.(
+        {
+          [STORAGE_KEY_QUIET_MODE]: {
+            oldValue: false,
+            newValue: true,
+          },
+        },
+        "local"
+      );
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        POPUP_QUIET_MODE_STATUS_LABEL
+      );
+    });
   });
 });

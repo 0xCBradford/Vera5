@@ -64,6 +64,7 @@ import {
   getIocTypeEnabled,
   getManualOnlyMode,
   getPreQueryNoticePreferenceConfigured,
+  getQuietMode,
   getShowDisabledSourcesInWorkspace,
   getShowPreQueryNotices,
   hasApiKey,
@@ -95,6 +96,7 @@ import {
   setIocTypeEnabled,
   setManualOnlyMode,
   setPreQueryNoticePreference,
+  setQuietMode,
   setShowDisabledSourcesInWorkspace,
 } from "../lib/storage";
 import {
@@ -766,6 +768,7 @@ export function Options() {
   const [settingsReloadToken, setSettingsReloadToken] = useState(0);
   const [autoScanEnabled, setAutoScanEnabledState] = useState(false);
   const [manualOnlyMode, setManualOnlyModeState] = useState(true);
+  const [quietModeActive, setQuietModeActiveState] = useState(false);
   const [enrichmentSourceEnabled, setEnrichmentSourceEnabledState] =
     useState<EnrichmentSourceEnabledRecord>(createDefaultSourceEnabledState());
   const [iocTypeEnabled, setIocTypeEnabledState] =
@@ -866,6 +869,7 @@ export function Options() {
     void Promise.all([
       getAutoScanEnabled(),
       getManualOnlyMode(),
+      getQuietMode(),
       getEnrichmentSourceEnabled(),
       getIocTypeEnabled(),
       getIncludePrivateIpv4(),
@@ -912,6 +916,7 @@ export function Options() {
         ([
           autoScanValue,
           manualOnlyValue,
+          quietModeValue,
           sourceEnabledValue,
           iocTypeEnabledValue,
           includePrivateIpv4Value,
@@ -940,6 +945,7 @@ export function Options() {
         ]) => {
           setAutoScanEnabledState(autoScanValue);
           setManualOnlyModeState(manualOnlyValue);
+          setQuietModeActiveState(quietModeValue);
           setEnrichmentSourceEnabledState(sourceEnabledValue);
           setIocTypeEnabledState(iocTypeEnabledValue);
           setIncludePrivateIpv4State(includePrivateIpv4Value);
@@ -1049,6 +1055,11 @@ export function Options() {
   const handleManualOnlyToggle = (checked: boolean) => {
     setManualOnlyModeState(checked);
     void setManualOnlyMode(checked);
+  };
+
+  const handleQuietModeToggle = (checked: boolean) => {
+    setQuietModeActiveState(checked);
+    void setQuietMode(checked);
   };
 
   const handleSourceToggle = (sourceId: EnrichmentSourceId, checked: boolean) => {
@@ -2460,6 +2471,30 @@ export function Options() {
               hidden={collapsedSections.trust}
             >
               <ToggleRow
+                label="Quiet mode"
+                hint="When on, Vera5 blocks outbound live vendor enrichment. Use this in sensitive environments where threat-intel API calls must not leave the browser."
+                ariaLabel="Quiet mode"
+                checked={quietModeActive}
+                disabled={!ready}
+                onChange={handleQuietModeToggle}
+              />
+              <ul
+                className="v5-domain-list"
+                aria-label="Quiet mode blocked and allowed actions"
+                style={{ marginBottom: 16 }}
+              >
+                <li className="v5-domain-list__item">
+                  <strong>Blocked while on:</strong> live vendor enrichment,
+                  bulk enrich queues, and macro enrich steps that would call
+                  vendors.
+                </li>
+                <li className="v5-domain-list__item">
+                  <strong>Still available:</strong> local indicator detection and
+                  highlights, cached enrichment on hover cards, and opening
+                  attributed pivot links you choose in a new tab.
+                </li>
+              </ul>
+              <ToggleRow
                 label="Scan link attributes for IOCs"
                 hint="Off by default. When on, Vera5 reads allowlisted link and attribute values (for example href and src) on pages you scan—in addition to visible text. Password fields and hidden inputs are never scanned."
                 ariaLabel="Scan link attributes for IOCs"
@@ -2762,8 +2797,9 @@ export function Options() {
                   className="v5-status v5-status--muted"
                   style={{ display: "block", marginBottom: 8 }}
                 >
-                  Apply SOC, CTI, or DFIR defaults for enrichment toggles, the
-                  default export template, and recommended pivot ordering.
+                  Apply SOC, CTI, or DFIR defaults for enrichment toggles, quiet
+                  mode where recommended, the default export template, and
+                  recommended pivot ordering.
                 </span>
                 <div className="v5-presets">
                   {ANALYST_MODE_PRESETS.map((preset) => (

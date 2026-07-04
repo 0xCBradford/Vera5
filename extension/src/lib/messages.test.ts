@@ -51,6 +51,12 @@ describe("Vera5 message envelopes", () => {
 
   it("builds ENRICH_SELECTION", () => {
     expect(enrichSelectionMessage()).toEqual({ type: MESSAGE.ENRICH_SELECTION });
+    expect(
+      enrichSelectionMessage({ macroStepType: "openFromSelection" })
+    ).toEqual({
+      type: MESSAGE.ENRICH_SELECTION,
+      macroStepType: "openFromSelection",
+    });
   });
 
   it("builds NAVIGATE_TO_IOC_ANCHOR", () => {

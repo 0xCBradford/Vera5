@@ -295,6 +295,8 @@ export function formatEnrichmentSourceLastErrorLabel(
       return "Blocked by domain policy";
     case ENRICHMENT_ERROR_CODE.INTERNAL_ASSET:
       return "Blocked by internal asset policy";
+    case ENRICHMENT_ERROR_CODE.QUIET_MODE:
+      return "Blocked by quiet mode";
     case ENRICHMENT_ERROR_CODE.VENDOR:
       return "Vendor error";
     default:

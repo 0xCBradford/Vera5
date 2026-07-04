@@ -17,11 +17,18 @@ import {
   downloadSettingsPackExport,
   exportSettingsPackJson,
   importSettingsPackJson,
+  importThreatProfileJson,
   isSettingsPackDocument,
   isThreatProfileDocument,
   mergeImportedSettingsPack,
+  mergeImportedThreatProfile,
   normalizeSettingsPackDocument,
+  normalizeThreatProfileDocument,
   parseSettingsPackDocument,
+  parseThreatProfileDocument,
+  buildThreatProfileImportDiff,
+  buildThreatProfileImportPreview,
+  THREAT_PROFILE_SCHEMA_VERSION,
   SETTINGS_PACK_EXPORT_FILENAME,
   SETTINGS_PACK_SCHEMA_VERSION,
   SettingsPackImportError,
@@ -40,6 +47,7 @@ import {
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_MANUAL_ONLY_MODE,
+  STORAGE_KEY_QUIET_MODE,
 } from "./storage";
 import {
   TEST_FIXTURE_API_KEY_LITERALS,
@@ -660,6 +668,129 @@ describe("settings pack threat profile precedence", () => {
         enabledConnectors: ["abuseipdb"],
         pivotRecipeSetId: "soc-triage",
       })
+    ).toThrow(SettingsPackImportError);
+  });
+});
+
+describe("threat profile import", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("normalizes quietModeDefault from threat profile JSON", () => {
+    const profile = normalizeThreatProfileDocument({
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      id: "restricted-dfir",
+      quietModeDefault: true,
+      enabledConnectors: ["abuseipdb"],
+    });
+
+    expect(profile.quietModeDefault).toBe(true);
+    expect(profile.id).toBe("restricted-dfir");
+  });
+
+  it("merges quietModeDefault onto Vera5 settings without touching API keys", () => {
+    const current = {
+      ...createDefaultVera5Settings(),
+      quietMode: false,
+      apiKeys: { abuseipdb: TEST_FIXTURE_STORED_API_KEY },
+    };
+    const merged = mergeImportedThreatProfile(current, {
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      quietModeDefault: true,
+    });
+
+    expect(merged.quietMode).toBe(true);
+    expect(merged.apiKeys).toEqual({ abuseipdb: TEST_FIXTURE_STORED_API_KEY });
+  });
+
+  it("leaves quiet mode unchanged when quietModeDefault is omitted", () => {
+    const current = {
+      ...createDefaultVera5Settings(),
+      quietMode: false,
+    };
+    const merged = mergeImportedThreatProfile(current, {
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      pivotRecipeSetId: "soc-triage",
+      enabledConnectors: ["otx"],
+    });
+
+    expect(merged.quietMode).toBe(false);
+  });
+
+  it("imports quietModeDefault into storage", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = false;
+    store[STORAGE_KEY_API_KEYS] = { abuseipdb: TEST_FIXTURE_STORED_API_KEY };
+
+    await importThreatProfileJson(
+      JSON.stringify({
+        threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+        id: "restricted-dfir",
+        quietModeDefault: true,
+        enabledConnectors: ["abuseipdb"],
+      })
+    );
+
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(true);
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    });
+  });
+
+  it("builds a quiet mode diff for threat profile import preview", () => {
+    const current = {
+      ...createDefaultVera5Settings(),
+      quietMode: false,
+    };
+    const changes = buildThreatProfileImportDiff(current, {
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      quietModeDefault: true,
+    });
+
+    expect(changes).toEqual([
+      {
+        field: "quietMode",
+        label: "Quiet mode",
+        currentValue: "Disabled",
+        incomingValue: "Enabled",
+      },
+    ]);
+  });
+
+  it("builds threat profile import preview from JSON", () => {
+    const preview = buildThreatProfileImportPreview(
+      { ...createDefaultVera5Settings(), quietMode: true },
+      JSON.stringify({
+        threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+        quietModeDefault: false,
+      })
+    );
+
+    expect(preview.profile.quietModeDefault).toBe(false);
+    expect(preview.changes).toEqual([
+      {
+        field: "quietMode",
+        label: "Quiet mode",
+        currentValue: "Enabled",
+        incomingValue: "Disabled",
+      },
+    ]);
+  });
+
+  it("rejects settings pack JSON on threat profile import", () => {
+    expect(() =>
+      parseThreatProfileDocument(
+        JSON.stringify(
+          buildSettingsPackDocument(createDefaultVera5Settings())
+        )
+      )
     ).toThrow(SettingsPackImportError);
   });
 });

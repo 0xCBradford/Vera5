@@ -1,15 +1,64 @@
 import { rethrowUnlessStaleExtensionError } from "./extensionContext";
 import type { IocType } from "./iocRegex";
 import { recordActiveInvestigationSessionMacroRunEvent } from "./investigationSessionStorage";
+import {
+  getQuietMode,
+  MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE,
+} from "./storage";
 
 export const MACRO_STEP_TYPE_OPEN_FROM_SELECTION = "openFromSelection" as const;
+
+export const MACRO_STEP_TYPE_ENRICH = "enrich" as const;
+
+export const MACRO_STEP_TYPE_QUEUE_RELATED_IOCS = "queueRelatedIocs" as const;
+
+export type MacroEnrichStepType =
+  | typeof MACRO_STEP_TYPE_OPEN_FROM_SELECTION
+  | typeof MACRO_STEP_TYPE_ENRICH
+  | typeof MACRO_STEP_TYPE_QUEUE_RELATED_IOCS;
 
 export type MacroContextMenuStepType =
   typeof MACRO_STEP_TYPE_OPEN_FROM_SELECTION;
 
+export const MACRO_ENRICH_STEP_TYPES: ReadonlySet<string> = new Set([
+  MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+  MACRO_STEP_TYPE_ENRICH,
+  MACRO_STEP_TYPE_QUEUE_RELATED_IOCS,
+]);
+
 export const CONTEXT_MENU_ENRICH_SELECTION_ID = "enrich-with-vera5";
 
+export type MacroEnrichStepQuietModeGateResult =
+  | { allowed: true }
+  | { allowed: false; message: string };
+
 const macroStepContextMenuActionIds = new Map<string, string>();
+
+export function isMacroEnrichStepType(stepType: string): boolean {
+  return MACRO_ENRICH_STEP_TYPES.has(stepType.trim());
+}
+
+export function resolveMacroEnrichStepQuietModeGate(
+  quietMode: boolean,
+  stepType: string
+): MacroEnrichStepQuietModeGateResult {
+  if (!isMacroEnrichStepType(stepType)) {
+    return { allowed: true };
+  }
+  if (!quietMode) {
+    return { allowed: true };
+  }
+  return {
+    allowed: false,
+    message: MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE,
+  };
+}
+
+export async function resolveMacroEnrichStepQuietModeGateForStep(
+  stepType: string
+): Promise<MacroEnrichStepQuietModeGateResult> {
+  return resolveMacroEnrichStepQuietModeGate(await getQuietMode(), stepType);
+}
 
 export function registerMacroStepContextMenuActionId(
   stepType: string,

@@ -1032,6 +1032,71 @@ export async function setQuietMode(enabled: boolean): Promise<void> {
   });
 }
 
+export const QUIET_MODE_ACTION_BADGE_TEXT = "Q";
+
+export const QUIET_MODE_ACTION_BADGE_BACKGROUND_COLOR = "#6B5A2E";
+
+export const POPUP_QUIET_MODE_STATUS_LABEL = "Quiet mode";
+
+export const PAGE_QUIET_MODE_BANNER_ARIA_LABEL =
+  "Quiet mode active. Live vendor enrichment is blocked.";
+
+export const PAGE_QUIET_MODE_BANNER_MESSAGE =
+  "Live vendor enrichment is blocked. Local detection, cached enrichment, and attributed pivots still work.";
+
+export const QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE =
+  "Quiet mode is active. Live vendor enrichment is blocked.";
+
+export const TRAY_ENRICH_QUEUE_QUIET_MODE_ABORT_MESSAGE =
+  "Quiet mode is active. Bulk enrich is blocked because live vendor enrichment is disabled.";
+
+export const MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE =
+  "Quiet mode is active. Macro enrich is blocked because live vendor enrichment is disabled.";
+
+export async function syncQuietModeActionBadge(quietMode: boolean): Promise<void> {
+  if (typeof chrome.action?.setBadgeText !== "function") {
+    return;
+  }
+
+  try {
+    if (quietMode) {
+      await chrome.action.setBadgeText({ text: QUIET_MODE_ACTION_BADGE_TEXT });
+      if (typeof chrome.action.setBadgeBackgroundColor === "function") {
+        await chrome.action.setBadgeBackgroundColor({
+          color: QUIET_MODE_ACTION_BADGE_BACKGROUND_COLOR,
+        });
+      }
+    } else {
+      await chrome.action.setBadgeText({ text: "" });
+    }
+  } catch {
+    // Some browsers omit action badge APIs on the toolbar action.
+  }
+}
+
+export async function refreshQuietModeActionBadgeFromStorage(): Promise<void> {
+  await syncQuietModeActionBadge(await getQuietMode());
+}
+
+export function setupQuietModeActionBadgeListener(): void {
+  void refreshQuietModeActionBadgeFromStorage();
+
+  if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
+    return;
+  }
+
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") {
+      return;
+    }
+    const change = changes[STORAGE_KEY_QUIET_MODE];
+    if (!change) {
+      return;
+    }
+    void syncQuietModeActionBadge(Boolean(change.newValue));
+  });
+}
+
 export async function getAttributeHrefExtractionEnabled(): Promise<boolean> {
   const settings = await getVera5Settings();
   return settings.attributeHrefExtractionEnabled;
@@ -1153,6 +1218,7 @@ export async function completeInstallQuickStart(
     [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: showPreQueryNotices,
     [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]: true,
     [STORAGE_KEY_AUTO_SCAN_ENABLED]: false,
+    [STORAGE_KEY_QUIET_MODE]: false,
   });
 }
 

@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
 import { enrichIocMessage } from "../lib/messages";
 import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
+import { ENRICHMENT_ERROR_CODE } from "../lib/enrichment";
 import * as storage from "../lib/storage";
 import {
   DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
+  STORAGE_KEY_QUIET_MODE,
+  QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
 } from "../lib/storage";
 import { clearGlobalEnrichmentCooldown } from "../lib/enrichmentCooldown";
 import {
@@ -158,6 +161,7 @@ describe("enrichment handler", () => {
     }
     store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
       DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    store[STORAGE_KEY_QUIET_MODE] = false;
     stubChromeStorage(store);
   });
 
@@ -1034,6 +1038,291 @@ describe("enrichment handler", () => {
           },
         ],
       },
+    });
+  });
+
+  it("blocks live vendor enrichment when quiet mode is active", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = true;
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+          errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+            errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+            errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+          },
+        ],
+      },
+    });
+  });
+
+  it("returns cached enrichment when quiet mode is active and cache hits", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = true;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: Date.now() - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+          fromCache: true,
+        },
+      },
+    };
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+    expect(response.payload.source).toMatchObject({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "cached summary",
+      fromCache: true,
+    });
+    expect(response.payload.sources).toEqual([
+      expect.objectContaining({
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: ENRICHMENT_SOURCE_STATUS.OK,
+        summary: "cached summary",
+        fromCache: true,
+      }),
+    ]);
+  });
+
+  it("blocks live enrichment with bypassCache when quiet mode is active", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = true;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: Date.now() - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+        },
+      },
+    };
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+        bypassCache: true,
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+          errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+            errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+            errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+          },
+        ],
+      },
+    });
+  });
+
+  it("blocks local backend outbound fetch when quiet mode is active", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = true;
+    vi.mocked(storage.getLocalBackendEnabled).mockResolvedValue(true);
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "fallback summary",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(requestLocalBackendEnrichment).not.toHaveBeenCalled();
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+          errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+            errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+            errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+          },
+        ],
+      },
+    });
+  });
+
+  it("returns partial cache hits with cached vs live labels when quiet mode is active", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = true;
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: Date.now() - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+        },
+      },
+    };
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+    enrichWithOtx.mockResolvedValue({
+      sourceId: "otx",
+      sourceLabel: "OTX",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live otx summary",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(enrichWithOtx).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+
+    const abuse = response.payload.sources.find(
+      (source) => source.sourceId === "abuseipdb"
+    );
+    const otx = response.payload.sources.find((source) => source.sourceId === "otx");
+
+    expect(abuse).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "cached summary",
+      fromCache: true,
+    });
+    expect(otx).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+      errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+    });
+    expect(response.payload.source).toMatchObject({
+      sourceId: "abuseipdb",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      fromCache: true,
+    });
+  });
+
+  it("reads extension cache per source under quiet mode when local backend is enabled", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = true;
+    vi.mocked(storage.getLocalBackendEnabled).mockResolvedValue(true);
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: Date.now() - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+        },
+      },
+    };
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+      })
+    );
+
+    expect(requestLocalBackendEnrichment).not.toHaveBeenCalled();
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(enrichWithOtx).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+
+    const abuse = response.payload.sources.find(
+      (source) => source.sourceId === "abuseipdb"
+    );
+    const otx = response.payload.sources.find((source) => source.sourceId === "otx");
+
+    expect(abuse).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "cached summary",
+      fromCache: true,
+    });
+    expect(otx).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
     });
   });
 });

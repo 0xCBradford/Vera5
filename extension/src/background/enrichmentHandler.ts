@@ -55,6 +55,8 @@ import {
   getEnrichmentCacheTtlSecondsFromSettings,
   getEnrichmentSourceCacheTtlSeconds,
   getLocalBackendEnabled,
+  getQuietMode,
+  QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
 } from "../lib/storage";
 
 ensureDefaultConnectorRegistry();
@@ -68,6 +70,16 @@ function createGlobalCooldownSourceResult(
     errorMessage: formatGlobalEnrichmentCooldownMessage(),
     retryHint: formatGlobalEnrichmentCooldownRetryHint(),
   });
+}
+
+function createQuietModeBlockedSourceResult(
+  sourceId: EnrichmentSourceId
+): EnrichmentSourceResult {
+  return createSkippedSourceResult(
+    sourceId,
+    ENRICHMENT_ERROR_CODE.QUIET_MODE,
+    QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE
+  );
 }
 
 async function fetchLiveSource(
@@ -113,6 +125,10 @@ async function enrichLiveSource(
     if (cached) {
       return cached;
     }
+  }
+
+  if (await getQuietMode()) {
+    return createQuietModeBlockedSourceResult(sourceId);
   }
 
   try {
@@ -282,6 +298,10 @@ async function enrichFromLocalBackend(
         pickPrimaryEnrichmentSource(cachedSources) ?? cachedSources[0]!;
       return { source, sources: cachedSources };
     }
+  }
+
+  if (await getQuietMode()) {
+    return enrichFromExtensionConnectors(message, ioc, enabled, bypassCache);
   }
 
   const backendResponse = await requestLocalBackendEnrichment({

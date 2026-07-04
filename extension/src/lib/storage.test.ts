@@ -43,6 +43,8 @@ import {
   setLocalBackendEnabled,
   setLocalLlmSummaryEnabled,
   setQuietMode,
+  syncQuietModeActionBadge,
+  QUIET_MODE_ACTION_BADGE_TEXT,
   setIocTypeEnabled,
   setManualOnlyMode,
   setPreQueryNoticePreference,
@@ -425,6 +427,44 @@ describe("quiet mode storage", () => {
     await setQuietMode(false);
     expect(store[STORAGE_KEY_QUIET_MODE]).toBe(false);
     await expect(getQuietMode()).resolves.toBe(false);
+  });
+});
+
+describe("quiet mode action badge", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("sets toolbar badge text when quiet mode is on", async () => {
+    const setBadgeText = vi.fn().mockResolvedValue(undefined);
+    const setBadgeBackgroundColor = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("chrome", {
+      action: {
+        setBadgeText,
+        setBadgeBackgroundColor,
+      },
+    });
+
+    await syncQuietModeActionBadge(true);
+
+    expect(setBadgeText).toHaveBeenCalledWith({
+      text: QUIET_MODE_ACTION_BADGE_TEXT,
+    });
+    expect(setBadgeBackgroundColor).toHaveBeenCalled();
+  });
+
+  it("clears toolbar badge text when quiet mode is off", async () => {
+    const setBadgeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("chrome", {
+      action: {
+        setBadgeText,
+        setBadgeBackgroundColor: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    await syncQuietModeActionBadge(false);
+
+    expect(setBadgeText).toHaveBeenCalledWith({ text: "" });
   });
 });
 
@@ -842,6 +882,21 @@ describe("migrate-safe defaults", () => {
     );
   });
 
+  it("defaults quiet mode off when normalizing empty storage (fresh install shape)", () => {
+    expect(normalizeVera5Settings({}).quietMode).toBe(false);
+  });
+
+  it("defaults quiet mode off when migrating legacy schema version 3 profiles", () => {
+    const migrated = migrateVera5StorageRaw({
+      [STORAGE_KEY_SCHEMA_VERSION]: 3,
+      [STORAGE_KEY_EXTENSION_ENABLED]: true,
+    });
+    expect(migrated[STORAGE_KEY_QUIET_MODE]).toBe(false);
+    expect(migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION]).toBe(
+      SETTINGS_SCHEMA_VERSION
+    );
+  });
+
   it("detects when storage migration is required", () => {
     expect(needsStorageMigration({})).toBe(true);
     expect(
@@ -1066,7 +1121,9 @@ describe("install quick start storage", () => {
     expect(store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]).toBe(true);
     expect(store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]).toBe(false);
     expect(store[STORAGE_KEY_AUTO_SCAN_ENABLED]).toBe(false);
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(false);
     await expect(getInstallQuickStartCompleted()).resolves.toBe(true);
+    await expect(getQuietMode()).resolves.toBe(false);
   });
 
   it("treats legacy pre-query configuration as completed quick start", async () => {

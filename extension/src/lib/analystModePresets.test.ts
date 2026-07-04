@@ -21,6 +21,9 @@ describe("analyst mode presets", () => {
       "thehive-case-note"
     );
     expect(ANALYST_MODE_PRESET_DFIR.settings.includePrivateIpv4).toBe(true);
+    expect(ANALYST_MODE_PRESET_DFIR.settings.quietMode).toBe(true);
+    expect(ANALYST_MODE_PRESET_SOC.settings.quietMode).toBe(false);
+    expect(ANALYST_MODE_PRESET_CTI.settings.quietMode).toBe(false);
     expect(ANALYST_MODE_PRESET_CTI.settings.showDisabledSourcesInWorkspace).toBe(
       true
     );
@@ -58,5 +61,17 @@ describe("analyst mode presets", () => {
     expect(next.enrichmentSourceEnabled.abuseipdb).toBe(true);
     expect(next.enrichmentSourceEnabled.otx).toBe(true);
     expect(next.preQueryNoticePreferenceConfigured).toBe(true);
+    expect(next.quietMode).toBe(false);
+  });
+
+  it("applies DFIR quiet mode defaults to Vera5 settings", () => {
+    const current = { ...createDefaultVera5Settings(), quietMode: false };
+    const next = applyAnalystModePresetToSettings(
+      current,
+      ANALYST_MODE_PRESET_DFIR
+    );
+
+    expect(next.analystModePresetId).toBe("dfir");
+    expect(next.quietMode).toBe(true);
   });
 });

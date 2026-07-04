@@ -3,6 +3,11 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enrichSelectionMessage } from "../lib/messages";
+import { MACRO_STEP_TYPE_OPEN_FROM_SELECTION } from "../lib/macroStepActions";
+import {
+  MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE,
+} from "../lib/storage";
+import * as vera5Storage from "../lib/storage";
 import { CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED } from "./enrichmentSourceStorage";
 import { CONTENT_STORAGE_KEY_MANUAL_ONLY_MODE } from "./manualOnlyStorage";
 import {
@@ -30,6 +35,14 @@ import {
   resolveSelectionActionState,
   setupEnrichSelectionListener,
 } from "./enrichSelection";
+
+vi.mock("../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/storage")>();
+  return {
+    ...actual,
+    getQuietMode: vi.fn(async () => false),
+  };
+});
 
 function stubChromeForEnrichSelectionTests(
   store: Record<string, unknown> = {}
@@ -272,6 +285,7 @@ describe("ENRICH_SELECTION message envelope", () => {
 
 describe("setupEnrichSelectionListener", () => {
   afterEach(() => {
+    vi.mocked(vera5Storage.getQuietMode).mockResolvedValue(false);
     cancelPendingHoverEnrichment();
     window.getSelection()?.removeAllRanges();
     document.body.replaceChildren();
@@ -439,6 +453,93 @@ describe("setupEnrichSelectionListener", () => {
     ).not.toBeNull();
     expect(document.body.textContent).toContain(
       DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE
+    );
+    expect(enrichmentBackgroundFetch.runBackgroundEnrichment).not.toHaveBeenCalled();
+  });
+
+  it("aborts macro openFromSelection enrich when quiet mode is active", async () => {
+    vi.mocked(vera5Storage.getQuietMode).mockResolvedValue(true);
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "soc.example.com" },
+    });
+    document.body.replaceChildren();
+    vi.spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment").mockResolvedValue(
+      "completed"
+    );
+
+    let listener:
+      | ((
+          message: unknown,
+          sender: unknown,
+          sendResponse: (response: unknown) => void
+        ) => boolean | void)
+      | undefined;
+
+    stubChromeForEnrichSelectionTests();
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: () =>
+            Promise.resolve({
+              [CONTENT_STORAGE_KEY_MANUAL_ONLY_MODE]: true,
+              [CONTENT_STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+                abuseipdb: true,
+                otx: false,
+                urlscan: false,
+                greynoise: false,
+              },
+            }),
+        },
+      },
+      runtime: {
+        id: "test-extension-id",
+        sendMessage: vi.fn(async () => ({ ok: true })),
+        onMessage: {
+          addListener: (
+            callback: (
+              message: unknown,
+              sender: unknown,
+              sendResponse: (response: unknown) => void
+            ) => boolean | void
+          ) => {
+            listener = callback;
+          },
+        },
+      },
+    });
+
+    setupEnrichSelectionListener();
+    expect(listener).toBeDefined();
+
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 192.0.2.1 today.";
+    document.body.appendChild(paragraph);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    const response = await new Promise<unknown>((resolve) => {
+      const handled = listener!(
+        enrichSelectionMessage({
+          macroStepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+        }),
+        {},
+        (payload) => resolve(payload)
+      );
+      expect(handled).toBe(true);
+    });
+
+    expect(response).toEqual({
+      ok: true,
+      payload: { value: "192.0.2.1", type: "ipv4" },
+    });
+    expect(
+      document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
+    ).not.toBeNull();
+    expect(document.body.textContent).toContain(
+      MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE
     );
     expect(enrichmentBackgroundFetch.runBackgroundEnrichment).not.toHaveBeenCalled();
   });

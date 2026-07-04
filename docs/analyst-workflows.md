@@ -44,6 +44,7 @@ Open the palette with `Ctrl+Shift+K` / `Cmd+Shift+K`, or run **Open command pale
 | **Copy filtered Markdown** | Copies the workspace tray’s **filtered** indicator list as Markdown to the clipboard. | Uses the active tray filter on the page. No-op when the filtered list is empty. Records an export event on the active investigation session when one exists. |
 | **Export tray subset** | Downloads the filtered tray list as a Markdown file. | Same filtered subset as **Copy filtered Markdown**. |
 | **Clear highlights** | Removes all indicator highlights on the current page. | Does not clear enrichment cache or investigation history. |
+| **Toggle quiet mode** | Turns quiet mode on or off for this browser profile. | When on, blocks live vendor enrichment while preserving detection, cache display, and pivot links. See [Quiet mode](#quiet-mode). |
 | **Open options** | Opens **Vera5 Settings**. | API keys, sources, trust policy, cache controls. |
 
 Tray export commands read the on-page workspace filter state. Open the **workspace sidebar** and set a type filter before running **Copy filtered Markdown** or **Export tray subset** if you need a subset rather than every detected IOC.
@@ -100,6 +101,7 @@ For HTTP 429 behavior and vendor-specific quotas, see [api-integrations.md](api-
 | Check AbuseIPDB cooldown before bulk enrich | Palette **Source health** or expand **Source operations** in the popup. |
 | Export filtered tray IOCs to a ticket | Set sidebar filter → palette **Copy filtered Markdown**. |
 | Reset page highlights only | Palette **Clear highlights**. |
+| Sensitive environment: cache + pivots only | Palette **Toggle quiet mode** or **Trust & consent → Quiet mode**; use **Cached** rows and pivot links; expect **›** enrich to block until quiet mode is off. |
 
 All enrich paths honor **Trust & consent** settings: manual-only mode, domain denylist, internal asset lists, and pre-query disclosure when enabled. See [security-model.md](security-model.md#trust-gates-stacked).
 
@@ -107,7 +109,7 @@ All enrich paths honor **Trust & consent** settings: manual-only mode, domain de
 
 Vera5 exposes **stable action identifiers** so programmable **operator macros** (local-only step sequences registered in the command palette or run from the tray) can reuse the same flows as the palette, context menu, and popup—without a second command registry or parallel enrich pipeline.
 
-Macros are stored locally in extension storage. They do not sync through Vera5 cloud infrastructure. Each macro step invokes an existing operator action; trust gates (manual-only mode, domain policy, internal asset lists, pre-query disclosure, and future quiet mode) apply on every **enrich** step the same way they do for manual use.
+Macros are stored locally in extension storage. They do not sync through Vera5 cloud infrastructure. Each macro step invokes an existing operator action; trust gates (manual-only mode, domain policy, internal asset lists, pre-query disclosure, and quiet mode) apply on every **enrich** step the same way they do for manual use.
 
 ### Shipped hook: enrich from selection
 
@@ -593,7 +595,68 @@ To bypass the cache for one indicator, click the **›** enrich control on the h
 - Removes cached entries for that indicator before fetching.
 - Bypasses the **global rate-limit cooldown** so you can retry deliberately (the vendor may still return 429).
 
-Use manual refresh when case notes must reflect “as of now,” after you cleared the cache, or when cached summary looks stale.
+Use manual refresh when case notes must reflect “as of now,” after you cleared the cache, or when cached summary looks stale. **Quiet mode** blocks manual refresh the same way it blocks automatic enrich—turn quiet mode off first if you need a live vendor response.
+
+## Quiet mode
+
+Quiet mode blocks **outbound live vendor enrichment API calls** from the extension background worker. Use it in sensitive environments where automated threat-intel queries must not leave the browser. Quiet mode is **off** by default.
+
+For the security model (what stays local vs what reaches vendors), see [security-model.md](security-model.md#quiet-mode).
+
+### Turning quiet mode on or off
+
+| Control | Where | Notes |
+|---------|-------|-------|
+| **Toggle quiet mode** | Command palette (`Ctrl+Shift+K` / `Cmd+Shift+K`) | Fast toggle while triaging on the active tab. |
+| **Quiet mode** | **Vera5 Settings → Trust & consent** | Toggle plus a blocked/allowed summary list. |
+| **Analyst workflow preset** | **Trust & consent → Analyst workflow preset** | **DFIR investigation** enables quiet mode by default; **SOC triage** and **CTI research** leave it off. |
+| **Threat profile import** | Threat profile import (when available) | Profile JSON may include `quietModeDefault`; applying the profile sets quiet mode without importing API keys. |
+
+When quiet mode is active:
+
+- A **persistent banner** appears at the top of pages where Vera5 is injected.
+- The toolbar popup header shows **Quiet mode**.
+- The extension toolbar badge shows **Q**.
+
+### What quiet mode blocks
+
+| Blocked action | Where you see it |
+|----------------|------------------|
+| Live vendor enrichment | **›** on a highlight, auto-enrich when manual-only is off, palette **Enrich selection**, context menu **Enrich selection with Vera5** |
+| Manual refresh | **›** with cache bypass—same outbound gate as automatic enrich |
+| Bulk enrich queue | Workspace tray bulk enrich aborts with a clear message |
+| Macro enrich steps | `openFromSelection`, `enrich`, and `queueRelatedIocs` steps abort with a clear message |
+
+Blocked enrich paths show messaging that quiet mode is active. Per-source rows may show a **Skipped** status with the same explanation instead of calling vendors.
+
+### What still works
+
+| Still available | Notes |
+|-----------------|-------|
+| **Scan page** / **Scan selection** | Local detection and highlights only—no vendor calls. |
+| **Cached enrichment** on hover cards | Prior successful responses remain readable with **Cached** badges and **Last updated** timestamps. |
+| **Recommended next pivots** | Attributed vendor links you activate yourself—see [Pivot behavior while quiet mode is on](#pivot-behavior-while-quiet-mode-is-on). |
+| Copy, labels, pins, sessions, collections, exports | Unaffected—no live enrich required. |
+| Investigation history reopen | Same-origin scroll/open behavior; history does not trigger new vendor fetches by itself. |
+
+Quiet mode stacks with other trust gates (domain denylist, internal asset lists, manual-only mode, pre-query disclosure). Turning quiet mode off later does not bypass domain deny—it removes only the quiet-mode outbound gate.
+
+### Pivot behavior while quiet mode is on
+
+**Recommended next pivots** on the hover card are **not blocked** by quiet mode. Vera5 builds each pivot URL locally from the indicator value you opened. When you click or keyboard-activate a pivot row, the browser opens that vendor’s search or indicator page in a **new tab**. That navigation is **user-initiated**—Vera5 does not perform a background vendor API `fetch` for pivot links.
+
+| Action | Quiet mode behavior |
+|--------|---------------------|
+| Click a **Recommended next pivots** link | **Allowed** — opens the vendor site in a new tab; no extension background enrich call |
+| Run **›** live enrich or manual refresh | **Blocked** — would call vendor APIs from the extension |
+| Read **Cached** enrichment rows | **Allowed** — served from local storage |
+| Planned macro **`openPivot`** step | **Allowed** when shipped — navigation-only; same model as manual pivot clicks |
+
+**Deliberate out-of-scope boundary:** Quiet mode does **not** prevent you from opening vendor sites via pivot links. That is intentional: pivots are attributed shortcuts for analyst-chosen navigation, not silent API enrichment. If policy forbids even visiting vendor pages from a sensitive workstation, do not activate pivot links—use copy/export workflows and organizational browser controls instead.
+
+**Cached vs live while quiet:** You can review **Cached** summaries and attribution footers, but you cannot obtain fresh **Live** vendor data until quiet mode is off (and other trust gates allow enrich). Risk score blending may show **Unknown risk** or stale cached evidence if live refresh is blocked—use pivots and per-source rows for context, not the headline band alone.
+
+**Vendor visibility:** Opening a pivot tab may still expose your browser session or IP to the vendor’s web front end, separate from Vera5’s enrichment API calls. Review vendor privacy policies for classified or air-gapped workflows.
 
 ## Rapid clicks and quota protection
 
@@ -723,6 +786,7 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | Fresh data everywhere | **Clear cache** on the options page, then re-enrich indicators you care about. |
 | Hit a rate limit | Read the retry hint; wait for cooldown; check vendor usage dashboards listed in [api-integrations.md](api-integrations.md). |
 | Conflicting risk signals | Read **How this score was computed**; follow pivots for diverging sources; do not treat the headline band as consensus when **Sources disagree** is shown. |
+| Quiet mode triage | Turn quiet mode on; scan and label locally; read **Cached** enrichment; use **Recommended next pivots** for vendor research; disable quiet mode only when live enrich is approved. |
 | Single live source only | Expect **Unknown risk** and an empty reasoning note until a second source returns parseable OK data. |
 | Phishing case handoff | Name session, enrich key IOCs, label/pin priorities, **Export session** Markdown or JSON; verify denylist if webmail blocked enrich. |
 | Campaign or hunt corpus across sessions | **Save to collection…** or **Add filtered to collection…** as you triage; **Export CSV** from **IOC collections** for ticket paste; collections survive **New session**. |
@@ -758,7 +822,8 @@ Import threat profile files through threat profile import, not the settings pack
 | No enrichment, only pivots | Source disabled or no API key | Enable source and save key in settings. |
 | “{Vendor} does not support this indicator type.” | Live enrichment requested for email, ASN, CIDR, file path, or onion | Expected for those types—use **Recommended next pivots** instead of live enrich. |
 | “Add your … API key” | Missing key for that source | Open settings from the card action. |
-| Cached summary but you need live data | Valid cache entry | Use **›** manual refresh. |
+| Cached summary but you need live data | Valid cache entry | Use **›** manual refresh (turn quiet mode off first if active). |
+| **›** or enrich shows quiet mode message | Quiet mode on | Expected—use cache and pivots, or disable quiet mode when live enrich is approved. |
 | All sources show rate-limit backoff | Global cooldown after 429 | Wait for the countdown hint; reduce hover churn. |
 | AbuseIPDB works, OTX errors | Partial success | Read per-source badge and message; fix OTX key or quota. |
 | **Unknown risk** with one Live source | Only one parseable OK signal | Enable a second source or accept advisory unknown until another source succeeds. |

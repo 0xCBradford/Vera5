@@ -17,6 +17,7 @@ import {
   STORAGE_KEY_DOMAIN_DENYLIST,
   STORAGE_KEY_DOMAIN_POLICY_MODE,
   STORAGE_KEY_MANUAL_ONLY_MODE,
+  STORAGE_KEY_QUIET_MODE,
   STORAGE_KEY_ANALYST_MODE_PRESET_ID,
   STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
   STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
@@ -1269,6 +1270,107 @@ describe("Options install quick start", () => {
   });
 });
 
+describe("Options quiet mode controls", () => {
+  let store: Record<string, unknown>;
+  let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+  beforeEach(() => {
+    store = {
+      [STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]: true,
+      [STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]: true,
+      [STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]: true,
+    };
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    vi.unstubAllGlobals();
+  });
+
+  it("renders quiet mode toggle with blocked and allowed guidance", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("Quiet mode");
+    expect(mounted.container.textContent).toContain("Blocked while on:");
+    expect(mounted.container.textContent).toContain("Still available:");
+    expect(mounted.container.textContent).toContain("attributed pivot links");
+
+    const toggle = mounted.container.querySelector(
+      'input[aria-label="Quiet mode"]'
+    ) as HTMLInputElement;
+    expect(toggle).not.toBeNull();
+    expect(toggle.checked).toBe(false);
+  });
+
+  it("reflects quiet mode on from storage", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = true;
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const toggle = mounted.container.querySelector(
+      'input[aria-label="Quiet mode"]'
+    ) as HTMLInputElement;
+    expect(toggle.checked).toBe(true);
+  });
+
+  it("persists quiet mode when toggled on", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const toggle = mounted.container.querySelector(
+      'input[aria-label="Quiet mode"]'
+    ) as HTMLInputElement;
+    await act(async () => {
+      toggle.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(true);
+    expect(toggle.checked).toBe(true);
+  });
+});
+
 describe("Options domain policy controls", () => {
   let store: Record<string, unknown>;
   let mounted: { container: HTMLDivElement; root: Root } | null = null;
@@ -1469,5 +1571,28 @@ describe("Options domain policy controls", () => {
     expect(store[STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS]).toEqual(
       expect.arrayContaining(["abuseipdb", "greynoise", "otx"])
     );
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(false);
+  });
+
+  it("applies DFIR analyst workflow preset with quiet mode on", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const applyButton = mounted.container.querySelector(
+      'button[aria-label="Apply DFIR investigation preset"]'
+    ) as HTMLButtonElement;
+
+    expect(applyButton).not.toBeNull();
+
+    await act(async () => {
+      applyButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_ANALYST_MODE_PRESET_ID]).toBe("dfir");
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(true);
   });
 });

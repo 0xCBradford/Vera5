@@ -12,7 +12,10 @@ import {
 } from "../lib/messages";
 import { clearTabScanSnapshot } from "../lib/tabScanSnapshotStorage";
 import { runStorageMigrationOnExtensionUpdate } from "../lib/storageMigration";
+import { setupQuietModeActionBadgeListener } from "../lib/storage";
 import { routeIncomingMessageAsync } from "./messageRouter";
+
+setupQuietModeActionBadgeListener();
 
 export const CONTEXT_MENU_ENRICH_SELECTION_TITLE = "Enrich selection with Vera5";
 
@@ -71,7 +74,12 @@ async function toggleCommandPaletteOnActiveTab(): Promise<void> {
 }
 
 async function sendEnrichSelectionToTab(tabId: number): Promise<void> {
-  await sendMessageToTab(tabId, enrichSelectionMessage());
+  await sendMessageToTab(
+    tabId,
+    enrichSelectionMessage({
+      macroStepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+    })
+  );
 }
 
 function resolveEnrichSelectionContextMenuActionId(): string {

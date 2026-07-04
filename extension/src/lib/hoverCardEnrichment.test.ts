@@ -664,6 +664,42 @@ describe("hover card enrichment placeholders", () => {
     );
   });
 
+  it("labels cached and quiet-blocked sources separately under quiet mode", () => {
+    const view = resolveMultiSourceEnrichmentView([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "12 abuse confidence",
+        fromCache: true,
+        fetchedAt: "2026-05-22T10:00:00.000Z",
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "skipped",
+        errorCode: "quiet_mode",
+        errorMessage: "Quiet mode is active. Live vendor enrichment is blocked.",
+      },
+    ]);
+
+    expect(view.enrichmentState).toBe("ready");
+    expect(view.summary).toBe("12 abuse confidence");
+    expect(view.sourceResults).toHaveLength(2);
+    expect(view.sourceResults[0]).toMatchObject({
+      label: "AbuseIPDB",
+      badgeText: "Cached",
+      fromCache: true,
+    });
+    expect(view.sourceResults[1]).toMatchObject({
+      label: "OTX",
+      badgeText: "Skipped",
+      fromCache: false,
+    });
+    expect(formatSourceStatusBadge("ok", true)).toBe("Cached");
+    expect(formatSourceStatusBadge("ok", false)).toBe("Live");
+  });
+
   it("resolves single-source RDAP/WHOIS enrichment with attribution footer and timestamp", () => {
     const fetchedAt = "2026-06-30T12:00:00.000Z";
     const view = resolveMultiSourceEnrichmentView([

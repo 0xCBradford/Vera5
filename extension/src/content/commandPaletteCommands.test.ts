@@ -21,9 +21,24 @@ import {
 import { openExtensionPopupMessage } from "../lib/messages";
 import { POPUP_PANEL } from "../lib/popupPanelFocus";
 
+const getQuietMode = vi.fn(async () => false);
+const setQuietMode = vi.fn(async () => undefined);
+
+vi.mock("../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/storage")>();
+  return {
+    ...actual,
+    getQuietMode: (...args: unknown[]) => getQuietMode(...args),
+    setQuietMode: (...args: unknown[]) => setQuietMode(...args),
+  };
+});
+
 describe("registerCoreCommandPaletteCommands", () => {
   beforeEach(() => {
     document.body.replaceChildren();
+    getQuietMode.mockResolvedValue(false);
+    getQuietMode.mockClear();
+    setQuietMode.mockClear();
     clearCommandPaletteCommands();
     registerCoreCommandPaletteCommands();
   });
@@ -34,7 +49,7 @@ describe("registerCoreCommandPaletteCommands", () => {
     vi.restoreAllMocks();
   });
 
-  it("registers all eight core palette commands", () => {
+  it("registers all nine core palette commands", () => {
     const ids = listCommandPaletteCommands().map((command) => command.id);
     expect(ids).toEqual([
       CORE_COMMAND_PALETTE_COMMAND_IDS.CLEAR_HIGHLIGHTS,
@@ -45,6 +60,7 @@ describe("registerCoreCommandPaletteCommands", () => {
       CORE_COMMAND_PALETTE_COMMAND_IDS.OPEN_OPTIONS,
       CORE_COMMAND_PALETTE_COMMAND_IDS.SCAN_PAGE,
       CORE_COMMAND_PALETTE_COMMAND_IDS.SOURCE_HEALTH,
+      CORE_COMMAND_PALETTE_COMMAND_IDS.TOGGLE_QUIET_MODE,
     ]);
   });
 
@@ -175,5 +191,27 @@ describe("registerCoreCommandPaletteCommands", () => {
     expect(safeRuntimeSendMessage).toHaveBeenCalledWith(
       openExtensionPopupMessage(POPUP_PANEL.SOURCE_OPERATIONS)
     );
+  });
+
+  it("turns quiet mode on when it is currently off", async () => {
+    getQuietMode.mockResolvedValue(false);
+
+    await executeCommandPaletteCommand(
+      CORE_COMMAND_PALETTE_COMMAND_IDS.TOGGLE_QUIET_MODE
+    );
+
+    expect(getQuietMode).toHaveBeenCalledTimes(1);
+    expect(setQuietMode).toHaveBeenCalledWith(true);
+  });
+
+  it("turns quiet mode off when it is currently on", async () => {
+    getQuietMode.mockResolvedValue(true);
+
+    await executeCommandPaletteCommand(
+      CORE_COMMAND_PALETTE_COMMAND_IDS.TOGGLE_QUIET_MODE
+    );
+
+    expect(getQuietMode).toHaveBeenCalledTimes(1);
+    expect(setQuietMode).toHaveBeenCalledWith(false);
   });
 });

@@ -13,6 +13,7 @@ import {
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_EXTENSION_ENABLED,
   STORAGE_KEY_HIGHLIGHT_ENABLED,
+  STORAGE_KEY_QUIET_MODE,
   STORAGE_KEY_SCHEMA_VERSION,
   STORAGE_KEY_STORAGE_SCHEMA_VERSION,
   vera5SettingsToStoragePayload,
@@ -88,6 +89,20 @@ describe("storageMigration", () => {
       SETTINGS_SCHEMA_VERSION
     );
     expect(store[STORAGE_KEY_SCHEMA_VERSION]).toBeUndefined();
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(false);
+  });
+
+  it("persists quiet mode off when migrating from schema version 8", async () => {
+    store[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 8;
+    store[STORAGE_KEY_EXTENSION_ENABLED] = true;
+    store[STORAGE_KEY_HIGHLIGHT_ENABLED] = true;
+
+    const result = await runStorageMigrationOnExtensionUpdate();
+
+    expect(result.migrated).toBe(true);
+    expect(result.fromVersion).toBe(8);
+    expect(result.toVersion).toBe(SETTINGS_SCHEMA_VERSION);
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(false);
   });
 
   it("is idempotent when storage is already on the current schema version", async () => {

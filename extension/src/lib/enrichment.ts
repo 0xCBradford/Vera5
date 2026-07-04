@@ -22,6 +22,7 @@ export const ENRICHMENT_ERROR_CODE = {
   DISABLED: "disabled",
   DOMAIN_POLICY: "domain_policy",
   INTERNAL_ASSET: "internal_asset",
+  QUIET_MODE: "quiet_mode",
   VENDOR: "vendor_error",
 } as const;
 
