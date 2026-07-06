@@ -112,4 +112,33 @@ describe("runSequentialTrayEnrichQueue", () => {
     expect(isTrayEnrichQueueRunning()).toBe(false);
     expect(getTrayEnrichQueueSnapshot()).toBeNull();
   });
+
+  it("runs bulk enrich after quiet mode is toggled off", async () => {
+    vi.mocked(storage.getQuietMode).mockResolvedValue(true);
+    const enrichAnchor = vi.fn(async () => undefined);
+
+    const blocked = await runSequentialTrayEnrichQueue(
+      ["a-1", "a-2"],
+      enrichAnchor
+    );
+
+    expect(blocked).toEqual({
+      completedCount: 0,
+      cancelled: false,
+      aborted: true,
+      abortMessage: TRAY_ENRICH_QUEUE_QUIET_MODE_ABORT_MESSAGE,
+    });
+    expect(enrichAnchor).not.toHaveBeenCalled();
+
+    vi.mocked(storage.getQuietMode).mockResolvedValue(false);
+    enrichAnchor.mockClear();
+
+    const restored = await runSequentialTrayEnrichQueue(
+      ["a-1", "a-2"],
+      enrichAnchor
+    );
+
+    expect(restored).toEqual({ completedCount: 2, cancelled: false });
+    expect(enrichAnchor).toHaveBeenCalledTimes(2);
+  });
 });

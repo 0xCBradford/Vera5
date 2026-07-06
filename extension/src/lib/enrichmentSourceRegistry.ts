@@ -1,5 +1,10 @@
 import type { IocType } from "./iocRegex";
 import { IOC_TYPE } from "./iocRegex";
+import type {
+  ConnectorFreshnessPolicy,
+  ConnectorReliabilityTier,
+  ConnectorSourceClass,
+} from "./connectorDefinition";
 
 export const ENRICHMENT_SOURCE = {
   ABUSEIPDB: "abuseipdb",
@@ -61,6 +66,9 @@ export type EnrichmentSourceDefinition = {
   cacheKeyNamespace: string;
   enabledDefault: false;
   liveConnector: boolean;
+  freshnessPolicy?: ConnectorFreshnessPolicy;
+  reliabilityTier?: ConnectorReliabilityTier;
+  sourceClass?: ConnectorSourceClass;
   buildPivotUrl?: (type: IocType, value: string) => string | null;
 };
 

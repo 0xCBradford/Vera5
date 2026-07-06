@@ -1082,6 +1082,83 @@ describe("enrichment handler", () => {
     });
   });
 
+  it("restores live vendor enrichment after quiet mode is toggled off", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = true;
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+
+    const blocked = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(blocked).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+          errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+            errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+            errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+          },
+        ],
+      },
+    });
+
+    store[STORAGE_KEY_QUIET_MODE] = false;
+    enrichWithAbuseIpdb.mockClear();
+
+    const restored = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).toHaveBeenCalledOnce();
+    expect(enrichWithAbuseIpdb).toHaveBeenCalledWith({
+      value: "8.8.8.8",
+      type: "ipv4",
+    });
+    expect(restored).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "live summary",
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.OK,
+            summary: "live summary",
+          },
+        ],
+      },
+    });
+  });
+
   it("returns cached enrichment when quiet mode is active and cache hits", async () => {
     store[STORAGE_KEY_QUIET_MODE] = true;
     store[STORAGE_KEY_ENRICHMENT_CACHE] = {

@@ -31,6 +31,97 @@ export const CONNECTOR_AUTHORITY_TIER = {
 export type ConnectorAuthorityTier =
   (typeof CONNECTOR_AUTHORITY_TIER)[keyof typeof CONNECTOR_AUTHORITY_TIER];
 
+export const CONNECTOR_RELIABILITY_TIER = {
+  COMMUNITY: "community",
+  AUTHORITATIVE: "authoritative",
+  PIVOT_ONLY: "pivot_only",
+} as const;
+
+export type ConnectorReliabilityTier =
+  (typeof CONNECTOR_RELIABILITY_TIER)[keyof typeof CONNECTOR_RELIABILITY_TIER];
+
+export type ConnectorReliabilityTierDefinition = {
+  value: ConnectorReliabilityTier;
+  label: string;
+  description: string;
+};
+
+export const CONNECTOR_RELIABILITY_TIER_DEFINITIONS: Record<
+  ConnectorReliabilityTier,
+  ConnectorReliabilityTierDefinition
+> = {
+  [CONNECTOR_RELIABILITY_TIER.COMMUNITY]: {
+    value: CONNECTOR_RELIABILITY_TIER.COMMUNITY,
+    label: "Community",
+    description:
+      "Community-sourced or crowd-fed intelligence. Shared pulses and user submissions may lag official vendor research. Informational only—does not replace live vendor rows or the composite risk score.",
+  },
+  [CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE]: {
+    value: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+    label: "Authoritative",
+    description:
+      "Vendor-operated or registry-grade feed with a defined API contract. Typical commercial threat intelligence and registration data sources. Informational only—does not replace live vendor rows or the composite risk score.",
+  },
+  [CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY]: {
+    value: CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+    label: "Pivot only",
+    description:
+      "No live enrichment connector in Vera5 for this source. Static pivot links only; metadata describes navigation affordance, not a live API response.",
+  },
+};
+
+export const CONNECTOR_RELIABILITY_TIER_ORDER: readonly ConnectorReliabilityTier[] =
+  [
+    CONNECTOR_RELIABILITY_TIER.COMMUNITY,
+    CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+    CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+  ];
+
+export function getConnectorReliabilityTierDefinition(
+  tier: ConnectorReliabilityTier
+): ConnectorReliabilityTierDefinition {
+  return CONNECTOR_RELIABILITY_TIER_DEFINITIONS[tier];
+}
+
+export function getConnectorReliabilityTierLabel(
+  tier: ConnectorReliabilityTier
+): string {
+  return CONNECTOR_RELIABILITY_TIER_DEFINITIONS[tier].label;
+}
+
+export function listConnectorReliabilityTierDefinitions(): readonly ConnectorReliabilityTierDefinition[] {
+  return CONNECTOR_RELIABILITY_TIER_ORDER.map(
+    (tier) => CONNECTOR_RELIABILITY_TIER_DEFINITIONS[tier]
+  );
+}
+
+export const CONNECTOR_SOURCE_CLASS = {
+  COMMUNITY: "community",
+  AUTHORITATIVE: "authoritative",
+} as const;
+
+export type ConnectorSourceClass =
+  (typeof CONNECTOR_SOURCE_CLASS)[keyof typeof CONNECTOR_SOURCE_CLASS];
+
+export const CONNECTOR_FRESHNESS_POLICY = {
+  STANDARD: "standard",
+  VOLATILE: "volatile",
+  STABLE: "stable",
+} as const;
+
+export type ConnectorFreshnessPolicy =
+  (typeof CONNECTOR_FRESHNESS_POLICY)[keyof typeof CONNECTOR_FRESHNESS_POLICY];
+
+export type ConnectorConfidenceMetadataFields = {
+  freshnessPolicy: ConnectorFreshnessPolicy | null;
+  reliabilityTier: ConnectorReliabilityTier | null;
+  sourceClass: ConnectorSourceClass | null;
+};
+
+export type ConnectorConfidenceMetadata = ConnectorConfidenceMetadataFields & {
+  sourceId: EnrichmentSourceId;
+};
+
 export type ConnectorCapabilityFlags = {
   liveEnrichment: boolean;
   pivotOnly: boolean;
@@ -96,6 +187,18 @@ const CONNECTOR_AUTHORITY_TIER_SET = new Set<string>(
   Object.values(CONNECTOR_AUTHORITY_TIER)
 );
 
+const CONNECTOR_RELIABILITY_TIER_SET = new Set<string>(
+  Object.values(CONNECTOR_RELIABILITY_TIER)
+);
+
+const CONNECTOR_SOURCE_CLASS_SET = new Set<string>(
+  Object.values(CONNECTOR_SOURCE_CLASS)
+);
+
+const CONNECTOR_FRESHNESS_POLICY_SET = new Set<string>(
+  Object.values(CONNECTOR_FRESHNESS_POLICY)
+);
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
 }
@@ -129,6 +232,53 @@ export function isConnectorAuthorityTier(
   value: unknown
 ): value is ConnectorAuthorityTier {
   return typeof value === "string" && CONNECTOR_AUTHORITY_TIER_SET.has(value);
+}
+
+export function isConnectorReliabilityTier(
+  value: unknown
+): value is ConnectorReliabilityTier {
+  return typeof value === "string" && CONNECTOR_RELIABILITY_TIER_SET.has(value);
+}
+
+export function isConnectorSourceClass(
+  value: unknown
+): value is ConnectorSourceClass {
+  return typeof value === "string" && CONNECTOR_SOURCE_CLASS_SET.has(value);
+}
+
+export function isConnectorFreshnessPolicy(
+  value: unknown
+): value is ConnectorFreshnessPolicy {
+  return typeof value === "string" && CONNECTOR_FRESHNESS_POLICY_SET.has(value);
+}
+
+export function isConnectorConfidenceMetadataFields(
+  value: unknown
+): value is ConnectorConfidenceMetadataFields {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    (record.freshnessPolicy === null ||
+      isConnectorFreshnessPolicy(record.freshnessPolicy)) &&
+    (record.reliabilityTier === null ||
+      isConnectorReliabilityTier(record.reliabilityTier)) &&
+    (record.sourceClass === null || isConnectorSourceClass(record.sourceClass))
+  );
+}
+
+export function isConnectorConfidenceMetadata(
+  value: unknown
+): value is ConnectorConfidenceMetadata {
+  if (!isConnectorConfidenceMetadataFields(value)) {
+    return false;
+  }
+  const record = value as ConnectorConfidenceMetadata;
+  return (
+    typeof record.sourceId === "string" &&
+    ENRICHMENT_SOURCE_ID_SET.has(record.sourceId)
+  );
 }
 
 export function isConnectorCapabilityFlags(

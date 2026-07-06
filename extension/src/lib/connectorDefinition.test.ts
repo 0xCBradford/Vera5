@@ -6,17 +6,29 @@ import {
 } from "./enrichment";
 import {
   CONNECTOR_AUTHORITY_TIER,
+  CONNECTOR_FRESHNESS_POLICY,
+  CONNECTOR_RELIABILITY_TIER,
+  CONNECTOR_RELIABILITY_TIER_DEFINITIONS,
+  CONNECTOR_SOURCE_CLASS,
   connectorDefinitionSupportsIocType,
   enrichWithConnectorDefinition,
+  getConnectorReliabilityTierDefinition,
+  getConnectorReliabilityTierLabel,
   isConnectorAuthorityTier,
   isConnectorCapabilityFlags,
   isConnectorCapabilityMetadata,
+  isConnectorConfidenceMetadata,
+  isConnectorConfidenceMetadataFields,
   isConnectorDefinition,
   isConnectorFetchResult,
+  isConnectorFreshnessPolicy,
   isConnectorNormalizeResult,
   isConnectorRateLimitPolicy,
+  isConnectorReliabilityTier,
+  isConnectorSourceClass,
   isLiveConnectorCapability,
   isPivotOnlyConnectorCapability,
+  listConnectorReliabilityTierDefinitions,
   runConnectorDefinitionHealthCheck,
   type ConnectorDefinition,
 } from "./connectorDefinition";
@@ -118,6 +130,59 @@ describe("ConnectorDefinition contract", () => {
       true
     );
     expect(isConnectorAuthorityTier("vendor")).toBe(false);
+
+    expect(isConnectorReliabilityTier(CONNECTOR_RELIABILITY_TIER.COMMUNITY)).toBe(
+      true
+    );
+    expect(isConnectorReliabilityTier(CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY)).toBe(
+      true
+    );
+    expect(isConnectorReliabilityTier("unknown")).toBe(false);
+
+    expect(isConnectorSourceClass(CONNECTOR_SOURCE_CLASS.AUTHORITATIVE)).toBe(
+      true
+    );
+    expect(isConnectorSourceClass("pivot_only")).toBe(false);
+
+    expect(isConnectorFreshnessPolicy(CONNECTOR_FRESHNESS_POLICY.STANDARD)).toBe(
+      true
+    );
+    expect(isConnectorFreshnessPolicy(CONNECTOR_FRESHNESS_POLICY.STABLE)).toBe(
+      true
+    );
+    expect(isConnectorFreshnessPolicy("realtime")).toBe(false);
+
+    expect(
+      isConnectorConfidenceMetadataFields({
+        freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.VOLATILE,
+        reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+        sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+      })
+    ).toBe(true);
+    expect(
+      isConnectorConfidenceMetadataFields({
+        freshnessPolicy: null,
+        reliabilityTier: null,
+        sourceClass: null,
+      })
+    ).toBe(true);
+    expect(
+      isConnectorConfidenceMetadata({
+        sourceId: ENRICHMENT_SOURCE.OTX,
+        freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+        reliabilityTier: CONNECTOR_RELIABILITY_TIER.COMMUNITY,
+        sourceClass: CONNECTOR_SOURCE_CLASS.COMMUNITY,
+      })
+    ).toBe(true);
+    expect(
+      isConnectorConfidenceMetadata({
+        sourceId: "unknown_source",
+        freshnessPolicy: null,
+        reliabilityTier: null,
+        sourceClass: null,
+      })
+    ).toBe(false);
+
     expect(
       isConnectorCapabilityMetadata({
         sourceId: ENRICHMENT_SOURCE.OTX,
@@ -150,6 +215,49 @@ describe("ConnectorDefinition contract", () => {
     expect(isConnectorDefinition(stubConnectorDefinition)).toBe(true);
     expect(isConnectorDefinition({ id: ENRICHMENT_SOURCE.OTX })).toBe(false);
     expect(isConnectorDefinition(null)).toBe(false);
+  });
+
+  it("documents reliability tier enum values with labels and descriptions", () => {
+    const definitions = listConnectorReliabilityTierDefinitions();
+
+    expect(definitions).toHaveLength(3);
+    expect(definitions.map((entry) => entry.value)).toEqual([
+      CONNECTOR_RELIABILITY_TIER.COMMUNITY,
+      CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+      CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+    ]);
+
+    expect(
+      CONNECTOR_RELIABILITY_TIER_DEFINITIONS[CONNECTOR_RELIABILITY_TIER.COMMUNITY]
+    ).toMatchObject({
+      label: "Community",
+      description: expect.stringContaining("Community-sourced"),
+    });
+    expect(
+      CONNECTOR_RELIABILITY_TIER_DEFINITIONS[
+        CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE
+      ]
+    ).toMatchObject({
+      label: "Authoritative",
+      description: expect.stringContaining("Vendor-operated"),
+    });
+    expect(
+      CONNECTOR_RELIABILITY_TIER_DEFINITIONS[
+        CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY
+      ]
+    ).toMatchObject({
+      label: "Pivot only",
+      description: expect.stringContaining("No live enrichment connector"),
+    });
+
+    expect(
+      getConnectorReliabilityTierLabel(CONNECTOR_RELIABILITY_TIER.COMMUNITY)
+    ).toBe("Community");
+    expect(
+      getConnectorReliabilityTierDefinition(
+        CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY
+      ).value
+    ).toBe("pivot_only");
   });
 
   it("validates fetch and normalize result guards", () => {

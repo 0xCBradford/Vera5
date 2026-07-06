@@ -14,6 +14,7 @@ import {
   isConnectorDefinition,
   type ConnectorCapabilityFlags,
   type ConnectorCapabilityMetadata,
+  type ConnectorConfidenceMetadata,
   type ConnectorDefinition,
   type ConnectorRateLimitPolicy,
 } from "./connectorDefinition";
@@ -175,6 +176,33 @@ export function lookupConnectorCapabilityMetadata(
     return undefined;
   }
   return getConnectorCapabilityMetadata(sourceId);
+}
+
+export function getConnectorConfidenceMetadata(
+  sourceId: EnrichmentSourceId
+): ConnectorConfidenceMetadata {
+  const definition = getEnrichmentSourceDefinition(sourceId);
+  return {
+    sourceId,
+    freshnessPolicy: definition.freshnessPolicy ?? null,
+    reliabilityTier: definition.reliabilityTier ?? null,
+    sourceClass: definition.sourceClass ?? null,
+  };
+}
+
+export function listConnectorConfidenceMetadata(): readonly ConnectorConfidenceMetadata[] {
+  return ENRICHMENT_SOURCE_ORDER.map((sourceId) =>
+    getConnectorConfidenceMetadata(sourceId)
+  );
+}
+
+export function lookupConnectorConfidenceMetadata(
+  sourceId: EnrichmentSourceId
+): ConnectorConfidenceMetadata | undefined {
+  if (!ENRICHMENT_SOURCE_ORDER.includes(sourceId)) {
+    return undefined;
+  }
+  return getConnectorConfidenceMetadata(sourceId);
 }
 
 function assertCapabilityMetadataMatchesDefinition(

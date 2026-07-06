@@ -10,10 +10,13 @@ import {
   ensureDefaultConnectorRegistry,
   enrichRegisteredLiveConnector,
   getConnectorCapabilityMetadata,
+  getConnectorConfidenceMetadata,
   hasRegisteredConnector,
   listConnectorCapabilityMetadata,
+  listConnectorConfidenceMetadata,
   listRegisteredConnectorIds,
   lookupConnectorCapabilityMetadata,
+  lookupConnectorConfidenceMetadata,
   lookupConnectorDefinition,
   registerBuiltInLiveConnectors,
   registerConnectorDefinition,
@@ -291,5 +294,34 @@ describe("connectorRegistry", () => {
         })
       )
     ).toThrow(ConnectorRegistryError);
+  });
+
+  it("exposes confidence metadata fields for every enrichment source", () => {
+    const metadata = listConnectorConfidenceMetadata();
+
+    expect(metadata).toHaveLength(ENRICHMENT_SOURCE_ORDER.length);
+    expect(lookupConnectorConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual(
+      getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.OTX)
+    );
+    expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.ABUSEIPDB)).toEqual({
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+      freshnessPolicy: null,
+      reliabilityTier: null,
+      sourceClass: null,
+    });
+    expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.VIRUSTOTAL)).toEqual({
+      sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
+      freshnessPolicy: null,
+      reliabilityTier: null,
+      sourceClass: null,
+    });
+
+    for (const entry of metadata) {
+      expect(entry).toMatchObject({
+        freshnessPolicy: null,
+        reliabilityTier: null,
+        sourceClass: null,
+      });
+    }
   });
 });

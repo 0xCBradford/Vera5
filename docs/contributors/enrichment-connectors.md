@@ -57,6 +57,22 @@ Vendor JSON is normalized for display and scoring in `enrichmentVendorNormalize.
 
 URLScan.io and GreyNoise have settings slots and static pivots (`pivots.ts`) but **no live API** in the current release. Do not document them as live connectors until implemented.
 
+## Connector confidence metadata — reliability tier
+
+Per-source informational metadata on hover card source rows includes `freshnessPolicy`, `reliabilityTier`, and `sourceClass`. Schema lives in `extension/src/lib/connectorDefinition.ts` and is exposed through `getConnectorConfidenceMetadata()` in `connectorRegistry.ts`.
+
+**Reliability tier** (`reliabilityTier`) is an enum with three documented values. It is informational only—it does not alter the composite risk score or the per-source live row.
+
+| Value | Label | Meaning |
+|-------|-------|---------|
+| `community` | Community | Community-sourced or crowd-fed intelligence. Shared pulses and user submissions may lag official vendor research. |
+| `authoritative` | Authoritative | Vendor-operated or registry-grade feed with a defined API contract. Typical commercial threat intelligence and registration data sources. |
+| `pivot_only` | Pivot only | No live enrichment connector in Vera5 for this source. Static pivot links only; metadata describes navigation affordance, not a live API response. |
+
+Lookup helpers: `getConnectorReliabilityTierDefinition()`, `getConnectorReliabilityTierLabel()`, `listConnectorReliabilityTierDefinitions()`. Canonical copy: `CONNECTOR_RELIABILITY_TIER_DEFINITIONS`.
+
+Legacy capability metadata still exposes `authorityTier` (`authoritative`, `community`, `unknown`) for connector profiles. `reliabilityTier` adds `pivot_only` for pivot-only registry entries and is the field hover-card chips will read.
+
 ## User-facing limits
 
 Vendor quotas and 429 behavior: [docs/api-integrations.md](../api-integrations.md).
