@@ -28,7 +28,7 @@ Public-facing images for README, store listings, and onboarding. Each asset belo
 | # | File (placeholder) | Surface | What must appear in the capture |
 |---|-------------------|---------|----------------------------------|
 | 1 | `scan-highlights-page.svg` | On-page highlights | `sample-alert.html` after **Scan page**: inline underlines, type badges, and **›** controls on several indicator types (IPv4, domain, URL, hash, CVE). |
-| 2 | `on-page-overlay-enrichment.svg` | On-page overlay | Overlay open on a highlight showing **Risk score**, **How this score was computed**, per-source rows (mocked or cached OK), **Recommended next pivots**, copy actions, and analyst notes area. |
+| 2 | `on-page-overlay-enrichment.svg` | On-page overlay | Overlay open on a highlight with **two or more** enrichment sources: **Risk score**, **How this score was computed**, per-source rows in **Sources** (mocked or cached OK), per-row **connector confidence metadata** chips (for example **Authoritative**, **Community**, **Standard**—informational only), **Recommended next pivots**, copy actions, and analyst notes area. |
 | 3 | `pre-query-disclosure.svg` | Trust — pre-query | Inline pre-query notice naming enabled vendors and the indicator value; **Send query** / **Cancel** visible (trigger with live sources enabled and manual enrich). |
 | 4 | `command-palette.svg` | Command palette | **Ctrl+Shift+K** / **Cmd+Shift+K** palette on a scanned tab: filter field and commands such as **Scan page**, **Enrich selection**, **Copy filtered Markdown**, **Open options**. |
 | 5 | `popup-session-tray.svg` | Toolbar popup | Active **Investigation session** title, IOC rollups from latest scan, **Detected indicators** tray with type filter chips and row list. |
@@ -40,7 +40,7 @@ Public-facing images for README, store listings, and onboarding. Each asset belo
 | 11 | `options-trust-consent.svg` | Settings — trust | **Trust & consent**: pre-query toggle, domain policy mode, allow/deny lists or preset control, internal asset lists, analyst workflow preset selector. |
 | 12 | `bulk-enrich-selection.svg` | Bulk enrich | Workspace tray with multiple row checkboxes selected, **Enrich selected (N)** and quota confirmation or **Enriching X of N…** progress visible. |
 
-Optional follow-ups (not required for MVP placeholder set): context menu **Enrich with Vera5**, **Appeared alongside** on overlay and tray, **Session export** download menu, **Promote session to collection…**, dark-mode variants of captures 1–2.
+Optional follow-ups (not required for MVP placeholder set): context menu **Enrich with Vera5**, **Appeared alongside** on overlay and tray, **Session export** download menu, **Promote session to collection…**, **Settings Backup** export/import with settings pack controls, dark-mode variants of captures 1–2.
 
 ## Gallery (placeholders)
 
@@ -54,7 +54,7 @@ Replace each image file under `assets/` and update the extension in the line bel
 
 ![On-page overlay — risk score, sources, and pivots (placeholder)](assets/on-page-overlay-enrichment.svg)
 
-*Capture brief:* #2 — enriched overlay with scoring and pivot links.
+*Capture brief:* #2 — enriched multi-source overlay with scoring, metadata chips, and pivot links.
 
 ![Pre-query disclosure before vendor fetch (placeholder)](assets/pre-query-disclosure.svg)
 

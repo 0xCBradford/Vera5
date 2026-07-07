@@ -107,6 +107,28 @@ describe("connector profile export", () => {
     expect(parsed).not.toHaveProperty("apiKeys");
   });
 
+  it("includes configured connector confidence metadata overrides in serialized JSON", () => {
+    const settings = {
+      ...createDefaultVera5Settings(),
+      connectorConfidenceMetadataOverrides: {
+        otx: { reliabilityTier: "authoritative", sourceClass: "authoritative" },
+        urlscan: { freshnessPolicy: "stable" },
+      },
+    };
+
+    const parsed = JSON.parse(serializeConnectorProfileExport(settings)) as {
+      preferences: {
+        connectorConfidenceMetadataOverrides: Record<string, unknown>;
+      };
+    };
+
+    expect(parsed.preferences.connectorConfidenceMetadataOverrides).toEqual({
+      otx: { reliabilityTier: "authoritative", sourceClass: "authoritative" },
+      urlscan: { freshnessPolicy: "stable" },
+    });
+    expect(JSON.stringify(parsed)).not.toContain(TEST_FIXTURE_STORED_API_KEY);
+  });
+
   it("rejects connector profile JSON that contains API keys", () => {
     const payload = {
       connectorProfileSchemaVersion: CONNECTOR_PROFILE_SCHEMA_VERSION,

@@ -289,6 +289,39 @@ describe("settings pack export", () => {
     expect(isSettingsPackDocument(parsed)).toBe(true);
   });
 
+  it("exports configured connector confidence metadata overrides in settings pack JSON", async () => {
+    store[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES] = {
+      otx: { reliabilityTier: "authoritative" },
+      urlscan: { freshnessPolicy: "stable", sourceClass: "authoritative" },
+    };
+
+    const json = await exportSettingsPackJson();
+    const parsed = JSON.parse(json) as {
+      connectorConfidenceMetadataOverrides: Record<string, unknown>;
+    };
+
+    expect(parsed.connectorConfidenceMetadataOverrides).toEqual({
+      otx: { reliabilityTier: "authoritative" },
+      urlscan: { freshnessPolicy: "stable", sourceClass: "authoritative" },
+    });
+    expect(json).not.toContain(TEST_FIXTURE_STORED_API_KEY);
+  });
+
+  it("round-trips configured metadata overrides through settings pack export and import", async () => {
+    store[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES] = {
+      greynoise: { freshnessPolicy: "stable" },
+    };
+
+    const exportJson = await exportSettingsPackJson();
+    store[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES] = {};
+
+    await importSettingsPackJson(exportJson);
+
+    expect(store[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES]).toEqual({
+      greynoise: { freshnessPolicy: "stable" },
+    });
+  });
+
   it("downloads settings pack JSON with the default filename", () => {
     const createObjectURL = vi.fn(() => "blob:settings-pack");
     const revokeObjectURL = vi.fn();

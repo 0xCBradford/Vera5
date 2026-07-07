@@ -475,6 +475,61 @@ describe("connector confidence metadata isolation from scoring", () => {
       resolveRiskScoreReasoningPresentation(decoratedView, null)
     ).toEqual(resolveRiskScoreReasoningPresentation(baselineView, null));
   });
+
+  it("computes the same composite score when reliability tier chips are omitted", () => {
+    const missingTierChipSources = decoratedSources.map((entry) => ({
+      ...entry,
+      metadataChips: entry.metadataChips.filter(
+        (chip) => chip.kind !== "reliability"
+      ),
+    }));
+
+    expect(
+      computeCompositeRiskScoreFromHoverCardSources(missingTierChipSources)
+    ).toEqual(computeCompositeRiskScoreFromHoverCardSources(baseSources));
+    expect(buildHoverCardRiskScoreView(missingTierChipSources).score).toEqual(
+      buildHoverCardRiskScoreView(baseSources).score
+    );
+  });
+
+  it("computes the same composite score when sources have partial metadata chips", () => {
+    const partialMetadataSources: HoverCardSourceEntry[] = [
+      {
+        ...baseSources[0]!,
+        metadataChips: [
+          {
+            kind: "freshness",
+            label: "Volatile",
+            tooltip: "Informational only.",
+          },
+          {
+            kind: "sourceClass",
+            label: "Community",
+            tooltip: "Informational only.",
+          },
+        ],
+      },
+      {
+        ...baseSources[1]!,
+        metadataChips: [
+          {
+            kind: "reliability",
+            label: "Authoritative",
+            tooltip: "Informational only.",
+          },
+        ],
+      },
+    ];
+
+    const baseline = computeCompositeRiskScoreFromHoverCardSources(baseSources);
+    const partial = computeCompositeRiskScoreFromHoverCardSources(
+      partialMetadataSources
+    );
+    expect(partial).toEqual(baseline);
+    expect(buildHoverCardRiskScoreView(partialMetadataSources).chain).toEqual(
+      buildHoverCardRiskScoreView(baseSources).chain
+    );
+  });
 });
 
 /**

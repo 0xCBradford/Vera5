@@ -12,142 +12,226 @@
 # Error details
 
 ```
-Error: browserType.launchPersistentContext: Executable doesn't exist at C:\Users\cbeea\AppData\Local\Temp\cursor-sandbox-cache\585b6b311e436fb11d2895e7f9368236\playwright\chromium-1228\chrome-win64\chrome.exe
-╔════════════════════════════════════════════════════════════╗
-║ Looks like Playwright was just installed or updated.       ║
-║ Please run the following command to download new browsers: ║
-║                                                            ║
-║     npx playwright install                                 ║
-║                                                            ║
-║ <3 Playwright Team                                         ║
-╚════════════════════════════════════════════════════════════╝
+Error: expect(received).toBe(expected) // Object.is equality
+
+- Expected  - 0
++ Received  + 1
+
+@@ -7,5 +7,6 @@
+  aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+  098f6bcd4621d373cade4e832627b4f6
+  CVE-2017-0144
+  analyst@example.com
++ https://example.com/login?ref=analyst
+
+Call Log:
+- Timeout 15000ms exceeded while waiting on the predicate
 ```
 
 # Test source
 
 ```ts
-  1   | import {
-  2   |   test as base,
-  3   |   chromium,
-  4   |   type BrowserContext,
-  5   |   type Worker,
-  6   | } from "@playwright/test";
-  7   | import fs from "node:fs";
-  8   | import {
-  9   |   expectNoLiveEnrichmentNetworkRequests,
-  10  |   seedE2eInstallQuickStart,
-  11  |   setupCiEnrichmentMocks,
-  12  |   type LiveEnrichmentNetworkGuard,
-  13  | } from "./enrichmentMockRoutes";
-  14  | import { extensionDistPath } from "../extensionPaths";
-  15  | 
-  16  | function resolveExtensionId(serviceWorker: Worker): string {
-  17  |   const match = serviceWorker.url().match(/^chrome-extension:\/\/([^/]+)\//);
-  18  |   if (!match?.[1]) {
-  19  |     throw new Error(`Unable to resolve extension id from ${serviceWorker.url()}`);
-  20  |   }
-  21  |   return match[1];
-  22  | }
-  23  | 
-  24  | async function waitForExtensionServiceWorker(
-  25  |   context: BrowserContext
-  26  | ): Promise<Worker> {
-  27  |   const existing = context
-  28  |     .serviceWorkers()
-  29  |     .find((worker) => worker.url().startsWith("chrome-extension://"));
-  30  |   if (existing) {
-  31  |     return existing;
-  32  |   }
-  33  | 
-  34  |   const worker = await context.waitForEvent("serviceworker", {
-  35  |     timeout: 30_000,
-  36  |   });
-  37  |   if (!worker.url().startsWith("chrome-extension://")) {
-  38  |     throw new Error(`Unexpected service worker URL: ${worker.url()}`);
-  39  |   }
-  40  |   return worker;
-  41  | }
-  42  | 
-  43  | async function dismissInstallQuickStartOptionsTab(
-  44  |   context: BrowserContext,
-  45  |   extensionId: string
-  46  | ): Promise<void> {
-  47  |   const optionsUrlPrefix = `chrome-extension://${extensionId}/options.html`;
-  48  | 
-  49  |   const closeOptionsPages = async (): Promise<void> => {
-  50  |     await Promise.all(
-  51  |       context.pages().map(async (page) => {
-  52  |         if (page.url().startsWith(optionsUrlPrefix)) {
-  53  |           await page.close();
-  54  |         }
-  55  |       })
-  56  |     );
-  57  |   };
-  58  | 
-  59  |   await closeOptionsPages();
-  60  |   for (let attempt = 0; attempt < 15; attempt += 1) {
-  61  |     await closeOptionsPages();
-  62  |     const hasOptionsTab = context.pages().some((page) =>
-  63  |       page.url().startsWith(optionsUrlPrefix)
-  64  |     );
-  65  |     if (!hasOptionsTab) {
-  66  |       return;
-  67  |     }
-  68  |     await new Promise((resolve) => setTimeout(resolve, 100));
-  69  |   }
-  70  | 
-  71  |   throw new Error(
-  72  |     "Install quick-start options tab remained open and blocked E2E navigation"
-  73  |   );
-  74  | }
-  75  | 
-  76  | let activeEnrichmentNetworkGuard: LiveEnrichmentNetworkGuard | null = null;
-  77  | 
-  78  | export const test = base.extend<{
-  79  |   context: BrowserContext;
-  80  |   extensionId: string;
-  81  | }>({
-  82  |   context: async ({}, use) => {
-  83  |     if (!fs.existsSync(extensionDistPath)) {
-  84  |       throw new Error(
-  85  |         `Extension dist missing at ${extensionDistPath}. Run npm run build first.`
-  86  |       );
-  87  |     }
-  88  | 
-> 89  |     const context = await chromium.launchPersistentContext("", {
-      |                     ^ Error: browserType.launchPersistentContext: Executable doesn't exist at C:\Users\cbeea\AppData\Local\Temp\cursor-sandbox-cache\585b6b311e436fb11d2895e7f9368236\playwright\chromium-1228\chrome-win64\chrome.exe
-  90  |       channel: "chromium",
-  91  |       args: [
-  92  |         `--disable-extensions-except=${extensionDistPath}`,
-  93  |         `--load-extension=${extensionDistPath}`,
-  94  |       ],
-  95  |     });
-  96  | 
-  97  |     activeEnrichmentNetworkGuard = await setupCiEnrichmentMocks(context);
-  98  |     const serviceWorker = await waitForExtensionServiceWorker(context);
-  99  |     const extensionId = resolveExtensionId(serviceWorker);
-  100 |     await seedE2eInstallQuickStart(context, extensionId);
-  101 |     await dismissInstallQuickStartOptionsTab(context, extensionId);
-  102 | 
-  103 |     try {
-  104 |       await use(context);
-  105 |     } finally {
-  106 |       activeEnrichmentNetworkGuard = null;
-  107 |       await context.close();
-  108 |     }
-  109 |   },
-  110 |   extensionId: async ({ context }, use) => {
-  111 |     const serviceWorker = await waitForExtensionServiceWorker(context);
-  112 |     await use(resolveExtensionId(serviceWorker));
-  113 |   },
-  114 | });
-  115 | 
-  116 | test.afterEach(() => {
-  117 |   if (activeEnrichmentNetworkGuard) {
-  118 |     expectNoLiveEnrichmentNetworkRequests(activeEnrichmentNetworkGuard);
-  119 |   }
-  120 | });
-  121 | 
-  122 | export { expect } from "@playwright/test";
-  123 | 
+  184 |   }
+  185 | }
+  186 | 
+  187 | export async function openHoverCardForSampleAlertIoc(
+  188 |   page: Page,
+  189 |   value: string = SAMPLE_ALERT_HOVER_CARD_IOC_VALUE
+  190 | ): Promise<void> {
+  191 |   const highlight = page.locator(
+  192 |     `${E2E_SELECTORS.iocHighlight}[data-vera5-value="${value}"]`
+  193 |   );
+  194 |   await highlight.locator(E2E_SELECTORS.iocEnrichIcon).click({ force: true });
+  195 |   await page.locator(E2E_SELECTORS.hoverCardPanel).waitFor({
+  196 |     state: "visible",
+  197 |     timeout: 15_000,
+  198 |   });
+  199 | }
+  200 | 
+  201 | export async function openHoverCardByHighlightClick(
+  202 |   page: Page,
+  203 |   value: string = SAMPLE_ALERT_HOVER_CARD_IOC_VALUE
+  204 | ): Promise<void> {
+  205 |   const highlight = page.locator(
+  206 |     `${E2E_SELECTORS.iocHighlight}[data-vera5-value="${value}"]`
+  207 |   );
+  208 |   await highlight.click({ force: true });
+  209 |   await page.locator(E2E_SELECTORS.hoverCardPanel).waitFor({
+  210 |     state: "visible",
+  211 |     timeout: 15_000,
+  212 |   });
+  213 | }
+  214 | 
+  215 | export async function installClipboardWriteCapture(
+  216 |   page: Page,
+  217 |   origin: string
+  218 | ): Promise<void> {
+  219 |   const browserName = page.context().browser()?.browserType().name();
+  220 |   if (browserName !== "firefox") {
+  221 |     await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
+  222 |       origin,
+  223 |     });
+  224 |   }
+  225 |   await page.addInitScript(() => {
+  226 |     const writes: string[] = [];
+  227 |     (
+  228 |       window as unknown as { __vera5E2eClipboardWrites?: string[] }
+  229 |     ).__vera5E2eClipboardWrites = writes;
+  230 |     if (!navigator.clipboard?.writeText) {
+  231 |       return;
+  232 |     }
+  233 |     const originalWrite = navigator.clipboard.writeText.bind(navigator.clipboard);
+  234 |     navigator.clipboard.writeText = async (text: string) => {
+  235 |       writes.push(text);
+  236 |       return originalWrite(text);
+  237 |     };
+  238 |   });
+  239 | }
+  240 | 
+  241 | export async function readCapturedClipboardText(page: Page): Promise<string> {
+  242 |   const text = await page.evaluate(async () => {
+  243 |     const writes = (
+  244 |       window as unknown as { __vera5E2eClipboardWrites?: string[] }
+  245 |     ).__vera5E2eClipboardWrites;
+  246 |     if (writes && writes.length > 0) {
+  247 |       return writes[writes.length - 1] ?? "";
+  248 |     }
+  249 |     try {
+  250 |       return await navigator.clipboard.readText();
+  251 |     } catch {
+  252 |       return "";
+  253 |     }
+  254 |   });
+  255 |   return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  256 | }
+  257 | 
+  258 | export async function runCopyAllFromHoverCard(page: Page): Promise<void> {
+  259 |   const exportSection = page.locator(E2E_SELECTORS.hoverCardExportSection);
+  260 |   await expect(exportSection).toBeVisible();
+  261 |   await exportSection.scrollIntoViewIfNeeded();
+  262 | 
+  263 |   const copyTrigger = page.getByRole("button", {
+  264 |     name: HOVER_CARD_COPY_DROPDOWN_ARIA_LABEL,
+  265 |   });
+  266 |   await copyTrigger.evaluate((button: HTMLButtonElement) => {
+  267 |     button.click();
+  268 |   });
+  269 | 
+  270 |   const copyAllItem = page
+  271 |     .locator(E2E_SELECTORS.hoverCardExportDropdownItem)
+  272 |     .filter({ hasText: "Copy all" });
+  273 |   await expect(copyAllItem).toBeVisible();
+  274 |   await copyAllItem.evaluate((item: HTMLElement) => {
+  275 |     item.click();
+  276 |   });
+  277 | }
+  278 | 
+  279 | export async function expectHoverCardCopyAllClipboardResult(
+  280 |   page: Page
+  281 | ): Promise<void> {
+  282 |   await expect
+  283 |     .poll(async () => readCapturedClipboardText(page), { timeout: 15_000 })
+> 284 |     .toBe(EXPECTED_SAMPLE_ALERT_COPY_ALL_CLIPBOARD_TEXT);
+      |      ^ Error: expect(received).toBe(expected) // Object.is equality
+  285 | 
+  286 |   const status = page.locator(E2E_SELECTORS.hoverCardScanExportStatus);
+  287 |   await expect(status).toBeVisible();
+  288 |   await expect(status).toHaveText(HOVER_CARD_COPY_ALL_SUCCESS_MESSAGE);
+  289 |   await expect(status).toHaveClass(/vera5-hover-card-scan-export-status--success/);
+  290 | }
+  291 | 
+  292 | export async function expectHoverCardDisclaimerVisible(page: Page): Promise<void> {
+  293 |   const disclaimer = page.locator(E2E_SELECTORS.hoverCardDisclaimer);
+  294 |   await expect(disclaimer).toBeVisible();
+  295 |   await expect(disclaimer).toHaveAttribute(
+  296 |     "aria-label",
+  297 |     HOVER_CARD_DISCLAIMER_ENRICHMENT_ARIA_LABEL
+  298 |   );
+  299 |   await expect(disclaimer).toContainText(HOVER_CARD_ENRICHMENT_DISCLAIMER_TEXT);
+  300 | }
+  301 | 
+  302 | export async function expectHoverCardCompositeScoreVisible(page: Page): Promise<void> {
+  303 |   const scoreSection = page.locator(E2E_SELECTORS.hoverCardRiskScore);
+  304 |   await expect(scoreSection).toBeVisible({ timeout: 15_000 });
+  305 | 
+  306 |   const label = page.locator(E2E_SELECTORS.hoverCardRiskScoreLabel);
+  307 |   await expect(label).toBeVisible();
+  308 |   await expect(label).toContainText("Risk score:");
+  309 | 
+  310 |   await expect
+  311 |     .poll(async () => label.locator("strong").textContent(), { timeout: 15_000 })
+  312 |     .toMatch(/(Low|Suspicious|High|Critical) risk \(\d+\/100\)/);
+  313 | }
+  314 | 
+  315 | export async function toggleCommandPaletteOnActiveTab(
+  316 |   context: BrowserContext,
+  317 |   extensionId: string
+  318 | ): Promise<void> {
+  319 |   const serviceWorker = context
+  320 |     .serviceWorkers()
+  321 |     .find((worker) => worker.url().includes(extensionId));
+  322 |   expect(serviceWorker).toBeDefined();
+  323 | 
+  324 |   await serviceWorker!.evaluate(async () => {
+  325 |     const [tab] = await chrome.tabs.query({
+  326 |       active: true,
+  327 |       currentWindow: true,
+  328 |     });
+  329 |     if (!tab?.id) {
+  330 |       throw new Error("No active tab for command palette toggle");
+  331 |     }
+  332 |     await chrome.tabs.sendMessage(tab.id, { type: "TOGGLE_COMMAND_PALETTE" });
+  333 |   });
+  334 | }
+  335 | 
+  336 | export async function openCommandPalette(page: Page): Promise<void> {
+  337 |   await expect(
+  338 |     page.getByRole("dialog", { name: COMMAND_PALETTE_DIALOG_ARIA_LABEL })
+  339 |   ).toBeVisible({ timeout: 15_000 });
+  340 |   await expect(page.locator(E2E_SELECTORS.commandPaletteInput)).toBeVisible();
+  341 | }
+  342 | 
+  343 | export async function runScanPageCommandFromPalette(page: Page): Promise<void> {
+  344 |   const input = page.getByLabel(COMMAND_PALETTE_FILTER_ARIA_LABEL);
+  345 |   await input.fill("scan");
+  346 |   await expect(page.locator(E2E_SELECTORS.commandPaletteScanCommand)).toHaveCount(1);
+  347 |   await expect(
+  348 |     page.getByRole("option", { name: COMMAND_PALETTE_SCAN_COMMAND_LABEL })
+  349 |   ).toBeVisible();
+  350 |   await input.press("Enter");
+  351 |   await expect(page.locator(E2E_SELECTORS.commandPaletteHost)).toBeHidden({
+  352 |     timeout: 15_000,
+  353 |   });
+  354 | }
+  355 | 
+  356 | export async function expectPopupInvestigationSessionIndicatorCount(
+  357 |   popupPage: Page,
+  358 |   count: number = EXPECTED_SAMPLE_ALERT_DETECTED_IOC_COUNT
+  359 | ): Promise<void> {
+  360 |   const section = popupPage.getByRole("region", {
+  361 |     name: POPUP_INVESTIGATION_SESSION_SECTION_ARIA_LABEL,
+  362 |   });
+  363 |   await expect(section).toBeVisible({ timeout: 15_000 });
+  364 |   const noun = count === 1 ? "indicator" : "indicators";
+  365 |   await expect
+  366 |     .poll(async () => section.textContent(), { timeout: 15_000 })
+  367 |     .toContain(`${count} ${noun}`);
+  368 | }
+  369 | 
+  370 | export async function ensurePopupInvestigationSession(popupPage: Page): Promise<void> {
+  371 |   const section = popupPage.getByRole("region", {
+  372 |     name: POPUP_INVESTIGATION_SESSION_SECTION_ARIA_LABEL,
+  373 |   });
+  374 |   await expect(section).toBeVisible({ timeout: 15_000 });
+  375 | 
+  376 |   if (
+  377 |     (await section.textContent())?.includes("No active investigation session")
+  378 |   ) {
+  379 |     await popupPage.getByRole("button", { name: "New session", exact: true }).click();
+  380 |   }
+  381 | 
+  382 |   await expect(section).not.toContainText("No active investigation session");
+  383 | }
+  384 | 
 ```

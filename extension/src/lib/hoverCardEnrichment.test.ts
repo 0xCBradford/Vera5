@@ -44,6 +44,126 @@ import {
 } from "./hoverCardEnrichment";
 import { IOC_RULE_ID, IOC_TYPE } from "./iocRegex";
 
+describe("connector confidence metadata rendering per source", () => {
+  afterEach(() => {
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
+  });
+
+  it.each([...ENRICHMENT_SOURCE_ORDER])(
+    "renders default metadata chips for %s",
+    (sourceId) => {
+      const fields = resolveHoverCardSourceConfidenceMetadata(sourceId);
+      const chips = buildHoverCardSourceMetadataChips(sourceId);
+      const expected = buildHoverCardSourceMetadataChipsFromFields(fields);
+
+      expect(chips).toEqual(expected);
+      expect(chips.map((chip) => chip.kind)).toEqual([
+        "reliability",
+        "freshness",
+        "sourceClass",
+      ]);
+      for (const chip of chips) {
+        expect(chip.tooltip.length).toBeGreaterThan(0);
+        if (chip.kind === "reliability" && chip.label === "Pivot only") {
+          expect(chip.tooltip.toLowerCase()).toContain("pivot");
+        } else {
+          expect(chip.tooltip.toLowerCase()).toContain("informational");
+        }
+      }
+    }
+  );
+
+  it.each([...ENRICHMENT_SOURCE_ORDER])(
+    "attaches metadata chips on hover card entries for %s",
+    (sourceId) => {
+      const [entry] = buildHoverCardSourceEntries([
+        {
+          sourceId,
+          sourceLabel: sourceId,
+          status: "ok",
+          summary: "summary",
+        },
+      ]);
+
+      expect(entry?.sourceId).toBe(sourceId);
+      expect(entry?.metadataChips).toEqual(
+        buildHoverCardSourceMetadataChips(sourceId)
+      );
+    }
+  );
+
+  it("renders expected chip labels for each built-in connector", () => {
+    const expectedLabelsBySource: Record<
+      (typeof ENRICHMENT_SOURCE_ORDER)[number],
+      readonly [string, string, string]
+    > = {
+      [ENRICHMENT_SOURCE.ABUSEIPDB]: [
+        "Authoritative",
+        "Standard",
+        "Authoritative",
+      ],
+      [ENRICHMENT_SOURCE.OTX]: ["Community", "Standard", "Community"],
+      [ENRICHMENT_SOURCE.VIRUSTOTAL]: [
+        "Pivot only",
+        "Standard",
+        "Authoritative",
+      ],
+      [ENRICHMENT_SOURCE.URLSCAN]: [
+        "Authoritative",
+        "Volatile",
+        "Authoritative",
+      ],
+      [ENRICHMENT_SOURCE.GREYNOISE]: [
+        "Authoritative",
+        "Volatile",
+        "Authoritative",
+      ],
+      [ENRICHMENT_SOURCE.SHODAN]: [
+        "Authoritative",
+        "Standard",
+        "Authoritative",
+      ],
+      [ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING]: [
+        "Pivot only",
+        "Stable",
+        "Authoritative",
+      ],
+      [ENRICHMENT_SOURCE.PULSEDIVE]: [
+        "Pivot only",
+        "Standard",
+        "Community",
+      ],
+      [ENRICHMENT_SOURCE.MALWAREBAZAAR]: [
+        "Pivot only",
+        "Stable",
+        "Community",
+      ],
+      [ENRICHMENT_SOURCE.CENSYS]: [
+        "Authoritative",
+        "Standard",
+        "Authoritative",
+      ],
+      [ENRICHMENT_SOURCE.THREATFOX]: [
+        "Pivot only",
+        "Volatile",
+        "Community",
+      ],
+      [ENRICHMENT_SOURCE.URLHAUS]: ["Pivot only", "Volatile", "Community"],
+      [ENRICHMENT_SOURCE.RDAP_WHOIS]: [
+        "Authoritative",
+        "Stable",
+        "Authoritative",
+      ],
+    };
+
+    for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
+      expect(
+        buildHoverCardSourceMetadataChips(sourceId).map((chip) => chip.label)
+      ).toEqual([...expectedLabelsBySource[sourceId]]);
+    }
+  });
+});
+
 describe("hover card enrichment placeholders", () => {
   it("resolves loading, error, empty, and ready display text", () => {
     expect(resolveEnrichmentDisplay({ enrichmentState: "loading" })).toEqual({
@@ -345,6 +465,51 @@ describe("hover card enrichment placeholders", () => {
       }
     );
     expect(buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX)).toEqual([]);
+
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
+  });
+
+  it("falls back to remaining metadata chips when reliability tier is missing", () => {
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({
+      [ENRICHMENT_SOURCE.OTX]: {
+        reliabilityTier: null,
+      },
+    });
+
+    expect(
+      buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX).map((chip) => chip.kind)
+    ).toEqual(["freshness", "sourceClass"]);
+    expect(
+      buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX).map(
+        (chip) => chip.label
+      )
+    ).toEqual(["Standard", "Community"]);
+
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
+  });
+
+  it("still builds source entries when reliability tier metadata is missing", () => {
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({
+      [ENRICHMENT_SOURCE.ABUSEIPDB]: {
+        reliabilityTier: null,
+      },
+    });
+
+    const [entry] = buildHoverCardSourceEntries([
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "12 abuse confidence",
+      },
+    ]);
+
+    expect(entry?.metadataChips.map((chip) => chip.kind)).toEqual([
+      "freshness",
+      "sourceClass",
+    ]);
+    expect(entry?.detail).toBe("12 abuse confidence");
+    expect(entry?.badgeText).toBe(formatSourceStatusBadge("ok"));
 
     enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
   });

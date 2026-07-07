@@ -13,6 +13,7 @@ import {
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_EXTENSION_ENABLED,
   STORAGE_KEY_MANUAL_ONLY_MODE,
+  STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES,
   STORAGE_KEY_SCHEMA_VERSION,
   STORAGE_KEY_STORAGE_SCHEMA_VERSION,
 } from "./storage";
@@ -83,6 +84,34 @@ describe("settings export", () => {
     expect(document.settings[STORAGE_KEY_API_KEYS]).toBeUndefined();
     expect(parsed.settings.apiKeys).toBeUndefined();
     expect(document.settings[STORAGE_KEY_AUTO_SCAN_ENABLED]).toBe(true);
+  });
+
+  it("includes configured connector confidence metadata overrides in settings export JSON", () => {
+    const settings = {
+      ...createDefaultVera5Settings(),
+      connectorConfidenceMetadataOverrides: {
+        greynoise: { freshnessPolicy: "stable" },
+        otx: {
+          reliabilityTier: "authoritative",
+          sourceClass: "authoritative",
+        },
+      },
+    };
+
+    const parsed = JSON.parse(serializeVera5SettingsExport(settings, false)) as {
+      settings: Record<string, unknown>;
+    };
+
+    expect(
+      parsed.settings[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES]
+    ).toEqual({
+      greynoise: { freshnessPolicy: "stable" },
+      otx: {
+        reliabilityTier: "authoritative",
+        sourceClass: "authoritative",
+      },
+    });
+    expect(parsed.settings[STORAGE_KEY_API_KEYS]).toBeUndefined();
   });
 
   it("includes API keys when export is explicitly requested", () => {

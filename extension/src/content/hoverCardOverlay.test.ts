@@ -2439,6 +2439,94 @@ describe("hover card overlay", () => {
     expect(panel.textContent).toContain("2 threat pulses");
   });
 
+  it("renders partial metadata chips when reliability tier is missing", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: formatSourceStatusBadge("ok"),
+          detail: "12 abuse confidence",
+          metadataChips: [
+            {
+              kind: "freshness",
+              label: "Standard",
+              tooltip: HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
+            },
+            {
+              kind: "sourceClass",
+              label: "Authoritative",
+              tooltip: HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
+            },
+          ],
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "ok",
+          badgeText: formatSourceStatusBadge("ok"),
+          detail: "2 threat pulses",
+          metadataChips: [
+            {
+              kind: "reliability",
+              label: "Community",
+              tooltip: HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
+            },
+            {
+              kind: "freshness",
+              label: "Standard",
+              tooltip: HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
+            },
+            {
+              kind: "sourceClass",
+              label: "Community",
+              tooltip: HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
+            },
+          ],
+        },
+      ],
+    });
+
+    const metadataRows = panel.querySelectorAll(".vera5-hover-card-source-metadata");
+    expect(metadataRows).toHaveLength(2);
+    expect(
+      metadataRows[0]?.querySelectorAll(".vera5-hover-card-source-metadata-chip")
+    ).toHaveLength(2);
+    expect(
+      metadataRows[0]?.querySelector(
+        ".vera5-hover-card-source-metadata-chip--reliability"
+      )
+    ).toBeNull();
+    expect(metadataRows[0]?.textContent).toContain("Standard");
+    expect(metadataRows[0]?.textContent).toContain("Authoritative");
+    expect(
+      metadataRows[1]?.querySelector(
+        ".vera5-hover-card-source-metadata-chip--reliability"
+      )
+    ).not.toBeNull();
+  });
+
   it("shows partial success UI when one source succeeds and another fails", () => {
     const anchor = document.createElement("span");
     document.body.appendChild(anchor);
