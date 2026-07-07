@@ -23,6 +23,73 @@ Each enrichment source registers under a stable **registry id** in `enrichmentSo
 
 Vendor quotas change with plan tier and policy updates. Treat the tables below as orientation; confirm your effective limits in each vendor account or API usage dashboard before heavy automation.
 
+## Connector confidence metadata (hover card)
+
+When a hover card shows **multiple enrichment sources**, each source row can display small **informational chips** for three registry-defined fields: **reliability tier**, **freshness policy**, and **source class**. Chips appear under the source badge and detail line. Hover a chip or the chip row for tooltip copy that states the labels are **informational only**.
+
+These metadata fields help analysts compare how Vera5 classifies each connector. They do **not** change vendor API behavior, quota consumption, or which HTTPS requests Vera5 issues under your saved API keys.
+
+### Reliability tier
+
+| Tier | Hover label | Meaning |
+|------|-------------|---------|
+| `community` | Community | Community-sourced or crowd-fed intelligence. Shared pulses and user submissions may lag official vendor research. |
+| `authoritative` | Authoritative | Vendor-operated or registry-grade feed with a defined API contract. Typical commercial threat intelligence and registration data sources. |
+| `pivot_only` | Pivot only | No live enrichment connector in Vera5 for this source today. Static pivot links only; the tier describes navigation affordance, not a live API response on the card. |
+
+### Freshness policy
+
+| Policy | Hover label | Meaning |
+|--------|-------------|---------|
+| `standard` | Standard | Typical cache-and-refresh expectations for this source. Results may be served from the local enrichment cache when fresh enough. |
+| `volatile` | Volatile | Results for this source may change quickly. Prefer checking fetch timestamps and live rows when timing matters. |
+| `stable` | Stable | Registry-style or slow-changing data. Updates are infrequent relative to threat-intel pulse feeds. |
+
+### Source class
+
+| Class | Hover label | Meaning |
+|-------|-------------|---------|
+| `community` | Community | Community-sourced or crowd-fed intelligence provider. |
+| `authoritative` | Authoritative | Vendor-operated or registry-grade intelligence provider. |
+
+**Source class vs reliability tier:** Class describes provider lineage (community vs vendor/registry). Reliability tier adds **Pivot only** for registry entries without live enrichment in Vera5. A source can be class **Authoritative** with tier **Pivot only** when Vera5 ships pivots but not live API enrichment (for example VirusTotal today).
+
+### Limitations (what metadata does not do)
+
+| Topic | Limitation |
+|-------|------------|
+| **Composite risk score** | Metadata does **not** alter the blended composite risk score, its band label, or per-source weights in scoring. |
+| **Score explain chain** | Metadata does **not** appear in **How this score was computed** or change reasoning-chain steps. |
+| **Verdict** | Chips are **not** a Vera5 malicious/benign verdict and must not be read as one. |
+| **Live rows** | Metadata does **not** replace per-source live results (badge, summary, tags, errors, or cache state). |
+| **Hosted feed** | Vera5 does **not** operate a cloud metadata or reputation service. Defaults ship with the extension registry; there is no background sync of tier labels from Vera5 infrastructure. |
+| **API keys and quotas** | Tier labels do **not** bypass BYOK requirements, rate limits, or organizational policy gates. |
+| **Pivot-only tier** | **Pivot only** means Vera5 has no live connector for that source—not that the vendor is untrusted or that pivot links are unsafe to open under your policy. |
+
+Chip tooltips on the hover card repeat that metadata is informational only and does not change the composite risk score.
+
+### Default metadata by registry ID
+
+Built-in defaults below apply when no connector-profile override is present. Missing or partial metadata on a row omits chips for that field without blocking enrichment.
+
+| Source (display name) | Registry ID | Reliability tier | Freshness policy | Source class |
+|-----------------------|-------------|------------------|------------------|--------------|
+| AbuseIPDB | `abuseipdb` | Authoritative | Standard | Authoritative |
+| AlienVault OTX | `otx` | Community | Standard | Community |
+| VirusTotal | `virustotal` | Pivot only | Standard | Authoritative |
+| URLScan.io | `urlscan` | Authoritative | Volatile | Authoritative |
+| GreyNoise | `greynoise` | Authoritative | Volatile | Authoritative |
+| Shodan | `shodan` | Authoritative | Standard | Authoritative |
+| Google Safe Browsing | `google_safe_browsing` | Pivot only | Stable | Authoritative |
+| Pulsedive | `pulsedive` | Pivot only | Standard | Community |
+| MalwareBazaar | `malwarebazaar` | Pivot only | Stable | Community |
+| Censys | `censys` | Authoritative | Standard | Authoritative |
+| ThreatFox | `threatfox` | Pivot only | Volatile | Community |
+| URLhaus | `urlhaus` | Pivot only | Volatile | Community |
+| RDAP/WHOIS | `rdap_whois` | Authoritative | Stable | Authoritative |
+
+For enrichment workflow and composite risk score behavior, see [analyst-workflows.md](analyst-workflows.md).
+
 ## Per-source rate limit matrix
 
 | Source | Registry ID | Live in extension | Vera5 API call (per enrichment) | Vendor quota (typical) | Quota window | HTTP 429 | Vendor reference |
@@ -336,6 +403,8 @@ Vendor URLs and policies change without notice. If a link breaks, search the ven
 ## Related documentation
 
 - [architecture.md](architecture.md) — MVP connector order, BYOK, parallel fetch, [Connector SDK](architecture.md#connector-sdk) registry ids
+- [api-integrations.md — Connector confidence metadata (hover card)](api-integrations.md#connector-confidence-metadata-hover-card) — reliability tier, freshness policy, source class, and limitations
 - [api-integrations.md — RDAP/WHOIS domain registration lookup](api-integrations.md#rdapwhois-domain-registration-lookup) — primary RDAP path, registry RDAP fallback, HTTPS WHOIS fallback when RDAP unavailable
+- [analyst-workflows.md](analyst-workflows.md) — enrichment workflow and composite risk score behavior
 - [local-mode.md](local-mode.md) — local-first enrichment and quota expectations
 - [security-model.md](security-model.md) — credential handling and user responsibilities

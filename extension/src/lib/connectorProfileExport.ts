@@ -9,6 +9,10 @@ import {
   ENRICHMENT_SOURCE_ORDER,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
+import {
+  validateImportedConnectorConfidenceMetadataOverridesRecord,
+  type ConnectorConfidenceMetadataOverridesRecord,
+} from "./connectorDefinition";
 import { DEFAULT_GREYNOISE_REQUEST_TIMEOUT_MS } from "./greynoiseConnector";
 import {
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
@@ -67,6 +71,7 @@ export type ConnectorProfilePreferences = {
   manualOnlyMode: boolean;
   enrichmentCacheTtlSeconds: number;
   enrichmentSourceCacheTtlSeconds: EnrichmentSourceCacheTtlRecord;
+  connectorConfidenceMetadataOverrides: ConnectorConfidenceMetadataOverridesRecord;
 };
 
 export type ConnectorProfileDocument = {
@@ -255,6 +260,9 @@ export function extractConnectorProfilePreferences(
     enrichmentSourceCacheTtlSeconds: {
       ...settings.enrichmentSourceCacheTtlSeconds,
     },
+    connectorConfidenceMetadataOverrides: {
+      ...settings.connectorConfidenceMetadataOverrides,
+    },
   };
 }
 
@@ -305,7 +313,25 @@ function normalizeConnectorProfilePreferences(
     enrichmentSourceCacheTtlSeconds: normalizeEnrichmentSourceCacheTtlRecord(
       value.enrichmentSourceCacheTtlSeconds
     ),
+    connectorConfidenceMetadataOverrides:
+      normalizeConnectorProfileConfidenceMetadataOverrides(
+        value.connectorConfidenceMetadataOverrides
+      ),
   };
+}
+
+function normalizeConnectorProfileConfidenceMetadataOverrides(
+  value: unknown
+): ConnectorConfidenceMetadataOverridesRecord {
+  try {
+    return validateImportedConnectorConfidenceMetadataOverridesRecord(value);
+  } catch (error) {
+    throw new ConnectorProfileImportError(
+      error instanceof Error
+        ? error.message
+        : "Invalid connector confidence metadata overrides."
+    );
+  }
 }
 
 export function parseConnectorProfileDocument(rawJson: string): {
@@ -382,6 +408,9 @@ export function mergeImportedConnectorProfile(
     enrichmentCacheTtlSeconds: preferences.enrichmentCacheTtlSeconds,
     enrichmentSourceCacheTtlSeconds: {
       ...preferences.enrichmentSourceCacheTtlSeconds,
+    },
+    connectorConfidenceMetadataOverrides: {
+      ...preferences.connectorConfidenceMetadataOverrides,
     },
   };
 }

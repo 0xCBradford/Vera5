@@ -11,6 +11,10 @@ import {
   type DomainPolicyMode,
 } from "./domainPolicy";
 import {
+  validateImportedConnectorConfidenceMetadataOverridesRecord,
+  type ConnectorConfidenceMetadataOverridesRecord,
+} from "./connectorDefinition";
+import {
   ENRICHMENT_SOURCE_LABELS,
   ENRICHMENT_SOURCE_ORDER,
 } from "./enrichmentSourceRegistry";
@@ -46,6 +50,7 @@ export type ThreatProfileDocument = {
   enabledConnectors?: readonly string[];
   pivotRecipeSetId?: string;
   noiseListRef?: string;
+  connectorConfidenceMetadataOverrides?: ConnectorConfidenceMetadataOverridesRecord;
 };
 
 export type ThreatProfileImportPreview = {
@@ -78,6 +83,7 @@ export type SettingsPackDocument = {
   enrichmentSourceCacheTtlSeconds: EnrichmentSourceCacheTtlRecord;
   domainPolicy: SettingsPackDomainPolicy;
   analystMode: SettingsPackAnalystMode;
+  connectorConfidenceMetadataOverrides?: ConnectorConfidenceMetadataOverridesRecord;
 };
 
 export type SettingsPackImportDiffEntry = {
@@ -154,7 +160,16 @@ export function isThreatProfileDocument(value: unknown): boolean {
   if (!isRecord(value)) {
     return false;
   }
+  if (isSettingsPackDocument(value)) {
+    return false;
+  }
   if (typeof value.threatProfileSchemaVersion === "number") {
+    return true;
+  }
+  if (
+    isRecord(value.connectorConfidenceMetadataOverrides) &&
+    Object.keys(value.connectorConfidenceMetadataOverrides).length > 0
+  ) {
     return true;
   }
   if (!Array.isArray(value.enabledConnectors)) {
@@ -243,6 +258,18 @@ export function normalizeThreatProfileDocument(value: unknown): ThreatProfileDoc
     profile.quietModeDefault = value.quietModeDefault;
   }
 
+  if (
+    Object.prototype.hasOwnProperty.call(
+      value,
+      "connectorConfidenceMetadataOverrides"
+    )
+  ) {
+    profile.connectorConfidenceMetadataOverrides =
+      normalizeImportedConfidenceMetadataOverrides(
+        value.connectorConfidenceMetadataOverrides
+      );
+  }
+
   return profile;
 }
 
@@ -269,6 +296,12 @@ export function mergeImportedThreatProfile(
     next.quietMode = profile.quietModeDefault;
   }
 
+  if (profile.connectorConfidenceMetadataOverrides !== undefined) {
+    next.connectorConfidenceMetadataOverrides = {
+      ...profile.connectorConfidenceMetadataOverrides,
+    };
+  }
+
   return next;
 }
 
@@ -276,19 +309,37 @@ export function buildThreatProfileImportDiff(
   current: Vera5Settings,
   profile: ThreatProfileDocument
 ): SettingsPackImportDiffEntry[] {
-  if (typeof profile.quietModeDefault !== "boolean") {
-    return [];
-  }
-
   const merged = mergeImportedThreatProfile(current, profile);
   const changes: SettingsPackImportDiffEntry[] = [];
 
-  if (current.quietMode !== merged.quietMode) {
+  if (
+    typeof profile.quietModeDefault === "boolean" &&
+    current.quietMode !== merged.quietMode
+  ) {
     changes.push({
       field: "quietMode",
       label: "Quiet mode",
       currentValue: formatSettingsPackBoolean(current.quietMode),
       incomingValue: formatSettingsPackBoolean(merged.quietMode),
+    });
+  }
+
+  if (
+    profile.connectorConfidenceMetadataOverrides !== undefined &&
+    !confidenceMetadataOverridesEqual(
+      current.connectorConfidenceMetadataOverrides,
+      merged.connectorConfidenceMetadataOverrides
+    )
+  ) {
+    changes.push({
+      field: "connectorConfidenceMetadataOverrides",
+      label: "Connector confidence metadata",
+      currentValue: formatSettingsPackConfidenceMetadataOverrides(
+        current.connectorConfidenceMetadataOverrides
+      ),
+      incomingValue: formatSettingsPackConfidenceMetadataOverrides(
+        merged.connectorConfidenceMetadataOverrides
+      ),
     });
   }
 
@@ -371,6 +422,9 @@ export function extractSettingsPackFromSettings(
       showDisabledSourcesInWorkspace: settings.showDisabledSourcesInWorkspace,
       includePrivateIpv4: settings.includePrivateIpv4,
     },
+    connectorConfidenceMetadataOverrides: {
+      ...settings.connectorConfidenceMetadataOverrides,
+    },
   };
 }
 
@@ -452,7 +506,38 @@ export function normalizeSettingsPackDocument(value: unknown): SettingsPackDocum
     ),
     domainPolicy: normalizeSettingsPackDomainPolicy(value.domainPolicy),
     analystMode: normalizeSettingsPackAnalystMode(value.analystMode),
+    ...(Object.prototype.hasOwnProperty.call(
+      value,
+      "connectorConfidenceMetadataOverrides"
+    )
+      ? {
+          connectorConfidenceMetadataOverrides:
+            normalizeImportedConfidenceMetadataOverrides(
+              value.connectorConfidenceMetadataOverrides
+            ),
+        }
+      : {}),
   };
+}
+
+function normalizeImportedConfidenceMetadataOverrides(
+  value: unknown
+): ConnectorConfidenceMetadataOverridesRecord {
+  try {
+    return validateImportedConnectorConfidenceMetadataOverridesRecord(value);
+  } catch (error) {
+    throw new SettingsPackImportError(
+      error instanceof Error
+        ? error.message
+        : "Invalid connector confidence metadata overrides."
+    );
+  }
+}
+
+function normalizeSettingsPackConfidenceMetadataOverrides(
+  value: unknown
+): ConnectorConfidenceMetadataOverridesRecord {
+  return normalizeImportedConfidenceMetadataOverrides(value);
 }
 
 export function parseSettingsPackDocument(rawJson: string): SettingsPackDocument {
@@ -488,6 +573,10 @@ export function mergeImportedSettingsPack(
     showDisabledSourcesInWorkspace: pack.analystMode.showDisabledSourcesInWorkspace,
     includePrivateIpv4: pack.analystMode.includePrivateIpv4,
     apiKeys: { ...current.apiKeys },
+    connectorConfidenceMetadataOverrides:
+      pack.connectorConfidenceMetadataOverrides !== undefined
+        ? { ...pack.connectorConfidenceMetadataOverrides }
+        : { ...current.connectorConfidenceMetadataOverrides },
   };
 }
 
@@ -539,6 +628,40 @@ function stringListsEqual(
 ): boolean {
   return (
     left.length === right.length && left.every((value, index) => value === right[index])
+  );
+}
+
+function formatSettingsPackConfidenceMetadataOverrides(
+  overrides: ConnectorConfidenceMetadataOverridesRecord
+): string {
+  const entries = ENRICHMENT_SOURCE_ORDER.flatMap((sourceId) => {
+    const override = overrides[sourceId];
+    if (!override) {
+      return [];
+    }
+    const parts: string[] = [];
+    if (override.reliabilityTier !== undefined) {
+      parts.push(`tier=${override.reliabilityTier ?? "none"}`);
+    }
+    if (override.freshnessPolicy !== undefined) {
+      parts.push(`freshness=${override.freshnessPolicy ?? "none"}`);
+    }
+    if (override.sourceClass !== undefined) {
+      parts.push(`class=${override.sourceClass ?? "none"}`);
+    }
+    return parts.length > 0
+      ? [`${ENRICHMENT_SOURCE_LABELS[sourceId]}: ${parts.join(", ")}`]
+      : [];
+  });
+  return entries.length > 0 ? entries.join("; ") : "(none)";
+}
+
+function confidenceMetadataOverridesEqual(
+  left: ConnectorConfidenceMetadataOverridesRecord,
+  right: ConnectorConfidenceMetadataOverridesRecord
+): boolean {
+  return (
+    JSON.stringify(left) === JSON.stringify(right)
   );
 }
 
@@ -676,6 +799,25 @@ export function buildSettingsPackImportDiff(
     formatSettingsPackBoolean(current.includePrivateIpv4),
     formatSettingsPackBoolean(merged.includePrivateIpv4)
   );
+
+  if (
+    pack.connectorConfidenceMetadataOverrides !== undefined &&
+    !confidenceMetadataOverridesEqual(
+      current.connectorConfidenceMetadataOverrides,
+      merged.connectorConfidenceMetadataOverrides
+    )
+  ) {
+    pushChange(
+      "connectorConfidenceMetadataOverrides",
+      "Connector confidence metadata",
+      formatSettingsPackConfidenceMetadataOverrides(
+        current.connectorConfidenceMetadataOverrides
+      ),
+      formatSettingsPackConfidenceMetadataOverrides(
+        merged.connectorConfidenceMetadataOverrides
+      )
+    );
+  }
 
   return changes;
 }

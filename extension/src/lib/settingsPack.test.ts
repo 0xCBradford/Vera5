@@ -47,7 +47,9 @@ import {
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_MANUAL_ONLY_MODE,
+  STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES,
   STORAGE_KEY_QUIET_MODE,
+  vera5SettingsToStoragePayload,
 } from "./storage";
 import {
   TEST_FIXTURE_API_KEY_LITERALS,
@@ -148,6 +150,7 @@ describe("settings pack schema", () => {
         showDisabledSourcesInWorkspace: true,
         includePrivateIpv4: true,
       },
+      connectorConfidenceMetadataOverrides: {},
     });
     expect(isSettingsPackDocument(document)).toBe(true);
     expect(json).not.toContain(TEST_FIXTURE_STORED_API_KEY);
@@ -514,6 +517,77 @@ describe("settings pack import", () => {
     );
   });
 
+  it("imports settings pack connector confidence metadata overrides without keys", async () => {
+    const pack = buildSettingsPackDocument(createDefaultVera5Settings());
+    pack.connectorConfidenceMetadataOverrides = {
+      otx: { reliabilityTier: "authoritative" },
+      urlscan: { freshnessPolicy: "stable" },
+    };
+
+    await importSettingsPackJson(JSON.stringify(pack));
+
+    expect(store[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES]).toEqual({
+      otx: { reliabilityTier: "authoritative" },
+      urlscan: { freshnessPolicy: "stable" },
+    });
+    const settings = await getVera5Settings();
+    expect(
+      settings.connectorConfidenceMetadataOverrides[ENRICHMENT_SOURCE.URLSCAN]
+    ).toEqual({ freshnessPolicy: "stable" });
+  });
+
+  it("exports settings pack metadata overrides and shows import diff", () => {
+    const current = {
+      ...createDefaultVera5Settings(),
+      connectorConfidenceMetadataOverrides: {},
+    };
+    const pack = buildSettingsPackDocument({
+      ...createDefaultVera5Settings(),
+      connectorConfidenceMetadataOverrides: {
+        greynoise: { freshnessPolicy: "stable" },
+      },
+    });
+
+    const changes = buildSettingsPackImportDiff(current, pack);
+    expect(changes.some((entry) => entry.field === "connectorConfidenceMetadataOverrides")).toBe(
+      true
+    );
+    expect(JSON.stringify(pack)).not.toContain("apiKeys");
+  });
+
+  it("rejects settings pack import with unknown connector metadata ids", async () => {
+    const pack = buildSettingsPackDocument(createDefaultVera5Settings());
+    pack.connectorConfidenceMetadataOverrides = {
+      unknown_source: { reliabilityTier: "community" },
+    };
+
+    await expect(importSettingsPackJson(JSON.stringify(pack))).rejects.toThrow(
+      SettingsPackImportError
+    );
+  });
+
+  it("rejects settings pack import with unknown metadata fields", async () => {
+    const pack = buildSettingsPackDocument(createDefaultVera5Settings());
+    pack.connectorConfidenceMetadataOverrides = {
+      otx: { reliabilityTier: "authoritative", scoreWeight: 2 },
+    };
+
+    await expect(importSettingsPackJson(JSON.stringify(pack))).rejects.toThrow(
+      SettingsPackImportError
+    );
+  });
+
+  it("rejects settings pack import with empty metadata override objects", async () => {
+    const pack = buildSettingsPackDocument(createDefaultVera5Settings());
+    pack.connectorConfidenceMetadataOverrides = {
+      otx: {},
+    };
+
+    await expect(importSettingsPackJson(JSON.stringify(pack))).rejects.toThrow(
+      SettingsPackImportError
+    );
+  });
+
   it("rejects settings pack import documents that contain secrets", async () => {
     await setApiKey("abuseipdb", TEST_FIXTURE_STORED_API_KEY);
 
@@ -624,6 +698,13 @@ describe("settings pack threat profile precedence", () => {
       isThreatProfileDocument({
         enabledConnectors: ["abuseipdb"],
         pivotRecipeSetId: "cti-hunt",
+      })
+    ).toBe(true);
+    expect(
+      isThreatProfileDocument({
+        connectorConfidenceMetadataOverrides: {
+          otx: { reliabilityTier: "authoritative" },
+        },
       })
     ).toBe(true);
     expect(
@@ -791,6 +872,147 @@ describe("threat profile import", () => {
           buildSettingsPackDocument(createDefaultVera5Settings())
         )
       )
+    ).toThrow(SettingsPackImportError);
+  });
+
+  it("normalizes connectorConfidenceMetadataOverrides from threat profile JSON", () => {
+    const profile = normalizeThreatProfileDocument({
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      id: "cti-metadata",
+      connectorConfidenceMetadataOverrides: {
+        otx: { reliabilityTier: "authoritative", sourceClass: "community" },
+        urlscan: { freshnessPolicy: "stable" },
+      },
+    });
+
+    expect(profile.connectorConfidenceMetadataOverrides).toEqual({
+      otx: { reliabilityTier: "authoritative", sourceClass: "community" },
+      urlscan: { freshnessPolicy: "stable" },
+    });
+  });
+
+  it("merges metadata overrides onto Vera5 settings without touching API keys", () => {
+    const current = {
+      ...createDefaultVera5Settings(),
+      connectorConfidenceMetadataOverrides: {},
+      apiKeys: { abuseipdb: TEST_FIXTURE_STORED_API_KEY },
+    };
+    const merged = mergeImportedThreatProfile(current, {
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      connectorConfidenceMetadataOverrides: {
+        greynoise: { freshnessPolicy: "stable" },
+      },
+    });
+
+    expect(merged.connectorConfidenceMetadataOverrides).toEqual({
+      greynoise: { freshnessPolicy: "stable" },
+    });
+    expect(merged.apiKeys).toEqual({ abuseipdb: TEST_FIXTURE_STORED_API_KEY });
+  });
+
+  it("leaves metadata overrides unchanged when connectorConfidenceMetadataOverrides is omitted", () => {
+    const current = {
+      ...createDefaultVera5Settings(),
+      connectorConfidenceMetadataOverrides: {
+        otx: { reliabilityTier: "authoritative" },
+      },
+    };
+    const merged = mergeImportedThreatProfile(current, {
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      quietModeDefault: true,
+    });
+
+    expect(merged.connectorConfidenceMetadataOverrides).toEqual({
+      otx: { reliabilityTier: "authoritative" },
+    });
+  });
+
+  it("imports metadata overrides into storage without keys", async () => {
+    store[STORAGE_KEY_API_KEYS] = { abuseipdb: TEST_FIXTURE_STORED_API_KEY };
+
+    await importThreatProfileJson(
+      JSON.stringify({
+        threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+        id: "metadata-profile",
+        connectorConfidenceMetadataOverrides: {
+          otx: { reliabilityTier: "authoritative" },
+          urlscan: { freshnessPolicy: "stable" },
+        },
+      })
+    );
+
+    expect(store[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES]).toEqual({
+      otx: { reliabilityTier: "authoritative" },
+      urlscan: { freshnessPolicy: "stable" },
+    });
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    });
+    const settings = await getVera5Settings();
+    expect(
+      settings.connectorConfidenceMetadataOverrides[ENRICHMENT_SOURCE.OTX]
+    ).toEqual({ reliabilityTier: "authoritative" });
+  });
+
+  it("builds metadata diff for threat profile import preview", () => {
+    const current = {
+      ...createDefaultVera5Settings(),
+      connectorConfidenceMetadataOverrides: {},
+    };
+    const changes = buildThreatProfileImportDiff(current, {
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      connectorConfidenceMetadataOverrides: {
+        greynoise: { freshnessPolicy: "stable" },
+      },
+    });
+
+    expect(changes.some((entry) => entry.field === "connectorConfidenceMetadataOverrides")).toBe(
+      true
+    );
+  });
+
+  it("rejects invalid connector confidence metadata in threat profile JSON", () => {
+    expect(() =>
+      normalizeThreatProfileDocument({
+        threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+        connectorConfidenceMetadataOverrides: {
+          otx: { reliabilityTier: "not-a-tier" },
+        },
+      })
+    ).toThrow(SettingsPackImportError);
+  });
+
+  it("rejects unknown connector ids in threat profile metadata overrides", () => {
+    expect(() =>
+      normalizeThreatProfileDocument({
+        threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+        connectorConfidenceMetadataOverrides: {
+          unknown_source: { reliabilityTier: "community" },
+        },
+      })
+    ).toThrow(SettingsPackImportError);
+  });
+
+  it("rejects unknown metadata fields in threat profile overrides", () => {
+    expect(() =>
+      normalizeThreatProfileDocument({
+        threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+        connectorConfidenceMetadataOverrides: {
+          otx: { reliabilityTier: "authoritative", scoreWeight: 2 },
+        },
+      })
+    ).toThrow(SettingsPackImportError);
+  });
+
+  it("rejects threat profile JSON that contains secrets alongside metadata", () => {
+    expect(() =>
+      normalizeThreatProfileDocument({
+        threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+        connectorConfidenceMetadataOverrides: {
+          otx: { reliabilityTier: "authoritative" },
+        },
+        apiKeys: { abuseipdb: "leaked" },
+      })
     ).toThrow(SettingsPackImportError);
   });
 });

@@ -24,16 +24,21 @@ import {
   type InternalAssetPolicy,
   type InternalAssetVendorLabelEntry,
 } from "./internalAssetPolicy";
+import {
+  normalizeConnectorConfidenceMetadataOverridesRecord,
+  type ConnectorConfidenceMetadataOverridesRecord,
+} from "./connectorDefinition";
 import type { IocType } from "./iocRegex";
 import {
   API_KEY_STORAGE_SLOTS,
   ENRICHMENT_SOURCE_DEFINITIONS,
   ENRICHMENT_SOURCE_ORDER,
   isApiKeyStorageSlot,
+  setConnectorConfidenceMetadataOverrides,
   type ApiKeyStorageSlot,
 } from "./enrichmentSourceRegistry";
 
-export const SETTINGS_SCHEMA_VERSION = 9;
+export const SETTINGS_SCHEMA_VERSION = 10;
 
 export const STORAGE_SCHEMA_VERSION = SETTINGS_SCHEMA_VERSION;
 
@@ -85,6 +90,8 @@ export const STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS = "internalAssetVendorLabe
 export const STORAGE_KEY_ANALYST_MODE_PRESET_ID = "analystModePresetId";
 export const STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID = "defaultExportTemplateId";
 export const STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS = "pivotEmphasisProviders";
+export const STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES =
+  "connectorConfidenceMetadataOverrides";
 
 export type { DomainPolicy, DomainPolicyMode };
 export type { InternalAssetPolicy, InternalAssetVendorLabelEntry };
@@ -132,6 +139,8 @@ export const STORAGE_KEYS = {
   ANALYST_MODE_PRESET_ID: STORAGE_KEY_ANALYST_MODE_PRESET_ID,
   DEFAULT_EXPORT_TEMPLATE_ID: STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
   PIVOT_EMPHASIS_PROVIDERS: STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
+  CONNECTOR_CONFIDENCE_METADATA_OVERRIDES:
+    STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES,
 } as const;
 
 export type ApiKeySlot = ApiKeyStorageSlot;
@@ -189,6 +198,7 @@ export type Vera5Settings = {
   analystModePresetId: string;
   defaultExportTemplateId: ExportTemplateId;
   pivotEmphasisProviders: PivotProvider[];
+  connectorConfidenceMetadataOverrides: ConnectorConfidenceMetadataOverridesRecord;
 };
 
 export type Vera5StorageRaw = {
@@ -226,6 +236,7 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_ANALYST_MODE_PRESET_ID]?: unknown;
   [STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]?: unknown;
   [STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS]?: unknown;
+  [STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES]?: unknown;
 };
 
 export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
@@ -261,6 +272,7 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_ANALYST_MODE_PRESET_ID,
   STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
   STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
+  STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES,
 ];
 
 export const VERA5_SETTINGS_READ_KEYS: readonly string[] = [
@@ -401,7 +413,18 @@ export function createDefaultVera5Settings(): Vera5Settings {
     analystModePresetId: "",
     defaultExportTemplateId: "analyst-update",
     pivotEmphasisProviders: [],
+    connectorConfidenceMetadataOverrides: {},
   };
+}
+
+export function normalizeStoredConnectorConfidenceMetadataOverrides(
+  value: unknown
+): ConnectorConfidenceMetadataOverridesRecord {
+  try {
+    return normalizeConnectorConfidenceMetadataOverridesRecord(value);
+  } catch {
+    return {};
+  }
 }
 
 export function normalizeEnrichmentSourceCacheTtlRecord(
@@ -680,6 +703,10 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
     pivotEmphasisProviders: normalizePivotEmphasisProviders(
       raw[STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS]
     ),
+    connectorConfidenceMetadataOverrides:
+      normalizeStoredConnectorConfidenceMetadataOverrides(
+        raw[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES]
+      ),
   };
 }
 
@@ -777,6 +804,14 @@ export function migrateVera5StorageRaw(raw: Vera5StorageRaw): Vera5StorageRaw {
     migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 9;
   }
 
+  if (readStorageSchemaVersion(migrated) < 10) {
+    migrated[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES] =
+      normalizeStoredConnectorConfidenceMetadataOverrides(
+        migrated[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES]
+      );
+    migrated[STORAGE_KEY_STORAGE_SCHEMA_VERSION] = 10;
+  }
+
   if (readStorageSchemaVersion(migrated) >= SETTINGS_SCHEMA_VERSION) {
     return migrated;
   }
@@ -836,6 +871,8 @@ export function vera5SettingsToStoragePayload(
     [STORAGE_KEY_ANALYST_MODE_PRESET_ID]: settings.analystModePresetId,
     [STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID]: settings.defaultExportTemplateId,
     [STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS]: settings.pivotEmphasisProviders,
+    [STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES]:
+      settings.connectorConfidenceMetadataOverrides,
   };
 }
 
@@ -897,6 +934,10 @@ export async function getVera5Settings(): Promise<Vera5Settings> {
     VERA5_SETTINGS_READ_KEYS
   )) as Vera5StorageRaw;
   const settings = normalizeVera5Settings(migrateVera5StorageRaw(raw));
+
+  setConnectorConfidenceMetadataOverrides(
+    settings.connectorConfidenceMetadataOverrides
+  );
 
   return {
     ...settings,

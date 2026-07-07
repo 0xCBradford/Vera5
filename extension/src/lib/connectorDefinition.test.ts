@@ -23,6 +23,10 @@ import {
   isConnectorFetchResult,
   isConnectorFreshnessPolicy,
   isConnectorNormalizeResult,
+  normalizeConnectorConfidenceMetadataOverride,
+  normalizeConnectorConfidenceMetadataOverridesRecord,
+  validateConnectorConfidenceMetadataOverrideForImport,
+  validateImportedConnectorConfidenceMetadataOverridesRecord,
   isConnectorRateLimitPolicy,
   isConnectorReliabilityTier,
   isConnectorSourceClass,
@@ -371,5 +375,86 @@ describe("ConnectorDefinition contract", () => {
     const defaultHealth =
       await runConnectorDefinitionHealthCheck(withoutHealthCheck);
     expect(defaultHealth.status).toBe(CONNECTOR_HEALTH_STATUS.OK);
+  });
+});
+
+describe("connector confidence metadata overrides", () => {
+  it("normalizes per-source override fields and rejects invalid enums", () => {
+    expect(
+      normalizeConnectorConfidenceMetadataOverride(
+        { reliabilityTier: "community", freshnessPolicy: "volatile" },
+        ENRICHMENT_SOURCE.OTX
+      )
+    ).toEqual({
+      reliabilityTier: "community",
+      freshnessPolicy: "volatile",
+    });
+
+    expect(() =>
+      normalizeConnectorConfidenceMetadataOverride(
+        { reliabilityTier: "bogus" },
+        ENRICHMENT_SOURCE.OTX
+      )
+    ).toThrow(/Invalid reliabilityTier/);
+  });
+
+  it("normalizes override records for known connector ids only", () => {
+    expect(
+      normalizeConnectorConfidenceMetadataOverridesRecord({
+        otx: { reliabilityTier: "authoritative" },
+        unknown_source: { reliabilityTier: "community" },
+      })
+    ).toEqual({
+      otx: { reliabilityTier: "authoritative" },
+    });
+  });
+});
+
+describe("imported connector confidence metadata validation", () => {
+  it("accepts valid override records for import", () => {
+    expect(
+      validateImportedConnectorConfidenceMetadataOverridesRecord({
+        otx: { reliabilityTier: "authoritative", freshnessPolicy: "volatile" },
+        urlscan: { sourceClass: "authoritative" },
+      })
+    ).toEqual({
+      otx: { reliabilityTier: "authoritative", freshnessPolicy: "volatile" },
+      urlscan: { sourceClass: "authoritative" },
+    });
+  });
+
+  it("returns an empty record when import metadata is omitted", () => {
+    expect(
+      validateImportedConnectorConfidenceMetadataOverridesRecord(undefined)
+    ).toEqual({});
+  });
+
+  it("rejects unknown connector ids on import", () => {
+    expect(() =>
+      validateImportedConnectorConfidenceMetadataOverridesRecord({
+        unknown_source: { reliabilityTier: "community" },
+      })
+    ).toThrow(/Unknown connector id/);
+  });
+
+  it("rejects unknown override fields on import", () => {
+    expect(() =>
+      validateConnectorConfidenceMetadataOverrideForImport(
+        { reliabilityTier: "authoritative", scoreWeight: 2 },
+        ENRICHMENT_SOURCE.OTX
+      )
+    ).toThrow(/Unknown connector confidence metadata field/);
+  });
+
+  it("rejects empty override objects on import", () => {
+    expect(() =>
+      validateConnectorConfidenceMetadataOverrideForImport({}, ENRICHMENT_SOURCE.OTX)
+    ).toThrow(/must include at least one supported field/);
+  });
+
+  it("rejects non-object metadata containers on import", () => {
+    expect(() =>
+      validateImportedConnectorConfidenceMetadataOverridesRecord([])
+    ).toThrow(/must be an object/);
   });
 });

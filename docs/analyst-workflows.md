@@ -677,6 +677,68 @@ With AbuseIPDB and OTX both enabled for IPv4:
 
 Disable sources you do not need for a case to save quota and simplify the card.
 
+## Interpreting connector confidence metadata
+
+When the hover card lists **two or more enrichment sources**, each source row may show small **metadata chips** under the badge (for example **Authoritative**, **Community**, **Standard**, **Volatile**, **Pivot only**). Chip tooltips state that labels are **informational only** and do not change the composite risk score.
+
+Tier definitions, freshness policies, source classes, and built-in defaults per vendor are documented in [Connector confidence metadata (hover card)](api-integrations.md#connector-confidence-metadata-hover-card) in [api-integrations.md](api-integrations.md). This section explains how to use those labels during triage—not as a second score.
+
+### Read order on a multi-source card
+
+| Step | What to read | Why |
+|------|--------------|-----|
+| 1 | Per-source **Live** / **Cached** / **Error** / **Skipped** badge and summary text | Vendor evidence for this indicator—always primary. |
+| 2 | Optional **tags**, **last updated**, and **Raw response** | Corroboration and audit detail when summaries are thin. |
+| 3 | Metadata chips (reliability tier, freshness policy, source class) | Context about how Vera5 classifies the connector—not a verdict on the IOC. |
+| 4 | **Risk score** headline and **How this score was computed** | Blended advisory band and explain chain—built only from parseable OK summaries, never from chips. |
+
+If a row has no chips, enrichment still works; Vera5 omits chips when metadata is missing for that source.
+
+### Reliability tier — how to interpret
+
+| Chip | During triage | Do not |
+|------|---------------|--------|
+| **Authoritative** | Treat live API or registry rows as vendor-contract data. Weight them in your mental model alongside policy-approved sources. | Assume **Authoritative** means unanimous malicious intent or replaces corroboration. |
+| **Community** | Expect crowd-sourced or pulse-style feeds (for example OTX). Useful for leads and context; confirm with authoritative sources or case policy when stakes are high. | Dismiss a **Community** row because the chip sounds “weaker”—read the live summary and pivots. |
+| **Pivot only** | Vera5 has no live connector for that vendor today. Use **Recommended next pivots** for manual review; the chip describes navigation affordance, not a failed enrich. | Read **Pivot only** as “untrusted vendor” or “safe to ignore.” |
+
+**Community vs authoritative on the same IOC:** Compare summaries side by side. A **Community** pulse count and an **Authoritative** abuse-confidence line can disagree—that is normal. Use **How this score was computed** and **Sources disagree** when the blended band exists; use pivots when they conflict. Chips label the *connector*, not which row “wins.”
+
+### Freshness policy — how to interpret
+
+| Chip | During triage | Do not |
+|------|---------------|--------|
+| **Standard** | Typical cache-and-refresh behavior. Check **Cached** vs **Live** and last-updated text when recency matters. | Assume **Standard** means stale data is impossible. |
+| **Volatile** | Noise and scan-style feeds may change quickly (for example URLScan.io, GreyNoise). Prefer **Live** or **›** refresh before time-sensitive decisions. | Treat **Volatile** as “incorrect”—it signals cadence, not accuracy. |
+| **Stable** | Registry-style data (for example RDAP/WHOIS). Registration fields change slowly; still verify live row text for the case. | Use **Stable** to skip vendor pivots when ownership or dates are disputed. |
+
+### Source class — how to interpret
+
+**Community** and **Authoritative** under source class describe **provider lineage** (crowd-sourced vs vendor/registry-operated). They often align with reliability tier but can differ—for example a vendor may be class **Authoritative** with tier **Pivot only** when Vera5 ships pivots but not live API enrichment (VirusTotal today).
+
+Use source class to set expectations about feed type; use the live summary for the actual signal.
+
+### What metadata does not change
+
+| Topic | Analyst takeaway |
+|-------|------------------|
+| Composite **Risk score** | Chips do not raise or lower the band or **/100** value. |
+| **How this score was computed** | Chips do not appear in reasoning lines and do not add weights. |
+| Verdict language | Vera5 does not output “malicious” or “benign” from chips—only vendor summaries and your judgment. |
+| Quota and keys | Chips do not bypass manual-only mode, quiet mode, rate limits, or missing API keys. |
+
+When writing case notes, cite vendor summaries, timestamps, and reasoning-chain lines—not chip labels alone.
+
+### Example patterns
+
+| Pattern on the card | Suggested read |
+|---------------------|----------------|
+| OTX **Community** + AbuseIPDB **Authoritative**, similar summaries | Corroboration across feed types; still read each row. |
+| OTX **Community** high pulses + AbuseIPDB **Authoritative** low abuse score | Expect possible **Sources disagree**; pivots to both vendors. |
+| VirusTotal **Pivot only** + live rows from other sources | Use VT pivots manually; composite score ignores VT until live enrichment ships. |
+| GreyNoise **Volatile** **Cached** row | Refresh with **›** if the alert is time-sensitive. |
+| Row with summary but no chips | Rely on badge and summary; metadata gap does not block enrich. |
+
 ## Composite risk score on the hover card
 
 When enrichment returns per-source results, the on-page overlay shows a **Risk score** section. Vera5 computes the label **on your machine** from normalized vendor summaries (AbuseIPDB abuse-confidence text, OTX pulse counts, report-count summaries, and similar parseable OK lines). It is **not** an LLM verdict and does not call Vera5-operated infrastructure.
@@ -786,6 +848,7 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | Fresh data everywhere | **Clear cache** on the options page, then re-enrich indicators you care about. |
 | Hit a rate limit | Read the retry hint; wait for cooldown; check vendor usage dashboards listed in [api-integrations.md](api-integrations.md). |
 | Conflicting risk signals | Read **How this score was computed**; follow pivots for diverging sources; do not treat the headline band as consensus when **Sources disagree** is shown. |
+| Community vs authoritative chips on one IOC | Read each live row first; use chips for feed-type context only—they do not pick a winner or change the score. See [Interpreting connector confidence metadata](#interpreting-connector-confidence-metadata). |
 | Quiet mode triage | Turn quiet mode on; scan and label locally; read **Cached** enrichment; use **Recommended next pivots** for vendor research; disable quiet mode only when live enrich is approved. |
 | Single live source only | Expect **Unknown risk** and an empty reasoning note until a second source returns parseable OK data. |
 | Phishing case handoff | Name session, enrich key IOCs, label/pin priorities, **Export session** Markdown or JSON; verify denylist if webmail blocked enrich. |
@@ -832,7 +895,7 @@ Import threat profile files through threat profile import, not the settings pack
 
 ## Related documentation
 
-- [api-integrations.md](api-integrations.md) — per-source limits, 429 headers, and monitoring links
+- [api-integrations.md](api-integrations.md) — per-source limits, 429 headers, monitoring links, and [connector confidence metadata definitions](api-integrations.md#connector-confidence-metadata-hover-card)
 - [local-mode.md](local-mode.md) — what stays on your machine vs what reaches vendors
 - [security-model.md](security-model.md) — permissions and host access
 - [architecture.md](architecture.md) — supported indicator types and connector scope

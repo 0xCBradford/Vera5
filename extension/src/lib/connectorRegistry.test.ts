@@ -25,13 +25,18 @@ import {
 } from "./connectorRegistry";
 import {
   CONNECTOR_AUTHORITY_TIER,
+  CONNECTOR_FRESHNESS_POLICY,
+  CONNECTOR_RELIABILITY_TIER,
+  CONNECTOR_SOURCE_CLASS,
   type ConnectorDefinition,
 } from "./connectorDefinition";
 import {
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
+  getEnrichmentSourceDefinition,
   LIVE_ENRICHMENT_SOURCE_ORDER,
 } from "./enrichmentSourceRegistry";
+import * as enrichmentSourceRegistry from "./enrichmentSourceRegistry";
 import { IOC_TYPE } from "./iocRegex";
 
 function buildStubDefinition(
@@ -72,6 +77,7 @@ function buildStubDefinition(
 describe("connectorRegistry", () => {
   afterEach(() => {
     resetDefaultConnectorRegistryState();
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
   });
 
   it("registers, looks up, lists, and unregisters connector definitions", () => {
@@ -296,7 +302,7 @@ describe("connectorRegistry", () => {
     ).toThrow(ConnectorRegistryError);
   });
 
-  it("exposes confidence metadata fields for every enrichment source", () => {
+  it("exposes confidence metadata defaults for every enrichment source", () => {
     const metadata = listConnectorConfidenceMetadata();
 
     expect(metadata).toHaveLength(ENRICHMENT_SOURCE_ORDER.length);
@@ -305,23 +311,84 @@ describe("connectorRegistry", () => {
     );
     expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.ABUSEIPDB)).toEqual({
       sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
-      freshnessPolicy: null,
-      reliabilityTier: null,
-      sourceClass: null,
+      freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+      reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+      sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+    });
+    expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual({
+      sourceId: ENRICHMENT_SOURCE.OTX,
+      freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+      reliabilityTier: CONNECTOR_RELIABILITY_TIER.COMMUNITY,
+      sourceClass: CONNECTOR_SOURCE_CLASS.COMMUNITY,
     });
     expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.VIRUSTOTAL)).toEqual({
       sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
+      freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+      reliabilityTier: CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+      sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+    });
+    expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.URLSCAN)).toEqual({
+      sourceId: ENRICHMENT_SOURCE.URLSCAN,
+      freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.VOLATILE,
+      reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+      sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+    });
+    expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.GREYNOISE)).toEqual({
+      sourceId: ENRICHMENT_SOURCE.GREYNOISE,
+      freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.VOLATILE,
+      reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+      sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+    });
+    expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.RDAP_WHOIS)).toEqual({
+      sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
+      freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STABLE,
+      reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+      sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+    });
+
+    for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
+      const entry = getConnectorConfidenceMetadata(sourceId);
+      expect(entry.freshnessPolicy).not.toBeNull();
+      expect(entry.reliabilityTier).not.toBeNull();
+      expect(entry.sourceClass).not.toBeNull();
+      if (!getEnrichmentSourceDefinition(sourceId).liveConnector) {
+        expect(entry.reliabilityTier).toBe(
+          CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY
+        );
+      }
+    }
+  });
+
+  it("returns null confidence fields when imported overrides explicitly clear metadata", () => {
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({
+      [ENRICHMENT_SOURCE.OTX]: {
+        freshnessPolicy: null,
+        reliabilityTier: null,
+        sourceClass: null,
+      },
+    });
+
+    expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual({
+      sourceId: ENRICHMENT_SOURCE.OTX,
       freshnessPolicy: null,
       reliabilityTier: null,
       sourceClass: null,
     });
+  });
 
-    for (const entry of metadata) {
-      expect(entry).toMatchObject({
-        freshnessPolicy: null,
-        reliabilityTier: null,
-        sourceClass: null,
-      });
-    }
+  it("applies imported confidence metadata overrides from settings", () => {
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({
+      [ENRICHMENT_SOURCE.OTX]: {
+        reliabilityTier: "authoritative",
+        sourceClass: "authoritative",
+      },
+    });
+
+    expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual({
+      sourceId: ENRICHMENT_SOURCE.OTX,
+      freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+      reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+      sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+    });
   });
 });

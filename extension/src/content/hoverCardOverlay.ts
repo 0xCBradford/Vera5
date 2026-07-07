@@ -55,7 +55,9 @@ import {
 import { safeOpenOptionsPage } from "../lib/extensionContext";
 import {
   buildSourceStatusBadgeClassName,
+  buildSourceMetadataChipClassName,
   formatEnrichmentSourceAttribution,
+  HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
   HOVER_CARD_ANALYST_NOTES_INPUT_ID,
   HOVER_CARD_ANALYST_NOTES_LABEL,
   HOVER_CARD_ANALYST_NOTES_PLACEHOLDER,
@@ -276,6 +278,9 @@ export const HOVER_CARD_SOURCES_CLASS = "vera5-hover-card-sources";
 export const HOVER_CARD_SOURCE_ITEM_CLASS = "vera5-hover-card-source-item";
 export const HOVER_CARD_SOURCE_BADGE_CLASS = "vera5-hover-card-source-badge";
 export const HOVER_CARD_SOURCE_DETAIL_CLASS = "vera5-hover-card-source-detail";
+export const HOVER_CARD_SOURCE_METADATA_CLASS = "vera5-hover-card-source-metadata";
+export const HOVER_CARD_SOURCE_METADATA_CHIP_CLASS =
+  "vera5-hover-card-source-metadata-chip";
 export const HOVER_CARD_SOURCE_TAGS_CLASS = "vera5-hover-card-source-tags";
 export const HOVER_CARD_RAW_JSON_CLASS = "vera5-hover-card-raw-json";
 export const HOVER_CARD_RAW_JSON_BODY_CLASS = "vera5-hover-card-raw-json-body";
@@ -578,6 +583,33 @@ function createPivotRecipesPanel(
   return section;
 }
 
+function appendSourceMetadataChips(
+  item: HTMLElement,
+  chips: readonly { kind: "reliability" | "freshness" | "sourceClass"; label: string; tooltip: string }[],
+  doc: Document
+): void {
+  if (!chips || chips.length === 0) {
+    return;
+  }
+
+  const row = doc.createElement("div");
+  row.className = HOVER_CARD_SOURCE_METADATA_CLASS;
+  row.setAttribute("role", "list");
+  row.setAttribute("aria-label", "Source metadata");
+  row.title = HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP;
+
+  for (const chip of chips) {
+    const span = doc.createElement("span");
+    span.className = buildSourceMetadataChipClassName(chip.kind);
+    span.setAttribute("role", "listitem");
+    span.title = chip.tooltip;
+    span.textContent = chip.label;
+    row.appendChild(span);
+  }
+
+  item.appendChild(row);
+}
+
 function createSourceResultsSection(
   sourceResults: readonly HoverCardSourceEntry[],
   doc: Document
@@ -606,6 +638,8 @@ function createSourceResultsSection(
     );
     badge.textContent = `${entry.label} · ${entry.badgeText}`;
     item.appendChild(badge);
+
+    appendSourceMetadataChips(item, entry.metadataChips ?? [], doc);
 
     const detail = doc.createElement("span");
     detail.className = HOVER_CARD_SOURCE_DETAIL_CLASS;

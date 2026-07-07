@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as enrichmentSourceRegistry from "./enrichmentSourceRegistry";
 import {
   buildDisabledSourcePlaceholders,
   buildHoverCardSourceEntries,
+  buildHoverCardSourceEntry,
+  buildHoverCardSourceMetadataChips,
+  buildHoverCardSourceMetadataChipsFromFields,
   DEFAULT_HOVER_CARD_SUMMARY,
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
@@ -22,6 +26,7 @@ import {
   resolveHoverCardDisclaimerAriaLabel,
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK,
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY,
+  resolveHoverCardSourceConfidenceMetadata,
   resolveMultiSourceEnrichmentView,
   shouldShowEnrichmentSourceAttribution,
   shouldShowHoverCardDisclaimer,
@@ -207,6 +212,174 @@ describe("hover card enrichment placeholders", () => {
     ]);
     expect(entries[0]?.badgeText).toBe(formatSourceStatusBadge("error"));
     expect(entries[1]?.badgeText).toBe(formatSourceStatusBadge("ok"));
+  });
+
+  it("attaches connector confidence metadata chips to each source entry", () => {
+    const entries = buildHoverCardSourceEntries([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "12 abuse confidence",
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+      },
+      {
+        sourceId: "virustotal",
+        sourceLabel: "VirusTotal",
+        status: "skipped",
+        errorMessage: "VirusTotal enrichment is not available yet.",
+      },
+    ]);
+
+    expect(entries[0]?.metadataChips.map((chip) => chip.label)).toEqual([
+      "Authoritative",
+      "Standard",
+      "Authoritative",
+    ]);
+    expect(entries[1]?.metadataChips.map((chip) => chip.label)).toEqual([
+      "Community",
+      "Standard",
+      "Community",
+    ]);
+    expect(entries[2]?.metadataChips.map((chip) => chip.label)).toEqual([
+      "Pivot only",
+      "Standard",
+      "Authoritative",
+    ]);
+  });
+
+  it("includes informational tooltips on metadata chips", () => {
+    const entries = buildHoverCardSourceEntries([
+      {
+        sourceId: "abuseipdb",
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "12 abuse confidence",
+      },
+      {
+        sourceId: "otx",
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "2 threat pulses",
+      },
+    ]);
+
+    for (const entry of entries) {
+      for (const chip of entry.metadataChips) {
+        expect(chip.tooltip.length).toBeGreaterThan(0);
+        expect(chip.tooltip.toLowerCase()).toContain("informational");
+      }
+    }
+
+    expect(entries[0]?.metadataChips[0]?.tooltip).toContain(
+      "composite risk score"
+    );
+    expect(entries[1]?.metadataChips[0]?.tooltip).toContain("Community-sourced");
+  });
+
+  it("omits metadata chips when confidence metadata fields are all null", () => {
+    expect(
+      buildHoverCardSourceMetadataChipsFromFields({
+        freshnessPolicy: null,
+        reliabilityTier: null,
+        sourceClass: null,
+      })
+    ).toEqual([]);
+  });
+
+  it("shows only available metadata chips when confidence metadata is partial", () => {
+    expect(
+      buildHoverCardSourceMetadataChipsFromFields({
+        freshnessPolicy: null,
+        reliabilityTier: "community",
+        sourceClass: null,
+      })
+    ).toEqual([
+      expect.objectContaining({
+        kind: "reliability",
+        label: "Community",
+      }),
+    ]);
+  });
+
+  it("skips invalid confidence enum values without throwing", () => {
+    expect(
+      buildHoverCardSourceMetadataChipsFromFields({
+        freshnessPolicy: "not-a-policy" as never,
+        reliabilityTier: "authoritative",
+        sourceClass: "bogus" as never,
+      })
+    ).toEqual([
+      expect.objectContaining({
+        kind: "reliability",
+        label: "Authoritative",
+      }),
+    ]);
+  });
+
+  it("returns an empty chip list for unknown source ids", () => {
+    expect(buildHoverCardSourceMetadataChips("unknown-source" as never)).toEqual(
+      []
+    );
+  });
+
+  it("treats explicit null metadata overrides as missing", () => {
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({
+      [ENRICHMENT_SOURCE.OTX]: {
+        freshnessPolicy: null,
+        reliabilityTier: null,
+        sourceClass: null,
+      },
+    });
+
+    expect(resolveHoverCardSourceConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual(
+      {
+        freshnessPolicy: null,
+        reliabilityTier: null,
+        sourceClass: null,
+      }
+    );
+    expect(buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX)).toEqual([]);
+
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
+  });
+
+  it("still builds a source entry when confidence metadata is missing", () => {
+    const entry = buildHoverCardSourceEntry({
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+      sourceLabel: "AbuseIPDB",
+      status: "ok",
+      summary: "12 abuse confidence",
+    });
+
+    expect(entry).not.toBeNull();
+    expect(entry?.detail).toBe("12 abuse confidence");
+    expect(entry?.badgeText).toBe(formatSourceStatusBadge("ok"));
+    expect(Array.isArray(entry?.metadataChips)).toBe(true);
+  });
+
+  afterEach(() => {
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
+  });
+
+  it("applies imported metadata overrides to hover card chips", () => {
+    enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({
+      [ENRICHMENT_SOURCE.OTX]: {
+        reliabilityTier: "authoritative",
+        sourceClass: "authoritative",
+      },
+    });
+
+    expect(
+      buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX).map(
+        (chip) => chip.label
+      )
+    ).toEqual(["Authoritative", "Standard", "Authoritative"]);
   });
 
   it("orders AbuseIPDB, OTX, and GreyNoise source rows in connector order with labels", () => {

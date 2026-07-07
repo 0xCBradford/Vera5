@@ -19,6 +19,7 @@ import { isInvestigationSessionIocPinned } from "../lib/investigationSession";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildSourceStatusBadgeClassName,
+  buildSourceMetadataChipClassName,
   formatEnrichmentSourceAttribution,
   HOVER_CARD_ANALYST_NOTES_INPUT_ID,
   HOVER_CARD_ANALYST_NOTES_LABEL,
@@ -33,6 +34,7 @@ import {
   HOVER_CARD_IOC_PINNED_LABEL,
   HOVER_CARD_OPEN_SETTINGS_LABEL,
   HOVER_CARD_RAW_JSON_SUMMARY_LABEL,
+  HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
   HOVER_CARD_WHY_DETECTED_SECTION_ARIA_LABEL,
   HOVER_CARD_ON_PAGE_VALUE_LABEL,
   HOVER_CARD_REFANGED_VALUE_LABEL,
@@ -596,6 +598,25 @@ export function HoverCard({
                 >
                   {entry.label} · {entry.badgeText}
                 </span>
+                {(entry.metadataChips?.length ?? 0) > 0 ? (
+                  <div
+                    className="vera5-hover-card-source-metadata"
+                    role="list"
+                    aria-label="Source metadata"
+                    title={HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP}
+                  >
+                    {entry.metadataChips!.map((chip) => (
+                      <span
+                        key={`${entry.sourceId}-${chip.kind}`}
+                        className={buildSourceMetadataChipClassName(chip.kind)}
+                        role="listitem"
+                        title={chip.tooltip}
+                      >
+                        {chip.label}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 <span className="vera5-hover-card-source-detail">{entry.detail}</span>
                 {entry.lastUpdatedLine ? (
                   <span

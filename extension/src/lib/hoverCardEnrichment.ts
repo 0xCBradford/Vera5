@@ -11,9 +11,25 @@ export {
 import {
   ENRICHMENT_SOURCE_ORDER,
   ENRICHMENT_SOURCE_LABELS,
+  resolveEnrichmentSourceConfidenceMetadata,
   formatDisabledSourceMessage,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
+import {
+  CONNECTOR_FRESHNESS_POLICY,
+  CONNECTOR_SOURCE_CLASS,
+  getConnectorFreshnessPolicyLabel,
+  getConnectorReliabilityTierDefinition,
+  getConnectorReliabilityTierLabel,
+  getConnectorSourceClassLabel,
+  type ConnectorFreshnessPolicy,
+  type ConnectorReliabilityTier,
+  type ConnectorSourceClass,
+  type ConnectorConfidenceMetadataFields,
+  isConnectorFreshnessPolicy,
+  isConnectorReliabilityTier,
+  isConnectorSourceClass,
+} from "./connectorDefinition";
 import {
   formatDetectionRuleReason,
   IOC_TYPE,
@@ -215,12 +231,27 @@ export function buildDisabledSourcePlaceholders(
 
 export type HoverCardSourceEntryStatus = "ok" | "error" | "skipped";
 
+export type HoverCardSourceMetadataChipKind =
+  | "reliability"
+  | "freshness"
+  | "sourceClass";
+
+export type HoverCardSourceMetadataChip = {
+  kind: HoverCardSourceMetadataChipKind;
+  label: string;
+  tooltip: string;
+};
+
+export const HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP =
+  "Informational only. Does not change the composite risk score or replace per-source live results.";
+
 export type HoverCardSourceEntry = {
   sourceId: EnrichmentSourceId;
   label: string;
   status: HoverCardSourceEntryStatus;
   badgeText: string;
   detail: string;
+  metadataChips: readonly HoverCardSourceMetadataChip[];
   fromCache?: boolean;
   lastUpdatedLine?: string;
   tags?: readonly string[];
@@ -281,6 +312,93 @@ export function buildSourceStatusBadgeClassName(
   return `vera5-hover-card-source-badge vera5-hover-card-source-badge--${status}`;
 }
 
+export function buildSourceMetadataChipClassName(
+  kind: HoverCardSourceMetadataChipKind
+): string {
+  return `vera5-hover-card-source-metadata-chip vera5-hover-card-source-metadata-chip--${kind}`;
+}
+
+function formatFreshnessPolicyTooltip(
+  policy: ConnectorFreshnessPolicy
+): string {
+  const lead =
+    policy === CONNECTOR_FRESHNESS_POLICY.VOLATILE
+      ? "Results for this source may change quickly."
+      : policy === CONNECTOR_FRESHNESS_POLICY.STABLE
+        ? "Registry-style data that changes infrequently."
+        : "Typical cache-and-refresh expectations for this source.";
+  return `${lead} ${HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP}`;
+}
+
+function formatSourceClassTooltip(sourceClass: ConnectorSourceClass): string {
+  const lead =
+    sourceClass === CONNECTOR_SOURCE_CLASS.COMMUNITY
+      ? "Community-sourced or crowd-fed intelligence provider."
+      : "Vendor-operated or registry-grade intelligence provider.";
+  return `${lead} ${HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP}`;
+}
+
+function formatReliabilityTierTooltip(tier: ConnectorReliabilityTier): string {
+  return getConnectorReliabilityTierDefinition(tier).description;
+}
+
+export function resolveHoverCardSourceConfidenceMetadata(
+  sourceId: EnrichmentSourceId
+): ConnectorConfidenceMetadataFields {
+  return resolveEnrichmentSourceConfidenceMetadata(sourceId);
+}
+
+export function buildHoverCardSourceMetadataChipsFromFields(fields: {
+  freshnessPolicy: ConnectorFreshnessPolicy | null;
+  reliabilityTier: ConnectorReliabilityTier | null;
+  sourceClass: ConnectorSourceClass | null;
+}): HoverCardSourceMetadataChip[] {
+  const chips: HoverCardSourceMetadataChip[] = [];
+  if (
+    fields.reliabilityTier &&
+    isConnectorReliabilityTier(fields.reliabilityTier)
+  ) {
+    chips.push({
+      kind: "reliability",
+      label: getConnectorReliabilityTierLabel(fields.reliabilityTier),
+      tooltip: formatReliabilityTierTooltip(fields.reliabilityTier),
+    });
+  }
+  if (
+    fields.freshnessPolicy &&
+    isConnectorFreshnessPolicy(fields.freshnessPolicy)
+  ) {
+    chips.push({
+      kind: "freshness",
+      label: getConnectorFreshnessPolicyLabel(fields.freshnessPolicy),
+      tooltip: formatFreshnessPolicyTooltip(fields.freshnessPolicy),
+    });
+  }
+  if (fields.sourceClass && isConnectorSourceClass(fields.sourceClass)) {
+    chips.push({
+      kind: "sourceClass",
+      label: getConnectorSourceClassLabel(fields.sourceClass),
+      tooltip: formatSourceClassTooltip(fields.sourceClass),
+    });
+  }
+  return chips;
+}
+
+export function buildHoverCardSourceMetadataChips(
+  sourceId: EnrichmentSourceId
+): HoverCardSourceMetadataChip[] {
+  if (!ENRICHMENT_SOURCE_ORDER.includes(sourceId)) {
+    return [];
+  }
+  try {
+    return buildHoverCardSourceMetadataChipsFromFields(
+      resolveHoverCardSourceConfidenceMetadata(sourceId)
+    );
+  } catch {
+    return [];
+  }
+}
+
 export function getSingleSourceLastUpdatedLine(
   sourceResults: readonly HoverCardSourceEntry[] | undefined
 ): string | undefined {
@@ -334,6 +452,7 @@ export function buildHoverCardSourceEntry(
     fromCache,
     badgeText: formatSourceStatusBadge(result.status, fromCache),
     detail: resolveSourceEntryDetail(result),
+    metadataChips: buildHoverCardSourceMetadataChips(result.sourceId),
   };
   const lastUpdatedLine = buildHoverCardLastUpdatedLine(result.fetchedAt);
   if (lastUpdatedLine) {

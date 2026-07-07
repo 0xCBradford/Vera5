@@ -489,6 +489,36 @@ export function buildVera5UiStylesCss(): string {
   display: block;
   color: var(--vera5-text);
 }
+.vera5-hover-card-source-metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+.vera5-hover-card-source-metadata-chip {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 3px;
+  border: 1px solid var(--vera5-border);
+  color: var(--vera5-muted-label);
+  background-color: var(--vera5-button-bg);
+  white-space: nowrap;
+}
+.vera5-hover-card-source-metadata-chip--reliability {
+  color: #8eb4ff;
+  border-color: color-mix(in srgb, #8eb4ff 35%, var(--vera5-border));
+}
+.vera5-hover-card-source-metadata-chip--freshness {
+  color: #c9b46a;
+  border-color: color-mix(in srgb, #c9b46a 35%, var(--vera5-border));
+}
+.vera5-hover-card-source-metadata-chip--sourceClass {
+  color: #9fd4b0;
+  border-color: color-mix(in srgb, #9fd4b0 35%, var(--vera5-border));
+}
 .vera5-hover-card-raw-json {
   margin-top: 4px;
 }

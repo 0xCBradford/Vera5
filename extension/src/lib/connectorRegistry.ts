@@ -29,6 +29,7 @@ import {
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
   getEnrichmentSourceDefinition,
+  resolveEnrichmentSourceConfidenceMetadata,
   LIVE_ENRICHMENT_SOURCE_ORDER,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
@@ -181,12 +182,10 @@ export function lookupConnectorCapabilityMetadata(
 export function getConnectorConfidenceMetadata(
   sourceId: EnrichmentSourceId
 ): ConnectorConfidenceMetadata {
-  const definition = getEnrichmentSourceDefinition(sourceId);
+  const fields = resolveEnrichmentSourceConfidenceMetadata(sourceId);
   return {
     sourceId,
-    freshnessPolicy: definition.freshnessPolicy ?? null,
-    reliabilityTier: definition.reliabilityTier ?? null,
-    sourceClass: definition.sourceClass ?? null,
+    ...fields,
   };
 }
 

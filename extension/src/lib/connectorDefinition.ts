@@ -112,11 +112,47 @@ export const CONNECTOR_FRESHNESS_POLICY = {
 export type ConnectorFreshnessPolicy =
   (typeof CONNECTOR_FRESHNESS_POLICY)[keyof typeof CONNECTOR_FRESHNESS_POLICY];
 
+const CONNECTOR_FRESHNESS_POLICY_LABELS: Record<
+  ConnectorFreshnessPolicy,
+  string
+> = {
+  [CONNECTOR_FRESHNESS_POLICY.STANDARD]: "Standard",
+  [CONNECTOR_FRESHNESS_POLICY.VOLATILE]: "Volatile",
+  [CONNECTOR_FRESHNESS_POLICY.STABLE]: "Stable",
+};
+
+const CONNECTOR_SOURCE_CLASS_LABELS: Record<ConnectorSourceClass, string> = {
+  [CONNECTOR_SOURCE_CLASS.COMMUNITY]: "Community",
+  [CONNECTOR_SOURCE_CLASS.AUTHORITATIVE]: "Authoritative",
+};
+
+export function getConnectorFreshnessPolicyLabel(
+  policy: ConnectorFreshnessPolicy
+): string {
+  return CONNECTOR_FRESHNESS_POLICY_LABELS[policy];
+}
+
+export function getConnectorSourceClassLabel(
+  sourceClass: ConnectorSourceClass
+): string {
+  return CONNECTOR_SOURCE_CLASS_LABELS[sourceClass];
+}
+
 export type ConnectorConfidenceMetadataFields = {
   freshnessPolicy: ConnectorFreshnessPolicy | null;
   reliabilityTier: ConnectorReliabilityTier | null;
   sourceClass: ConnectorSourceClass | null;
 };
+
+export type ConnectorConfidenceMetadataOverride = {
+  freshnessPolicy?: ConnectorFreshnessPolicy | null;
+  reliabilityTier?: ConnectorReliabilityTier | null;
+  sourceClass?: ConnectorSourceClass | null;
+};
+
+export type ConnectorConfidenceMetadataOverridesRecord = Partial<
+  Record<EnrichmentSourceId, ConnectorConfidenceMetadataOverride>
+>;
 
 export type ConnectorConfidenceMetadata = ConnectorConfidenceMetadataFields & {
   sourceId: EnrichmentSourceId;
@@ -250,6 +286,144 @@ export function isConnectorFreshnessPolicy(
   value: unknown
 ): value is ConnectorFreshnessPolicy {
   return typeof value === "string" && CONNECTOR_FRESHNESS_POLICY_SET.has(value);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function normalizeConnectorConfidenceMetadataOverride(
+  value: unknown,
+  sourceId: string
+): ConnectorConfidenceMetadataOverride | null {
+  if (!isRecord(value)) {
+    throw new Error(
+      `Connector confidence metadata override for ${sourceId} must be an object.`
+    );
+  }
+
+  const override: ConnectorConfidenceMetadataOverride = {};
+
+  if (Object.prototype.hasOwnProperty.call(value, "freshnessPolicy")) {
+    const field = value.freshnessPolicy;
+    if (
+      field !== null &&
+      field !== undefined &&
+      !isConnectorFreshnessPolicy(field)
+    ) {
+      throw new Error(
+        `Invalid freshnessPolicy for connector ${sourceId}: ${String(field)}`
+      );
+    }
+    override.freshnessPolicy = field as ConnectorFreshnessPolicy | null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, "reliabilityTier")) {
+    const field = value.reliabilityTier;
+    if (
+      field !== null &&
+      field !== undefined &&
+      !isConnectorReliabilityTier(field)
+    ) {
+      throw new Error(
+        `Invalid reliabilityTier for connector ${sourceId}: ${String(field)}`
+      );
+    }
+    override.reliabilityTier = field as ConnectorReliabilityTier | null;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(value, "sourceClass")) {
+    const field = value.sourceClass;
+    if (field !== null && field !== undefined && !isConnectorSourceClass(field)) {
+      throw new Error(
+        `Invalid sourceClass for connector ${sourceId}: ${String(field)}`
+      );
+    }
+    override.sourceClass = field as ConnectorSourceClass | null;
+  }
+
+  return Object.keys(override).length > 0 ? override : null;
+}
+
+export function normalizeConnectorConfidenceMetadataOverridesRecord(
+  value: unknown
+): ConnectorConfidenceMetadataOverridesRecord {
+  if (value === undefined) {
+    return {};
+  }
+  if (!isRecord(value)) {
+    throw new Error("Connector confidence metadata overrides must be an object.");
+  }
+
+  const record: ConnectorConfidenceMetadataOverridesRecord = {};
+  for (const [sourceId, entry] of Object.entries(value)) {
+    if (!ENRICHMENT_SOURCE_ID_SET.has(sourceId)) {
+      continue;
+    }
+    const normalized = normalizeConnectorConfidenceMetadataOverride(
+      entry,
+      sourceId
+    );
+    if (normalized) {
+      record[sourceId as EnrichmentSourceId] = normalized;
+    }
+  }
+  return record;
+}
+
+const CONNECTOR_CONFIDENCE_METADATA_OVERRIDE_FIELD_SET = new Set<string>([
+  "freshnessPolicy",
+  "reliabilityTier",
+  "sourceClass",
+]);
+
+export function validateConnectorConfidenceMetadataOverrideForImport(
+  value: unknown,
+  sourceId: string
+): ConnectorConfidenceMetadataOverride {
+  if (!isRecord(value)) {
+    throw new Error(
+      `Connector confidence metadata override for ${sourceId} must be an object.`
+    );
+  }
+
+  for (const key of Object.keys(value)) {
+    if (!CONNECTOR_CONFIDENCE_METADATA_OVERRIDE_FIELD_SET.has(key)) {
+      throw new Error(
+        `Unknown connector confidence metadata field "${key}" for connector ${sourceId}.`
+      );
+    }
+  }
+
+  const normalized = normalizeConnectorConfidenceMetadataOverride(value, sourceId);
+  if (!normalized) {
+    throw new Error(
+      `Connector confidence metadata override for ${sourceId} must include at least one supported field.`
+    );
+  }
+
+  return normalized;
+}
+
+export function validateImportedConnectorConfidenceMetadataOverridesRecord(
+  value: unknown
+): ConnectorConfidenceMetadataOverridesRecord {
+  if (value === undefined) {
+    return {};
+  }
+  if (!isRecord(value)) {
+    throw new Error("Connector confidence metadata overrides must be an object.");
+  }
+
+  const record: ConnectorConfidenceMetadataOverridesRecord = {};
+  for (const [sourceId, entry] of Object.entries(value)) {
+    if (!ENRICHMENT_SOURCE_ID_SET.has(sourceId)) {
+      throw new Error(`Unknown connector id in metadata overrides: ${sourceId}.`);
+    }
+    record[sourceId as EnrichmentSourceId] =
+      validateConnectorConfidenceMetadataOverrideForImport(entry, sourceId);
+  }
+  return record;
 }
 
 export function isConnectorConfidenceMetadataFields(

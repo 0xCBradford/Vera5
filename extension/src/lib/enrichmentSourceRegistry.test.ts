@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { IOC_TYPE } from "./iocRegex";
 import {
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
+  ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS,
   LIVE_ENRICHMENT_SOURCE_ORDER,
   OPTIONS_API_KEY_SLOTS,
   enrichmentSourceSupportsIocType,
@@ -11,6 +12,8 @@ import {
   formatUnsupportedIndicatorTypeMessage,
   getEnrichmentSourceDefinition,
   listEnrichmentSourcesWithPivotSupport,
+  resolveEnrichmentSourceConfidenceMetadata,
+  setConnectorConfidenceMetadataOverrides,
 } from "./enrichmentSourceRegistry";
 import { enrichWithConnectorShell } from "./enrichmentConnectorShell";
 import {
@@ -39,6 +42,32 @@ describe("enrichmentSourceRegistry", () => {
       "urlhaus",
       "rdap_whois",
     ]);
+  });
+
+  it("assigns confidence metadata defaults for every built-in source", () => {
+    expect(Object.keys(ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS)).toEqual(
+      [...ENRICHMENT_SOURCE_ORDER]
+    );
+
+    for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
+      const defaults = ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[sourceId];
+      expect(defaults.freshnessPolicy).toBeTruthy();
+      expect(defaults.reliabilityTier).toBeTruthy();
+      expect(defaults.sourceClass).toBeTruthy();
+    }
+
+    expect(
+      ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[ENRICHMENT_SOURCE.OTX]
+    ).toMatchObject({
+      reliabilityTier: "community",
+      sourceClass: "community",
+    });
+    expect(
+      ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[ENRICHMENT_SOURCE.VIRUSTOTAL]
+    ).toMatchObject({
+      reliabilityTier: "pivot_only",
+      sourceClass: "authoritative",
+    });
   });
 
   it("registers live connectors and options API key slots", () => {
@@ -231,5 +260,46 @@ describe("enrichmentConnectorShell", () => {
     expect(result.status).toBe(ENRICHMENT_SOURCE_STATUS.SKIPPED);
     expect(result.errorCode).toBe(ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE);
     expect(result.errorMessage).toBe("OTX does not support this indicator type.");
+  });
+});
+
+describe("connector confidence metadata overrides", () => {
+  afterEach(() => {
+    setConnectorConfidenceMetadataOverrides({});
+  });
+
+  it("applies imported overrides on top of built-in defaults", () => {
+    setConnectorConfidenceMetadataOverrides({
+      [ENRICHMENT_SOURCE.OTX]: {
+        reliabilityTier: "authoritative",
+        sourceClass: "authoritative",
+      },
+    });
+
+    expect(resolveEnrichmentSourceConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual(
+      {
+        freshnessPolicy: "standard",
+        reliabilityTier: "authoritative",
+        sourceClass: "authoritative",
+      }
+    );
+  });
+
+  it("allows explicit null overrides to clear metadata fields", () => {
+    setConnectorConfidenceMetadataOverrides({
+      [ENRICHMENT_SOURCE.ABUSEIPDB]: {
+        freshnessPolicy: null,
+        reliabilityTier: null,
+        sourceClass: null,
+      },
+    });
+
+    expect(
+      resolveEnrichmentSourceConfidenceMetadata(ENRICHMENT_SOURCE.ABUSEIPDB)
+    ).toEqual({
+      freshnessPolicy: null,
+      reliabilityTier: null,
+      sourceClass: null,
+    });
   });
 });

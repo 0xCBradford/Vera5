@@ -1,9 +1,14 @@
 import type { IocType } from "./iocRegex";
 import { IOC_TYPE } from "./iocRegex";
-import type {
-  ConnectorFreshnessPolicy,
-  ConnectorReliabilityTier,
-  ConnectorSourceClass,
+import {
+  CONNECTOR_FRESHNESS_POLICY,
+  CONNECTOR_RELIABILITY_TIER,
+  CONNECTOR_SOURCE_CLASS,
+  type ConnectorConfidenceMetadataFields,
+  type ConnectorConfidenceMetadataOverridesRecord,
+  type ConnectorFreshnessPolicy,
+  type ConnectorReliabilityTier,
+  type ConnectorSourceClass,
 } from "./connectorDefinition";
 
 export const ENRICHMENT_SOURCE = {
@@ -66,9 +71,9 @@ export type EnrichmentSourceDefinition = {
   cacheKeyNamespace: string;
   enabledDefault: false;
   liveConnector: boolean;
-  freshnessPolicy?: ConnectorFreshnessPolicy;
-  reliabilityTier?: ConnectorReliabilityTier;
-  sourceClass?: ConnectorSourceClass;
+  freshnessPolicy?: ConnectorFreshnessPolicy | null;
+  reliabilityTier?: ConnectorReliabilityTier | null;
+  sourceClass?: ConnectorSourceClass | null;
   buildPivotUrl?: (type: IocType, value: string) => string | null;
 };
 
@@ -252,6 +257,89 @@ function buildRdapWhoisPivotUrl(type: IocType, value: string): string | null {
     return null;
   }
   return `https://rdap.org/domain/${encodePathSegment(value.trim().toLowerCase())}`;
+}
+
+export type EnrichmentSourceConfidenceMetadataDefaults = {
+  freshnessPolicy: ConnectorFreshnessPolicy;
+  reliabilityTier: ConnectorReliabilityTier;
+  sourceClass: ConnectorSourceClass;
+};
+
+export const ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS: Record<
+  EnrichmentSourceId,
+  EnrichmentSourceConfidenceMetadataDefaults
+> = {
+  [ENRICHMENT_SOURCE.ABUSEIPDB]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+    sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+  },
+  [ENRICHMENT_SOURCE.OTX]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.COMMUNITY,
+    sourceClass: CONNECTOR_SOURCE_CLASS.COMMUNITY,
+  },
+  [ENRICHMENT_SOURCE.VIRUSTOTAL]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+    sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+  },
+  [ENRICHMENT_SOURCE.URLSCAN]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.VOLATILE,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+    sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+  },
+  [ENRICHMENT_SOURCE.GREYNOISE]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.VOLATILE,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+    sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+  },
+  [ENRICHMENT_SOURCE.SHODAN]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+    sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+  },
+  [ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STABLE,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+    sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+  },
+  [ENRICHMENT_SOURCE.PULSEDIVE]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+    sourceClass: CONNECTOR_SOURCE_CLASS.COMMUNITY,
+  },
+  [ENRICHMENT_SOURCE.MALWAREBAZAAR]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STABLE,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+    sourceClass: CONNECTOR_SOURCE_CLASS.COMMUNITY,
+  },
+  [ENRICHMENT_SOURCE.CENSYS]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+    sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+  },
+  [ENRICHMENT_SOURCE.THREATFOX]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.VOLATILE,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+    sourceClass: CONNECTOR_SOURCE_CLASS.COMMUNITY,
+  },
+  [ENRICHMENT_SOURCE.URLHAUS]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.VOLATILE,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+    sourceClass: CONNECTOR_SOURCE_CLASS.COMMUNITY,
+  },
+  [ENRICHMENT_SOURCE.RDAP_WHOIS]: {
+    freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STABLE,
+    reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
+    sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+  },
+};
+
+export function getEnrichmentSourceConfidenceMetadataDefaults(
+  sourceId: EnrichmentSourceId
+): EnrichmentSourceConfidenceMetadataDefaults {
+  return ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[sourceId];
 }
 
 export const ENRICHMENT_SOURCE_DEFINITIONS: Record<
@@ -502,4 +590,56 @@ export function listEnrichmentSourcesWithPivotSupport(
   return ENRICHMENT_SOURCE_ORDER.filter(
     (sourceId) => buildEnrichmentSourcePivotUrl(sourceId, type, value) !== null
   );
+}
+
+let connectorConfidenceMetadataOverrides: ConnectorConfidenceMetadataOverridesRecord =
+  {};
+
+export function setConnectorConfidenceMetadataOverrides(
+  overrides: ConnectorConfidenceMetadataOverridesRecord
+): void {
+  connectorConfidenceMetadataOverrides = { ...overrides };
+}
+
+export function getConnectorConfidenceMetadataOverrides(): ConnectorConfidenceMetadataOverridesRecord {
+  return connectorConfidenceMetadataOverrides;
+}
+
+function mergeConfidenceMetadataField<T>(
+  overrideValue: T | null | undefined,
+  definitionValue: T | null | undefined,
+  defaultValue: T | null
+): T | null {
+  if (overrideValue !== undefined) {
+    return overrideValue;
+  }
+  if (definitionValue !== undefined) {
+    return definitionValue;
+  }
+  return defaultValue;
+}
+
+export function resolveEnrichmentSourceConfidenceMetadata(
+  sourceId: EnrichmentSourceId
+): ConnectorConfidenceMetadataFields {
+  const definition = getEnrichmentSourceDefinition(sourceId);
+  const defaults = getEnrichmentSourceConfidenceMetadataDefaults(sourceId);
+  const override = connectorConfidenceMetadataOverrides[sourceId];
+  return {
+    freshnessPolicy: mergeConfidenceMetadataField(
+      override?.freshnessPolicy,
+      definition.freshnessPolicy,
+      defaults.freshnessPolicy
+    ),
+    reliabilityTier: mergeConfidenceMetadataField(
+      override?.reliabilityTier,
+      definition.reliabilityTier,
+      defaults.reliabilityTier
+    ),
+    sourceClass: mergeConfidenceMetadataField(
+      override?.sourceClass,
+      definition.sourceClass,
+      defaults.sourceClass
+    ),
+  };
 }

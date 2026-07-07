@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
-import { ENRICHMENT_SOURCE, ENRICHMENT_SOURCE_ORDER } from "./hoverCardEnrichment";
+import {
+  ENRICHMENT_SOURCE,
+  ENRICHMENT_SOURCE_ORDER,
+  type HoverCardSourceEntry,
+} from "./hoverCardEnrichment";
 import {
   buildHoverCardRiskReasoningChain,
   buildHoverCardRiskScoreView,
@@ -9,10 +13,12 @@ import {
   COMPOSITE_RISK_LABEL,
   COMPOSITE_SCORE_DISAGREEMENT_NOTICE,
   computeCompositeRiskScore,
+  computeCompositeRiskScoreFromHoverCardSources,
   formatCompositeScoreContributionLine,
   formatCompositeScoreContributionTooltip,
   formatCompositeRiskScoreSummaryText,
   DEFAULT_SOURCE_SCORE_WEIGHTS,
+  hoverCardSourceEntriesToScoringInput,
   MIN_REQUIRED_SCORING_SIGNALS,
   resolveHoverCardRiskScorePresentation,
   RISK_SCORE_REASONING_CHAIN_CLASS,
@@ -363,6 +369,111 @@ describe("risk score reasoning chain", () => {
     expect(buildHoverCardRiskReasoningChain(sourceResults)).toEqual(
       buildHoverCardRiskScoreView(sourceResults).chain
     );
+  });
+});
+
+describe("connector confidence metadata isolation from scoring", () => {
+  const baseSources: HoverCardSourceEntry[] = [
+    {
+      sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+      label: "AbuseIPDB",
+      status: "ok",
+      badgeText: "Live",
+      detail: "80 abuse confidence",
+      metadataChips: [],
+    },
+    {
+      sourceId: ENRICHMENT_SOURCE.OTX,
+      label: "OTX",
+      status: "ok",
+      badgeText: "Live",
+      detail: "3 threat pulses",
+      metadataChips: [],
+    },
+  ];
+
+  const decoratedSources: HoverCardSourceEntry[] = [
+    {
+      ...baseSources[0]!,
+      metadataChips: [
+        {
+          kind: "reliability",
+          label: "Community",
+          tooltip: "Informational only.",
+        },
+        {
+          kind: "freshness",
+          label: "Volatile",
+          tooltip: "Informational only.",
+        },
+        {
+          kind: "sourceClass",
+          label: "Community",
+          tooltip: "Informational only.",
+        },
+      ],
+    },
+    {
+      ...baseSources[1]!,
+      metadataChips: [
+        {
+          kind: "reliability",
+          label: "Authoritative",
+          tooltip: "Informational only.",
+        },
+        {
+          kind: "freshness",
+          label: "Standard",
+          tooltip: "Informational only.",
+        },
+        {
+          kind: "sourceClass",
+          label: "Authoritative",
+          tooltip: "Informational only.",
+        },
+      ],
+    },
+  ];
+
+  it("maps hover card sources to scoring input without metadata fields", () => {
+    expect(hoverCardSourceEntriesToScoringInput(decoratedSources)).toEqual([
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        status: "ok",
+        summary: "80 abuse confidence",
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.OTX,
+        sourceLabel: "OTX",
+        status: "ok",
+        summary: "3 threat pulses",
+      },
+    ]);
+  });
+
+  it("computes the same composite score when metadata chips differ", () => {
+    const baseline = computeCompositeRiskScoreFromHoverCardSources(baseSources);
+    const decorated = computeCompositeRiskScoreFromHoverCardSources(
+      decoratedSources
+    );
+    expect(decorated).toEqual(baseline);
+  });
+
+  it("builds the same risk score reasoning chain when metadata chips differ", () => {
+    const baselineView = buildHoverCardRiskScoreView(baseSources);
+    const decoratedView = buildHoverCardRiskScoreView(decoratedSources);
+    expect(decoratedView.score).toEqual(baselineView.score);
+    expect(decoratedView.chain).toEqual(baselineView.chain);
+    expect(decoratedView.summaryText).toBe(baselineView.summaryText);
+  });
+
+  it("resolves the same reasoning presentation when metadata chips differ", () => {
+    const baselineView = buildHoverCardRiskScoreView(baseSources);
+    const decoratedView = buildHoverCardRiskScoreView(decoratedSources);
+    expect(
+      resolveRiskScoreReasoningPresentation(decoratedView, null)
+    ).toEqual(resolveRiskScoreReasoningPresentation(baselineView, null));
   });
 });
 

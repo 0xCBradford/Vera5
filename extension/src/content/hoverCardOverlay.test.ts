@@ -11,12 +11,14 @@ import {
   buildHoverCardSourceEntries,
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
+  formatSourceStatusBadge,
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
   HOVER_CARD_LOADING_SUMMARY,
   HOVER_CARD_RISK_SCORE_DISCLAIMER,
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK,
   HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY,
   HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL,
+  HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
 } from "../lib/hoverCardEnrichment";
 import * as hoverCardCoOccurrence from "../lib/hoverCardCoOccurrence";
 import {
@@ -2319,6 +2321,122 @@ describe("hover card overlay", () => {
     expect(
       panel.querySelector(`.${HOVER_CARD_SOURCE_DETAIL_CLASS}`)
     ).not.toBeNull();
+  });
+
+  it("renders confidence metadata chips on each multi-source row", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "12 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          status: "ok",
+          summary: "2 threat pulses",
+        },
+      ]),
+    });
+
+    const metadataRows = panel.querySelectorAll(".vera5-hover-card-source-metadata");
+    expect(metadataRows).toHaveLength(2);
+    expect(panel.textContent).toContain("Authoritative");
+    expect(panel.textContent).toContain("Community");
+    expect(
+      panel.querySelectorAll(".vera5-hover-card-source-metadata-chip")
+    ).toHaveLength(6);
+    expect(
+      panel.querySelector(".vera5-hover-card-source-metadata-chip--reliability")
+    ).not.toBeNull();
+    expect(
+      panel.querySelector(".vera5-hover-card-source-metadata-chip--freshness")
+    ).not.toBeNull();
+    expect(
+      panel.querySelector(".vera5-hover-card-source-metadata-chip--sourceClass")
+    ).not.toBeNull();
+    expect(metadataRows[0]?.getAttribute("title")).toBe(
+      HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP
+    );
+    const firstChip = panel.querySelector(
+      ".vera5-hover-card-source-metadata-chip"
+    );
+    expect(firstChip?.getAttribute("title")?.toLowerCase()).toContain(
+      "informational"
+    );
+  });
+
+  it("renders source rows without metadata chips when metadata is missing", () => {
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    Object.defineProperty(anchor, "getBoundingClientRect", {
+      value: () => ({
+        top: 60,
+        left: 60,
+        width: 40,
+        height: 16,
+        right: 100,
+        bottom: 76,
+        x: 60,
+        y: 60,
+        toJSON: () => ({}),
+      }),
+    });
+
+    const panel = showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "12 abuse confidence",
+      sourceResults: [
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          label: "AbuseIPDB",
+          status: "ok",
+          badgeText: formatSourceStatusBadge("ok"),
+          detail: "12 abuse confidence",
+          metadataChips: [],
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "ok",
+          badgeText: formatSourceStatusBadge("ok"),
+          detail: "2 threat pulses",
+          metadataChips: [],
+        },
+      ],
+    });
+
+    expect(panel.querySelectorAll(".vera5-hover-card-source-metadata")).toHaveLength(
+      0
+    );
+    expect(panel.textContent).toContain("AbuseIPDB");
+    expect(panel.textContent).toContain("OTX");
+    expect(panel.textContent).toContain("12 abuse confidence");
+    expect(panel.textContent).toContain("2 threat pulses");
   });
 
   it("shows partial success UI when one source succeeds and another fails", () => {

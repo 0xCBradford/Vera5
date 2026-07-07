@@ -21,8 +21,10 @@ import {
   setIocTypeEnabled,
   setManualOnlyMode,
   STORAGE_KEY_API_KEYS,
+  STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES,
   STORAGE_KEY_IOC_TYPE_ENABLED,
   STORAGE_KEY_MANUAL_ONLY_MODE,
+  vera5SettingsToStoragePayload,
 } from "./storage";
 import {
   HOVER_CARD_ENRICHMENT_DISCLAIMER,
@@ -208,5 +210,75 @@ describe("connector profile storage integration", () => {
     expect(after.enrichmentSourceEnabled).toEqual(before.enrichmentSourceEnabled);
     expect(after.iocTypeEnabled).toEqual(before.iocTypeEnabled);
     expect(store[STORAGE_KEY_IOC_TYPE_ENABLED]).toEqual(before.iocTypeEnabled);
+  });
+
+  it("imports connector confidence metadata overrides without API keys", async () => {
+    const profile = buildConnectorProfileDocument(createDefaultVera5Settings());
+    profile.preferences.connectorConfidenceMetadataOverrides = {
+      otx: { reliabilityTier: "authoritative", sourceClass: "authoritative" },
+      abuseipdb: { reliabilityTier: null, freshnessPolicy: null, sourceClass: null },
+    };
+
+    await importConnectorProfileJson(JSON.stringify(profile));
+
+    expect(store[STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES]).toEqual({
+      otx: { reliabilityTier: "authoritative", sourceClass: "authoritative" },
+      abuseipdb: {
+        reliabilityTier: null,
+        freshnessPolicy: null,
+        sourceClass: null,
+      },
+    });
+    const settings = await getVera5Settings();
+    expect(
+      settings.connectorConfidenceMetadataOverrides[ENRICHMENT_SOURCE.OTX]
+    ).toEqual({
+      reliabilityTier: "authoritative",
+      sourceClass: "authoritative",
+    });
+  });
+
+  it("exports connector confidence metadata overrides from settings", async () => {
+    await chrome.storage.local.set(
+      vera5SettingsToStoragePayload({
+        ...createDefaultVera5Settings(),
+        connectorConfidenceMetadataOverrides: {
+          greynoise: { freshnessPolicy: "stable" },
+        },
+      })
+    );
+
+    const parsed = JSON.parse(await exportConnectorProfileJson()) as {
+      preferences: {
+        connectorConfidenceMetadataOverrides: Record<string, unknown>;
+      };
+    };
+
+    expect(
+      parsed.preferences.connectorConfidenceMetadataOverrides.greynoise
+    ).toEqual({ freshnessPolicy: "stable" });
+    expect(JSON.stringify(parsed)).not.toContain(TEST_FIXTURE_STORED_API_KEY);
+  });
+
+  it("rejects connector profile import with unknown connector metadata ids", async () => {
+    const profile = buildConnectorProfileDocument(createDefaultVera5Settings());
+    profile.preferences.connectorConfidenceMetadataOverrides = {
+      unknown_source: { reliabilityTier: "community" },
+    };
+
+    await expect(importConnectorProfileJson(JSON.stringify(profile))).rejects.toThrow(
+      ConnectorProfileImportError
+    );
+  });
+
+  it("rejects connector profile import with unknown metadata fields", async () => {
+    const profile = buildConnectorProfileDocument(createDefaultVera5Settings());
+    profile.preferences.connectorConfidenceMetadataOverrides = {
+      otx: { reliabilityTier: "authoritative", extraField: true },
+    };
+
+    await expect(importConnectorProfileJson(JSON.stringify(profile))).rejects.toThrow(
+      ConnectorProfileImportError
+    );
   });
 });
