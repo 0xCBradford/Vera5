@@ -26,6 +26,7 @@ Analyst-facing behavior on real pages uses the **content-script overlay**, not t
 - `enrichmentExport.ts`, `exportTemplates.ts` — normalized enrichment records; markdown and JSON export; tray subset export; pluggable ticket templates
 - `aiSummaryPrompt.ts`, `aiSummaryService.ts` — versioned enrichment-summary prompt template and localhost-only (`127.0.0.1`) LLM summary requests with typed timeout, connection, HTTP, and malformed-response failures
 - `tabScanSnapshot.ts`, `tabScanSummary.ts`, `tabScanSummaryClient.ts` — per-tab scan snapshot storage, summary consumers, and tray subset export record builders
+- `pageContext.ts` — versioned `PageContextType` enum and local page-context classifier contract (bounded URL signals plus DOM heuristic samples only; no full-page upload)
 - `pivots.ts`, `settingsExport.ts`, `vera5UiStyles.ts` — pivots, export, shared styles
 
 ## Message flow (simplified)
