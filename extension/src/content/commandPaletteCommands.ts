@@ -9,6 +9,7 @@ import { ENRICHMENT_SOURCE_OPS_SECTION_TITLE } from "../lib/enrichmentSourceOps"
 import { getQuietMode, setQuietMode } from "../lib/storage";
 import { openExtensionPopupMessage } from "../lib/messages";
 import { POPUP_PANEL } from "../lib/popupPanelFocus";
+import { refreshActiveTrayExportTemplateId } from "./analystModeStorage";
 import { handleEnrichSelectionRequest } from "./enrichSelection";
 import { getFilteredTrayEnrichmentRecords } from "./hoverCardOverlay";
 import { clearIocHighlights } from "./highlighter";
@@ -89,13 +90,14 @@ export function registerCoreCommandPaletteCommands(): void {
       if (records.length === 0) {
         return;
       }
-      await copyTrayTemplateExportToClipboard("markdown-report", records);
+      const templateId = await refreshActiveTrayExportTemplateId();
+      await copyTrayTemplateExportToClipboard(templateId, records);
       void recordActiveInvestigationSessionExportEvent({
         iocs: records.map((record) => ({
           value: record.value,
           type: record.type,
         })),
-        templateId: "markdown-report",
+        templateId,
       });
     },
   });
@@ -110,13 +112,14 @@ export function registerCoreCommandPaletteCommands(): void {
       if (records.length === 0) {
         return;
       }
-      downloadTrayTemplateExportFile("markdown-report", records);
+      const templateId = await refreshActiveTrayExportTemplateId();
+      downloadTrayTemplateExportFile(templateId, records);
       void recordActiveInvestigationSessionExportEvent({
         iocs: records.map((record) => ({
           value: record.value,
           type: record.type,
         })),
-        templateId: "markdown-report",
+        templateId,
       });
     },
   });

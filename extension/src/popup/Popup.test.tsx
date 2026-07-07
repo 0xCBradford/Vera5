@@ -15,6 +15,11 @@ import { ENRICHMENT_SOURCE } from "../lib/enrichmentSourceRegistry";
 import { createEmptyEnrichmentCache } from "../lib/cache";
 import { buildEnrichmentSourceOpsRows } from "../lib/enrichmentSourceOps";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
+import {
+  PAGE_CONTEXT_CLASSIFIER_SCHEMA_VERSION,
+  PAGE_CONTEXT_TYPE,
+} from "../lib/pageContext";
+import type { TabPageContextRecord } from "../lib/pageContext";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import * as tabScanSummary from "../lib/tabScanSummary";
 import * as iocCoOccurrenceStorage from "../lib/iocCoOccurrenceStorage";
@@ -224,6 +229,7 @@ function stubChrome(options: {
   collections?: ReturnType<typeof createIocCollection>[];
   localStore?: Record<string, unknown>;
   sessionStore?: Record<string, unknown>;
+  pageContext?: TabPageContextRecord | null;
 }): void {
   const collections = [...(options.collections ?? [])];
   const localStore = options.localStore ?? {};
@@ -495,6 +501,18 @@ function stubChrome(options: {
           return {
             ok: true,
             payload: { collection: updated, removed: true },
+          };
+        }
+        if (message?.type === MESSAGE.GET_TAB_SCAN_SUMMARY) {
+          return {
+            ok: true,
+            payload: { summary: options.initialSummary ?? null },
+          };
+        }
+        if (message?.type === MESSAGE.GET_TAB_PAGE_CONTEXT) {
+          return {
+            ok: true,
+            payload: { context: options.pageContext ?? null },
           };
         }
         return {
@@ -859,6 +877,7 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("3 indicators · 1 CVE · 2 IP");
     });
+    expect(mounted.container.textContent).toContain("Generic page");
     expect(mounted.container.textContent).toContain("All (3)");
     expect(mounted.container.textContent).toContain("IP (2)");
     expect(mounted.container.textContent).toContain("CVE (1)");
@@ -872,6 +891,31 @@ describe("Popup IOC tray", () => {
     expect(firstRow?.dataset.vera5SourceTextHint).toBe(
       "Contact 8.8.8.8 for details."
     );
+  });
+
+  it("shows active page context badge in the IOC tray header", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      pageContext: {
+        schemaVersion: PAGE_CONTEXT_CLASSIFIER_SCHEMA_VERSION,
+        pageContextType: PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+        pageUrl: sampleSummary.pageUrl,
+        matchedSignals: ["url:hostname:splunk"],
+        classifiedAt: sampleSummary.scannedAt,
+        tabId: 7,
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("SOC dashboard");
+    });
+
+    const badge = mounted!.container.querySelector(
+      '[aria-label="Page profile: SOC dashboard"]'
+    );
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toBe("SOC dashboard");
   });
 
   it("shows co-occurring IOCs in tray row expanders", async () => {
@@ -1204,8 +1248,21 @@ describe("Popup IOC tray", () => {
   });
 
   it("re-enriches the selected indicator through the background worker", async () => {
-    stubChrome({ initialSummary: sampleSummary });
+    stubChrome({
+      initialSummary: sampleSummary,
+      pageContext: {
+        schemaVersion: PAGE_CONTEXT_CLASSIFIER_SCHEMA_VERSION,
+        pageContextType: PAGE_CONTEXT_TYPE.GENERIC,
+        pageUrl: sampleSummary.pageUrl,
+        matchedSignals: [],
+        classifiedAt: sampleSummary.scannedAt,
+        tabId: 7,
+      },
+    });
     mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Generic page");
+    });
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });

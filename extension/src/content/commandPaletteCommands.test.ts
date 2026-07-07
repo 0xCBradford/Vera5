@@ -14,6 +14,7 @@ import * as enrichSelection from "./enrichSelection";
 import * as hoverCardOverlay from "./hoverCardOverlay";
 import * as highlighter from "./highlighter";
 import * as scanPage from "./scanPage";
+import * as analystModeStorage from "./analystModeStorage";
 import {
   CORE_COMMAND_PALETTE_COMMAND_IDS,
   registerCoreCommandPaletteCommands,
@@ -110,6 +111,9 @@ describe("registerCoreCommandPaletteCommands", () => {
     vi.spyOn(hoverCardOverlay, "getFilteredTrayEnrichmentRecords").mockResolvedValue(
       records
     );
+    vi.spyOn(analystModeStorage, "refreshActiveTrayExportTemplateId").mockResolvedValue(
+      "jira-comment"
+    );
     const copyTrayTemplateExportToClipboard = vi
       .spyOn(exportTemplates, "copyTrayTemplateExportToClipboard")
       .mockResolvedValue(true);
@@ -119,7 +123,7 @@ describe("registerCoreCommandPaletteCommands", () => {
     );
 
     expect(copyTrayTemplateExportToClipboard).toHaveBeenCalledWith(
-      "markdown-report",
+      "jira-comment",
       records
     );
   });
@@ -128,6 +132,9 @@ describe("registerCoreCommandPaletteCommands", () => {
     const records = [{ exportedAt: "2026-01-01T00:00:00.000Z" }] as const;
     vi.spyOn(hoverCardOverlay, "getFilteredTrayEnrichmentRecords").mockResolvedValue(
       records
+    );
+    vi.spyOn(analystModeStorage, "refreshActiveTrayExportTemplateId").mockResolvedValue(
+      "jira-comment"
     );
     const downloadTrayTemplateExportFile = vi
       .spyOn(exportTemplates, "downloadTrayTemplateExportFile")
@@ -138,7 +145,7 @@ describe("registerCoreCommandPaletteCommands", () => {
     );
 
     expect(downloadTrayTemplateExportFile).toHaveBeenCalledWith(
-      "markdown-report",
+      "jira-comment",
       records
     );
   });

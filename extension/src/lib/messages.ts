@@ -9,6 +9,10 @@ import {
   isTabScanSnapshotPayload,
   type TabScanSnapshotPayload,
 } from "./tabScanSnapshot";
+import {
+  isPageContextClassification,
+  type PageContextClassification,
+} from "./pageContext";
 
 export const MESSAGE = {
   PING: "PING",
@@ -21,6 +25,8 @@ export const MESSAGE = {
   REOPEN_INVESTIGATION_HISTORY: "REOPEN_INVESTIGATION_HISTORY",
   TAB_SCAN_SNAPSHOT: "TAB_SCAN_SNAPSHOT",
   GET_TAB_SCAN_SUMMARY: "GET_TAB_SCAN_SUMMARY",
+  TAB_PAGE_CONTEXT: "TAB_PAGE_CONTEXT",
+  GET_TAB_PAGE_CONTEXT: "GET_TAB_PAGE_CONTEXT",
   ENRICH_IOC: "ENRICH_IOC",
   OPEN_OPTIONS_PAGE: "OPEN_OPTIONS_PAGE",
   OPEN_EXTENSION_POPUP: "OPEN_EXTENSION_POPUP",
@@ -77,6 +83,14 @@ export type TabScanSnapshotMessage = {
 };
 export type GetTabScanSummaryMessage = {
   type: typeof MESSAGE.GET_TAB_SCAN_SUMMARY;
+  tabId?: number;
+};
+export type TabPageContextMessage = {
+  type: typeof MESSAGE.TAB_PAGE_CONTEXT;
+  classification: PageContextClassification;
+};
+export type GetTabPageContextMessage = {
+  type: typeof MESSAGE.GET_TAB_PAGE_CONTEXT;
   tabId?: number;
 };
 export type EnrichIocMessage = {
@@ -172,6 +186,8 @@ export type Vera5Message =
   | ContentRegisterMessage
   | TabScanSnapshotMessage
   | GetTabScanSummaryMessage
+  | TabPageContextMessage
+  | GetTabPageContextMessage
   | EnrichIocMessage
   | OpenOptionsPageMessage
   | OpenExtensionPopupMessage
@@ -318,6 +334,12 @@ export function tabScanSnapshotMessage(
   snapshot: TabScanSnapshotPayload
 ): TabScanSnapshotMessage {
   return { type: MESSAGE.TAB_SCAN_SNAPSHOT, snapshot };
+}
+
+export function tabPageContextMessage(
+  classification: PageContextClassification
+): TabPageContextMessage {
+  return { type: MESSAGE.TAB_PAGE_CONTEXT, classification };
 }
 
 export function openOptionsPageMessage(): OpenOptionsPageMessage {
@@ -741,6 +763,15 @@ export function getTabScanSummaryMessage(
   return { type: MESSAGE.GET_TAB_SCAN_SUMMARY, tabId };
 }
 
+export function getTabPageContextMessage(
+  tabId?: number
+): GetTabPageContextMessage {
+  if (tabId === undefined) {
+    return { type: MESSAGE.GET_TAB_PAGE_CONTEXT };
+  }
+  return { type: MESSAGE.GET_TAB_PAGE_CONTEXT, tabId };
+}
+
 export function isTabScanSnapshotMessage(
   raw: unknown
 ): raw is TabScanSnapshotMessage {
@@ -762,6 +793,35 @@ export function isGetTabScanSummaryMessage(
   }
   const record = raw as Record<string, unknown>;
   if (record.type !== MESSAGE.GET_TAB_SCAN_SUMMARY) {
+    return false;
+  }
+  if (record.tabId === undefined) {
+    return true;
+  }
+  return typeof record.tabId === "number" && Number.isFinite(record.tabId);
+}
+
+export function isTabPageContextMessage(
+  raw: unknown
+): raw is TabPageContextMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.TAB_PAGE_CONTEXT) {
+    return false;
+  }
+  return isPageContextClassification(record.classification);
+}
+
+export function isGetTabPageContextMessage(
+  raw: unknown
+): raw is GetTabPageContextMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.GET_TAB_PAGE_CONTEXT) {
     return false;
   }
   if (record.tabId === undefined) {
@@ -873,6 +933,12 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   }
   if (type === MESSAGE.GET_TAB_SCAN_SUMMARY) {
     return isGetTabScanSummaryMessage(raw);
+  }
+  if (type === MESSAGE.TAB_PAGE_CONTEXT) {
+    return isTabPageContextMessage(raw);
+  }
+  if (type === MESSAGE.GET_TAB_PAGE_CONTEXT) {
+    return isGetTabPageContextMessage(raw);
   }
   if (type === MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION) {
     return isGetActiveInvestigationSessionMessage(raw);

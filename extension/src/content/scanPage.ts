@@ -1,10 +1,16 @@
 import type { MessageResponse } from "../lib/messages";
-import { tabScanSnapshotMessage } from "../lib/messages";
+import { tabPageContextMessage, tabScanSnapshotMessage } from "../lib/messages";
 import {
   logUnlessBenignExtensionError,
   runWithExtensionContext,
   safeRuntimeSendMessage,
 } from "../lib/extensionContext";
+import {
+  classifyPageContextFromDocument,
+  resolvePageContextForActiveTab,
+  type PageContextClassification,
+} from "../lib/pageContext";
+import { setCachedPageContextType } from "./analystModeStorage";
 import {
   buildTabScanSnapshotEntriesFromMatches,
   buildTabScanSnapshotPayload,
@@ -170,6 +176,35 @@ export async function publishTabScanSnapshot(
   return { tabId, snapshot };
 }
 
+export async function publishTabPageContext(
+  classification: PageContextClassification
+): Promise<number | null> {
+  const response = await safeRuntimeSendMessage(
+    tabPageContextMessage(classification)
+  );
+  if (!response || typeof response !== "object" || !("ok" in response)) {
+    return null;
+  }
+  if (response.ok !== true) {
+    return null;
+  }
+  const payload = (response as { payload?: unknown }).payload;
+  const tabId =
+    payload !== null &&
+    typeof payload === "object" &&
+    "tabId" in payload &&
+    typeof (payload as { tabId: unknown }).tabId === "number"
+      ? (payload as { tabId: number }).tabId
+      : null;
+  return tabId;
+}
+
+export function classifyCurrentPageContext(
+  documentRef: Document = document
+): PageContextClassification | null {
+  return classifyPageContextFromDocument(documentRef, window.location.href);
+}
+
 async function finalizeScanResponse(
   highlightMatches: ReadonlyArray<DetectedIocInTextNode>,
   highlightRoot: Node,
@@ -184,6 +219,12 @@ async function finalizeScanResponse(
   );
   const snapshotEntries = buildScanSnapshotEntries(snapshotMatches, anchorLinks);
   const { tabId, snapshot } = await publishTabScanSnapshot(snapshotEntries);
+  const pageContext = resolvePageContextForActiveTab(
+    classifyCurrentPageContext(document),
+    window.location.href
+  );
+  await publishTabPageContext(pageContext);
+  setCachedPageContextType(pageContext.pageContextType);
   logIocDetectionCount(snapshotMatches.length);
   logIocScanProfile(profile);
   const payload: ScanPageResultPayload = {

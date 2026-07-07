@@ -10,6 +10,8 @@ import {
   resolveTrayTemplateCopyFeedback,
   resolveTrayTemplateExportFeedback,
   trayEnrichmentHintStyle,
+  pageContextBadgeStyle,
+  resolveActivePageContextBadgeLabel,
 } from "./Popup";
 
 const sampleSummary = buildTabScanSummary({
@@ -196,5 +198,23 @@ describe("trayEnrichmentHintStyle", () => {
   it("keeps enrichment hints non-interactive", () => {
     expect(trayEnrichmentHintStyle("Cached").pointerEvents).toBe("none");
     expect(trayEnrichmentHintStyle("Cached").userSelect).toBe("none");
+  });
+});
+
+describe("pageContextBadgeStyle", () => {
+  it("renders a compact non-wrapping badge", () => {
+    expect(pageContextBadgeStyle().whiteSpace).toBe("nowrap");
+    expect(pageContextBadgeStyle().flexShrink).toBe(0);
+  });
+});
+
+describe("resolveActivePageContextBadgeLabel", () => {
+  it("falls back to generic page label when context is missing", () => {
+    expect(resolveActivePageContextBadgeLabel(null)).toBe("Generic page");
+  });
+
+  it("maps known page context types to operator labels", () => {
+    expect(resolveActivePageContextBadgeLabel("soc_dashboard")).toBe("SOC dashboard");
+    expect(resolveActivePageContextBadgeLabel("malware_blog")).toBe("Malware blog");
   });
 });

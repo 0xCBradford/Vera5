@@ -32,6 +32,8 @@ import { CONTENT_STORAGE_KEY_MANUAL_ONLY_MODE } from "./manualOnlyStorage";
 import { scanTextNodesForIocs } from "./detector";
 import { highlightDetectedIocs } from "./highlighter";
 import { IOC_TYPE, IOC_RULE_ID, type IocType } from "../lib/iocRegex";
+import { PAGE_CONTEXT_TYPE } from "../lib/pageContext";
+import { setCachedPageContextType } from "./analystModeStorage";
 import { getPivotRecipes } from "../lib/pivots";
 import * as copyText from "../lib/copyText";
 import { REDACTED_VALUE_PLACEHOLDER } from "../lib/enrichmentRawResponse";
@@ -3197,6 +3199,7 @@ describe("hover card overlay", () => {
   });
 
   it("exports filtered markdown through the template engine after scan cache warms", async () => {
+    setCachedPageContextType(PAGE_CONTEXT_TYPE.SOC_DASHBOARD);
     const scanSummary = buildTabScanSummary({
       ...buildTabScanSnapshotPayload({
         pageUrl: "https://example.com/alert",
@@ -3246,7 +3249,7 @@ describe("hover card overlay", () => {
     exportMarkdownItem?.click();
 
     await vi.waitFor(() => {
-      expect(download).toHaveBeenCalledWith("markdown-report", records, document);
+      expect(download).toHaveBeenCalledWith("jira-comment", records, document);
     });
 
     download.mockRestore();

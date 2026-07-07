@@ -10,6 +10,7 @@ import {
   scanPageMessage,
   toggleCommandPaletteMessage,
 } from "../lib/messages";
+import { clearTabPageContext } from "../lib/pageContextStorage";
 import { clearTabScanSnapshot } from "../lib/tabScanSnapshotStorage";
 import { runStorageMigrationOnExtensionUpdate } from "../lib/storageMigration";
 import { setupQuietModeActionBadgeListener } from "../lib/storage";
@@ -114,6 +115,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   void clearTabScanSnapshot(tabId);
+  void clearTabPageContext(tabId);
 });
 
 chrome.commands.onCommand.addListener((command) => {

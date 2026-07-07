@@ -8,6 +8,8 @@ import {
 } from "./analystModePresets";
 import type { ExportTemplateId } from "./exportTemplates";
 import type { EnrichmentSourceId } from "./enrichmentSourceRegistry";
+import { normalizePageContextSiteModeOverrides } from "./pageContext";
+import type { PageContextSiteModeOverridesRecord } from "./pageContext";
 import type { PivotProvider } from "./pivots";
 import {
   createDefaultDomainPolicy,
@@ -92,6 +94,8 @@ export const STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID = "defaultExportTemplateId";
 export const STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS = "pivotEmphasisProviders";
 export const STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES =
   "connectorConfidenceMetadataOverrides";
+export const STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES =
+  "pageContextSiteModeOverrides";
 
 export type { DomainPolicy, DomainPolicyMode };
 export type { InternalAssetPolicy, InternalAssetVendorLabelEntry };
@@ -141,6 +145,8 @@ export const STORAGE_KEYS = {
   PIVOT_EMPHASIS_PROVIDERS: STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
   CONNECTOR_CONFIDENCE_METADATA_OVERRIDES:
     STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES,
+  PAGE_CONTEXT_SITE_MODE_OVERRIDES:
+    STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
 } as const;
 
 export type ApiKeySlot = ApiKeyStorageSlot;
@@ -1411,6 +1417,15 @@ export async function applyAnalystModePreset(
   const settings = await getVera5Settings();
   const next = applyAnalystModePresetToSettings(settings, preset);
   await chrome.storage.local.set(vera5SettingsToStoragePayload(next));
+}
+
+export async function getPageContextSiteModeOverrides(): Promise<PageContextSiteModeOverridesRecord> {
+  const result = await chrome.storage.local.get(
+    STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES
+  );
+  return normalizePageContextSiteModeOverrides(
+    result[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]
+  );
 }
 
 export function maskApiKeyForDisplay(key: string): string {

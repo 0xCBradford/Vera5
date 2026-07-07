@@ -187,6 +187,23 @@ When operator macros ship, built-in and custom macros register in the command pa
 
 **AbuseIPDB**, **OTX**, **URLScan.io** (domain and URL), and **GreyNoise (community)** (IPv4) perform live HTTPS enrichment when enabled with a saved API key. Other registry sources provide pivot links and settings slots only.
 
+## Page context and default export templates
+
+Vera5 classifies the active tab locally (URL and bounded DOM signals only) into analyst-native page types. When the classified page type changes, Vera5 can apply the matching analyst workflow preset and default export template unless you have set a per-site mode override (see **Trust & consent** when site overrides ship).
+
+The popup IOC tray shows the active page profile badge (for example **SOC dashboard** or **Generic page**). Generic pages keep your saved profile default and do not force a page-type export template.
+
+| Classified page type | Operator label | Default export template | Typical use |
+|--------------------|----------------|-------------------------|-------------|
+| `soc_dashboard` | SOC dashboard | **Jira comment** (`jira-comment`) | Splunk, Sentinel, Elastic, Security Onion-style alert dashboards |
+| `case_ticket` | Case / ticket | **Jira comment** (`jira-comment`) | Jira issues, GitHub issues, ticket workflows |
+| `cti_platform` | CTI platform | **Markdown report** (`markdown-report`) | OTX, MISP, OpenCTI, TheHive case views |
+| `malware_blog` | Malware blog | **Markdown report** (`markdown-report`) | Threat research posts and IOC write-ups |
+| `sandbox_report` | Sandbox report | **TheHive case note** (`thehive-case-note`) | VirusTotal GUI, Hybrid Analysis, Any.Run-style reports |
+| `generic` | Generic page | Profile default (**Analyst update**, `analyst-update`) | Unclassified pages; no automatic template swap |
+
+Template IDs match the export template engine in [export-artifacts.md](export-artifacts.md). Hover card **Template**, tray **Export template**, and **Copy template** actions use the active default unless you pick another template for that export.
+
 ## Typical triage flow
 
 All steps use the **on-page overlay** on the tab under review unless noted.

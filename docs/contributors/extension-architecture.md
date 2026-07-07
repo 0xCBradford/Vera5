@@ -26,7 +26,13 @@ Analyst-facing behavior on real pages uses the **content-script overlay**, not t
 - `enrichmentExport.ts`, `exportTemplates.ts` — normalized enrichment records; markdown and JSON export; tray subset export; pluggable ticket templates
 - `aiSummaryPrompt.ts`, `aiSummaryService.ts` — versioned enrichment-summary prompt template and localhost-only (`127.0.0.1`) LLM summary requests with typed timeout, connection, HTTP, and malformed-response failures
 - `tabScanSnapshot.ts`, `tabScanSummary.ts`, `tabScanSummaryClient.ts` — per-tab scan snapshot storage, summary consumers, and tray subset export record builders
-- `pageContext.ts` — versioned `PageContextType` enum and local page-context classifier contract (bounded URL signals plus DOM heuristic samples only; no full-page upload)
+- `pageContext.ts` — versioned `PageContextType` enum, bounded DOM probe (`probePageContextDomSignalsFromDocument`), local page-context classifier, static IOC type priority hints, and UI layout profiles (tray sort default, hover card field emphasis, pivot recipe ordering) per page context
+- `pageContextStorage.ts` — session-local last classified page context per tab (`chrome.storage.session`); cleared on tab close
+- `pageContextClient.ts` — popup and tray consumers fetch tab page context via `GET_TAB_PAGE_CONTEXT`
+- `analystModeStorage.ts` — content-script cache for profile export defaults, pivot emphasis, and effective export template id (`resolveEffectiveDefaultExportTemplateId` + tab page context)
+- Generic page context is a neutral fallback: tray sort stays `all`, IOC priority and layout profiles preserve baseline ordering, and detection, enrich, and export are never gated by page type
+- On page-context type change, `pageContextStorage.ts` applies the matching analyst workflow preset (SOC, CTI, or DFIR) unless the page origin has a stored mode override in `pageContextSiteModeOverrides`
+- `PAGE_CONTEXT_DEFAULT_EXPORT_TEMPLATE_BY_TYPE` in `pageContext.ts` maps each classified page type to a default export template id (`jira-comment`, `markdown-report`, `thehive-case-note`); generic pages keep the profile default
 - `pivots.ts`, `settingsExport.ts`, `vera5UiStyles.ts` — pivots, export, shared styles
 
 ## Message flow (simplified)
@@ -41,6 +47,7 @@ sequenceDiagram
 
   Popup->>Content: Scan and navigate-to-anchor messages
   Popup->>SW: GET_TAB_SCAN_SUMMARY
+  Popup->>SW: GET_TAB_PAGE_CONTEXT
   Content->>SW: Enrich, scan snapshot, and summary messages
   SW->>Store: Read and write settings and cache
   SW->>Vendor: HTTPS enrichment (indicator only)

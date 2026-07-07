@@ -6,6 +6,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MESSAGE, scanPageMessage, scanSelectionMessage } from "../lib/messages";
+import {
+  PAGE_CONTEXT_CORE_OPERATION,
+  PAGE_CONTEXT_TYPE,
+  pageContextAllowsCoreOperation,
+} from "../lib/pageContext";
 import { CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED } from "./highlightStorage";
 import { CONTENT_STORAGE_KEY_INCLUDE_PRIVATE_IPV4 } from "./includePrivateIpv4Storage";
 import { CONTENT_STORAGE_KEY_IOC_TYPE_ENABLED } from "./iocTypeEnabledStorage";
@@ -125,7 +130,7 @@ describe("handleScanPageRequest", () => {
     const root = mountPage("<p>Contact 8.8.8.8 today.</p>");
     await handleScanPageRequest(root);
 
-    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
     const message = sendMessage.mock.calls[0]?.[0];
     expect(message.type).toBe(MESSAGE.TAB_SCAN_SNAPSHOT);
     expect(message.snapshot.pageUrl).toBe("https://example.com/alert");
@@ -178,6 +183,59 @@ describe("handleScanPageRequest", () => {
       sourceTextHint: "Contact 8.8.8.8 today.",
     });
     expect(root.querySelectorAll(`.${IOC_HIGHLIGHT_CLASS}`)).toHaveLength(0);
+  });
+
+  it("publishes generic page context without blocking detection on unmatched pages", async () => {
+    store[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED] = true;
+    const root = mountPage("<p>Contact 8.8.8.8 today.</p>");
+    const response = await handleScanPageRequest(root);
+
+    expect(response).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 1 }),
+      })
+    );
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    const contextMessage = sendMessage.mock.calls[1]?.[0];
+    expect(contextMessage.type).toBe(MESSAGE.TAB_PAGE_CONTEXT);
+    expect(contextMessage.classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.GENERIC);
+    expect(
+      pageContextAllowsCoreOperation(
+        contextMessage.classification.pageContextType,
+        PAGE_CONTEXT_CORE_OPERATION.DETECTION
+      )
+    ).toBe(true);
+    expect(
+      pageContextAllowsCoreOperation(
+        contextMessage.classification.pageContextType,
+        PAGE_CONTEXT_CORE_OPERATION.ENRICH
+      )
+    ).toBe(true);
+    expect(
+      pageContextAllowsCoreOperation(
+        contextMessage.classification.pageContextType,
+        PAGE_CONTEXT_CORE_OPERATION.EXPORT
+      )
+    ).toBe(true);
+  });
+
+  it("publishes generic page context when classifier input is unavailable", async () => {
+    store[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED] = true;
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: {
+        href: "file:///tmp/sample.html",
+        hostname: "",
+      },
+    });
+    const root = mountPage("<p>Contact 8.8.8.8 today.</p>");
+    await handleScanPageRequest(root);
+
+    const contextMessage = sendMessage.mock.calls[1]?.[0];
+    expect(contextMessage.type).toBe(MESSAGE.TAB_PAGE_CONTEXT);
+    expect(contextMessage.classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.GENERIC);
+    expect(contextMessage.classification.pageUrl).toBe("file:///tmp/sample.html");
   });
 
   it("applies highlights when highlight storage is enabled", async () => {
@@ -449,7 +507,7 @@ describe("handleScanSelectionRequest", () => {
         payload: expect.objectContaining({ count: 1 }),
       })
     );
-    expect(sendMessage).toHaveBeenCalledTimes(1);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
     const message = sendMessage.mock.calls[0]?.[0];
     expect(message.snapshot.entries).toEqual([
       expect.objectContaining({

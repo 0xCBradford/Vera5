@@ -4,6 +4,12 @@ import {
 } from "../lib/analystModePresets";
 import type { ExportTemplateId } from "../lib/exportTemplates";
 import { safeStorageLocalGet } from "../lib/extensionContext";
+import {
+  PAGE_CONTEXT_TYPE,
+  resolveEffectiveDefaultExportTemplateId,
+  type PageContextType,
+} from "../lib/pageContext";
+import { requestTabPageContextForActiveTab } from "../lib/pageContextClient";
 import type { PivotProvider } from "../lib/pivots";
 import {
   STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
@@ -21,6 +27,7 @@ export type AnalystModeDisplayContext = {
 };
 
 let cachedDisplayContext: AnalystModeDisplayContext | null = null;
+let cachedPageContextType: PageContextType = PAGE_CONTEXT_TYPE.GENERIC;
 
 export function getCachedAnalystModeDisplayContext(): AnalystModeDisplayContext {
   return (
@@ -28,6 +35,21 @@ export function getCachedAnalystModeDisplayContext(): AnalystModeDisplayContext 
       defaultExportTemplateId: "analyst-update",
       pivotEmphasisProviders: [],
     }
+  );
+}
+
+export function getCachedPageContextType(): PageContextType {
+  return cachedPageContextType;
+}
+
+export function setCachedPageContextType(pageContextType: PageContextType): void {
+  cachedPageContextType = pageContextType;
+}
+
+export function getCachedEffectiveDefaultExportTemplateId(): ExportTemplateId {
+  return resolveEffectiveDefaultExportTemplateId(
+    getCachedAnalystModeDisplayContext().defaultExportTemplateId,
+    cachedPageContextType
   );
 }
 
@@ -48,8 +70,21 @@ export async function refreshAnalystModeDisplayContext(): Promise<AnalystModeDis
   return cachedDisplayContext;
 }
 
+export async function refreshPageContextDisplayContext(): Promise<PageContextType> {
+  const context = await requestTabPageContextForActiveTab();
+  cachedPageContextType =
+    context?.pageContextType ?? PAGE_CONTEXT_TYPE.GENERIC;
+  return cachedPageContextType;
+}
+
+export async function refreshActiveTrayExportTemplateId(): Promise<ExportTemplateId> {
+  await refreshPageContextDisplayContext();
+  return getCachedEffectiveDefaultExportTemplateId();
+}
+
 export function setupAnalystModeStorageListener(): void {
   void refreshAnalystModeDisplayContext();
+  void refreshPageContextDisplayContext();
 
   if (typeof chrome === "undefined" || !chrome.storage?.onChanged) {
     return;

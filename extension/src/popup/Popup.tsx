@@ -13,6 +13,13 @@ import {
   getTabScanTrayFilter,
   saveTabScanTrayFilter,
 } from "../lib/tabScanSnapshotStorage";
+import { requestTabPageContextForActiveTab } from "../lib/pageContextClient";
+import {
+  PAGE_CONTEXT_TYPE,
+  PAGE_CONTEXT_TYPE_LABEL,
+  normalizePageContextType,
+  type PageContextType,
+} from "../lib/pageContext";
 import { requestTabScanSummaryForActiveTab } from "../lib/tabScanSummaryClient";
 import {
   buildTabScanCountSummaryText,
@@ -2361,6 +2368,27 @@ export function trayEnrichmentHintStyle(
   return { ...base, color: POPUP_THEME.muted };
 }
 
+export function pageContextBadgeStyle(): CSSProperties {
+  return {
+    flexShrink: 0,
+    fontSize: 10,
+    fontWeight: 600,
+    padding: "2px 8px",
+    borderRadius: 999,
+    border: `1px solid ${POPUP_THEME.border}`,
+    backgroundColor: POPUP_THEME.trayRowBg,
+    color: POPUP_THEME.accentText,
+    lineHeight: 1.4,
+    whiteSpace: "nowrap",
+  };
+}
+
+export function resolveActivePageContextBadgeLabel(
+  pageContextType: PageContextType | null
+): string {
+  return PAGE_CONTEXT_TYPE_LABEL[normalizePageContextType(pageContextType)];
+}
+
 function sessionActionButtonStyle(): CSSProperties {
   return {
     padding: "4px 8px",
@@ -2412,6 +2440,8 @@ export function Popup() {
     "idle"
   );
   const [scanSummary, setScanSummary] = useState<TabScanSummary | null>(null);
+  const [activePageContextType, setActivePageContextType] =
+    useState<PageContextType | null>(null);
   const [typeFilter, setTypeFilter] = useState<IocTypeFilter>("all");
   const [trayFilterReady, setTrayFilterReady] = useState(false);
   const [trayNavigationMessage, setTrayNavigationMessage] = useState<string | null>(
@@ -2478,6 +2508,13 @@ export function Popup() {
   const [trayPageCoOccurrenceIndex, setTrayPageCoOccurrenceIndex] =
     useState<PageIocCoOccurrenceIndex | null>(null);
 
+  const refreshActivePageContext = async () => {
+    const context = await requestTabPageContextForActiveTab();
+    setActivePageContextType(
+      context?.pageContextType ?? PAGE_CONTEXT_TYPE.GENERIC
+    );
+  };
+
   const refreshSourceOps = async () => {
     const snapshot = await requestEnrichmentSourceOps();
     setSourceOps(snapshot);
@@ -2523,6 +2560,7 @@ export function Popup() {
         setScanState("done");
       }
     });
+    void refreshActivePageContext();
     void refreshInvestigationSessionState().finally(() => {
       setSessionTitleReady(true);
     });
@@ -2744,6 +2782,9 @@ export function Popup() {
   }, []);
 
   const trayView = resolvePopupTrayView({ enabled, scanState, scanSummary });
+  const activePageContextBadgeLabel = resolveActivePageContextBadgeLabel(
+    activePageContextType
+  );
 
   const filteredEntries = useMemo(() => {
     if (!scanSummary) {
@@ -3296,6 +3337,7 @@ export function Popup() {
             if (summary !== null) {
               setScanSummary(summary);
               setScanState("done");
+              await refreshActivePageContext();
               await refreshInvestigationSessionState();
               return;
             }
@@ -3343,6 +3385,7 @@ export function Popup() {
             if (summary !== null) {
               setScanSummary(summary);
               setScanState("done");
+              await refreshActivePageContext();
               await refreshInvestigationSessionState();
               return;
             }
@@ -4664,16 +4707,33 @@ export function Popup() {
           aria-label="Detected indicators"
           style={{ marginTop: 14, borderTop: `1px solid ${POPUP_THEME.border}`, paddingTop: 12 }}
         >
-          <h2
+          <div
             style={{
-              fontSize: 15,
-              fontWeight: 600,
-              margin: "0 0 8px",
-              color: POPUP_THEME.accentText,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              marginBottom: 8,
             }}
           >
-            Detected indicators
-          </h2>
+            <h2
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                margin: 0,
+                color: POPUP_THEME.accentText,
+              }}
+            >
+              Detected indicators
+            </h2>
+            <span
+              aria-label={`Page profile: ${activePageContextBadgeLabel}`}
+              title={`Active page profile: ${activePageContextBadgeLabel}`}
+              style={pageContextBadgeStyle()}
+            >
+              {activePageContextBadgeLabel}
+            </span>
+          </div>
           {trayView === "prompt" ? (
             <p style={trayStatusStyle()}>
               Scan this page to list detected indicators.

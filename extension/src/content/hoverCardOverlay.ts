@@ -114,7 +114,7 @@ import {
 import { resolveTrayNavigationFeedback } from "../lib/workspaceTrayState";
 import { handleNavigateToIocAnchorRequest } from "./iocTrayNavigation";
 import { getPivotRecipes } from "../lib/pivots";
-import { getCachedAnalystModeDisplayContext } from "./analystModeStorage";
+import { getCachedAnalystModeDisplayContext, getCachedEffectiveDefaultExportTemplateId } from "./analystModeStorage";
 import { scheduleCopyFeedbackReset } from "../lib/motionPreference";
 import { ENRICHMENT_SOURCE_LABELS } from "../lib/enrichmentSourceRegistry";
 import { buildPreQueryDisclosureMessage, cancelPreQueryDisclosure, resolvePreQueryDisclosure } from "../lib/enrichmentPolicy";
@@ -1369,6 +1369,10 @@ function withScanExportRecords(
     });
 }
 
+function resolveActiveTrayExportTemplateId(): ExportTemplateId {
+  return getCachedEffectiveDefaultExportTemplateId();
+}
+
 function runTraySubsetExport(
   cache: ScanExportCache,
   format: TraySubsetExportFormat,
@@ -1377,14 +1381,15 @@ function runTraySubsetExport(
   if (!cache.context || cache.records.length === 0) {
     return false;
   }
+  const templateId = resolveActiveTrayExportTemplateId();
   if (format === "markdown") {
-    downloadTrayTemplateExportFile("markdown-report", cache.records, doc);
+    downloadTrayTemplateExportFile(templateId, cache.records, doc);
   } else {
     downloadTraySubsetExportFile(cache.records, format, doc);
   }
   notifyInvestigationSessionExportRecorded(
     mapEnrichmentRecordsToTimelineIocs(cache.records),
-    format === "markdown" ? { templateId: "markdown-report" } : undefined
+    format === "markdown" ? { templateId } : undefined
   );
   return true;
 }
@@ -1459,10 +1464,11 @@ function buildScanListTemplateCopyDropdownActions(
             return;
           }
 
+          const templateId = resolveActiveTrayExportTemplateId();
           const copied =
             format === "markdown"
               ? await copyTrayTemplateExportToClipboard(
-                  "markdown-report",
+                  templateId,
                   cache.records
                 )
               : await copyTraySubsetExportJsonToClipboard(cache.records);
@@ -1479,7 +1485,7 @@ function buildScanListTemplateCopyDropdownActions(
           if (copied) {
             notifyInvestigationSessionExportRecorded(
               mapEnrichmentRecordsToTimelineIocs(cache.records),
-              format === "markdown" ? { templateId: "markdown-report" } : undefined
+              format === "markdown" ? { templateId } : undefined
             );
           }
         },
@@ -1522,7 +1528,7 @@ function createTemplateExportRow(
     option.textContent = getExportTemplateLabel(templateId);
     templateSelect.appendChild(option);
   }
-  templateSelect.value = getCachedAnalystModeDisplayContext().defaultExportTemplateId;
+  templateSelect.value = getCachedEffectiveDefaultExportTemplateId();
 
   const exportTemplateButton = doc.createElement("button");
   exportTemplateButton.type = "button";

@@ -8,6 +8,10 @@ import {
   setPopupPanelFocus,
 } from "../lib/popupPanelFocus";
 import {
+  handleGetTabPageContextMessage,
+  handleTabPageContextMessage,
+} from "../lib/pageContextStorage";
+import {
   handleGetTabScanSummaryMessage,
   handleTabScanSnapshotMessage,
 } from "../lib/tabScanSnapshotStorage";
@@ -49,6 +53,10 @@ export function routeIncomingMessage(raw: unknown): MessageResponse {
       return { ok: false, error: "tab scan snapshot requires async handler" };
     case MESSAGE.GET_TAB_SCAN_SUMMARY:
       return { ok: false, error: "tab scan summary requires async handler" };
+    case MESSAGE.TAB_PAGE_CONTEXT:
+      return { ok: false, error: "tab page context requires async handler" };
+    case MESSAGE.GET_TAB_PAGE_CONTEXT:
+      return { ok: false, error: "tab page context read requires async handler" };
     case MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION:
       return { ok: false, error: "active investigation session requires async handler" };
     case MESSAGE.CREATE_INVESTIGATION_SESSION:
@@ -168,6 +176,14 @@ export async function routeIncomingMessageAsync(
 
   if (raw.type === MESSAGE.GET_TAB_SCAN_SUMMARY) {
     return handleGetTabScanSummaryMessage(raw.tabId, sender);
+  }
+
+  if (raw.type === MESSAGE.TAB_PAGE_CONTEXT) {
+    return handleTabPageContextMessage(raw.classification, sender);
+  }
+
+  if (raw.type === MESSAGE.GET_TAB_PAGE_CONTEXT) {
+    return handleGetTabPageContextMessage(raw.tabId, sender);
   }
 
   if (raw.type === MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION) {
