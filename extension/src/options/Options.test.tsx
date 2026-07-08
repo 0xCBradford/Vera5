@@ -21,7 +21,9 @@ import {
   STORAGE_KEY_ANALYST_MODE_PRESET_ID,
   STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
   STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
+  STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
 } from "../lib/storage";
+import { PAGE_CONTEXT_TYPE } from "../lib/pageContext";
 import { IOC_TYPE_SETTINGS_ORDER } from "../lib/storage";
 import { DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES } from "../lib/domainPolicy";
 import {
@@ -289,6 +291,96 @@ describe("Options API key inputs", () => {
       'input[aria-label="Remember per-site attribute scan choices"]'
     ) as HTMLInputElement;
     expect(rememberToggle.checked).toBe(true);
+  });
+
+  it("persists page context site mode overrides from Trust section", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("Treat this site as");
+
+    const hostInput = mounted.container.querySelector(
+      'input[aria-label="Page context override hostname"]'
+    ) as HTMLInputElement;
+    const typeSelect = mounted.container.querySelector(
+      'select[aria-label="Page context override type"]'
+    ) as HTMLSelectElement;
+    const addButton = mounted.container.querySelector(
+      'button[aria-label="Add page context site override"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(hostInput, "splunk.example.com");
+      hostInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await act(async () => {
+      typeSelect.value = PAGE_CONTEXT_TYPE.CTI_PLATFORM;
+      typeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await act(async () => {
+      addButton.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]).toEqual({
+      "splunk.example.com": PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+    });
+    expect(mounted.container.textContent).toContain("splunk.example.com");
+    expect(mounted.container.textContent).toContain("CTI platform");
+  });
+
+  it("clears all page context site overrides from Trust section", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const hostInput = mounted.container.querySelector(
+      'input[aria-label="Page context override hostname"]'
+    ) as HTMLInputElement;
+    const addButton = mounted.container.querySelector(
+      'button[aria-label="Add page context site override"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(hostInput, "splunk.example.com");
+      hostInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      addButton.click();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        mounted.container.querySelector(
+          'button[aria-label="Clear all page context site overrides"]'
+        )
+      ).not.toBeNull();
+    });
+
+    const clearAllButton = mounted.container.querySelector(
+      'button[aria-label="Clear all page context site overrides"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      clearAllButton.click();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]).toEqual({});
+    expect(mounted.container.textContent).not.toContain("splunk.example.com");
   });
 
   it("renders the auto-scan toggle", async () => {

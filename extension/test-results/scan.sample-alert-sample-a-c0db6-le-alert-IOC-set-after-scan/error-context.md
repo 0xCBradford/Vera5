@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: export.clipboard.spec.ts >> hover card export clipboard smoke >> copies all scanned indicators via Copy all without live vendor network
-- Location: e2e\export.clipboard.spec.ts:23:3
+- Name: scan.sample-alert.spec.ts >> sample-alert.html scan smoke >> detects the fixed sample-alert IOC set after scan
+- Location: e2e\scan.sample-alert.spec.ts:19:3
 
 # Error details
 

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Internal runbook — credential reset procedure (sample)</title>
+    <meta
+      name="description"
+      content="Generic internal documentation page for page-context fallback validation without SOC, CTI, or sandbox layout signals."
+    />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        line-height: 1.55;
+        margin: 2rem auto;
+        max-width: 46rem;
+        padding: 0 1rem;
+      }
+      .meta {
+        color: #555;
+        font-size: 0.9rem;
+      }
+      code {
+        font-size: 0.95em;
+      }
+      ol {
+        padding-left: 1.25rem;
+      }
+    </style>
+  </head>
+  <body>
+    <article>
+      <h1>Credential reset procedure</h1>
+      <p class="meta">
+        Generic documentation fixture for page-context fallback checks. Values below
+        are public test data from <code>examples/sample-iocs.txt</code>.
+      </p>
+
+      <h2>When to use this runbook</h2>
+      <p>
+        Use this procedure when an employee reports suspicious sign-in activity from
+        a known lab address such as <strong>192.0.2.1</strong> or when passive DNS
+        shows an unexpected hostname like
+        <strong>example.com</strong> on a managed asset. These strings support
+        detection regression only—they are not active incident indicators.
+      </p>
+
+      <h2>Steps</h2>
+      <ol>
+        <li>Confirm the account lockout ticket references the correct user.</li>
+        <li>
+          Capture any related URL the user clicked, for example
+          <a href="https://example.com/login">https://example.com/login</a>.
+        </li>
+        <li>
+          Reset credentials and record the related file hash
+          <code>d41d8cd98f00b204e9800998ecf8427e</code> if malware cleanup is
+          required.
+        </li>
+        <li>
+          Notify the service desk alias
+          <a href="mailto:analyst@corp.example.com">analyst@corp.example.com</a>.
+        </li>
+      </ol>
+
+      <h2>Notes</h2>
+      <p>
+        This page intentionally avoids SOC dashboard tables, CTI platform branding,
+        malware research article shape, and sandbox verdict layout so operators can
+        confirm the generic page profile and default export template.
+      </p>
+    </article>
+  </body>
+</html>

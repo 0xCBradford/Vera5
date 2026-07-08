@@ -2,15 +2,20 @@ import { rethrowUnlessStaleExtensionError } from "./extensionContext";
 import type { IocType } from "./iocRegex";
 import { recordActiveInvestigationSessionMacroRunEvent } from "./investigationSessionStorage";
 import {
+  isOperatorMacroEnrichStepType,
+  OPERATOR_MACRO_STEP_TYPE,
+} from "./operatorMacroStepTypes";
+import {
   getQuietMode,
   MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE,
 } from "./storage";
 
 export const MACRO_STEP_TYPE_OPEN_FROM_SELECTION = "openFromSelection" as const;
 
-export const MACRO_STEP_TYPE_ENRICH = "enrich" as const;
+export const MACRO_STEP_TYPE_ENRICH = OPERATOR_MACRO_STEP_TYPE.ENRICH;
 
-export const MACRO_STEP_TYPE_QUEUE_RELATED_IOCS = "queueRelatedIocs" as const;
+export const MACRO_STEP_TYPE_QUEUE_RELATED_IOCS =
+  OPERATOR_MACRO_STEP_TYPE.QUEUE_RELATED_IOCS;
 
 export type MacroEnrichStepType =
   | typeof MACRO_STEP_TYPE_OPEN_FROM_SELECTION
@@ -35,7 +40,10 @@ export type MacroEnrichStepQuietModeGateResult =
 const macroStepContextMenuActionIds = new Map<string, string>();
 
 export function isMacroEnrichStepType(stepType: string): boolean {
-  return MACRO_ENRICH_STEP_TYPES.has(stepType.trim());
+  const trimmed = stepType.trim();
+  return (
+    trimmed === MACRO_STEP_TYPE_OPEN_FROM_SELECTION || isOperatorMacroEnrichStepType(trimmed)
+  );
 }
 
 export function resolveMacroEnrichStepQuietModeGate(

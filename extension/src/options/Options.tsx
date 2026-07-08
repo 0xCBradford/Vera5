@@ -67,6 +67,7 @@ import {
   getQuietMode,
   getShowDisabledSourcesInWorkspace,
   getShowPreQueryNotices,
+  getPageContextSiteModeOverrides,
   hasApiKey,
   completeInstallQuickStart,
   IOC_TYPE_SETTINGS_ORDER,
@@ -98,7 +99,17 @@ import {
   setPreQueryNoticePreference,
   setQuietMode,
   setShowDisabledSourcesInWorkspace,
+  setPageContextSiteModeOverrides,
+  clearPageContextSiteModeOverrides,
 } from "../lib/storage";
+import {
+  PAGE_CONTEXT_TYPE,
+  PAGE_CONTEXT_TYPE_LABEL,
+  PAGE_CONTEXT_TYPE_ORDER,
+  normalizePageContextSiteModeOverrideHost,
+  type PageContextSiteModeOverridesRecord,
+  type PageContextType,
+} from "../lib/pageContext";
 import {
   DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT,
   DOMAIN_POLICY_MODE_DENY_BY_DEFAULT,
@@ -798,6 +809,16 @@ export function Options() {
     useState("");
   const [attributeHrefSitePreferenceModeDraft, setAttributeHrefSitePreferenceModeDraft] =
     useState<AttributeHrefSitePreference>("off");
+  const [
+    pageContextSiteModeOverrides,
+    setPageContextSiteModeOverridesState,
+  ] = useState<PageContextSiteModeOverridesRecord>({});
+  const [pageContextSiteModeOverrideHostDraft, setPageContextSiteModeOverrideHostDraft] =
+    useState("");
+  const [pageContextSiteModeOverrideTypeDraft, setPageContextSiteModeOverrideTypeDraft] =
+    useState<PageContextType>(PAGE_CONTEXT_TYPE.SOC_DASHBOARD);
+  const [activeTabPageContextOverrideHost, setActiveTabPageContextOverrideHost] =
+    useState<string | null>(null);
   const [showDisabledSourcesInWorkspace, setShowDisabledSourcesInWorkspaceState] =
     useState(false);
   const [showPreQueryNotices, setShowPreQueryNoticesState] = useState(true);
@@ -879,6 +900,7 @@ export function Options() {
       getAttributeHrefExtractionConsentAcknowledged(),
       getAttributeHrefExtractionRememberSiteChoices(),
       getAttributeHrefExtractionSitePreferences(),
+      getPageContextSiteModeOverrides(),
       getShowDisabledSourcesInWorkspace(),
       getShowPreQueryNotices(),
       getPreQueryNoticePreferenceConfigured(),
@@ -926,6 +948,7 @@ export function Options() {
           attributeHrefExtractionConsentAcknowledgedValue,
           attributeHrefExtractionRememberSiteChoicesValue,
           attributeHrefExtractionSitePreferencesValue,
+          pageContextSiteModeOverridesValue,
           showDisabledSourcesValue,
           showPreQueryNoticesValue,
           preQueryNoticePreferenceConfiguredValue,
@@ -961,6 +984,7 @@ export function Options() {
           setAttributeHrefExtractionSitePreferencesState(
             attributeHrefExtractionSitePreferencesValue
           );
+          setPageContextSiteModeOverridesState(pageContextSiteModeOverridesValue);
           setShowDisabledSourcesInWorkspaceState(showDisabledSourcesValue);
           setShowPreQueryNoticesState(showPreQueryNoticesValue);
           setPreQueryNoticePreferenceConfiguredState(
@@ -990,6 +1014,19 @@ export function Options() {
         setReady(true);
       });
   }, [settingsReloadToken]);
+
+  useEffect(() => {
+    if (!ready || typeof chrome === "undefined" || !chrome.tabs?.query) {
+      return;
+    }
+
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      const host = tab?.url
+        ? normalizePageContextSiteModeOverrideHost(tab.url)
+        : "";
+      setActiveTabPageContextOverrideHost(host.length > 0 ? host : null);
+    });
+  }, [ready, pageContextSiteModeOverrides]);
 
   useEffect(() => {
     if (
@@ -1152,6 +1189,35 @@ export function Options() {
     delete next[host];
     setAttributeHrefExtractionSitePreferencesState(next);
     void setAttributeHrefExtractionSitePreferences(next);
+  };
+
+  const handleAddPageContextSiteModeOverride = () => {
+    const host = normalizePageContextSiteModeOverrideHost(
+      pageContextSiteModeOverrideHostDraft
+    );
+    if (!host || pageContextSiteModeOverrides[host]) {
+      setPageContextSiteModeOverrideHostDraft("");
+      return;
+    }
+    const next = {
+      ...pageContextSiteModeOverrides,
+      [host]: pageContextSiteModeOverrideTypeDraft,
+    };
+    setPageContextSiteModeOverridesState(next);
+    setPageContextSiteModeOverrideHostDraft("");
+    void setPageContextSiteModeOverrides(next);
+  };
+
+  const handleRemovePageContextSiteModeOverride = (host: string) => {
+    const next = { ...pageContextSiteModeOverrides };
+    delete next[host];
+    setPageContextSiteModeOverridesState(next);
+    void setPageContextSiteModeOverrides(next);
+  };
+
+  const handleClearAllPageContextSiteModeOverrides = () => {
+    setPageContextSiteModeOverridesState({});
+    void clearPageContextSiteModeOverrides();
   };
 
   const handleShowDisabledSourcesToggle = (checked: boolean) => {
@@ -2791,6 +2857,144 @@ export function Options() {
                 onAdd={handleAddInternalAssetVendorLabel}
                 onRemove={handleRemoveInternalAssetVendorLabel}
               />
+              <fieldset className="v5-field" disabled={!ready}>
+                <legend className="v5-field__label">Treat this site as …</legend>
+                <span
+                  className="v5-status v5-status--muted"
+                  style={{ display: "block", marginBottom: 8 }}
+                >
+                  Save a page-type override per hostname. Overrides persist
+                  locally and adjust IOC priority, tray layout, and export
+                  defaults for that site.
+                </span>
+                {activeTabPageContextOverrideHost &&
+                pageContextSiteModeOverrides[activeTabPageContextOverrideHost] ? (
+                  <div
+                    className="v5-status"
+                    role="status"
+                    style={{ display: "block", marginBottom: 8 }}
+                  >
+                    Active tab override:{" "}
+                    <strong>
+                      {
+                        PAGE_CONTEXT_TYPE_LABEL[
+                          pageContextSiteModeOverrides[
+                            activeTabPageContextOverrideHost
+                          ]!
+                        ]
+                      }
+                    </strong>{" "}
+                    for <code>{activeTabPageContextOverrideHost}</code>.{" "}
+                    <button
+                      type="button"
+                      className="v5-btn v5-btn--link"
+                      aria-label={`Reset ${activeTabPageContextOverrideHost} to auto-detect`}
+                      onClick={() =>
+                        handleRemovePageContextSiteModeOverride(
+                          activeTabPageContextOverrideHost
+                        )
+                      }
+                    >
+                      Reset to auto-detect
+                    </button>
+                  </div>
+                ) : null}
+                <form
+                  className="v5-actions"
+                  style={{ marginBottom: 8 }}
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    handleAddPageContextSiteModeOverride();
+                  }}
+                >
+                  <input
+                    className="v5-input v5-input--sm"
+                    type="text"
+                    aria-label="Page context override hostname"
+                    placeholder="example.com"
+                    value={pageContextSiteModeOverrideHostDraft}
+                    onChange={(event) =>
+                      setPageContextSiteModeOverrideHostDraft(event.target.value)
+                    }
+                  />
+                  <select
+                    className="v5-input v5-input--sm"
+                    aria-label="Page context override type"
+                    value={pageContextSiteModeOverrideTypeDraft}
+                    onChange={(event) =>
+                      setPageContextSiteModeOverrideTypeDraft(
+                        event.target.value as PageContextType
+                      )
+                    }
+                  >
+                    {PAGE_CONTEXT_TYPE_ORDER.map((pageContextType) => (
+                      <option key={pageContextType} value={pageContextType}>
+                        {PAGE_CONTEXT_TYPE_LABEL[pageContextType]}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="submit"
+                    className="v5-btn v5-btn--primary"
+                    aria-label="Add page context site override"
+                  >
+                    Add
+                  </button>
+                </form>
+                {Object.keys(pageContextSiteModeOverrides).length > 0 ? (
+                  <div className="v5-actions" style={{ marginBottom: 8 }}>
+                    <button
+                      type="button"
+                      className="v5-btn"
+                      aria-label="Clear all page context site overrides"
+                      onClick={handleClearAllPageContextSiteModeOverrides}
+                    >
+                      Clear all overrides
+                    </button>
+                  </div>
+                ) : null}
+                <ul
+                  className="v5-domain-list"
+                  aria-label="Page context site overrides"
+                >
+                  {Object.entries(pageContextSiteModeOverrides)
+                    .sort(([leftHost], [rightHost]) =>
+                      leftHost.localeCompare(rightHost)
+                    )
+                    .map(([host, pageContextType]) => (
+                      <li
+                        key={host}
+                        className={`v5-domain-list__item${
+                          host === activeTabPageContextOverrideHost
+                            ? " v5-domain-list__item--override-active"
+                            : ""
+                        }`}
+                      >
+                        <span>
+                          <code>{host}</code>
+                          {" — "}
+                          {PAGE_CONTEXT_TYPE_LABEL[pageContextType]}
+                          {host === activeTabPageContextOverrideHost ? (
+                            <>
+                              {" "}
+                              <strong>(active tab)</strong>
+                            </>
+                          ) : null}
+                        </span>
+                        <button
+                          type="button"
+                          className="v5-btn v5-btn--link"
+                          aria-label={`Reset ${host} to auto-detect`}
+                          onClick={() =>
+                            handleRemovePageContextSiteModeOverride(host)
+                          }
+                        >
+                          Reset to auto-detect
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </fieldset>
               <div className="v5-field">
                 <span className="v5-field__label">Analyst workflow presets</span>
                 <span

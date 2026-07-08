@@ -27,6 +27,13 @@ import {
   getVera5Settings,
   listDisabledEnrichmentSources,
 } from "./storage";
+import {
+  getPageContextTraySortDefault,
+  normalizePageContextType,
+  PAGE_CONTEXT_TYPE,
+  sortIocTypesByPageContextPriority,
+  type PageContextType,
+} from "./pageContext";
 import type { TabScanSnapshot, TabScanSnapshotEntry } from "./tabScanSnapshot";
 
 export const TAB_SCAN_SUMMARY_SCHEMA_VERSION = 1;
@@ -84,13 +91,42 @@ export function sortIocTypesForTrayFilter(
   return TRAY_FILTER_TYPE_ORDER.filter((type) => available.has(type));
 }
 
+export function sortIocTypesForTrayDisplay(
+  types: ReadonlyArray<IocType>,
+  pageContextType: PageContextType | null | undefined
+): IocType[] {
+  const normalized = normalizePageContextType(pageContextType);
+  if (normalized === PAGE_CONTEXT_TYPE.GENERIC) {
+    return sortIocTypesForTrayFilter(types);
+  }
+  return sortIocTypesByPageContextPriority(types, normalized);
+}
+
+export function resolveTrayTypeFilterDefaultForPageContext(
+  pageContextType: PageContextType | null | undefined
+): IocTypeFilter {
+  const traySortDefault = getPageContextTraySortDefault(
+    normalizePageContextType(pageContextType)
+  );
+  return traySortDefault === "all" ? "all" : traySortDefault;
+}
+
+export function listIocTypesPresentInSummaryForPageContext(
+  summary: TabScanSummary,
+  pageContextType: PageContextType | null | undefined
+): IocType[] {
+  const presentTypes = Object.entries(summary.countByType)
+    .filter(([, count]) => typeof count === "number" && count > 0)
+    .map(([type]) => type as IocType);
+  return sortIocTypesForTrayDisplay(presentTypes, pageContextType);
+}
+
 export function listIocTypesPresentInSummary(
   summary: TabScanSummary
 ): IocType[] {
-  return sortIocTypesForTrayFilter(
-    Object.entries(summary.countByType)
-      .filter(([, count]) => typeof count === "number" && count > 0)
-      .map(([type]) => type as IocType)
+  return listIocTypesPresentInSummaryForPageContext(
+    summary,
+    PAGE_CONTEXT_TYPE.GENERIC
   );
 }
 
@@ -104,11 +140,18 @@ export function filterTabScanSummaryEntries(
   return entries.filter((entry) => entry.type === filter);
 }
 
-export function buildTabScanCountSummaryText(summary: TabScanSummary): string {
+export function buildTabScanCountSummaryText(
+  summary: TabScanSummary,
+  pageContextType?: PageContextType | null
+): string {
   const parts = [
     `${summary.totalCount} indicator${summary.totalCount === 1 ? "" : "s"}`,
   ];
-  for (const type of listIocTypesPresentInSummary(summary)) {
+  const orderedTypes =
+    pageContextType === undefined
+      ? listIocTypesPresentInSummary(summary)
+      : listIocTypesPresentInSummaryForPageContext(summary, pageContextType);
+  for (const type of orderedTypes) {
     const count = summary.countByType[type];
     if (count && count > 0) {
       parts.push(`${count} ${IOC_TYPE_TRAY_LABEL[type]}`);

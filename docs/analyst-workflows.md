@@ -189,20 +189,58 @@ When operator macros ship, built-in and custom macros register in the command pa
 
 ## Page context and default export templates
 
-Vera5 classifies the active tab locally (URL and bounded DOM signals only) into analyst-native page types. When the classified page type changes, Vera5 can apply the matching analyst workflow preset and default export template unless you have set a per-site mode override (see **Trust & consent** when site overrides ship).
+Vera5 classifies the active tab locally (URL and bounded DOM signals only) into analyst-native page types. When the classified page type changes, Vera5 can apply the matching analyst workflow preset and default export template unless you have set a per-site mode override in **Trust & consent → Treat this site as …**.
 
-The popup IOC tray shows the active page profile badge (for example **SOC dashboard** or **Generic page**). Generic pages keep your saved profile default and do not force a page-type export template.
+The popup IOC tray shows the active page profile badge (for example **SOC dashboard** or **Generic page**). When a site override is active, the badge shows **Override** with **Reset to auto-detect**; otherwise it shows **Auto-detected**. Generic pages keep your saved profile default and do not force a page-type export template.
 
-| Classified page type | Operator label | Default export template | Typical use |
-|--------------------|----------------|-------------------------|-------------|
-| `soc_dashboard` | SOC dashboard | **Jira comment** (`jira-comment`) | Splunk, Sentinel, Elastic, Security Onion-style alert dashboards |
-| `case_ticket` | Case / ticket | **Jira comment** (`jira-comment`) | Jira issues, GitHub issues, ticket workflows |
-| `cti_platform` | CTI platform | **Markdown report** (`markdown-report`) | OTX, MISP, OpenCTI, TheHive case views |
-| `malware_blog` | Malware blog | **Markdown report** (`markdown-report`) | Threat research posts and IOC write-ups |
-| `sandbox_report` | Sandbox report | **TheHive case note** (`thehive-case-note`) | VirusTotal GUI, Hybrid Analysis, Any.Run-style reports |
-| `generic` | Generic page | Profile default (**Analyst update**, `analyst-update`) | Unclassified pages; no automatic template swap |
+### Classifier vs site override precedence
 
-Template IDs match the export template engine in [export-artifacts.md](export-artifacts.md). Hover card **Template**, tray **Export template**, and **Copy template** actions use the active default unless you pick another template for that export.
+| Step | Source | Wins when |
+|------|--------|-----------|
+| 1 | Local classifier (URL + bounded DOM heuristics) | No stored override exists for the page hostname |
+| 2 | Per-site override (`pageContextSiteModeOverrides`) | You saved **Treat this site as …** for that hostname in **Trust & consent** |
+
+When an override exists, it replaces the classifier’s page type for **effective** behavior: popup badge, IOC tray priority hints, default export template selection, and session-stored tab page context. The classifier still runs locally on each scan; its signals are not uploaded. Overrides persist in extension local storage until you **Reset to auto-detect** or **Clear all overrides**.
+
+Automatic analyst workflow preset application on page-type change is **skipped** while a site override is stored for that origin—your chosen page type stays in control without preset churn.
+
+### Trust gates and page context overrides
+
+Page context—including per-site overrides—does **not** bypass **Trust & consent** gates:
+
+| Trust gate | Page context / override behavior |
+|------------|----------------------------------|
+| **Domain denylist / allowlist** | Live enrichment and auto-scan still follow domain policy on every page. A site override may change tray layout and export defaults, but it cannot enable vendor calls on a blocked host. Automatic analyst preset application on page-type change is skipped when the page origin is blocked by domain policy. |
+| **Quiet mode** | Live vendor enrichment remains blocked while quiet mode is on. Overrides do not turn quiet mode off. Automatic analyst preset application on page-type change is skipped while quiet mode is active so a classified SOC or CTI page cannot silently disable quiet mode. |
+
+Site overrides never call vendor APIs, upload page content, or change domain policy. They adjust local defaults only. All enrich paths still run through the same stacked trust gates documented in [security-model.md](security-model.md#trust-gates-stacked).
+
+### Page-type → preset → export template matrix
+
+When the classified page type **changes** on a tab (after **Scan page** or auto-scan), Vera5 may auto-apply the **Analyst workflow preset** for that type—unless a per-site override is stored, the origin is blocked by domain policy, or **Quiet mode** is on (see [Trust gates and page context overrides](#trust-gates-and-page-context-overrides)). Preset application updates enrichment defaults, recommended pivot ordering, and related trust settings (for example **DFIR investigation** enables **Quiet mode** and private-space IPv4). The **Default export template** column is the template Vera5 selects on the overlay **Template** row for that page type; it matches the preset’s own default export template on mapped rows.
+
+| Page type ID | Operator label | Auto-applied analyst preset | Default export template | Typical use |
+|--------------|----------------|----------------------------|-------------------------|-------------|
+| `soc_dashboard` | SOC dashboard | **SOC triage** (`soc`) | **Jira comment** (`jira-comment`) | Splunk, Sentinel, Elastic, Security Onion-style alert dashboards |
+| `case_ticket` | Case / ticket | **SOC triage** (`soc`) | **Jira comment** (`jira-comment`) | Jira issues, GitHub issues, ticket workflows |
+| `cti_platform` | CTI platform | **CTI research** (`cti`) | **Markdown report** (`markdown-report`) | OTX, MISP, OpenCTI, TheHive case views |
+| `malware_blog` | Malware blog | **CTI research** (`cti`) | **Markdown report** (`markdown-report`) | Threat research posts and IOC write-ups |
+| `sandbox_report` | Sandbox report | **DFIR investigation** (`dfir`) | **TheHive case note** (`thehive-case-note`) | VirusTotal GUI, Hybrid Analysis, Any.Run-style reports |
+| `generic` | Generic page | *(none — no automatic preset apply)* | *(profile default; factory install default **Analyst update**, `analyst-update`)* | Unclassified pages; tray sort baseline; no page-type template swap |
+
+Template IDs match the export template engine in [export-artifacts.md](export-artifacts.md). Hover card **Template**, tray **Export template**, and **Copy template** actions use the effective default unless you pick another template for that export. On **Generic page**, the effective export template is whatever you saved under **Trust & consent** (or the factory default above)—not a page-type mapping.
+
+### Relationship to risk score and explain-this-IOC chain
+
+Page context adjusts **defaults**—export template, analyst preset (when auto-applied), and IOC tray type sort hints. It does **not** change how Vera5 computes the composite **Risk score** or the **How this score was computed** explain-this-IOC chain.
+
+| Page context influence | Scoring and explain chain |
+|------------------------|---------------------------|
+| Default export template and ticket-oriented layouts on SOC or case pages | Unchanged: bands, weights, and reasoning lines come from parseable vendor summaries via the local scoring engine |
+| Analyst preset pivot ordering when a preset auto-applies | Does not add, remove, or rewrite reasoning lines—see [Explain-this-IOC chain vs composite score](#explain-this-ioc-chain-vs-composite-score) |
+| Connector confidence metadata chips on multi-source rows | Still informational only; chips never appear in the explain chain (see [Interpreting connector confidence metadata](#interpreting-connector-confidence-metadata)) |
+
+When enriching an indicator on any classified page, read per-source rows, the **Risk score** headline, and **How this score was computed** using the same rules as on a generic page.
 
 ## Typical triage flow
 
@@ -777,6 +815,10 @@ Session and case exports mirror overlay rules: JSON `score.mode` is **`insuffici
 ## Explain-this-IOC chain vs composite score
 
 The hover card shows **two related outputs**. They answer different questions; neither is an AI judgment.
+
+### Page context independence
+
+Local page classification (SOC dashboard, CTI platform, malware blog, sandbox report, and other types) does **not** change composite score math, disagreement thresholds, or explain-this-IOC reasoning lines. Page context may adjust export defaults, analyst preset defaults, and IOC tray type sort hints—see [Page context and default export templates](#page-context-and-default-export-templates). Implementation detail for scoring and reasoning builders: [Scoring system (contributors)](contributors/scoring-system.md).
 
 | Output | UI label | What it answers | How it is built |
 |--------|----------|-----------------|-----------------|

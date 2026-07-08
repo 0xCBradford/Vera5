@@ -41,6 +41,7 @@ import * as copyText from "../lib/copyText";
 import * as storage from "../lib/storage";
 import {
   POPUP_QUIET_MODE_STATUS_LABEL,
+  STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_QUIET_MODE,
 } from "../lib/storage";
 import {
@@ -217,6 +218,7 @@ const storageOnChangedListeners: Array<
     areaName: string
   ) => void
 > = [];
+let chromeLocalStore: Record<string, unknown> = {};
 
 function stubChrome(options: {
   initialSummary?: ReturnType<typeof buildTabScanSummary> | null;
@@ -232,7 +234,8 @@ function stubChrome(options: {
   pageContext?: TabPageContextRecord | null;
 }): void {
   const collections = [...(options.collections ?? [])];
-  const localStore = options.localStore ?? {};
+  chromeLocalStore = { ...(options.localStore ?? {}) };
+  const localStore = chromeLocalStore;
   const sessionStore = options.sessionStore ?? {};
   storageOnChangedListeners.length = 0;
   vi.stubGlobal("chrome", {
@@ -912,10 +915,53 @@ describe("Popup IOC tray", () => {
     });
 
     const badge = mounted!.container.querySelector(
-      '[aria-label="Page profile: SOC dashboard"]'
+      '[aria-label="Page profile: SOC dashboard. Auto-detected."]'
     );
     expect(badge).not.toBeNull();
     expect(badge?.textContent).toBe("SOC dashboard");
+    expect(mounted!.container.textContent).toContain("Auto-detected");
+  });
+
+  it("shows override active state and resets to auto-detect from the tray header", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      pageContext: {
+        schemaVersion: PAGE_CONTEXT_CLASSIFIER_SCHEMA_VERSION,
+        pageContextType: PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+        pageUrl: sampleSummary.pageUrl,
+        matchedSignals: ["url:hostname:splunk"],
+        classifiedAt: sampleSummary.scannedAt,
+        tabId: 7,
+      },
+      localStore: {
+        [STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]: {
+          "example.com": PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("CTI platform");
+    });
+
+    expect(mounted!.container.textContent).toContain("Override");
+    expect(mounted!.container.textContent).toContain("Reset to auto-detect");
+
+    const resetButton = mounted!.container.querySelector(
+      'button[aria-label="Reset page profile to auto-detect"]'
+    ) as HTMLButtonElement;
+    resetButton.click();
+
+    await vi.waitFor(() => {
+      expect(chromeLocalStore[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]).toEqual(
+        {}
+      );
+    });
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("SOC dashboard");
+      expect(mounted!.container.textContent).toContain("Auto-detected");
+    });
   });
 
   it("shows co-occurring IOCs in tray row expanders", async () => {

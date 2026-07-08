@@ -7,8 +7,10 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   PAGE_CONTEXT_TYPE,
+  applySiteModeOverrideToPageContextClassification,
   buildPageContextClassifierInput,
   classifyPageContext,
+  normalizePageContextSiteModeOverrides,
   probePageContextDomSignalsFromDocument,
 } from "./pageContext";
 
@@ -338,23 +340,41 @@ describe("pageContext case ticket, CTI, malware blog, and sandbox patterns", () 
     );
   });
 
-  it("classifies malware analysis blog exports as malware_blog", () => {
-    mountFixture(`<!DOCTYPE html><html><head><title>Ransomware threat actor malware analysis</title>
-      <meta name="description" content="Published threat research write-up with indicators of compromise" /></head>
-      <body><h1>Campaign IOC summary</h1><p class="meta">Published 1 Jan 2026 · 8 min read</p></body></html>`);
+  it("classifies sample-malware-blog.html as malware_blog from bounded DOM heuristics", () => {
+    mountFixture(loadFixture("sample-malware-blog.html"));
     const domSignals = probePageContextDomSignalsFromDocument(document);
     const input = buildPageContextClassifierInput({
-      pageUrl: "http://localhost:8080/malware-writeup.html",
+      pageUrl: "http://localhost:8080/sample-malware-blog.html",
+      domSignals,
+      classifiedAt: 1_700_000_000_000,
+    });
+
+    expect(input).not.toBeNull();
+    expect(domSignals.documentTitle.toLowerCase()).toContain("malware analysis");
+    expect(domSignals.metaDescriptionSample.toLowerCase()).toContain(
+      "indicators of compromise"
+    );
+
+    const classification = classifyPageContext(input!);
+    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.MALWARE_BLOG);
+    expect(classification.matchedSignals).toEqual(
+      expect.arrayContaining(["dom:malware-topic", "dom:blog-shape", "dom:ioc-section"])
+    );
+  });
+
+  it("keeps sample-generic-page.html as generic fallback", () => {
+    mountFixture(loadFixture("sample-generic-page.html"));
+    const domSignals = probePageContextDomSignalsFromDocument(document);
+    const input = buildPageContextClassifierInput({
+      pageUrl: "http://localhost:8080/sample-generic-page.html",
       domSignals,
       classifiedAt: 1_700_000_000_000,
     });
 
     expect(input).not.toBeNull();
     const classification = classifyPageContext(input!);
-    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.MALWARE_BLOG);
-    expect(classification.matchedSignals).toEqual(
-      expect.arrayContaining(["dom:malware-topic", "dom:blog-shape", "dom:ioc-section"])
-    );
+    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.GENERIC);
+    expect(classification.matchedSignals).toEqual([]);
   });
 
   it("keeps sample-blog.html as generic fallback", () => {
@@ -388,6 +408,49 @@ describe("pageContext case ticket, CTI, malware blog, and sandbox patterns", () 
     );
   });
 
+  it("classifies sample-cti-platform.html as cti_platform from bounded DOM heuristics", () => {
+    mountFixture(loadFixture("sample-cti-platform.html"));
+    const domSignals = probePageContextDomSignalsFromDocument(document);
+    const input = buildPageContextClassifierInput({
+      pageUrl: "http://localhost:8080/misp/events/view/4821/sample-cti-platform.html",
+      domSignals,
+      classifiedAt: 1_700_000_000_000,
+    });
+
+    expect(input).not.toBeNull();
+    expect(domSignals.primaryHeadingSample.toLowerCase()).toContain("misp event");
+
+    const classification = classifyPageContext(input!);
+    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.CTI_PLATFORM);
+    expect(classification.matchedSignals).toEqual(
+      expect.arrayContaining(["dom:misp-brand", "url:pathname:misp-event"])
+    );
+  });
+
+  it("classifies sample-sandbox-report.html as sandbox_report from bounded DOM heuristics", () => {
+    mountFixture(loadFixture("sample-sandbox-report.html"));
+    const domSignals = probePageContextDomSignalsFromDocument(document);
+    const input = buildPageContextClassifierInput({
+      pageUrl: "http://localhost:8080/sandbox/report/sample-sandbox-report.html",
+      domSignals,
+      classifiedAt: 1_700_000_000_000,
+    });
+
+    expect(input).not.toBeNull();
+    expect(domSignals.metaDescriptionSample.toLowerCase()).toContain("detection ratio");
+    expect(domSignals.preformattedBlockCount).toBeGreaterThan(0);
+
+    const classification = classifyPageContext(input!);
+    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.SANDBOX_REPORT);
+    expect(classification.matchedSignals).toEqual(
+      expect.arrayContaining([
+        "url:pathname:sandbox-report",
+        "dom:sandbox-verdict",
+        "dom:sandbox-mitre",
+      ])
+    );
+  });
+
   it("classifies Hybrid Analysis and ANY.RUN URLs as sandbox_report", () => {
     const hybridInput = buildPageContextClassifierInput({
       pageUrl: "https://www.hybrid-analysis.com/sample/abc123/1234567890",
@@ -406,5 +469,221 @@ describe("pageContext case ticket, CTI, malware blog, and sandbox patterns", () 
     expect(classifyPageContext(anyRunInput!).pageContextType).toBe(
       PAGE_CONTEXT_TYPE.SANDBOX_REPORT
     );
+  });
+});
+
+const PAGE_CONTEXT_FIXTURE_LABEL_CASES = [
+  {
+    fixture: "sample-splunk-export.html",
+    pageUrl: "http://localhost:8080/sample-splunk-export.html",
+    expected: PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+  },
+  {
+    fixture: "sample-security-onion-alert.html",
+    pageUrl: "http://localhost:8080/sample-security-onion-alert.html",
+    expected: PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+  },
+  {
+    fixture: "sample-cti-platform.html",
+    pageUrl: "http://localhost:8080/misp/events/view/4821/sample-cti-platform.html",
+    expected: PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+  },
+  {
+    fixture: "sample-malware-blog.html",
+    pageUrl: "http://localhost:8080/sample-malware-blog.html",
+    expected: PAGE_CONTEXT_TYPE.MALWARE_BLOG,
+  },
+  {
+    fixture: "sample-sandbox-report.html",
+    pageUrl: "http://localhost:8080/sandbox/report/sample-sandbox-report.html",
+    expected: PAGE_CONTEXT_TYPE.SANDBOX_REPORT,
+  },
+  {
+    fixture: "sample-alert.html",
+    pageUrl: "http://localhost:8080/sample-alert.html",
+    expected: PAGE_CONTEXT_TYPE.GENERIC,
+  },
+  {
+    fixture: "sample-generic-page.html",
+    pageUrl: "http://localhost:8080/sample-generic-page.html",
+    expected: PAGE_CONTEXT_TYPE.GENERIC,
+  },
+  {
+    fixture: "sample-blog.html",
+    pageUrl: "http://localhost:8080/sample-blog.html",
+    expected: PAGE_CONTEXT_TYPE.GENERIC,
+  },
+] as const;
+
+describe("pageContext examples fixture classifier labels", () => {
+  afterEach(() => {
+    document.documentElement.innerHTML = "";
+  });
+
+  it.each(PAGE_CONTEXT_FIXTURE_LABEL_CASES)(
+    "labels $fixture as $expected",
+    ({ fixture, pageUrl, expected }) => {
+      mountFixture(loadFixture(fixture));
+      const domSignals = probePageContextDomSignalsFromDocument(document);
+      const input = buildPageContextClassifierInput({
+        pageUrl,
+        domSignals,
+        classifiedAt: 1_700_000_000_000,
+      });
+
+      expect(input).not.toBeNull();
+      expect(classifyPageContext(input!).pageContextType).toBe(expected);
+    }
+  );
+});
+
+describe("pageContext ambiguous URL generic fallback", () => {
+  afterEach(() => {
+    document.documentElement.innerHTML = "";
+  });
+
+  it.each([
+    {
+      label: "Elastic marketing site",
+      pageUrl: "https://www.elastic.co/about",
+      domSignals: {
+        documentTitle: "About Elastic",
+        primaryHeadingSample: "Our story",
+      },
+    },
+    {
+      label: "Azure portal home without Sentinel blade",
+      pageUrl: "https://portal.azure.com/#home",
+      domSignals: {
+        documentTitle: "Microsoft Azure",
+        primaryHeadingSample: "Home",
+      },
+    },
+    {
+      label: "GitHub repository page without issue path",
+      pageUrl: "https://github.com/acme/detektr",
+      domSignals: {},
+    },
+    {
+      label: "VirusTotal site without GUI report path",
+      pageUrl: "https://www.virustotal.com/about",
+      domSignals: {},
+    },
+    {
+      label: "Atlassian wiki page without issue path",
+      pageUrl: "https://acme.atlassian.net/wiki/spaces/SEC/overview",
+      domSignals: {},
+    },
+  ])("falls back to generic for $label", ({ pageUrl, domSignals }) => {
+    const input = buildPageContextClassifierInput({
+      pageUrl,
+      domSignals,
+      classifiedAt: 1_700_000_000_000,
+    });
+
+    expect(input).not.toBeNull();
+    const classification = classifyPageContext(input!);
+    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.GENERIC);
+    expect(classification.matchedSignals).toEqual([]);
+  });
+
+  it.each([
+    {
+      label: "CTI platform DOM without matching URL pathname",
+      fixture: "sample-cti-platform.html",
+      pageUrl: "http://localhost:8080/sample-cti-platform.html",
+    },
+    {
+      label: "sandbox report DOM without report pathname",
+      fixture: "sample-sandbox-report.html",
+      pageUrl: "http://localhost:8080/sample-sandbox-report.html",
+    },
+  ])("falls back to generic for $label", ({ fixture, pageUrl }) => {
+    mountFixture(loadFixture(fixture));
+    const domSignals = probePageContextDomSignalsFromDocument(document);
+    const input = buildPageContextClassifierInput({
+      pageUrl,
+      domSignals,
+      classifiedAt: 1_700_000_000_000,
+    });
+
+    expect(input).not.toBeNull();
+    const classification = classifyPageContext(input!);
+    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.GENERIC);
+    expect(classification.matchedSignals).toEqual([]);
+  });
+});
+
+describe("pageContext site override precedence over classifier", () => {
+  afterEach(() => {
+    document.documentElement.innerHTML = "";
+  });
+
+  it("prefers stored site override over soc_dashboard fixture classification", () => {
+    mountFixture(loadFixture("sample-splunk-export.html"));
+    const domSignals = probePageContextDomSignalsFromDocument(document);
+    const input = buildPageContextClassifierInput({
+      pageUrl: "http://localhost:8080/sample-splunk-export.html",
+      domSignals,
+      classifiedAt: 1_700_000_000_000,
+    });
+
+    expect(input).not.toBeNull();
+    const classification = classifyPageContext(input!);
+    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.SOC_DASHBOARD);
+
+    const effective = applySiteModeOverrideToPageContextClassification(
+      classification,
+      normalizePageContextSiteModeOverrides({
+        localhost: PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+      })
+    );
+
+    expect(effective.pageContextType).toBe(PAGE_CONTEXT_TYPE.CTI_PLATFORM);
+    expect(effective.pageUrl).toBe(classification.pageUrl);
+    expect(effective.matchedSignals).toEqual(classification.matchedSignals);
+  });
+
+  it("prefers stored site override over malware_blog fixture classification", () => {
+    mountFixture(loadFixture("sample-malware-blog.html"));
+    const domSignals = probePageContextDomSignalsFromDocument(document);
+    const input = buildPageContextClassifierInput({
+      pageUrl: "http://localhost:8080/sample-malware-blog.html",
+      domSignals,
+      classifiedAt: 1_700_000_000_000,
+    });
+
+    expect(input).not.toBeNull();
+    const classification = classifyPageContext(input!);
+    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.MALWARE_BLOG);
+
+    const effective = applySiteModeOverrideToPageContextClassification(
+      classification,
+      normalizePageContextSiteModeOverrides({
+        localhost: PAGE_CONTEXT_TYPE.GENERIC,
+      })
+    );
+
+    expect(effective.pageContextType).toBe(PAGE_CONTEXT_TYPE.GENERIC);
+  });
+
+  it("returns classifier output unchanged when no override is stored", () => {
+    mountFixture(loadFixture("sample-sandbox-report.html"));
+    const domSignals = probePageContextDomSignalsFromDocument(document);
+    const input = buildPageContextClassifierInput({
+      pageUrl: "http://localhost:8080/sandbox/report/sample-sandbox-report.html",
+      domSignals,
+      classifiedAt: 1_700_000_000_000,
+    });
+
+    expect(input).not.toBeNull();
+    const classification = classifyPageContext(input!);
+
+    expect(
+      applySiteModeOverrideToPageContextClassification(
+        classification,
+        normalizePageContextSiteModeOverrides({})
+      )
+    ).toBe(classification);
   });
 });

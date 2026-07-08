@@ -35,8 +35,12 @@ import {
   normalizePageContextDomHeuristicSignals,
   normalizePageContextType,
   pageContextAllowsCoreOperation,
+  pageContextTrustGatesAllowAnalystPresetApplication,
   parsePageContextUrlSignals,
   resolvePageContextAnalystPresetApplication,
+  applySiteModeOverrideToPageContextClassification,
+  resolveActivePageContextDisplay,
+  resolvePageContextSourceStatusLabel,
   resolveAnalystModePresetIdForPageContext,
   resolveDefaultExportTemplateIdForPageContext,
   resolveEffectiveDefaultExportTemplateId,
@@ -389,8 +393,80 @@ describe("pageContext analyst mode preset alignment", () => {
         siteModeOverrides: normalizePageContextSiteModeOverrides({
           "splunk.corp": PAGE_CONTEXT_TYPE.CTI_PLATFORM,
         }),
+        trustGates: {
+          pageAllowedByDomainPolicy: true,
+          quietModeActive: false,
+        },
       })
     ).toBeNull();
+  });
+
+  it("skips preset application when domain policy blocks the page origin", () => {
+    expect(
+      resolvePageContextAnalystPresetApplication({
+        previousPageContextType: PAGE_CONTEXT_TYPE.GENERIC,
+        nextPageContextType: PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+        pageOrigin: "mail.example.com",
+        siteModeOverrides: {},
+        trustGates: {
+          pageAllowedByDomainPolicy: false,
+          quietModeActive: false,
+        },
+      })
+    ).toBeNull();
+  });
+
+  it("skips preset application while quiet mode is active", () => {
+    expect(
+      resolvePageContextAnalystPresetApplication({
+        previousPageContextType: PAGE_CONTEXT_TYPE.GENERIC,
+        nextPageContextType: PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+        pageOrigin: "splunk.corp",
+        siteModeOverrides: {},
+        trustGates: {
+          pageAllowedByDomainPolicy: true,
+          quietModeActive: true,
+        },
+      })
+    ).toBeNull();
+  });
+
+  it("skips preset application when a site override is stored even if trust gates pass", () => {
+    expect(
+      resolvePageContextAnalystPresetApplication({
+        previousPageContextType: PAGE_CONTEXT_TYPE.GENERIC,
+        nextPageContextType: PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+        pageOrigin: "splunk.corp",
+        siteModeOverrides: normalizePageContextSiteModeOverrides({
+          "splunk.corp": PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+        }),
+        trustGates: {
+          pageAllowedByDomainPolicy: true,
+          quietModeActive: false,
+        },
+      })
+    ).toBeNull();
+  });
+
+  it("requires trust gates and site overrides to pass before auto-applying presets", () => {
+    expect(
+      pageContextTrustGatesAllowAnalystPresetApplication({
+        pageAllowedByDomainPolicy: true,
+        quietModeActive: false,
+      })
+    ).toBe(true);
+    expect(
+      pageContextTrustGatesAllowAnalystPresetApplication({
+        pageAllowedByDomainPolicy: false,
+        quietModeActive: false,
+      })
+    ).toBe(false);
+    expect(
+      pageContextTrustGatesAllowAnalystPresetApplication({
+        pageAllowedByDomainPolicy: true,
+        quietModeActive: true,
+      })
+    ).toBe(false);
   });
 
   it("skips preset application for generic fallback pages", () => {
@@ -402,6 +478,58 @@ describe("pageContext analyst mode preset alignment", () => {
         siteModeOverrides: {},
       })
     ).toBeNull();
+  });
+
+  it("prefers stored site overrides for active page context display", () => {
+    expect(
+      resolveActivePageContextDisplay({
+        classifiedPageContextType: PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+        siteModeOverrides: normalizePageContextSiteModeOverrides({
+          "splunk.corp": PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+        }),
+        pageOrigin: "https://splunk.corp/app/search",
+      })
+    ).toEqual({
+      pageContextType: PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+      source: "override",
+    });
+    expect(
+      resolveActivePageContextDisplay({
+        classifiedPageContextType: PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+        siteModeOverrides: {},
+        pageOrigin: "https://splunk.corp/app/search",
+      })
+    ).toEqual({
+      pageContextType: PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+      source: "auto_detect",
+    });
+  });
+
+  it("labels page context source state for operators", () => {
+    expect(resolvePageContextSourceStatusLabel("override")).toBe("Override active");
+    expect(resolvePageContextSourceStatusLabel("auto_detect")).toBe("Auto-detected");
+  });
+
+  it("applies stored site overrides to classifier output", () => {
+    const input = buildPageContextClassifierInput({
+      pageUrl: "https://splunk.corp/en-US/app/search/search",
+      domSignals: {},
+      classifiedAt: 1_700_000_000_000,
+    });
+    expect(input).not.toBeNull();
+    const classification = classifyPageContext(input!);
+    expect(classification.pageContextType).toBe(PAGE_CONTEXT_TYPE.SOC_DASHBOARD);
+
+    const effective = applySiteModeOverrideToPageContextClassification(
+      classification,
+      normalizePageContextSiteModeOverrides({
+        "splunk.corp": PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+      })
+    );
+
+    expect(effective.pageContextType).toBe(PAGE_CONTEXT_TYPE.CTI_PLATFORM);
+    expect(effective.pageUrl).toBe(classification.pageUrl);
+    expect(effective.matchedSignals).toEqual(classification.matchedSignals);
   });
 });
 

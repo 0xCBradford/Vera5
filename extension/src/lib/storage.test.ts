@@ -9,6 +9,7 @@ import {
   getAttributeHrefExtractionConsentAcknowledged,
   getAttributeHrefExtractionRememberSiteChoices,
   getAttributeHrefExtractionSitePreferences,
+  getPageContextSiteModeOverrides,
   getAutoScanEnabled,
   getDomainAllowlist,
   getDomainDenylist,
@@ -32,6 +33,9 @@ import {
   setAttributeHrefExtractionConsentAcknowledged,
   setAttributeHrefExtractionRememberSiteChoices,
   setAttributeHrefExtractionSitePreferences,
+  setPageContextSiteModeOverrides,
+  clearPageContextSiteModeOverrides,
+  removePageContextSiteModeOverrideForOrigin,
   setAutoScanEnabled,
   setDomainAllowlist,
   setDomainDenylist,
@@ -54,6 +58,7 @@ import {
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_CONSENT_ACKNOWLEDGED,
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_REMEMBER_SITE_CHOICES,
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_SITE_PREFERENCES,
+  STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
   STORAGE_KEY_QUIET_MODE,
   hasApiKey,
@@ -617,6 +622,37 @@ describe("attribute href remember site choices storage", () => {
     await expect(getAttributeHrefExtractionSitePreferences()).resolves.toEqual({
       "mail.example.com": "off",
     });
+  });
+
+  it("persists page context site mode overrides", async () => {
+    await setPageContextSiteModeOverrides({
+      "splunk.example.com": "soc_dashboard",
+    });
+    expect(store[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]).toEqual({
+      "splunk.example.com": "soc_dashboard",
+    });
+    await expect(getPageContextSiteModeOverrides()).resolves.toEqual({
+      "splunk.example.com": "soc_dashboard",
+    });
+  });
+
+  it("clears a single page context site mode override by origin", async () => {
+    await setPageContextSiteModeOverrides({
+      "splunk.example.com": "soc_dashboard",
+      "otx.example.com": "cti_platform",
+    });
+    await removePageContextSiteModeOverrideForOrigin("https://splunk.example.com/app");
+    expect(store[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]).toEqual({
+      "otx.example.com": "cti_platform",
+    });
+  });
+
+  it("clears all page context site mode overrides", async () => {
+    await setPageContextSiteModeOverrides({
+      "splunk.example.com": "soc_dashboard",
+    });
+    await clearPageContextSiteModeOverrides();
+    expect(store[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]).toEqual({});
   });
 });
 

@@ -18,6 +18,9 @@ import {
   PAGE_CONTEXT_TYPE,
   PAGE_CONTEXT_TYPE_LABEL,
   normalizePageContextType,
+  resolveActivePageContextDisplay,
+  resolvePageContextSourceStatusLabel,
+  type PageContextSource,
   type PageContextType,
 } from "../lib/pageContext";
 import { requestTabScanSummaryForActiveTab } from "../lib/tabScanSummaryClient";
@@ -29,7 +32,7 @@ import {
   findTabScanSummaryEntryForIndicatorValue,
   formatTrayRowEnrichmentHint,
   IOC_TYPE_TRAY_LABEL,
-  listIocTypesPresentInSummary,
+  listIocTypesPresentInSummaryForPageContext,
   loadTrayEntryEnrichmentStatuses,
   resolveTrayCopyFeedback,
   resolveTrayExportFeedback,
@@ -71,10 +74,13 @@ import {
 import {
   getExtensionEnabled,
   getHighlightEnabled,
+  getPageContextSiteModeOverrides,
   getQuietMode,
   POPUP_QUIET_MODE_STATUS_LABEL,
+  removePageContextSiteModeOverrideForOrigin,
   setExtensionEnabled,
   setHighlightEnabled,
+  STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_QUIET_MODE,
 } from "../lib/storage";
 import { openExtensionSitePermissionsPage } from "../lib/extensionSitePermissions";
@@ -2368,15 +2374,18 @@ export function trayEnrichmentHintStyle(
   return { ...base, color: POPUP_THEME.muted };
 }
 
-export function pageContextBadgeStyle(): CSSProperties {
+export function pageContextBadgeStyle(options?: {
+  isOverride?: boolean;
+}): CSSProperties {
+  const isOverride = options?.isOverride === true;
   return {
     flexShrink: 0,
     fontSize: 10,
     fontWeight: 600,
     padding: "2px 8px",
     borderRadius: 999,
-    border: `1px solid ${POPUP_THEME.border}`,
-    backgroundColor: POPUP_THEME.trayRowBg,
+    border: `1px solid ${isOverride ? POPUP_THEME.accentText : POPUP_THEME.border}`,
+    backgroundColor: isOverride ? POPUP_THEME.buttonBg : POPUP_THEME.trayRowBg,
     color: POPUP_THEME.accentText,
     lineHeight: 1.4,
     whiteSpace: "nowrap",
@@ -2442,6 +2451,11 @@ export function Popup() {
   const [scanSummary, setScanSummary] = useState<TabScanSummary | null>(null);
   const [activePageContextType, setActivePageContextType] =
     useState<PageContextType | null>(null);
+  const [activePageContextSource, setActivePageContextSource] =
+    useState<PageContextSource>("auto_detect");
+  const [activePageContextPageOrigin, setActivePageContextPageOrigin] = useState<
+    string | null
+  >(null);
   const [typeFilter, setTypeFilter] = useState<IocTypeFilter>("all");
   const [trayFilterReady, setTrayFilterReady] = useState(false);
   const [trayNavigationMessage, setTrayNavigationMessage] = useState<string | null>(
@@ -2509,9 +2523,33 @@ export function Popup() {
     useState<PageIocCoOccurrenceIndex | null>(null);
 
   const refreshActivePageContext = async () => {
-    const context = await requestTabPageContextForActiveTab();
-    setActivePageContextType(
-      context?.pageContextType ?? PAGE_CONTEXT_TYPE.GENERIC
+    const [context, overrides] = await Promise.all([
+      requestTabPageContextForActiveTab(),
+      getPageContextSiteModeOverrides(),
+    ]);
+    const classifiedType = context?.pageContextType ?? PAGE_CONTEXT_TYPE.GENERIC;
+    const pageOrigin =
+      context?.pageUrl || (await resolveActiveTabPageUrl()) || null;
+    const normalizedOrigin =
+      typeof pageOrigin === "string" && pageOrigin.trim().length > 0
+        ? pageOrigin
+        : null;
+    const display = resolveActivePageContextDisplay({
+      classifiedPageContextType: classifiedType,
+      siteModeOverrides: overrides,
+      pageOrigin: normalizedOrigin,
+    });
+    setActivePageContextType(display.pageContextType);
+    setActivePageContextSource(display.source);
+    setActivePageContextPageOrigin(normalizedOrigin);
+  };
+
+  const handleResetActivePageContextOverride = () => {
+    if (!activePageContextPageOrigin) {
+      return;
+    }
+    void removePageContextSiteModeOverrideForOrigin(activePageContextPageOrigin).then(
+      () => refreshActivePageContext()
     );
   };
 
@@ -2595,10 +2633,12 @@ export function Popup() {
         return;
       }
       const change = changes[STORAGE_KEY_QUIET_MODE];
-      if (!change) {
-        return;
+      if (change) {
+        setQuietModeActive(Boolean(change.newValue));
       }
-      setQuietModeActive(Boolean(change.newValue));
+      if (changes[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]) {
+        void refreshActivePageContext();
+      }
     };
 
     chrome.storage.onChanged.addListener(handleStorageChange);
@@ -2785,6 +2825,9 @@ export function Popup() {
   const activePageContextBadgeLabel = resolveActivePageContextBadgeLabel(
     activePageContextType
   );
+  const activePageContextSourceLabel =
+    resolvePageContextSourceStatusLabel(activePageContextSource);
+  const activePageContextOverrideActive = activePageContextSource === "override";
 
   const filteredEntries = useMemo(() => {
     if (!scanSummary) {
@@ -4726,13 +4769,70 @@ export function Popup() {
             >
               Detected indicators
             </h2>
-            <span
-              aria-label={`Page profile: ${activePageContextBadgeLabel}`}
-              title={`Active page profile: ${activePageContextBadgeLabel}`}
-              style={pageContextBadgeStyle()}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                flexWrap: "wrap",
+                gap: 6,
+                maxWidth: "62%",
+              }}
             >
-              {activePageContextBadgeLabel}
-            </span>
+              <span
+                aria-label={`Page profile: ${activePageContextBadgeLabel}. ${activePageContextSourceLabel}.`}
+                title={`Active page profile: ${activePageContextBadgeLabel} (${activePageContextSourceLabel.toLowerCase()})`}
+                style={pageContextBadgeStyle({
+                  isOverride: activePageContextOverrideActive,
+                })}
+              >
+                {activePageContextBadgeLabel}
+              </span>
+              {activePageContextOverrideActive ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: POPUP_THEME.accentText,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Override
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Reset page profile to auto-detect"
+                    title="Reset to auto-detect"
+                    onClick={handleResetActivePageContextOverride}
+                    style={{
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      color: POPUP_THEME.accentText,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Reset to auto-detect
+                  </button>
+                </>
+              ) : (
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: POPUP_THEME.muted,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Auto-detected
+                </span>
+              )}
+            </div>
           </div>
           {trayView === "prompt" ? (
             <p style={trayStatusStyle()}>
@@ -4752,7 +4852,7 @@ export function Popup() {
           {trayView === "results" && scanSummary ? (
             <>
               <p style={{ fontSize: 12, margin: "0 0 10px", color: POPUP_THEME.muted }}>
-                {buildTabScanCountSummaryText(scanSummary)}
+                {buildTabScanCountSummaryText(scanSummary, activePageContextType)}
               </p>
               <div
                 role="group"
@@ -4767,7 +4867,10 @@ export function Popup() {
                 >
                   All ({scanSummary.totalCount})
                 </button>
-                {listIocTypesPresentInSummary(scanSummary).map((type) => (
+                {listIocTypesPresentInSummaryForPageContext(
+                  scanSummary,
+                  activePageContextType
+                ).map((type) => (
                   <button
                     key={type}
                     type="button"

@@ -716,40 +716,89 @@ function collectBoundedDomText(value: string | null | undefined): string {
   return typeof value === "string" ? value : "";
 }
 
+function isExcludedDomProbeElement(element: Element): boolean {
+  if (
+    element instanceof HTMLInputElement &&
+    PAGE_CONTEXT_CLASSIFIER_INPUT_BOUNDS.excludedInputTypes.includes(
+      element.type.toLowerCase() as (typeof PAGE_CONTEXT_CLASSIFIER_INPUT_BOUNDS.excludedInputTypes)[number]
+    )
+  ) {
+    return true;
+  }
+
+  for (const tagName of PAGE_CONTEXT_CLASSIFIER_INPUT_BOUNDS.excludedDomSubtrees) {
+    if (element.closest(tagName) !== null) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function queryFirstUnexcludedElement(
+  document: Document,
+  selector: string
+): Element | null {
+  for (const candidate of document.querySelectorAll(selector)) {
+    if (candidate instanceof Element && !isExcludedDomProbeElement(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function probeMetaDescriptionSample(document: Document): string {
+  const metaDescription = document
+    .querySelector('meta[name="description"]')
+    ?.getAttribute("content");
+  if (typeof metaDescription === "string" && metaDescription.length > 0) {
+    return metaDescription;
+  }
+
+  const metaClassElement = queryFirstUnexcludedElement(document, ".meta");
+  return metaClassElement?.textContent ?? "";
+}
+
 export function probePageContextDomSignalsFromDocument(
   document: Document
 ): PageContextDomHeuristicSignals {
   const bounds = PAGE_CONTEXT_CLASSIFIER_INPUT_BOUNDS;
-  const metaDescription =
-    document.querySelector('meta[name="description"]')?.getAttribute("content") ??
-    document.querySelector(".meta")?.textContent ??
-    "";
+  const metaDescription = probeMetaDescriptionSample(document);
+  const primaryHeading = queryFirstUnexcludedElement(document, "h1");
 
   let tableRowCountEstimate = 0;
-  const tables = document.querySelectorAll("table");
-  const tableLimit = Math.min(tables.length, bounds.maxDomTableProbeLimit);
-  for (let tableIndex = 0; tableIndex < tableLimit; tableIndex += 1) {
-    const table = tables.item(tableIndex);
-    if (!table) {
+  let tablesProbed = 0;
+  for (const table of document.querySelectorAll("table")) {
+    if (!(table instanceof HTMLTableElement) || isExcludedDomProbeElement(table)) {
       continue;
     }
+    if (tablesProbed >= bounds.maxDomTableProbeLimit) {
+      break;
+    }
+    tablesProbed += 1;
     const rows = table.querySelectorAll("tbody tr, tr");
     tableRowCountEstimate += Math.min(rows.length, bounds.maxDomTableRowProbeLimit);
   }
 
-  const preformattedBlockCount = Math.min(
-    document.querySelectorAll("pre").length,
-    bounds.maxPreformattedBlockProbeLimit
-  );
+  let preformattedBlockCount = 0;
+  for (const block of document.querySelectorAll("pre")) {
+    if (!(block instanceof HTMLPreElement) || isExcludedDomProbeElement(block)) {
+      continue;
+    }
+    preformattedBlockCount += 1;
+    if (preformattedBlockCount >= bounds.maxPreformattedBlockProbeLimit) {
+      break;
+    }
+  }
+
+  const dataTestIdElement = queryFirstUnexcludedElement(document, "[data-testid]");
 
   return normalizePageContextDomHeuristicSignals({
     documentTitle: collectBoundedDomText(document.title),
-    primaryHeadingSample: collectBoundedDomText(
-      document.querySelector("h1")?.textContent
-    ),
+    primaryHeadingSample: collectBoundedDomText(primaryHeading?.textContent),
     metaDescriptionSample: collectBoundedDomText(metaDescription),
     dataTestIdSample: collectBoundedDomText(
-      document.querySelector("[data-testid]")?.getAttribute("data-testid")
+      dataTestIdElement?.getAttribute("data-testid")
     ),
     tableRowCountEstimate,
     preformattedBlockCount,
@@ -1517,6 +1566,81 @@ export function hasPageContextSiteModeOverride(
   return overrides[host] !== undefined;
 }
 
+export type PageContextSource = "auto_detect" | "override";
+
+export type PageContextTrustGateState = {
+  pageAllowedByDomainPolicy: boolean;
+  quietModeActive: boolean;
+};
+
+export function pageContextTrustGatesAllowAnalystPresetApplication(
+  trustGates: PageContextTrustGateState
+): boolean {
+  return trustGates.pageAllowedByDomainPolicy && !trustGates.quietModeActive;
+}
+
+export function resolvePageContextSiteModeOverrideType(
+  overrides: PageContextSiteModeOverridesRecord,
+  origin: string
+): PageContextType | null {
+  const host = normalizePageContextSiteModeOverrideHost(origin);
+  if (host.length === 0) {
+    return null;
+  }
+  return overrides[host] ?? null;
+}
+
+export function resolveActivePageContextDisplay(input: {
+  classifiedPageContextType: PageContextType | unknown;
+  siteModeOverrides: PageContextSiteModeOverridesRecord;
+  pageOrigin: string | null;
+}): {
+  pageContextType: PageContextType;
+  source: PageContextSource;
+} {
+  if (input.pageOrigin !== null) {
+    const overrideType = resolvePageContextSiteModeOverrideType(
+      input.siteModeOverrides,
+      input.pageOrigin
+    );
+    if (overrideType !== null) {
+      return { pageContextType: overrideType, source: "override" };
+    }
+  }
+
+  return {
+    pageContextType: normalizePageContextType(input.classifiedPageContextType),
+    source: "auto_detect",
+  };
+}
+
+export function resolvePageContextSourceStatusLabel(
+  source: PageContextSource
+): string {
+  return source === "override" ? "Override active" : "Auto-detected";
+}
+
+export function applySiteModeOverrideToPageContextClassification(
+  classification: PageContextClassification,
+  siteModeOverrides: PageContextSiteModeOverridesRecord
+): PageContextClassification {
+  const display = resolveActivePageContextDisplay({
+    classifiedPageContextType: classification.pageContextType,
+    siteModeOverrides,
+    pageOrigin: classification.pageUrl,
+  });
+  if (display.source === "auto_detect") {
+    return classification;
+  }
+  if (classification.pageContextType === display.pageContextType) {
+    return classification;
+  }
+  return {
+    ...classification,
+    pageContextType: display.pageContextType,
+  };
+}
+
 export function resolveAnalystModePresetIdForPageContext(
   pageContextType: PageContextType | unknown
 ): AnalystModePresetId | null {
@@ -1552,6 +1676,7 @@ export function resolvePageContextAnalystPresetApplication(input: {
   nextPageContextType: PageContextType;
   pageOrigin: string | null;
   siteModeOverrides: PageContextSiteModeOverridesRecord;
+  trustGates?: PageContextTrustGateState;
 }): AnalystModePresetId | null {
   if (
     input.previousPageContextType !== undefined &&
@@ -1562,6 +1687,13 @@ export function resolvePageContextAnalystPresetApplication(input: {
   }
 
   if (input.pageOrigin === null) {
+    return null;
+  }
+
+  if (
+    input.trustGates !== undefined &&
+    !pageContextTrustGatesAllowAnalystPresetApplication(input.trustGates)
+  ) {
     return null;
   }
 

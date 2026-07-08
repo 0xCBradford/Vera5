@@ -206,6 +206,15 @@ describe("pageContextBadgeStyle", () => {
     expect(pageContextBadgeStyle().whiteSpace).toBe("nowrap");
     expect(pageContextBadgeStyle().flexShrink).toBe(0);
   });
+
+  it("emphasizes override active state", () => {
+    expect(pageContextBadgeStyle({ isOverride: true }).border).not.toBe(
+      pageContextBadgeStyle().border
+    );
+    expect(pageContextBadgeStyle({ isOverride: true }).backgroundColor).not.toBe(
+      pageContextBadgeStyle().backgroundColor
+    );
+  });
 });
 
 describe("resolveActivePageContextBadgeLabel", () => {

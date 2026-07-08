@@ -13,11 +13,13 @@ import { requestTabPageContextForActiveTab } from "../lib/pageContextClient";
 import type { PivotProvider } from "../lib/pivots";
 import {
   STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
+  STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
 } from "../lib/storage";
 
 export {
   STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
+  STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
 };
 
@@ -99,6 +101,9 @@ export function setupAnalystModeStorageListener(): void {
       STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS in changes
     ) {
       void refreshAnalystModeDisplayContext();
+    }
+    if (STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES in changes) {
+      void refreshPageContextDisplayContext();
     }
   });
 }

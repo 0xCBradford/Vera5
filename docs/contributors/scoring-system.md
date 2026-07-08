@@ -97,3 +97,7 @@ When changing thresholds or weights, update golden fixtures and [docs/analyst-wo
 ## User documentation
 
 Operators read score/disagreement guidance in [docs/analyst-workflows.md](../analyst-workflows.md), not in this file.
+
+## Page context and scoring
+
+Tab page classification (`pageContext.ts`) drives IOC priority hints, tray and hover card layout profiles, and export template defaults. It does **not** call `scoring.ts`, alter `reasoningLines`, or substitute page-type heuristics for vendor evidence. The explain-this-IOC chain rules are unchanged on every classified page type; see [Explain-this-IOC chain vs composite score](../analyst-workflows.md#explain-this-ioc-chain-vs-composite-score) and [Page context and default export templates](../analyst-workflows.md#page-context-and-default-export-templates).

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Hybrid Analysis — behavioral analysis report (sample)</title>
+    <meta
+      name="description"
+      content="Sandbox verdict summary with detection ratio, MITRE ATT&amp;CK mapping, and file hash details for offline validation."
+    />
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0f1419;
+        --panel: #1a2332;
+        --border: #2d3a4d;
+        --text: #e7ecf3;
+        --muted: #9aa7b8;
+        --critical: #ff6b6b;
+        --accent: #4dabf7;
+        --ok: #69db7c;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", system-ui, sans-serif;
+        font-size: 13px;
+        line-height: 1.45;
+        margin: 0;
+      }
+      header {
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        padding: 0.85rem 1rem;
+      }
+      header h1 {
+        font-size: 1rem;
+        margin: 0 0 0.35rem;
+      }
+      .meta,
+      .disclaimer {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      .verdict {
+        color: var(--critical);
+        font-weight: 700;
+      }
+      main {
+        margin: 0 auto;
+        max-width: 58rem;
+        padding: 0.85rem 1rem 2rem;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        margin-bottom: 0.85rem;
+        padding: 0.85rem;
+      }
+      section h2 {
+        font-size: 0.9rem;
+        margin: 0 0 0.65rem;
+      }
+      .grid {
+        display: grid;
+        gap: 0.65rem;
+        grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+      }
+      .stat {
+        background: #121820;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0.55rem 0.65rem;
+      }
+      .stat dt {
+        color: var(--muted);
+        font-size: 0.75rem;
+        margin: 0;
+      }
+      .stat dd {
+        font-size: 0.95rem;
+        margin: 0.15rem 0 0;
+      }
+      pre {
+        background: #0b1017;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.78rem;
+        margin: 0;
+        overflow: auto;
+        padding: 0.65rem;
+        white-space: pre-wrap;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 0.35rem 0.5rem;
+        text-align: left;
+      }
+      th {
+        color: var(--muted);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Sandbox report — sample submission</h1>
+      <p class="meta">
+        Behavioral analysis export · detection ratio 38/70 · environment: Windows 11
+      </p>
+      <p class="disclaimer">
+        Documentation-only sandbox report fixture. Hash and network values are public
+        test data from <code>examples/sample-iocs.txt</code>.
+      </p>
+      <p class="verdict">Sandbox verdict: malicious</p>
+    </header>
+
+    <main>
+      <section>
+        <h2>Summary</h2>
+        <dl class="grid">
+          <div class="stat">
+            <dt>Detection ratio</dt>
+            <dd>38 / 70 engines</dd>
+          </div>
+          <div class="stat">
+            <dt>Contacted domain</dt>
+            <dd><code>malware.testcategory.com</code></dd>
+          </div>
+          <div class="stat">
+            <dt>Contacted IPv4</dt>
+            <dd><code>192.0.2.1</code></dd>
+          </div>
+          <div class="stat">
+            <dt>Related CVE</dt>
+            <dd><code>CVE-2017-0144</code></dd>
+          </div>
+        </dl>
+      </section>
+
+      <section>
+        <h2>File hash details</h2>
+        <pre>
+SHA256: 2c26b46b68ffc68ff99b453c1d3041340af4e48c939d388f102f0b149d592117
+MD5:    d41d8cd98f00b204e9800998ecf8427e
+SHA1:   aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8
+        </pre>
+      </section>
+
+      <section>
+        <h2>Behavioral analysis highlights</h2>
+        <p>
+          The sample created a scheduled task, attempted outbound HTTP to
+          <code>http://192.0.2.1/resource?id=1</code>, and copied itself to
+          <code>C:\Users\Public\malware.exe</code>. DNS queries included resolver
+          <code>8.8.8.8</code> during sandbox replay.
+        </p>
+      </section>
+
+      <section>
+        <h2>MITRE ATT&amp;CK mapping</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Tactic</th>
+              <th>Technique</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Execution</td>
+              <td>T1059</td>
+              <td>cmd.exe child process</td>
+            </tr>
+            <tr>
+              <td>Command and Control</td>
+              <td>T1071</td>
+              <td>HTTPS beacon to login lure URL</td>
+            </tr>
+            <tr>
+              <td>Exfiltration</td>
+              <td>T1041</td>
+              <td>POST to staging host</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="meta">
+          Related lure URL in traffic:
+          <code>https://example.com/login?ref=analyst</code>
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

@@ -11,6 +11,7 @@ import {
   PAGE_CONTEXT_TYPE,
   pageContextAllowsCoreOperation,
 } from "../lib/pageContext";
+import { STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES } from "../lib/storage";
 import { CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED } from "./highlightStorage";
 import { CONTENT_STORAGE_KEY_INCLUDE_PRIVATE_IPV4 } from "./includePrivateIpv4Storage";
 import { CONTENT_STORAGE_KEY_IOC_TYPE_ENABLED } from "./iocTypeEnabledStorage";
@@ -218,6 +219,21 @@ describe("handleScanPageRequest", () => {
         PAGE_CONTEXT_CORE_OPERATION.EXPORT
       )
     ).toBe(true);
+  });
+
+  it("publishes overridden page context type when a site override is configured", async () => {
+    store[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED] = true;
+    store[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES] = {
+      "example.com": PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+    };
+    const root = mountPage("<p>Contact 8.8.8.8 today.</p>");
+    await handleScanPageRequest(root);
+
+    const contextMessage = sendMessage.mock.calls[1]?.[0];
+    expect(contextMessage.type).toBe(MESSAGE.TAB_PAGE_CONTEXT);
+    expect(contextMessage.classification.pageContextType).toBe(
+      PAGE_CONTEXT_TYPE.CTI_PLATFORM
+    );
   });
 
   it("publishes generic page context when classifier input is unavailable", async () => {

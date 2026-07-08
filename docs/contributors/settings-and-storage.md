@@ -25,6 +25,7 @@ Vera5 persists analyst configuration in **`chrome.storage.local`** via `extensio
 | Analyst notes | Per-IOC notes in overlay card; stored under `analystNotes` in `chrome.storage.local` via `extension/src/lib/analystNotesStorage.ts` |
 | Tab scan snapshots | Last scan per browser tab (IOC type, value, highlight anchor id, page URL, timestamp) in `chrome.storage.session` via `extension/src/lib/tabScanSnapshotStorage.ts`; cleared when the tab closes |
 | Tab page context | Last classified page context per browser tab (`pageContextType`, page URL, matched signal ids, timestamp) in `chrome.storage.session` via `extension/src/lib/pageContextStorage.ts`; updated on page scan; cleared when the tab closes. When the classified page type changes, Vera5 applies the matching analyst workflow preset (SOC, CTI, or DFIR) unless the site origin has a stored mode override in `pageContextSiteModeOverrides` |
+| Page context site overrides | Per-hostname page-type overrides in `pageContextSiteModeOverrides` (`chrome.storage.local`); Options **Trust & Consent → Treat this site as …** add/remove entries via `setPageContextSiteModeOverrides()`, **Reset to auto-detect**, and **Clear all overrides**; popup tray header shows override vs auto-detected state with inline reset |
 | Tab scan summaries | Stable consumer view (`TabScanSummary`: total count, per-type counts, entries) fetched via `GET_TAB_SCAN_SUMMARY` in `extension/src/lib/tabScanSummaryClient.ts` |
 
 Never commit storage dumps or API keys to git.

@@ -6,10 +6,12 @@ import {
   safeRuntimeSendMessage,
 } from "../lib/extensionContext";
 import {
+  applySiteModeOverrideToPageContextClassification,
   classifyPageContextFromDocument,
   resolvePageContextForActiveTab,
   type PageContextClassification,
 } from "../lib/pageContext";
+import { getPageContextSiteModeOverrides } from "../lib/storage";
 import { setCachedPageContextType } from "./analystModeStorage";
 import {
   buildTabScanSnapshotEntriesFromMatches,
@@ -219,9 +221,14 @@ async function finalizeScanResponse(
   );
   const snapshotEntries = buildScanSnapshotEntries(snapshotMatches, anchorLinks);
   const { tabId, snapshot } = await publishTabScanSnapshot(snapshotEntries);
-  const pageContext = resolvePageContextForActiveTab(
+  const classifiedPageContext = resolvePageContextForActiveTab(
     classifyCurrentPageContext(document),
     window.location.href
+  );
+  const siteModeOverrides = await getPageContextSiteModeOverrides();
+  const pageContext = applySiteModeOverrideToPageContextClassification(
+    classifiedPageContext,
+    siteModeOverrides
   );
   await publishTabPageContext(pageContext);
   setCachedPageContextType(pageContext.pageContextType);

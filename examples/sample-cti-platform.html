@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>MISP event 4821 — clustered infrastructure (sample)</title>
+    <meta
+      name="description"
+      content="MISP event export with MISP galaxy tags and attribute table for local CTI platform validation."
+    />
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f6f8fa;
+        --panel: #ffffff;
+        --border: #d0d7de;
+        --text: #1f2328;
+        --muted: #656d76;
+        --accent: #0969da;
+        --tag: #ddf4ff;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: system-ui, sans-serif;
+        line-height: 1.5;
+        margin: 0;
+      }
+      header {
+        background: var(--panel);
+        border-bottom: 1px solid var(--border);
+        padding: 1rem 1.25rem;
+      }
+      header h1 {
+        font-size: 1.15rem;
+        margin: 0 0 0.35rem;
+      }
+      .meta,
+      .disclaimer {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+      .tag {
+        background: var(--tag);
+        border: 1px solid #54aeff66;
+        border-radius: 999px;
+        display: inline-block;
+        font-size: 0.75rem;
+        margin-right: 0.35rem;
+        padding: 0.1rem 0.5rem;
+      }
+      main {
+        margin: 0 auto;
+        max-width: 58rem;
+        padding: 1rem 1.25rem 2rem;
+      }
+      section {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        margin-bottom: 1rem;
+        padding: 1rem;
+      }
+      section h2 {
+        font-size: 0.95rem;
+        margin: 0 0 0.75rem;
+      }
+      table {
+        border-collapse: collapse;
+        font-size: 0.88rem;
+        width: 100%;
+      }
+      th,
+      td {
+        border: 1px solid var(--border);
+        padding: 0.4rem 0.55rem;
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: #f6f8fa;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      code {
+        font-family: Consolas, "Courier New", monospace;
+        font-size: 0.85em;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>MISP event view — #4821</h1>
+      <p class="meta">
+        Threat cluster · export captured for offline validation · public sample values
+        only
+      </p>
+      <p class="disclaimer">
+        Documentation-only CTI platform fixture. Indicator values match
+        <code>examples/sample-iocs.txt</code>—not live incident intelligence.
+      </p>
+      <p>
+        <span class="tag">MISP galaxy: threat-actor</span>
+        <span class="tag">confidence: medium</span>
+        <span class="tag">TLP:AMBER</span>
+      </p>
+    </header>
+
+    <main>
+      <section>
+        <h2>Event summary</h2>
+        <p>
+          Analysts clustered passive DNS and sandbox pivots around
+          <strong>malware.testcategory.com</strong> and a related login URL
+          <a href="https://example.com/login">https://example.com/login</a>.
+          Command-and-control chatter referenced resolver
+          <strong>8.8.8.8</strong> during sinkhole testing. Related file hash
+          <code>d41d8cd98f00b204e9800998ecf8427e</code> appeared in two
+          attribute rows below.
+        </p>
+      </section>
+
+      <section>
+        <h2>Attributes</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Value</th>
+              <th>Comment</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>ip-dst</td>
+              <td><code>192.0.2.1</code></td>
+              <td>Staging host from passive DNS</td>
+            </tr>
+            <tr>
+              <td>domain</td>
+              <td><code>malware.testcategory.com</code></td>
+              <td>Primary C2 domain</td>
+            </tr>
+            <tr>
+              <td>url</td>
+              <td><code>http://192.0.2.1/resource?id=1</code></td>
+              <td>Payload delivery mirror</td>
+            </tr>
+            <tr>
+              <td>sha256</td>
+              <td>
+                <code
+                  >e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855</code
+                >
+              </td>
+              <td>Dropper sample from sandbox export</td>
+            </tr>
+            <tr>
+              <td>md5</td>
+              <td><code>098f6bcd4621d373cade4e832627b4f6</code></td>
+              <td>Legacy hash alias</td>
+            </tr>
+            <tr>
+              <td>sha1</td>
+              <td><code>aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8</code></td>
+              <td>Archive member hash</td>
+            </tr>
+            <tr>
+              <td>vulnerability</td>
+              <td><code>CVE-2021-44228</code></td>
+              <td>Probable initial access</td>
+            </tr>
+            <tr>
+              <td>email-src</td>
+              <td><code>analyst@corp.example.com</code></td>
+              <td>Phishing lure sender</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>Galaxy notes</h2>
+        <p class="meta">
+          MISP galaxy mapping is illustrative. Use this page to confirm CTI
+          platform page profile, domain-forward IOC ordering, and export defaults
+          when served locally.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

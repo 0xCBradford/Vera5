@@ -8,7 +8,10 @@ import {
 } from "./analystModePresets";
 import type { ExportTemplateId } from "./exportTemplates";
 import type { EnrichmentSourceId } from "./enrichmentSourceRegistry";
-import { normalizePageContextSiteModeOverrides } from "./pageContext";
+import {
+  normalizePageContextSiteModeOverrideHost,
+  normalizePageContextSiteModeOverrides,
+} from "./pageContext";
 import type { PageContextSiteModeOverridesRecord } from "./pageContext";
 import type { PivotProvider } from "./pivots";
 import {
@@ -145,8 +148,6 @@ export const STORAGE_KEYS = {
   PIVOT_EMPHASIS_PROVIDERS: STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
   CONNECTOR_CONFIDENCE_METADATA_OVERRIDES:
     STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES,
-  PAGE_CONTEXT_SITE_MODE_OVERRIDES:
-    STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
 } as const;
 
 export type ApiKeySlot = ApiKeyStorageSlot;
@@ -1426,6 +1427,37 @@ export async function getPageContextSiteModeOverrides(): Promise<PageContextSite
   return normalizePageContextSiteModeOverrides(
     result[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]
   );
+}
+
+export async function setPageContextSiteModeOverrides(
+  overrides: PageContextSiteModeOverridesRecord
+): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]:
+      normalizePageContextSiteModeOverrides(overrides),
+  });
+}
+
+export async function removePageContextSiteModeOverrideForOrigin(
+  origin: string
+): Promise<void> {
+  const host = normalizePageContextSiteModeOverrideHost(origin);
+  if (host.length === 0) {
+    return;
+  }
+
+  const overrides = await getPageContextSiteModeOverrides();
+  if (overrides[host] === undefined) {
+    return;
+  }
+
+  const next = { ...overrides };
+  delete next[host];
+  await setPageContextSiteModeOverrides(next);
+}
+
+export async function clearPageContextSiteModeOverrides(): Promise<void> {
+  await setPageContextSiteModeOverrides({});
 }
 
 export function maskApiKeyForDisplay(key: string): string {

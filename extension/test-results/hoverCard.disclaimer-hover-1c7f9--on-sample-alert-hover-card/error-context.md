@@ -6,8 +6,8 @@
 
 # Test info
 
-- Name: export.clipboard.spec.ts >> hover card export clipboard smoke >> copies all scanned indicators via Copy all without live vendor network
-- Location: e2e\export.clipboard.spec.ts:23:3
+- Name: hoverCard.disclaimer.spec.ts >> hover card disclaimer smoke >> shows enrichment disclaimer on sample-alert hover card
+- Location: e2e\hoverCard.disclaimer.spec.ts:20:3
 
 # Error details
 
