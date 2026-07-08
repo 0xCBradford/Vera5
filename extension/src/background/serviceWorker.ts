@@ -14,9 +14,11 @@ import { clearTabPageContext } from "../lib/pageContextStorage";
 import { clearTabScanSnapshot } from "../lib/tabScanSnapshotStorage";
 import { runStorageMigrationOnExtensionUpdate } from "../lib/storageMigration";
 import { setupQuietModeActionBadgeListener } from "../lib/storage";
+import { ensureBuiltInOperatorMacros } from "../lib/operatorMacroStorage";
 import { routeIncomingMessageAsync } from "./messageRouter";
 
 setupQuietModeActionBadgeListener();
+void ensureBuiltInOperatorMacros();
 
 export const CONTEXT_MENU_ENRICH_SELECTION_TITLE = "Enrich selection with Vera5";
 
@@ -92,6 +94,7 @@ function resolveEnrichSelectionContextMenuActionId(): string {
 
 chrome.runtime.onInstalled.addListener((details) => {
   registerEnrichSelectionContextMenu();
+  void ensureBuiltInOperatorMacros();
   if (details.reason === "update") {
     void runStorageMigrationOnExtensionUpdate();
   }

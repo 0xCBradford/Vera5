@@ -100,6 +100,8 @@ For HTTP 429 behavior and vendor-specific quotas, see [api-integrations.md](api-
 | Return to yesterday’s enrich on this alert page | Popup or palette **Open history** → click row → rescan if highlight missing. |
 | Check AbuseIPDB cooldown before bulk enrich | Palette **Source health** or expand **Source operations** in the popup. |
 | Export filtered tray IOCs to a ticket | Set sidebar filter → palette **Copy filtered Markdown**. |
+| CTI blog or report: enrich + export + pivots in one pass | Select the indicator → **CTI Deep Check** built-in playbook (see [Built-in playbooks](#built-in-playbooks)). |
+| Alert triage: enrich + related IOCs + case-note scaffold | Select the indicator, **Scan page** to populate the tray → **DFIR Triage** built-in playbook. |
 | Reset page highlights only | Palette **Clear highlights**. |
 | Sensitive environment: cache + pivots only | Palette **Toggle quiet mode** or **Trust & consent → Quiet mode**; use **Cached** rows and pivot links; expect **›** enrich to block until quiet mode is off. |
 
@@ -151,30 +153,63 @@ Steps that open the toolbar popup to a specific section use session-scoped focus
 
 Palette **Open history** and **Source health** already set these tokens before opening the popup. Macro steps that mirror those commands should use the same tokens so the popup lands on the correct panel.
 
-### Planned macro step catalog (v1)
+### Macro step catalog (v1)
 
-Operator macros will compose the hooks above with additional step types that map to existing export, pivot, and tray behaviors. Planned v1 step type ids (schema validation will reject unknown types):
+Operator macros compose the hooks above with step types that map to existing export, pivot, and tray behaviors. Import validation rejects unknown step types.
 
 | Step type id | Intended behavior | Integration note |
 |--------------|-------------------|------------------|
 | `openFromSelection` | Enrich indicator in current selection | Shipped; context menu id `enrich-with-vera5`. |
-| `enrich` | Enrich the active hover-card or tray target | Same trust gates and enrich pipeline as manual **›** enrich. |
-| `exportMarkdown` | Export using normalized enrichment export builders | Uses the existing export template engine; see [export-artifacts.md](export-artifacts.md). |
-| `openPivot` | Open an attributed pivot link for the active indicator | Navigation only; no live vendor `fetch` from the macro runner. |
-| `applyNoteTemplate` | Apply analyst note template to the active IOC | Extends per-IOC notes on the hover card. |
-| `queueRelatedIocs` | Queue related IOCs from the tray scan | Respects bulk-enrich caps and quota warnings. |
+| `enrich` | Enrich the selected indicator or active hover-card target | Shipped; same trust gates and enrich pipeline as manual **›** enrich and palette **Enrich selection**. |
+| `exportMarkdown` | Export using normalized enrichment export builders | Shipped; uses the export template engine; see [export-artifacts.md](export-artifacts.md). |
+| `openPivot` | Open attributed pivot links for the active indicator | Shipped; navigation only—no live vendor `fetch` from the macro runner. |
+| `applyNoteTemplate` | Apply an analyst note template to the active IOC | Shipped; extends per-IOC notes on the hover card. |
+| `queueRelatedIocs` | Queue related IOCs from the tray scan | Shipped; respects per-run queue limits. |
 
-Built-in playbooks (for example CTI deep-check and DFIR triage sequences) will ship as predefined macros that chain these steps. User-defined macros will be editable in settings, exportable as JSON without API keys, and runnable from the command palette or tray.
+User-defined macros will be editable in settings, exportable as JSON without API keys, and runnable from the command palette or tray alongside built-in playbooks.
+
+### Built-in playbooks
+
+Vera5 ships two predefined operator macros in **local extension storage** only. They hydrate when the extension loads or updates. If you save a custom macro with the same id, your copy is kept; canonical built-in definitions refresh only when the stored entry is still marked built-in.
+
+| Macro id | Name | Intended use |
+|----------|------|--------------|
+| `cti-deep-check` | **CTI Deep Check** | Research a single indicator from blogs, reports, or intel pages: enrich, copy a Markdown enrichment report, and open the CTI research pivot set. |
+| `dfir-triage` | **DFIR Triage** | Start endpoint or case triage on one indicator: enrich, queue related IOCs from the current tray scan, and append a structured DFIR checklist to the active IOC note. |
+
+#### CTI Deep Check (`cti-deep-check`)
+
+**When to use:** You have selected a single IOC (in prose or on a page highlight) and want a portable research artifact plus attributed pivots without repeating export and pivot clicks.
+
+| Step | Type | What it does |
+|------|------|--------------|
+| 1 | `enrich` | Enrich the **selected** indicator. Uses cached enrichment when available. Domain policy, internal asset lists, pre-query disclosure, and quiet mode apply before any live vendor call—the same stacked gates as manual enrich. |
+| 2 | `exportMarkdown` | Copy a **markdown-report** export (the default template for the **CTI research** analyst preset) for the selected indicator to the clipboard. |
+| 3 | `openPivot` | Open all attributed pivot links in **CTI research** pivot emphasis order (community-intel and sandbox destinations such as OTX, VirusTotal, Pulsedive, ThreatFox, URLScan.io, MalwareBazaar, AbuseIPDB, URLhaus, and GreyNoise). Opens links in your browser only; this step does not issue additional live vendor API calls. |
+
+**Palette and tray:** Registered for command palette and tray run surfaces. Not bound to the context menu—use **Enrich selection with Vera5** or the macro when you need selection-based enrich outside a playbook.
+
+#### DFIR Triage (`dfir-triage`)
+
+**When to use:** You are triaging an alert or case ticket and need enrichment, related IOCs from the page tray, and a repeatable case-note scaffold on the active indicator.
+
+| Step | Type | What it does |
+|------|------|--------------|
+| 1 | `enrich` | Same trust-gated enrich path as CTI Deep Check for the **selected** indicator. |
+| 2 | `queueRelatedIocs` | Queue up to **8** related indicators from the **tray scan** snapshot. Run **Scan page** first so the workspace tray is populated. |
+| 3 | `applyNoteTemplate` | **Append** a DFIR triage checklist to the **active IOC** note on the hover card. The template prompts you to confirm enrichment and queued related IOCs, collect endpoint telemetry and timeline scope, and document containment, escalation, and next investigative actions. |
+
+**Palette and tray:** Registered for command palette and tray run surfaces. Not bound to the context menu.
 
 ### Trust behavior for macro runs
 
 Macro runs must not bypass analyst consent or hostname policy:
 
-- **Enrich** and **openFromSelection** steps abort with clear UI when domain policy blocks the page, internal asset lists block the indicator, pre-query disclosure is declined, or quiet mode blocks outbound vendor calls (when that mode is enabled).
-- Export and pivot steps may still succeed when enrich is blocked, when the step does not require a live vendor response.
-- Macro bulk enrich is capped per run so playbooks cannot fan out unbounded parallel vendor calls without quota warnings.
+- **`enrich`** and **`openFromSelection`** steps abort with clear UI when domain policy blocks the page, internal asset lists block the indicator, pre-query disclosure is declined, or quiet mode blocks outbound vendor calls (when that mode is enabled).
+- **exportMarkdown**, **openPivot**, and **applyNoteTemplate** steps may still succeed when enrich is blocked, when the step does not require a live vendor response.
+- Macro bulk enrich and tray queue steps are capped per run so playbooks cannot fan out unbounded parallel vendor calls without quota warnings.
 
-When operator macros ship, built-in and custom macros register in the command palette alongside core commands rather than replacing the palette registry.
+Built-in and custom macros register in the command palette alongside core commands rather than replacing the palette registry.
 
 ## Before you start
 

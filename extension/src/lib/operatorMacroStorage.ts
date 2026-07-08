@@ -8,9 +8,13 @@ import {
   createOperatorMacro,
   normalizeOperatorMacro,
   normalizeOperatorMacroId,
+  OperatorMacroImportError,
+  parseImportedOperatorMacroJson,
   type CreateOperatorMacroInput,
   type OperatorMacro,
 } from "./operatorMacro";
+import { getBuiltInOperatorMacros } from "./builtInOperatorMacros";
+import { assertBuiltInOperatorMacroEnrichTrustContracts } from "./operatorMacroEnrichTrust";
 
 export const OPERATOR_MACRO_STORE_SCHEMA_VERSION = 1;
 export const STORAGE_KEY_OPERATOR_MACROS = "operatorMacros";
@@ -232,4 +236,42 @@ export async function createStoredOperatorMacro(
 
   const saved = await saveStoredOperatorMacro(macro);
   return saved ? macro : null;
+}
+
+export async function importStoredOperatorMacroFromJson(
+  rawJson: string
+): Promise<OperatorMacro> {
+  const macro = parseImportedOperatorMacroJson(rawJson);
+  const saved = await saveStoredOperatorMacro(macro);
+  if (!saved) {
+    throw new OperatorMacroImportError("Macro could not be saved.");
+  }
+  return macro;
+}
+
+export async function ensureBuiltInOperatorMacros(): Promise<void> {
+  assertBuiltInOperatorMacroEnrichTrustContracts();
+  const builtIns = getBuiltInOperatorMacros();
+  const store = await getOperatorMacrosStore();
+  const nextMacros = [...store.macros];
+  let changed = false;
+
+  for (const builtIn of builtIns) {
+    const index = nextMacros.findIndex((entry) => entry.id === builtIn.id);
+    if (index === -1) {
+      nextMacros.push(builtIn);
+      changed = true;
+      continue;
+    }
+    if (nextMacros[index]!.metadata.builtIn) {
+      nextMacros[index] = builtIn;
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return;
+  }
+
+  await persistOperatorMacrosStore(buildOperatorMacrosStorePayload(nextMacros));
 }

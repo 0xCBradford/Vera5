@@ -3,11 +3,16 @@ import {
   createOperatorMacro,
   DEFAULT_OPERATOR_MACRO_TRIGGERS,
   listEnabledOperatorMacroTriggers,
+  MAX_OPERATOR_MACRO_STEPS,
   normalizeOperatorMacro,
   normalizeOperatorMacroStep,
   normalizeOperatorMacroTriggersFromList,
+  OperatorMacroImportError,
   OPERATOR_MACRO_SCHEMA_VERSION,
   OPERATOR_MACRO_TRIGGER,
+  parseImportedOperatorMacroJson,
+  validateImportedOperatorMacro,
+  validateImportedOperatorMacroSteps,
 } from "./operatorMacro";
 
 describe("operatorMacro schema", () => {
@@ -194,6 +199,89 @@ describe("operatorMacro schema", () => {
         name: "Missing triggers",
         triggers: { palette: false, tray: false, context: false },
       })
+    ).toThrow(/at least one trigger/i);
+  });
+});
+
+function buildImportableMacro(overrides: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+    id: "import-test",
+    name: "Import test",
+    steps: [{ type: "enrich", params: { scope: "selection" } }],
+    triggers: { palette: true },
+    metadata: {},
+    ...overrides,
+  };
+}
+
+describe("operatorMacro import validation", () => {
+  it("accepts valid macro JSON with known v1 step types", () => {
+    const macro = validateImportedOperatorMacro(buildImportableMacro());
+
+    expect(macro.id).toBe("import-test");
+    expect(macro.steps).toHaveLength(1);
+    expect(macro.steps[0]?.type).toBe("enrich");
+  });
+
+  it("parses imported macro JSON strings", () => {
+    const macro = parseImportedOperatorMacroJson(
+      JSON.stringify(buildImportableMacro({ id: "parsed-macro", name: "Parsed macro" }))
+    );
+
+    expect(macro.id).toBe("parsed-macro");
+    expect(macro.name).toBe("Parsed macro");
+  });
+
+  it("rejects invalid JSON", () => {
+    expect(() => parseImportedOperatorMacroJson("{")).toThrow(OperatorMacroImportError);
+    expect(() => parseImportedOperatorMacroJson("{")).toThrow(/Invalid JSON/i);
+  });
+
+  it("rejects unknown step types on import", () => {
+    expect(() =>
+      validateImportedOperatorMacro(
+        buildImportableMacro({
+          steps: [{ type: "openFromSelection", params: {} }],
+        })
+      )
+    ).toThrow(/Unknown macro step type: openFromSelection/i);
+
+    expect(() =>
+      validateImportedOperatorMacroSteps([{ type: "notARealStep", params: {} }])
+    ).toThrow(/Unknown macro step type: notARealStep/i);
+  });
+
+  it("rejects oversized step lists on import", () => {
+    const steps = Array.from({ length: MAX_OPERATOR_MACRO_STEPS + 1 }, () => ({
+      type: "enrich",
+      params: { scope: "selection" },
+    }));
+
+    expect(() => validateImportedOperatorMacroSteps(steps)).toThrow(
+      new RegExp(`exceeds maximum of ${MAX_OPERATOR_MACRO_STEPS} steps`, "i")
+    );
+
+    expect(() =>
+      validateImportedOperatorMacro(buildImportableMacro({ steps }))
+    ).toThrow(new RegExp(`exceeds maximum of ${MAX_OPERATOR_MACRO_STEPS} steps`, "i"));
+  });
+
+  it("rejects unsupported schema versions and missing macro fields", () => {
+    expect(() =>
+      validateImportedOperatorMacro(buildImportableMacro({ schemaVersion: 99 }))
+    ).toThrow(/Unsupported macro schema version/i);
+
+    expect(() =>
+      validateImportedOperatorMacro(buildImportableMacro({ id: "Invalid_ID" }))
+    ).toThrow(/Macro id is missing or invalid/i);
+
+    expect(() =>
+      validateImportedOperatorMacro(
+        buildImportableMacro({
+          triggers: { palette: false, tray: false, context: false },
+        })
+      )
     ).toThrow(/at least one trigger/i);
   });
 });

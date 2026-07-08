@@ -1,24 +1,28 @@
-import { ENRICHMENT_ERROR_CODE } from "../lib/enrichment";
 import type { MessageResponse } from "../lib/messages";
 import { MESSAGE } from "../lib/messages";
-import {
-  isMacroEnrichStepType,
-  resolveMacroEnrichStepQuietModeGateForStep,
-} from "../lib/macroStepActions";
+import { isMacroEnrichStepType } from "../lib/macroStepActions";
 import { extractExactIocValue } from "../lib/iocRequestBoundaries";
 import { IOC_TYPE, ruleIdForIocType, type IocMatch, type IocRegexOptions, type IocType } from "../lib/iocRegex";
 import {
   logUnlessBenignExtensionError,
   rethrowUnlessStaleExtensionError,
 } from "../lib/extensionContext";
+import {
+  normalizeOperatorMacroEnrichStepParams,
+  OPERATOR_MACRO_IOC_SCOPE,
+  OPERATOR_MACRO_STEP_TYPE,
+  type OperatorMacroEnrichStepParams,
+} from "../lib/operatorMacroStepTypes";
 import { detectIocsInText } from "./detector";
 import { attemptAutoEnrichmentFetch } from "./enrichmentAutoFetch";
 import {
   cancelPendingHoverEnrichment,
   presentEnrichmentTrustGateBlocked,
   resolveIndicatorEnrichmentTrustGate,
+  resolveOperatorMacroEnrichStepTrustGates,
   resolvePageEnrichmentTrustGate,
   runBackgroundEnrichment,
+  type EnrichmentTrustGateResult,
 } from "./enrichmentBackgroundFetch";
 import {
   loadWorkspaceEnrichmentSourceContext,
@@ -30,6 +34,8 @@ import {
   type HoverCardOpenOptions,
 } from "./hoverCardTrigger";
 import {
+  getLastHoverCardAnchor,
+  getLastHoverCardPayload,
   showHoverCardNearRange,
   type HoverCardOverlayPayload,
 } from "./hoverCardOverlay";
@@ -283,10 +289,38 @@ async function presentSelectionTrustGateBlocked(
   return true;
 }
 
+async function resolveSelectionEnrichTrustGate(
+  resolved: {
+    value: string;
+    type: IocType;
+  },
+  doc: Document,
+  options: { macroStepType?: string }
+): Promise<EnrichmentTrustGateResult> {
+  const macroStepType = options.macroStepType?.trim() ?? "";
+  if (macroStepType.length > 0 && isMacroEnrichStepType(macroStepType)) {
+    return resolveOperatorMacroEnrichStepTrustGates(
+      doc,
+      resolved.value,
+      resolved.type,
+      macroStepType
+    );
+  }
+
+  const pageGate = await resolvePageEnrichmentTrustGate(doc);
+  if (!pageGate.allowed) {
+    return pageGate;
+  }
+
+  return resolveIndicatorEnrichmentTrustGate(resolved.value, resolved.type);
+}
+
 export async function openEnrichmentForResolvedSelection(
   resolved: {
     value: string;
     type: IocType;
+    ruleId?: IocMatch["ruleId"];
+    sourceTextHint?: string;
     highlight: HTMLElement | null;
     range: Range | null;
   },
@@ -324,19 +358,101 @@ export async function openEnrichmentForResolvedSelection(
 
   if (options.enrichmentTrigger === "manual") {
     cancelPendingHoverEnrichment();
-    void runBackgroundEnrichment(payload, doc, { bypassCache: true }).catch(
-      rethrowUnlessStaleExtensionError
-    );
-  } else {
+    void runBackgroundEnrichment(payload, doc, {
+      bypassCache: options.bypassCache !== false,
+    }).catch(rethrowUnlessStaleExtensionError);
+  } else if (options.enrichmentTrigger !== "none") {
     void attemptAutoEnrichmentFetch(payload).catch(rethrowUnlessStaleExtensionError);
   }
 
   return true;
 }
 
+export type OperatorMacroEnrichStepRunResult =
+  | {
+      ok: true;
+      value: string;
+      type: IocType;
+      trustGateBlocked: boolean;
+    }
+  | { ok: false; error: string };
+
+export async function runOperatorMacroEnrichStep(
+  rawParams: Record<string, unknown> | OperatorMacroEnrichStepParams,
+  doc: Document = document
+): Promise<OperatorMacroEnrichStepRunResult> {
+  const params = normalizeOperatorMacroEnrichStepParams(rawParams);
+  const stepType = OPERATOR_MACRO_STEP_TYPE.ENRICH;
+
+  if (params.scope === OPERATOR_MACRO_IOC_SCOPE.SELECTION) {
+    const response = await handleEnrichSelectionRequest(doc, {
+      macroStepType: stepType,
+      bypassCache: params.forceRefresh,
+    });
+    if (!response.ok) {
+      return { ok: false, error: response.error ?? "Enrich step failed." };
+    }
+
+    const payload = response.payload as
+      | {
+          value: string;
+          type: IocType;
+          trustGateBlocked?: boolean;
+        }
+      | undefined;
+    if (!payload) {
+      return { ok: false, error: "Enrich step failed." };
+    }
+
+    return {
+      ok: true,
+      value: payload.value,
+      type: payload.type,
+      trustGateBlocked: payload.trustGateBlocked === true,
+    };
+  }
+
+  if (params.scope !== OPERATOR_MACRO_IOC_SCOPE.ACTIVE_IOC) {
+    return { ok: false, error: "Unsupported enrich step scope." };
+  }
+
+  const hoverPayload = getLastHoverCardPayload();
+  const anchor = getLastHoverCardAnchor();
+  if (!hoverPayload || !anchor) {
+    return { ok: false, error: "No active indicator target for enrich step." };
+  }
+
+  const trustGate = await resolveOperatorMacroEnrichStepTrustGates(
+    doc,
+    hoverPayload.value,
+    hoverPayload.type,
+    stepType
+  );
+  if (!trustGate.allowed) {
+    presentEnrichmentTrustGateBlocked(hoverPayload, trustGate, doc);
+    return {
+      ok: true,
+      value: hoverPayload.value,
+      type: hoverPayload.type,
+      trustGateBlocked: true,
+    };
+  }
+
+  cancelPendingHoverEnrichment();
+  const result = await runBackgroundEnrichment(hoverPayload, doc, {
+    bypassCache: params.forceRefresh,
+  });
+  return {
+    ok: true,
+    value: hoverPayload.value,
+    type: hoverPayload.type,
+    trustGateBlocked: result === "blocked" || result === "cancelled",
+  };
+}
+
 export async function handleEnrichSelectionRequest(
   doc: Document = document,
-  options: { macroStepType?: string } = {}
+  options: { macroStepType?: string; bypassCache?: boolean } = {}
 ): Promise<MessageResponse> {
   const selection = doc.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
@@ -348,9 +464,9 @@ export async function handleEnrichSelectionRequest(
     return { ok: false, error: "No indicator found in selection." };
   }
 
-  const pageGate = await resolvePageEnrichmentTrustGate(doc);
-  if (!pageGate.allowed) {
-    const opened = await presentSelectionTrustGateBlocked(resolved, pageGate, doc);
+  const trustGate = await resolveSelectionEnrichTrustGate(resolved, doc, options);
+  if (!trustGate.allowed) {
+    const opened = await presentSelectionTrustGateBlocked(resolved, trustGate, doc);
     if (!opened) {
       return { ok: false, error: "No indicator found in selection." };
     }
@@ -359,59 +475,14 @@ export async function handleEnrichSelectionRequest(
       payload: {
         value: resolved.value,
         type: resolved.type,
+        trustGateBlocked: true,
       },
     };
-  }
-
-  const indicatorGate = await resolveIndicatorEnrichmentTrustGate(
-    resolved.value,
-    resolved.type
-  );
-  if (!indicatorGate.allowed) {
-    const opened = await presentSelectionTrustGateBlocked(
-      resolved,
-      indicatorGate,
-      doc
-    );
-    if (!opened) {
-      return { ok: false, error: "No indicator found in selection." };
-    }
-    return {
-      ok: true,
-      payload: {
-        value: resolved.value,
-        type: resolved.type,
-      },
-    };
-  }
-
-  const macroStepType = options.macroStepType?.trim() ?? "";
-  if (macroStepType.length > 0 && isMacroEnrichStepType(macroStepType)) {
-    const quietGate = await resolveMacroEnrichStepQuietModeGateForStep(macroStepType);
-    if (!quietGate.allowed) {
-      const opened = await presentSelectionTrustGateBlocked(
-        resolved,
-        {
-          errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
-          errorMessage: quietGate.message,
-        },
-        doc
-      );
-      if (!opened) {
-        return { ok: false, error: "No indicator found in selection." };
-      }
-      return {
-        ok: true,
-        payload: {
-          value: resolved.value,
-          type: resolved.type,
-        },
-      };
-    }
   }
 
   const opened = await openEnrichmentForResolvedSelection(resolved, doc, {
     enrichmentTrigger: "manual",
+    bypassCache: options.bypassCache !== false,
   });
   if (!opened) {
     return { ok: false, error: "No indicator found in selection." };
@@ -422,6 +493,7 @@ export async function handleEnrichSelectionRequest(
     payload: {
       value: resolved.value,
       type: resolved.type,
+      trustGateBlocked: false,
     },
   };
 }

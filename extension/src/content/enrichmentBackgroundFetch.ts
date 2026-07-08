@@ -1,5 +1,10 @@
 import { ENRICHMENT_ERROR_CODE } from "../lib/enrichment";
 import {
+  isMacroEnrichStepType,
+  resolveMacroEnrichStepQuietModeGateForStep,
+} from "../lib/macroStepActions";
+import type { IocType } from "../lib/iocRegex";
+import {
   beginPreQueryDisclosureWait,
   cancelPreQueryDisclosure,
   resolvePreQueryDisclosure,
@@ -92,6 +97,39 @@ export async function resolveIndicatorEnrichmentTrustGate(
       errorMessage: INTERNAL_ASSET_ENRICHMENT_BLOCKED_MESSAGE,
     };
   }
+  return { allowed: true };
+}
+
+export async function resolveOperatorMacroEnrichStepTrustGates(
+  doc: Document,
+  value: string,
+  type: IocType,
+  stepType: string
+): Promise<EnrichmentTrustGateResult> {
+  const trimmedStepType = stepType.trim();
+  if (trimmedStepType.length === 0 || !isMacroEnrichStepType(trimmedStepType)) {
+    return { allowed: true };
+  }
+
+  const pageGate = await resolvePageEnrichmentTrustGate(doc);
+  if (!pageGate.allowed) {
+    return pageGate;
+  }
+
+  const indicatorGate = await resolveIndicatorEnrichmentTrustGate(value, type);
+  if (!indicatorGate.allowed) {
+    return indicatorGate;
+  }
+
+  const quietGate = await resolveMacroEnrichStepQuietModeGateForStep(trimmedStepType);
+  if (!quietGate.allowed) {
+    return {
+      allowed: false,
+      errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+      errorMessage: quietGate.message,
+    };
+  }
+
   return { allowed: true };
 }
 

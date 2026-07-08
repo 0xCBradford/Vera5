@@ -1,12 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createOperatorMacro } from "./operatorMacro";
+import { createOperatorMacro, OperatorMacroImportError, OPERATOR_MACRO_SCHEMA_VERSION } from "./operatorMacro";
+import { BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK, BUILT_IN_OPERATOR_MACRO_ID_DFIR_TRIAGE } from "./builtInOperatorMacros";
 import {
   createEmptyOperatorMacrosStore,
   createStoredOperatorMacro,
   deleteStoredOperatorMacro,
+  ensureBuiltInOperatorMacros,
   getOperatorMacrosStore,
   getStoredOperatorMacro,
   hydrateOperatorMacrosStore,
+  importStoredOperatorMacroFromJson,
   listStoredOperatorMacros,
   MAX_STORED_OPERATOR_MACROS,
   normalizeOperatorMacrosStore,
@@ -177,5 +180,80 @@ describe("operatorMacroStorage", () => {
       schemaVersion: OPERATOR_MACRO_STORE_SCHEMA_VERSION,
       macros: [macro],
     });
+  });
+
+  it("imports validated macro JSON into storage and rejects invalid payloads", async () => {
+    const imported = await importStoredOperatorMacroFromJson(
+      JSON.stringify({
+        schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+        id: "imported-macro",
+        name: "Imported macro",
+        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        triggers: { palette: true },
+        metadata: {},
+      })
+    );
+
+    expect(imported.id).toBe("imported-macro");
+    await expect(getStoredOperatorMacro("imported-macro")).resolves.toMatchObject({
+      id: "imported-macro",
+      name: "Imported macro",
+    });
+
+    await expect(
+      importStoredOperatorMacroFromJson(
+        JSON.stringify({
+          schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+          id: "bad-import",
+          name: "Bad import",
+          steps: [{ type: "openFromSelection", params: {} }],
+          triggers: { palette: true },
+          metadata: {},
+        })
+      )
+    ).rejects.toThrow(OperatorMacroImportError);
+  });
+
+  it("ensures built-in CTI Deep Check is persisted when missing", async () => {
+    await ensureBuiltInOperatorMacros();
+
+    const stored = await getStoredOperatorMacro(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK);
+    expect(stored).not.toBeNull();
+    expect(stored?.metadata.builtIn).toBe(true);
+    expect(stored?.steps.map((step) => step.type)).toEqual([
+      "enrich",
+      "exportMarkdown",
+      "openPivot",
+    ]);
+  });
+
+  it("ensures built-in DFIR Triage is persisted when missing", async () => {
+    await ensureBuiltInOperatorMacros();
+
+    const stored = await getStoredOperatorMacro(BUILT_IN_OPERATOR_MACRO_ID_DFIR_TRIAGE);
+    expect(stored).not.toBeNull();
+    expect(stored?.metadata.builtIn).toBe(true);
+    expect(stored?.steps.map((step) => step.type)).toEqual([
+      "enrich",
+      "queueRelatedIocs",
+      "applyNoteTemplate",
+    ]);
+  });
+
+  it("refreshes canonical built-in macros without overwriting custom macros with the same id", async () => {
+    const customMacro = createOperatorMacro({
+      id: BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK,
+      name: "Custom override",
+      steps: [{ type: "enrich", params: { scope: "selection" } }],
+      triggers: { palette: true },
+      metadata: { builtIn: false, description: "Custom" },
+    });
+    await saveStoredOperatorMacro(customMacro);
+
+    await ensureBuiltInOperatorMacros();
+
+    const stored = await getStoredOperatorMacro(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK);
+    expect(stored?.name).toBe("Custom override");
+    expect(stored?.metadata.builtIn).toBe(false);
   });
 });

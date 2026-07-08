@@ -33,6 +33,7 @@ import {
   normalizeConnectorConfidenceMetadataOverridesRecord,
   type ConnectorConfidenceMetadataOverridesRecord,
 } from "./connectorDefinition";
+import { runStorageMigrationIfNeeded as runStorageMigrationImpl } from "./storageMigration";
 import type { IocType } from "./iocRegex";
 import {
   API_KEY_STORAGE_SLOTS,
@@ -929,10 +930,7 @@ export type StorageMigrationResult = {
 };
 
 export async function runStorageMigrationIfNeeded(): Promise<StorageMigrationResult> {
-  const { runStorageMigrationIfNeeded: runMigration } = await import(
-    "./storageMigration"
-  );
-  return runMigration();
+  return runStorageMigrationImpl();
 }
 
 export async function getVera5Settings(): Promise<Vera5Settings> {

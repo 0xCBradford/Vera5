@@ -3,7 +3,10 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { enrichSelectionMessage } from "../lib/messages";
-import { MACRO_STEP_TYPE_OPEN_FROM_SELECTION } from "../lib/macroStepActions";
+import {
+  MACRO_STEP_TYPE_ENRICH,
+  MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+} from "../lib/macroStepActions";
 import {
   MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE,
 } from "../lib/storage";
@@ -33,6 +36,7 @@ import {
   resolveHighlightFromSelection,
   resolveIocMatchFromSelectionText,
   resolveSelectionActionState,
+  runOperatorMacroEnrichStep,
   setupEnrichSelectionListener,
 } from "./enrichSelection";
 
@@ -163,7 +167,7 @@ describe("handleEnrichSelectionRequest", () => {
     const response = await handleEnrichSelectionRequest();
     expect(response).toEqual({
       ok: true,
-      payload: { value: "192.0.2.1", type: "ipv4" },
+      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: false },
     });
     expect(
       document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
@@ -195,7 +199,7 @@ describe("handleEnrichSelectionRequest", () => {
     const response = await handleEnrichSelectionRequest();
     expect(response).toEqual({
       ok: true,
-      payload: { value: "8.8.8.8", type: "ipv4" },
+      payload: { value: "8.8.8.8", type: "ipv4", trustGateBlocked: false },
     });
   });
 
@@ -221,7 +225,7 @@ describe("handleEnrichSelectionRequest", () => {
     const response = await handleEnrichSelectionRequest();
     expect(response).toEqual({
       ok: true,
-      payload: { value: "192.0.2.1", type: "ipv4" },
+      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: true },
     });
     expect(
       document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
@@ -230,6 +234,69 @@ describe("handleEnrichSelectionRequest", () => {
       DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE
     );
     expect(enrichmentBackgroundFetch.runBackgroundEnrichment).not.toHaveBeenCalled();
+  });
+
+  it("blocks operator macro enrich steps on denylisted hosts before vendor calls", async () => {
+    Object.defineProperty(document, "location", {
+      configurable: true,
+      value: { hostname: "mail.example.com" },
+    });
+    stubChromeForEnrichSelectionTests({
+      [STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED]: true,
+      [STORAGE_KEY_DOMAIN_DENYLIST]: ["mail.example.com"],
+    });
+
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 192.0.2.1 today.";
+    document.body.replaceChildren(paragraph);
+
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    const response = await handleEnrichSelectionRequest(document, {
+      macroStepType: MACRO_STEP_TYPE_ENRICH,
+    });
+    expect(response).toEqual({
+      ok: true,
+      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: true },
+    });
+    expect(document.body.textContent).toContain(
+      DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE
+    );
+    expect(enrichmentBackgroundFetch.runBackgroundEnrichment).not.toHaveBeenCalled();
+  });
+
+  it("runs built-in macro enrich steps through the selection trust pipeline", async () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 192.0.2.1 today.";
+    document.body.replaceChildren(paragraph);
+
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    const result = await runOperatorMacroEnrichStep(
+      {
+        scope: "selection",
+        forceRefresh: false,
+      },
+      document
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      value: "192.0.2.1",
+      type: "ipv4",
+      trustGateBlocked: false,
+    });
+    expect(enrichmentBackgroundFetch.runBackgroundEnrichment).toHaveBeenCalledWith(
+      expect.objectContaining({ value: "192.0.2.1", type: "ipv4" }),
+      document,
+      { bypassCache: false }
+    );
   });
 });
 
@@ -377,7 +444,7 @@ describe("setupEnrichSelectionListener", () => {
 
     expect(response).toEqual({
       ok: true,
-      payload: { value: "192.0.2.1", type: "ipv4" },
+      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: false },
     });
     expect(
       document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
@@ -446,7 +513,7 @@ describe("setupEnrichSelectionListener", () => {
 
     expect(response).toEqual({
       ok: true,
-      payload: { value: "192.0.2.1", type: "ipv4" },
+      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: true },
     });
     expect(
       document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
@@ -533,7 +600,7 @@ describe("setupEnrichSelectionListener", () => {
 
     expect(response).toEqual({
       ok: true,
-      payload: { value: "192.0.2.1", type: "ipv4" },
+      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: true },
     });
     expect(
       document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)

@@ -316,6 +316,101 @@ export function isOperatorMacroRecord(value: unknown): value is OperatorMacro {
   return normalizeOperatorMacro(value) !== null;
 }
 
+export class OperatorMacroImportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OperatorMacroImportError";
+  }
+}
+
+export function validateImportedOperatorMacroSteps(
+  value: unknown
+): readonly OperatorMacroStep[] {
+  if (!Array.isArray(value)) {
+    throw new OperatorMacroImportError("Macro steps must be an array.");
+  }
+  if (value.length > MAX_OPERATOR_MACRO_STEPS) {
+    throw new OperatorMacroImportError(
+      `Macro step list exceeds maximum of ${MAX_OPERATOR_MACRO_STEPS} steps.`
+    );
+  }
+
+  const steps: OperatorMacroStep[] = [];
+  for (let index = 0; index < value.length; index += 1) {
+    const entry = value[index];
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new OperatorMacroImportError(`Macro step at index ${index} must be an object.`);
+    }
+
+    const record = entry as Record<string, unknown>;
+    const type = readNonEmptyTrimmedString(record.type);
+    if (!type) {
+      throw new OperatorMacroImportError(`Macro step at index ${index} is missing a step type.`);
+    }
+    if (!isOperatorMacroStepTypeV1(type)) {
+      throw new OperatorMacroImportError(`Unknown macro step type: ${type}.`);
+    }
+
+    const step = normalizeOperatorMacroStepV1(record);
+    if (!step) {
+      throw new OperatorMacroImportError(
+        `Macro step at index ${index} has invalid parameters.`
+      );
+    }
+    steps.push(step);
+  }
+
+  return steps;
+}
+
+export function validateImportedOperatorMacro(value: unknown): OperatorMacro {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new OperatorMacroImportError("Macro import must be a JSON object.");
+  }
+
+  const record = value as Record<string, unknown>;
+  if (record.schemaVersion !== OPERATOR_MACRO_SCHEMA_VERSION) {
+    throw new OperatorMacroImportError("Unsupported macro schema version.");
+  }
+
+  const id = normalizeOperatorMacroId(record.id);
+  const name = normalizeOperatorMacroName(record.name);
+  if (!id) {
+    throw new OperatorMacroImportError("Macro id is missing or invalid.");
+  }
+  if (!name) {
+    throw new OperatorMacroImportError("Macro name is missing or invalid.");
+  }
+
+  const triggers =
+    Array.isArray(record.triggers) && record.triggers.length > 0
+      ? normalizeOperatorMacroTriggersFromList(record.triggers)
+      : normalizeOperatorMacroTriggers(record.triggers);
+
+  if (!triggers.palette && !triggers.tray && !triggers.context) {
+    throw new OperatorMacroImportError("Macro requires at least one trigger surface.");
+  }
+
+  return {
+    schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+    id,
+    name,
+    steps: validateImportedOperatorMacroSteps(record.steps),
+    triggers,
+    metadata: normalizeOperatorMacroMetadata(record.metadata),
+  };
+}
+
+export function parseImportedOperatorMacroJson(rawJson: string): OperatorMacro {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawJson);
+  } catch {
+    throw new OperatorMacroImportError("Invalid JSON.");
+  }
+  return validateImportedOperatorMacro(parsed);
+}
+
 export function createOperatorMacro(input: CreateOperatorMacroInput): OperatorMacro {
   const id = normalizeOperatorMacroId(input.id);
   const name = normalizeOperatorMacroName(input.name);

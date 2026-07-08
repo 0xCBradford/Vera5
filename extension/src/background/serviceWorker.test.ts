@@ -20,10 +20,36 @@ const runStorageMigrationOnExtensionUpdate = vi.fn(async () => ({
   toVersion: 4,
 }));
 
+const runStorageMigrationIfNeeded = vi.fn(async () => ({
+  migrated: false,
+  fromVersion: 4,
+  toVersion: 4,
+}));
+
 vi.mock("../lib/storageMigration", () => ({
   runStorageMigrationOnExtensionUpdate: (...args: unknown[]) =>
     runStorageMigrationOnExtensionUpdate(...args),
+  runStorageMigrationIfNeeded: (...args: unknown[]) =>
+    runStorageMigrationIfNeeded(...args),
 }));
+
+const ensureBuiltInOperatorMacros = vi.fn(async () => undefined);
+
+vi.mock("../lib/operatorMacroStorage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/operatorMacroStorage")>();
+  return {
+    ...actual,
+    ensureBuiltInOperatorMacros: () => ensureBuiltInOperatorMacros(),
+  };
+});
+
+vi.mock("../lib/storage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/storage")>();
+  return {
+    ...actual,
+    setupQuietModeActionBadgeListener: vi.fn(),
+  };
+});
 
 const emitInvestigationSessionMacroRunTimelineEvent = vi.fn();
 
@@ -200,6 +226,7 @@ describe("service worker scan-page command routing", () => {
     });
     openOptionsPage.mockReset();
     runStorageMigrationOnExtensionUpdate.mockReset();
+    ensureBuiltInOperatorMacros.mockReset();
     emitInvestigationSessionMacroRunTimelineEvent.mockReset();
     runStorageMigrationOnExtensionUpdate.mockResolvedValue({
       migrated: false,

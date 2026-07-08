@@ -9,6 +9,8 @@ export default defineConfig({
   build: {
     outDir,
     emptyOutDir: true,
+    // MV3 service workers have no `window`/`document`; Vite's module-preload helper uses both.
+    modulePreload: false,
     target: "es2022",
     rollupOptions: {
       input: {
