@@ -234,7 +234,8 @@ function stubChrome(options: {
   pageContext?: TabPageContextRecord | null;
 }): void {
   const collections = [...(options.collections ?? [])];
-  chromeLocalStore = { ...(options.localStore ?? {}) };
+  // Prefer the caller object when provided so tests can assert persisted writes.
+  chromeLocalStore = options.localStore ?? {};
   const localStore = chromeLocalStore;
   const sessionStore = options.sessionStore ?? {};
   storageOnChangedListeners.length = 0;
@@ -1462,6 +1463,119 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain(
         "Added 3 indicators to Phishing Campaign."
+      );
+    });
+  });
+
+  it("opens Run macro… on a tray row and sends a selection run to the active tab", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+    });
+
+    const runToggle = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) =>
+        button.getAttribute("aria-label") === "Run macro… for 8.8.8.8"
+    );
+    expect(runToggle).toBeDefined();
+    flushSync(() => {
+      runToggle?.click();
+    });
+
+    await vi.waitFor(() => {
+      const macroButton = Array.from(mounted.container.querySelectorAll("button")).find(
+        (button) => button.textContent === "CTI Deep Check"
+      );
+      expect(macroButton).toBeDefined();
+    });
+
+    const macroButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "CTI Deep Check"
+    );
+    flushSync(() => {
+      macroButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({
+          type: MESSAGE.RUN_OPERATOR_MACRO,
+          macroId: "cti-deep-check",
+          target: {
+            mode: "selection",
+            entry: {
+              value: "8.8.8.8",
+              iocType: IOC_TYPE.IPV4,
+              anchorId: "vera5-hl-1",
+            },
+          },
+        })
+      );
+      expect(mounted?.container.textContent).toContain("Ran CTI Deep Check on 8.8.8.8.");
+    });
+  });
+
+  it("opens Run macro on filtered… and sends filtered entries to the active tab", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("8.8.8.8");
+    });
+
+    const runFilteredButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Run macro on filtered… (3)"
+    );
+    expect(runFilteredButton).toBeDefined();
+    flushSync(() => {
+      runFilteredButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      const macroButton = Array.from(mounted.container.querySelectorAll("button")).find(
+        (button) => button.textContent === "DFIR Triage"
+      );
+      expect(macroButton).toBeDefined();
+    });
+
+    const macroButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "DFIR Triage"
+    );
+    flushSync(() => {
+      macroButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+        7,
+        expect.objectContaining({
+          type: MESSAGE.RUN_OPERATOR_MACRO,
+          macroId: "dfir-triage",
+          target: {
+            mode: "filtered",
+            entries: expect.arrayContaining([
+              {
+                value: "8.8.8.8",
+                iocType: IOC_TYPE.IPV4,
+                anchorId: "vera5-hl-1",
+              },
+              {
+                value: "192.0.2.1",
+                iocType: IOC_TYPE.IPV4,
+                anchorId: "vera5-hl-2",
+              },
+              {
+                value: "CVE-2021-44228",
+                iocType: IOC_TYPE.CVE,
+                anchorId: "vera5-hl-3",
+              },
+            ]),
+          },
+        })
+      );
+      expect(mounted?.container.textContent).toContain(
+        "Ran DFIR Triage on 3 filtered indicators."
       );
     });
   });

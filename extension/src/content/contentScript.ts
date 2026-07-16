@@ -21,6 +21,7 @@ import { setupAnalystModeStorageListener } from "./analystModeStorage";
 import { CONTENT_MESSAGE } from "./constants";
 import { setupBackgroundEnrichmentRouting } from "./enrichmentBackgroundFetch";
 import { setupCommandPaletteListener } from "./commandPalette";
+import { setupRunOperatorMacroListener } from "./commandPaletteCommands";
 import { setupHoverCardTrigger } from "./hoverCardTrigger";
 import { setupEnrichSelectionListener } from "./enrichSelection";
 import { setupHighlightStorageListener, setupScanPageListener } from "./scanPage";
@@ -61,6 +62,7 @@ if (!contentScriptAlreadyInitialized) {
   void runWithExtensionContextAsync(syncIocLabelsWithStorage);
   setupBackgroundEnrichmentRouting();
   setupCommandPaletteListener();
+  setupRunOperatorMacroListener();
   setupHoverCardTrigger();
   setupExamplesFixtureBridge();
 }

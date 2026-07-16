@@ -40,6 +40,8 @@ const BACKGROUND_ASYNC_MESSAGE_TYPES = [
   MESSAGE.ENRICH_IOC,
   MESSAGE.TAB_SCAN_SNAPSHOT,
   MESSAGE.GET_TAB_SCAN_SUMMARY,
+  MESSAGE.TAB_PAGE_CONTEXT,
+  MESSAGE.GET_TAB_PAGE_CONTEXT,
   MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION,
   MESSAGE.CREATE_INVESTIGATION_SESSION,
   MESSAGE.UPDATE_INVESTIGATION_SESSION_TITLE,
@@ -63,6 +65,7 @@ const CONTENT_SCRIPT_MESSAGE_LISTENERS = [
   "src/content/scanPage.ts",
   "src/content/enrichSelection.ts",
   "src/content/commandPalette.ts",
+  "src/content/commandPaletteCommands.ts",
   "src/content/iocTrayNavigation.ts",
   "src/content/investigationHistoryReopen.ts",
 ] as const;
@@ -75,12 +78,14 @@ const CONTENT_TO_TAB_MESSAGE_TYPES = [
   MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
   MESSAGE.REOPEN_INVESTIGATION_HISTORY,
   MESSAGE.TOGGLE_COMMAND_PALETTE,
+  MESSAGE.RUN_OPERATOR_MACRO,
 ] as const;
 
 const CONTENT_MESSAGE_TYPE_MARKERS: Partial<
   Record<(typeof CONTENT_TO_TAB_MESSAGE_TYPES)[number], readonly string[]>
 > = {
   [MESSAGE.NAVIGATE_TO_IOC_ANCHOR]: ["isNavigateToIocAnchorMessage"],
+  [MESSAGE.RUN_OPERATOR_MACRO]: ["isRunOperatorMacroMessage"],
 };
 
 const BROWSER_COMPAT_ENTRY_POINTS = [
@@ -264,10 +269,14 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
   it("registers selection context menu on install in the service worker", () => {
     const serviceWorkerSource = readSource("src/background/serviceWorker.ts");
 
-    expect(serviceWorkerSource).toContain("registerEnrichSelectionContextMenu");
+    expect(serviceWorkerSource).toContain("registerVera5ContextMenus");
     expect(serviceWorkerSource).toContain("chrome.contextMenus.create");
     expect(serviceWorkerSource).toContain('contexts: ["selection"]');
     expect(serviceWorkerSource).toContain("chrome.runtime.onInstalled");
+    expect(serviceWorkerSource).toContain(
+      "OPERATOR_MACRO_CONTEXT_RUN_ON_SELECTION_LABEL"
+    );
+    expect(serviceWorkerSource).toContain('mode: "activeSelection"');
   });
 
   it("uses promise-friendly storage helpers for content-script settings reads", () => {

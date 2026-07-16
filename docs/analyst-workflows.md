@@ -13,7 +13,7 @@ Everything below assumes the **production on-page overlay** (content script on t
 | **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. Assign **Label**, **Pin**, and read **Session timeline** on the card when an investigation session is active. Use **Save to collection…** to add an indicator to a persistent collection. |
 | **Command palette** | Keyboard-driven actions on the active tab: scan, enrich selection, open history, source health, tray export, clear highlights, and settings. See [Operator UX: command palette and quick actions](#operator-ux-command-palette-and-quick-actions). |
 | **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page** / **Scan selection** / **Enrich selection**, manage the **Investigation session** (title, rollups, export, recent sessions, **Promote session to collection…**), review **Investigation history**, **Detected indicators** (**Save to collection…**, **Add filtered to collection…**), manage **IOC collections**, and read **Source operations** (cache, cooldown, per-source status, vendor quota hints). |
-| **Workspace sidebar** | Optional on-page tray from **Open sidebar** in the popup: filter indicators, **Save to collection…**, **Add filtered to collection…**, copy subsets, and export templates while staying on the alert page. Pinned session indicators sort to the top. |
+| **Workspace sidebar** | Optional on-page tray from **Open sidebar** in the popup: filter indicators, **Save to collection…**, **Add filtered to collection…**, **Run macro…** on a row, **Run macro on filtered…** for the active type filter, copy subsets, and export templates while staying on the alert page. Pinned session indicators sort to the top. |
 | **Context menu** | Right-click selected text → **Enrich selection with Vera5** when the selection contains a detectable indicator. Uses the same trust gates and enrich pipeline as palette **Enrich selection**. |
 | **Settings (options) page** | Configure API keys, enable sources, set manual-only and auto-scan, clear the enrichment cache, export or import settings. Source health details live in the popup **Source operations** section—not a duplicate panel here. |
 | **React hover card** | Unit tests and `npm run dev` only. It is **not** shown on live page tabs. It exercises the same local scoring rules as the overlay; unit tests may also show per-source contribution chips the overlay does not render. |
@@ -46,6 +46,7 @@ Open the palette with `Ctrl+Shift+K` / `Cmd+Shift+K`, or run **Open command pale
 | **Clear highlights** | Removes all indicator highlights on the current page. | Does not clear enrichment cache or investigation history. |
 | **Toggle quiet mode** | Turns quiet mode on or off for this browser profile. | When on, blocks live vendor enrichment while preserving detection, cache display, and pivot links. See [Quiet mode](#quiet-mode). |
 | **Open options** | Opens **Vera5 Settings**. | API keys, sources, trust policy, cache controls. |
+| **Operator macros** (by name) | Runs a stored local playbook (built-in or custom) through the same command registry. | Macros with the command-palette trigger enabled appear alongside core commands. Search by macro name, id, tags, or the keyword **macro**. Selecting a result runs the playbook steps in order (enrich, export, open pivots, note template, queue related IOCs). |
 
 Tray export commands read the on-page workspace filter state. Open the **workspace sidebar** and set a type filter before running **Copy filtered Markdown** or **Export tray subset** if you need a subset rather than every detected IOC.
 
@@ -109,7 +110,7 @@ All enrich paths honor **Trust & consent** settings: manual-only mode, domain de
 
 ## Macro step hooks (operator macros)
 
-Vera5 exposes **stable action identifiers** so programmable **operator macros** (local-only step sequences registered in the command palette or run from the tray) can reuse the same flows as the palette, context menu, and popup—without a second command registry or parallel enrich pipeline.
+Vera5 exposes **stable action identifiers** so programmable **operator macros** (local-only step sequences registered in the command palette, tray, or context menu) can reuse the same flows as the palette, context menu, and popup—without a second command registry or parallel enrich pipeline.
 
 Macros are stored locally in extension storage. They do not sync through Vera5 cloud infrastructure. Each macro step invokes an existing operator action; trust gates (manual-only mode, domain policy, internal asset lists, pre-query disclosure, and quiet mode) apply on every **enrich** step the same way they do for manual use.
 
@@ -177,6 +178,8 @@ Vera5 ships two predefined operator macros in **local extension storage** only. 
 | `cti-deep-check` | **CTI Deep Check** | Research a single indicator from blogs, reports, or intel pages: enrich, copy a Markdown enrichment report, and open the CTI research pivot set. |
 | `dfir-triage` | **DFIR Triage** | Start endpoint or case triage on one indicator: enrich, queue related IOCs from the current tray scan, and append a structured DFIR checklist to the active IOC note. |
 
+Page classification can **suggest** these playbooks for matching page types (CTI platforms and malware blogs → CTI Deep Check; sandbox reports → DFIR Triage). Suggestions are defaults only and never auto-run. When you store a per-site page-profile override, the suggestion is skipped—see [Page-type → preset → export template matrix](#page-type--preset--export-template-matrix).
+
 #### CTI Deep Check (`cti-deep-check`)
 
 **When to use:** You have selected a single IOC (in prose or on a page highlight) and want a portable research artifact plus attributed pivots without repeating export and pivot clicks.
@@ -187,7 +190,7 @@ Vera5 ships two predefined operator macros in **local extension storage** only. 
 | 2 | `exportMarkdown` | Copy a **markdown-report** export (the default template for the **CTI research** analyst preset) for the selected indicator to the clipboard. |
 | 3 | `openPivot` | Open all attributed pivot links in **CTI research** pivot emphasis order (community-intel and sandbox destinations such as OTX, VirusTotal, Pulsedive, ThreatFox, URLScan.io, MalwareBazaar, AbuseIPDB, URLhaus, and GreyNoise). Opens links in your browser only; this step does not issue additional live vendor API calls. |
 
-**Palette and tray:** Registered for command palette and tray run surfaces. Not bound to the context menu—use **Enrich selection with Vera5** or the macro when you need selection-based enrich outside a playbook.
+**Palette, tray, and context menu:** Registered for command palette and tray run surfaces. In the IOC tray, open **Run macro…** on a row (or **Run macro on filtered…** for the active type filter) and choose the playbook—the page runner seeds that indicator (or each filtered indicator in turn). With the **Context menu** trigger enabled on a macro in settings, right-click selected text and choose **Run macro on selection** → the playbook name; that path uses the same on-page runner as the palette (not a separate enrich pipeline). **Enrich selection with Vera5** remains the one-step enrich action.
 
 #### DFIR Triage (`dfir-triage`)
 
@@ -199,15 +202,26 @@ Vera5 ships two predefined operator macros in **local extension storage** only. 
 | 2 | `queueRelatedIocs` | Queue up to **8** related indicators from the **tray scan** snapshot. Run **Scan page** first so the workspace tray is populated. |
 | 3 | `applyNoteTemplate` | **Append** a DFIR triage checklist to the **active IOC** note on the hover card. The template prompts you to confirm enrichment and queued related IOCs, collect endpoint telemetry and timeline scope, and document containment, escalation, and next investigative actions. |
 
-**Palette and tray:** Registered for command palette and tray run surfaces. Not bound to the context menu.
+**Palette, tray, and context menu:** Registered for command palette and tray run surfaces. Use the same tray **Run macro…** / **Run macro on filtered…** actions as CTI Deep Check. Enable the **Context menu** trigger in settings to run the playbook from **Run macro on selection** on highlighted text.
+
+### Running macros from the IOC tray
+
+After **Scan page**, the toolbar popup (and side panel) tray exposes:
+
+| Action | Scope | Behavior |
+|--------|-------|----------|
+| **Run macro…** | One tray row | Lists macros with the tray trigger enabled. Choosing a playbook navigates to that indicator on the page and runs the steps for it. |
+| **Run macro on filtered…** | Current type filter (All or a type chip) | Runs the chosen playbook once per filtered indicator, in list order. Empty filters disable the action. |
+
+Only macros with the tray trigger enabled appear. Palette-only macros stay in the command palette. Runs use the same content-script runner and trust gates as palette invocation—no separate enrich pipeline.
 
 ### Trust behavior for macro runs
 
 Macro runs must not bypass analyst consent or hostname policy:
 
-- **`enrich`** and **`openFromSelection`** steps abort with clear UI when domain policy blocks the page, internal asset lists block the indicator, pre-query disclosure is declined, or quiet mode blocks outbound vendor calls (when that mode is enabled).
-- **exportMarkdown**, **openPivot**, and **applyNoteTemplate** steps may still succeed when enrich is blocked, when the step does not require a live vendor response.
-- Macro bulk enrich and tray queue steps are capped per run so playbooks cannot fan out unbounded parallel vendor calls without quota warnings.
+- **`enrich`** and **`openFromSelection`** steps abort the remaining playbook steps with clear UI when domain policy blocks the page, internal asset lists block the indicator, quiet mode blocks outbound vendor calls, or pre-query disclosure is declined. The hover card shows the gate reason (for example domain policy, quiet mode, or a disclosure-declined abort message). Tray **Run macro…** returns that same message instead of a success status.
+- Later steps do not continue after an enrich trust abort for that run.
+- Live enrichments per macro run are capped (default **8** attempts across `enrich` steps and `queueRelatedIocs` queue items, including tray **Run macro on filtered…**). When the cap is hit, the hover card and tray show a **quota warning** and remaining enrich work for that run is skipped—no unbounded vendor fan-out.
 
 Built-in and custom macros register in the command palette alongside core commands rather than replacing the palette registry.
 
@@ -254,16 +268,18 @@ Site overrides never call vendor APIs, upload page content, or change domain pol
 
 When the classified page type **changes** on a tab (after **Scan page** or auto-scan), Vera5 may auto-apply the **Analyst workflow preset** for that type—unless a per-site override is stored, the origin is blocked by domain policy, or **Quiet mode** is on (see [Trust gates and page context overrides](#trust-gates-and-page-context-overrides)). Preset application updates enrichment defaults, recommended pivot ordering, and related trust settings (for example **DFIR investigation** enables **Quiet mode** and private-space IPv4). The **Default export template** column is the template Vera5 selects on the overlay **Template** row for that page type; it matches the preset’s own default export template on mapped rows.
 
-| Page type ID | Operator label | Auto-applied analyst preset | Default export template | Typical use |
-|--------------|----------------|----------------------------|-------------------------|-------------|
-| `soc_dashboard` | SOC dashboard | **SOC triage** (`soc`) | **Jira comment** (`jira-comment`) | Splunk, Sentinel, Elastic, Security Onion-style alert dashboards |
-| `case_ticket` | Case / ticket | **SOC triage** (`soc`) | **Jira comment** (`jira-comment`) | Jira issues, GitHub issues, ticket workflows |
-| `cti_platform` | CTI platform | **CTI research** (`cti`) | **Markdown report** (`markdown-report`) | OTX, MISP, OpenCTI, TheHive case views |
-| `malware_blog` | Malware blog | **CTI research** (`cti`) | **Markdown report** (`markdown-report`) | Threat research posts and IOC write-ups |
-| `sandbox_report` | Sandbox report | **DFIR investigation** (`dfir`) | **TheHive case note** (`thehive-case-note`) | VirusTotal GUI, Hybrid Analysis, Any.Run-style reports |
-| `generic` | Generic page | *(none — no automatic preset apply)* | *(profile default; factory install default **Analyst update**, `analyst-update`)* | Unclassified pages; tray sort baseline; no page-type template swap |
+| Page type ID | Operator label | Auto-applied analyst preset | Default export template | Suggested operator macro | Typical use |
+|--------------|----------------|----------------------------|-------------------------|--------------------------|-------------|
+| `soc_dashboard` | SOC dashboard | **SOC triage** (`soc`) | **Jira comment** (`jira-comment`) | *(none)* | Splunk, Sentinel, Elastic, Security Onion-style alert dashboards |
+| `case_ticket` | Case / ticket | **SOC triage** (`soc`) | **Jira comment** (`jira-comment`) | *(none)* | Jira issues, GitHub issues, ticket workflows |
+| `cti_platform` | CTI platform | **CTI research** (`cti`) | **Markdown report** (`markdown-report`) | **CTI Deep Check** (`cti-deep-check`) | OTX, MISP, OpenCTI, TheHive case views |
+| `malware_blog` | Malware blog | **CTI research** (`cti`) | **Markdown report** (`markdown-report`) | **CTI Deep Check** (`cti-deep-check`) | Threat research posts and IOC write-ups |
+| `sandbox_report` | Sandbox report | **DFIR investigation** (`dfir`) | **TheHive case note** (`thehive-case-note`) | **DFIR Triage** (`dfir-triage`) | VirusTotal GUI, Hybrid Analysis, Any.Run-style reports |
+| `generic` | Generic page | *(none — no automatic preset apply)* | *(profile default; factory install default **Analyst update**, `analyst-update`)* | *(none)* | Unclassified pages; tray sort baseline; no page-type template swap |
 
 Template IDs match the export template engine in [export-artifacts.md](export-artifacts.md). Hover card **Template**, tray **Export template**, and **Copy template** actions use the effective default unless you pick another template for that export. On **Generic page**, the effective export template is whatever you saved under **Trust & consent** (or the factory default above)—not a page-type mapping.
+
+**Suggested operator macros** are optional defaults only. Vera5 does **not** auto-run a macro when the page type changes. When a per-site **Treat this site as …** override is stored for the origin, the page-type macro suggestion is skipped—the same way automatic analyst preset application is skipped—so your chosen page profile stays in control without a playbook nudge.
 
 ### Relationship to risk score and explain-this-IOC chain
 

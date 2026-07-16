@@ -6,9 +6,9 @@ Vera5 ships as a Manifest V3 Chromium extension under `extension/`. TypeScript, 
 
 | Surface | Path | Context |
 |---------|------|---------|
-| Service worker | `extension/src/background/` | No DOM. Routes messages, runs enrichment, cache, cooldown. |
-| Content scripts | `extension/src/content/` | Page DOM. Detection, highlights, **production hover overlay** (`hoverCardOverlay.ts`). |
-| Popup | `extension/src/popup/` | Toolbar UI: enable, highlights, scan, IOC tray with type filters, count summary, copy-all/copy-filtered actions, Markdown/JSON subset export, ticket template export, source-attributed non-blocking per-row enrichment hints from stored cache, empty/post-scan states, row navigation to page highlights, and stale-highlight feedback when the page DOM changed. |
+| Service worker | `extension/src/background/` | No DOM. Routes messages, runs enrichment, cache, cooldown. Registers selection context menus (**Enrich selection with Vera5**, **Run macro on selection** parent with per-macro children for `triggers.context`) and sends `RUN_OPERATOR_MACRO` / `ENRICH_SELECTION` to the active tab. |
+| Content scripts | `extension/src/content/` | Page DOM. Detection, highlights, **production hover overlay** (`hoverCardOverlay.ts`), command palette (`commandPalette.ts` / `commandPaletteCommands.ts`). Palette-trigger operator macros register into the shared `commandRegistry` (ids `operator-macro:<macroId>`) and run through the same execute path as core commands. Tray-trigger runs arrive via `RUN_OPERATOR_MACRO` (`selection` or `filtered` seed) and share `runOperatorMacro` with palette execution. Macro enrich steps await the enrich pipeline and abort the run with hover-card (and tray) messaging when domain policy, quiet mode, or declined pre-query disclosure blocks the call. A per-run live-enrich budget (`MAX_OPERATOR_MACRO_LIVE_ENRICH_CALLS_PER_RUN`) caps `enrich` and `queueRelatedIocs` fan-out and surfaces a quota warning when truncated. |
+| Popup | `extension/src/popup/` | Toolbar UI: enable, highlights, scan, IOC tray with type filters, count summary, copy-all/copy-filtered actions, Markdown/JSON subset export, ticket template export, **Run macro…** / **Run macro on filtered…** (sends `RUN_OPERATOR_MACRO` to the active tab), source-attributed non-blocking per-row enrichment hints from stored cache, empty/post-scan states, row navigation to page highlights, and stale-highlight feedback when the page DOM changed. |
 | Options | `extension/src/options/` | Settings page: keys, toggles, cache clear, export/import. |
 | React components | `extension/src/components/` | Hover card and risk score for **unit tests and dev shell only** — not injected into live tabs. |
 
@@ -33,6 +33,7 @@ Analyst-facing behavior on real pages uses the **content-script overlay**, not t
 - Generic page context is a neutral fallback: tray sort stays `all`, IOC priority and layout profiles preserve baseline ordering, and detection, enrich, and export are never gated by page type
 - On page-context type change, `pageContextStorage.ts` applies the matching analyst workflow preset (SOC, CTI, or DFIR) unless the page origin has a stored mode override in `pageContextSiteModeOverrides`
 - `PAGE_CONTEXT_DEFAULT_EXPORT_TEMPLATE_BY_TYPE` in `pageContext.ts` maps each classified page type to a default export template id (`jira-comment`, `markdown-report`, `thehive-case-note`); generic pages keep the profile default
+- `PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE` in `pageContext.ts` maps CTI/malware-blog and sandbox page types to built-in operator macro ids (`cti-deep-check`, `dfir-triage`); `resolvePageContextDefaultOperatorMacroSuggestion` returns that id only when no per-site page-context override is stored for the origin (suggestion only—never auto-runs macros)
 - Page context layout profiles (`cardFieldEmphasis`, `pivotRecipeOrder`) are static ordering hints only—composite score and explain-this-IOC reasoning lines remain in `scoring.ts` / `hoverCardEnrichment.ts` (see [scoring-system.md](scoring-system.md))
 - `pivots.ts`, `settingsExport.ts`, `vera5UiStyles.ts` — pivots, export, shared styles
 

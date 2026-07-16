@@ -1099,6 +1099,17 @@ export const TRAY_ENRICH_QUEUE_QUIET_MODE_ABORT_MESSAGE =
 export const MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE =
   "Quiet mode is active. Macro enrich is blocked because live vendor enrichment is disabled.";
 
+export const MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE =
+  "Macro aborted. Pre-query disclosure was not accepted, so live enrichment did not run.";
+
+export const OPERATOR_MACRO_ENRICH_TRUST_ABORT_FALLBACK_MESSAGE =
+  "Macro aborted. Enrichment was blocked by a trust gate.";
+
+export const OPERATOR_MACRO_RUN_ABORTED_FALLBACK_MESSAGE = "Macro aborted.";
+
+export const OPERATOR_MACRO_BULK_ENRICH_QUOTA_WARNING_MESSAGE =
+  "Macro enrich capped for this run to protect vendor quotas. Remaining enrich steps were skipped. Check Source operations for vendor quota orientation.";
+
 export async function syncQuietModeActionBadge(quietMode: boolean): Promise<void> {
   if (typeof chrome.action?.setBadgeText !== "function") {
     return;

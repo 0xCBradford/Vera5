@@ -15,6 +15,49 @@ import {
   SETTINGS_PACK_THREAT_PROFILE_PRECEDENCE_NOTE,
   type SettingsPackImportPreview,
 } from "../lib/settingsPack";
+import type { OperatorMacro, OperatorMacroStep, OperatorMacroTriggers } from "../lib/operatorMacro";
+import {
+  buildOperatorMacroPackImportPreview,
+  downloadOperatorMacroPackExport,
+  MAX_OPERATOR_MACRO_STEPS,
+  MAX_OPERATOR_MACRO_DESCRIPTION_LENGTH,
+  MAX_OPERATOR_MACRO_ID_LENGTH,
+  MAX_OPERATOR_MACRO_NAME_LENGTH,
+  normalizeOperatorMacroId,
+  normalizeOperatorMacroName,
+  serializeOperatorMacroEditorSteps,
+  validateOperatorMacroEditorSteps,
+  type OperatorMacroPackImportPreview,
+} from "../lib/operatorMacro";
+import {
+  createDefaultOperatorMacroStep,
+  DEFAULT_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT,
+  isOperatorMacroStepTypeV1,
+  MAX_OPERATOR_MACRO_NOTE_TEMPLATE_TEXT_LENGTH,
+  MAX_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT,
+  normalizeOperatorMacroStepV1,
+  OPERATOR_MACRO_EXPORT_DESTINATION,
+  OPERATOR_MACRO_IOC_SCOPE,
+  OPERATOR_MACRO_NOTE_TEMPLATE_MODE,
+  OPERATOR_MACRO_PIVOT_OPEN_MODE,
+  OPERATOR_MACRO_QUEUE_SOURCE,
+  OPERATOR_MACRO_STEP_TYPE,
+  OPERATOR_MACRO_STEP_TYPE_LABEL,
+  OPERATOR_MACRO_STEP_TYPE_V1_ORDER,
+  type OperatorMacroStepTypeV1,
+} from "../lib/operatorMacroStepTypes";
+import { EXPORT_TEMPLATE_IDS, getExportTemplateLabel } from "../lib/exportTemplates";
+import {
+  createStoredOperatorMacro,
+  deleteStoredOperatorMacro,
+  duplicateStoredOperatorMacro,
+  ensureBuiltInOperatorMacros,
+  exportUserOperatorMacroPackJson,
+  importUserOperatorMacroPackJson,
+  listStoredOperatorMacros,
+  reorderStoredOperatorMacros,
+  saveStoredOperatorMacro,
+} from "../lib/operatorMacroStorage";
 import type {
   ApiKeySlot,
   AttributeHrefSitePreference,
@@ -31,6 +74,7 @@ import {
   ENRICHMENT_SOURCE_DESCRIPTIONS,
   ENRICHMENT_SOURCE_LABELS,
   ENRICHMENT_SOURCE_ORDER,
+  isEnrichmentSourceId,
   LIVE_ENRICHMENT_SOURCE_ORDER,
   OPTIONS_API_KEY_SLOTS,
   type EnrichmentSourceId,
@@ -103,6 +147,7 @@ import {
   clearPageContextSiteModeOverrides,
 } from "../lib/storage";
 import {
+  PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE,
   PAGE_CONTEXT_TYPE,
   PAGE_CONTEXT_TYPE_LABEL,
   PAGE_CONTEXT_TYPE_ORDER,
@@ -199,6 +244,7 @@ const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "api-keys", label: "API Keys" },
   { id: "local-ai-summary", label: "Local AI Summary" },
   { id: "trust", label: "Trust & Consent" },
+  { id: "operator-macros", label: "Operator Macros" },
   { id: "cache", label: "Enrichment Cache" },
   { id: "backup", label: "Settings Backup" },
 ];
@@ -372,6 +418,772 @@ function ToggleRow({
         onChange={onChange}
       />
     </label>
+  );
+}
+
+type OperatorMacroStepDraft = {
+  clientId: string;
+  type: string;
+  params: Record<string, unknown>;
+};
+
+type OperatorMacroEditorDraft = {
+  id: string;
+  name: string;
+  description: string;
+  triggers: OperatorMacroTriggers;
+  steps: OperatorMacroStepDraft[];
+};
+
+function createOperatorMacroStepDraftId(): string {
+  return `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function operatorMacroStepDraftFromStep(
+  step: OperatorMacroStep,
+  clientId: string
+): OperatorMacroStepDraft {
+  return {
+    clientId,
+    type: step.type,
+    params: { ...step.params },
+  };
+}
+
+function createEmptyOperatorMacroEditorDraft(): OperatorMacroEditorDraft {
+  const defaultEnrich = createDefaultOperatorMacroStep(OPERATOR_MACRO_STEP_TYPE.ENRICH);
+  return {
+    id: "",
+    name: "",
+    description: "",
+    triggers: {
+      palette: true,
+      tray: false,
+      context: false,
+    },
+    steps: [
+      operatorMacroStepDraftFromStep(
+        {
+          type: defaultEnrich.type,
+          params: defaultEnrich.params as Record<string, unknown>,
+        },
+        createOperatorMacroStepDraftId()
+      ),
+    ],
+  };
+}
+
+function operatorMacroEditorDraftFromMacro(
+  macro: OperatorMacro
+): OperatorMacroEditorDraft {
+  return {
+    id: macro.id,
+    name: macro.name,
+    description: macro.metadata.description,
+    triggers: { ...macro.triggers },
+    steps: macro.steps.map((step, index) =>
+      operatorMacroStepDraftFromStep(step, `${macro.id}-step-${index}`)
+    ),
+  };
+}
+
+function suggestOperatorMacroIdFromName(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, MAX_OPERATOR_MACRO_ID_LENGTH);
+  if (slug.length > 0 && normalizeOperatorMacroId(slug)) {
+    return slug;
+  }
+  return `macro-${Date.now()}`;
+}
+
+function formatOperatorMacroTriggerSummary(triggers: OperatorMacroTriggers): string {
+  const labels: string[] = [];
+  if (triggers.palette) {
+    labels.push("Palette");
+  }
+  if (triggers.tray) {
+    labels.push("Tray");
+  }
+  if (triggers.context) {
+    labels.push("Context menu");
+  }
+  return labels.length > 0 ? labels.join(", ") : "None";
+}
+
+const OPERATOR_MACRO_IOC_SCOPE_LABEL: Record<string, string> = {
+  [OPERATOR_MACRO_IOC_SCOPE.SELECTION]: "Selection",
+  [OPERATOR_MACRO_IOC_SCOPE.ACTIVE_IOC]: "Active IOC",
+  [OPERATOR_MACRO_IOC_SCOPE.TRAY_FILTERED]: "Tray filtered",
+};
+
+function readOperatorMacroStepProviders(
+  params: Record<string, unknown>
+): EnrichmentSourceId[] {
+  if (!Array.isArray(params.providers)) {
+    return [];
+  }
+  return params.providers.filter(
+    (provider): provider is EnrichmentSourceId =>
+      typeof provider === "string" && isEnrichmentSourceId(provider)
+  );
+}
+
+function operatorMacroStepDraftValidationError(
+  step: OperatorMacroStepDraft,
+  index: number
+): string | null {
+  if (!isOperatorMacroStepTypeV1(step.type)) {
+    return `Step ${index + 1} uses an unsupported step type.`;
+  }
+  if (normalizeOperatorMacroStepV1(step) === null) {
+    return `Step ${index + 1} has invalid parameters.`;
+  }
+  return null;
+}
+
+type OperatorMacroStepFieldsEditorProps = {
+  step: OperatorMacroStepDraft;
+  disabled: boolean;
+  onParamsChange: (params: Record<string, unknown>) => void;
+};
+
+function OperatorMacroStepFieldsEditor({
+  step,
+  disabled,
+  onParamsChange,
+}: OperatorMacroStepFieldsEditorProps) {
+  const patchParams = (patch: Record<string, unknown>) => {
+    onParamsChange({ ...step.params, ...patch });
+  };
+
+  switch (step.type) {
+    case OPERATOR_MACRO_STEP_TYPE.ENRICH:
+      return (
+        <>
+          <div className="v5-field">
+            <label className="v5-field__label" htmlFor={`${step.clientId}-enrich-scope`}>
+              IOC scope
+            </label>
+            <select
+              id={`${step.clientId}-enrich-scope`}
+              className="v5-input"
+              disabled={disabled}
+              value={
+                typeof step.params.scope === "string"
+                  ? step.params.scope
+                  : OPERATOR_MACRO_IOC_SCOPE.SELECTION
+              }
+              onChange={(event) => patchParams({ scope: event.target.value })}
+            >
+              <option value={OPERATOR_MACRO_IOC_SCOPE.SELECTION}>
+                {OPERATOR_MACRO_IOC_SCOPE_LABEL[OPERATOR_MACRO_IOC_SCOPE.SELECTION]}
+              </option>
+              <option value={OPERATOR_MACRO_IOC_SCOPE.ACTIVE_IOC}>
+                {OPERATOR_MACRO_IOC_SCOPE_LABEL[OPERATOR_MACRO_IOC_SCOPE.ACTIVE_IOC]}
+              </option>
+            </select>
+          </div>
+          <ToggleRow
+            label="Force refresh"
+            hint="Bypass enrichment cache for this step."
+            ariaLabel="Force refresh enrichment"
+            checked={step.params.forceRefresh === true}
+            disabled={disabled}
+            onChange={(checked) => patchParams({ forceRefresh: checked })}
+          />
+        </>
+      );
+    case OPERATOR_MACRO_STEP_TYPE.EXPORT_MARKDOWN:
+      return (
+        <>
+          <div className="v5-field">
+            <label
+              className="v5-field__label"
+              htmlFor={`${step.clientId}-export-template`}
+            >
+              Export template
+            </label>
+            <select
+              id={`${step.clientId}-export-template`}
+              className="v5-input"
+              disabled={disabled}
+              value={
+                typeof step.params.templateId === "string"
+                  ? step.params.templateId
+                  : EXPORT_TEMPLATE_IDS[0]
+              }
+              onChange={(event) => patchParams({ templateId: event.target.value })}
+            >
+              {EXPORT_TEMPLATE_IDS.map((templateId) => (
+                <option key={templateId} value={templateId}>
+                  {getExportTemplateLabel(templateId)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="v5-field">
+            <label
+              className="v5-field__label"
+              htmlFor={`${step.clientId}-export-destination`}
+            >
+              Destination
+            </label>
+            <select
+              id={`${step.clientId}-export-destination`}
+              className="v5-input"
+              disabled={disabled}
+              value={
+                typeof step.params.destination === "string"
+                  ? step.params.destination
+                  : OPERATOR_MACRO_EXPORT_DESTINATION.CLIPBOARD
+              }
+              onChange={(event) => patchParams({ destination: event.target.value })}
+            >
+              <option value={OPERATOR_MACRO_EXPORT_DESTINATION.CLIPBOARD}>
+                Clipboard
+              </option>
+              <option value={OPERATOR_MACRO_EXPORT_DESTINATION.DOWNLOAD}>
+                Download
+              </option>
+            </select>
+          </div>
+          <div className="v5-field">
+            <label className="v5-field__label" htmlFor={`${step.clientId}-export-scope`}>
+              IOC scope
+            </label>
+            <select
+              id={`${step.clientId}-export-scope`}
+              className="v5-input"
+              disabled={disabled}
+              value={
+                typeof step.params.scope === "string"
+                  ? step.params.scope
+                  : OPERATOR_MACRO_IOC_SCOPE.SELECTION
+              }
+              onChange={(event) => patchParams({ scope: event.target.value })}
+            >
+              {Object.values(OPERATOR_MACRO_IOC_SCOPE).map((scope) => (
+                <option key={scope} value={scope}>
+                  {OPERATOR_MACRO_IOC_SCOPE_LABEL[scope]}
+                </option>
+              ))}
+            </select>
+          </div>
+        </>
+      );
+    case OPERATOR_MACRO_STEP_TYPE.OPEN_PIVOT: {
+      const selectedProviders = readOperatorMacroStepProviders(step.params);
+      return (
+        <>
+          <div className="v5-field">
+            <span className="v5-field__label">Pivot providers</span>
+            <div className="v5-chips" style={{ marginBottom: 8 }}>
+              {selectedProviders.length > 0 ? (
+                selectedProviders.map((providerId) => (
+                  <span key={providerId} className="v5-chip">
+                    {ENRICHMENT_SOURCE_LABELS[providerId]}
+                  </span>
+                ))
+              ) : (
+                <span className="v5-chip v5-chip--muted">None selected</span>
+              )}
+            </div>
+            <ul className="v5-domain-list" aria-label="Pivot providers">
+              {ENRICHMENT_SOURCE_ORDER.map((providerId) => {
+                const checked = selectedProviders.includes(providerId);
+                return (
+                  <li key={providerId} className="v5-domain-list__item">
+                    <label className="v5-row" style={{ cursor: disabled ? "wait" : "pointer" }}>
+                      <span className="v5-row__text">
+                        <span className="v5-row__label">
+                          {ENRICHMENT_SOURCE_LABELS[providerId]}
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={disabled}
+                        onChange={(event) => {
+                          const next = event.target.checked
+                            ? [...selectedProviders, providerId]
+                            : selectedProviders.filter((entry) => entry !== providerId);
+                          patchParams({ providers: next });
+                        }}
+                      />
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <div className="v5-field">
+            <label className="v5-field__label" htmlFor={`${step.clientId}-pivot-open-mode`}>
+              Open mode
+            </label>
+            <select
+              id={`${step.clientId}-pivot-open-mode`}
+              className="v5-input"
+              disabled={disabled}
+              value={
+                typeof step.params.openMode === "string"
+                  ? step.params.openMode
+                  : OPERATOR_MACRO_PIVOT_OPEN_MODE.FIRST
+              }
+              onChange={(event) => patchParams({ openMode: event.target.value })}
+            >
+              <option value={OPERATOR_MACRO_PIVOT_OPEN_MODE.FIRST}>First provider</option>
+              <option value={OPERATOR_MACRO_PIVOT_OPEN_MODE.ALL}>All providers</option>
+            </select>
+          </div>
+        </>
+      );
+    }
+    case OPERATOR_MACRO_STEP_TYPE.APPLY_NOTE_TEMPLATE:
+      return (
+        <>
+          <div className="v5-field">
+            <label
+              className="v5-field__label"
+              htmlFor={`${step.clientId}-note-template-text`}
+            >
+              Template text
+            </label>
+            <textarea
+              id={`${step.clientId}-note-template-text`}
+              className="v5-input"
+              rows={4}
+              disabled={disabled}
+              maxLength={MAX_OPERATOR_MACRO_NOTE_TEMPLATE_TEXT_LENGTH}
+              value={
+                typeof step.params.templateText === "string" ? step.params.templateText : ""
+              }
+              onChange={(event) => patchParams({ templateText: event.target.value })}
+            />
+          </div>
+          <div className="v5-field">
+            <label className="v5-field__label" htmlFor={`${step.clientId}-note-template-mode`}>
+              Mode
+            </label>
+            <select
+              id={`${step.clientId}-note-template-mode`}
+              className="v5-input"
+              disabled={disabled}
+              value={
+                typeof step.params.mode === "string"
+                  ? step.params.mode
+                  : OPERATOR_MACRO_NOTE_TEMPLATE_MODE.APPEND
+              }
+              onChange={(event) => patchParams({ mode: event.target.value })}
+            >
+              <option value={OPERATOR_MACRO_NOTE_TEMPLATE_MODE.REPLACE}>Replace</option>
+              <option value={OPERATOR_MACRO_NOTE_TEMPLATE_MODE.APPEND}>Append</option>
+            </select>
+          </div>
+          <div className="v5-field">
+            <label className="v5-field__label" htmlFor={`${step.clientId}-note-template-scope`}>
+              IOC scope
+            </label>
+            <select
+              id={`${step.clientId}-note-template-scope`}
+              className="v5-input"
+              disabled={disabled}
+              value={
+                typeof step.params.scope === "string"
+                  ? step.params.scope
+                  : OPERATOR_MACRO_IOC_SCOPE.SELECTION
+              }
+              onChange={(event) => patchParams({ scope: event.target.value })}
+            >
+              <option value={OPERATOR_MACRO_IOC_SCOPE.SELECTION}>
+                {OPERATOR_MACRO_IOC_SCOPE_LABEL[OPERATOR_MACRO_IOC_SCOPE.SELECTION]}
+              </option>
+              <option value={OPERATOR_MACRO_IOC_SCOPE.ACTIVE_IOC}>
+                {OPERATOR_MACRO_IOC_SCOPE_LABEL[OPERATOR_MACRO_IOC_SCOPE.ACTIVE_IOC]}
+              </option>
+            </select>
+          </div>
+        </>
+      );
+    case OPERATOR_MACRO_STEP_TYPE.QUEUE_RELATED_IOCS:
+      return (
+        <>
+          <div className="v5-field">
+            <label className="v5-field__label" htmlFor={`${step.clientId}-queue-source`}>
+              Queue source
+            </label>
+            <select
+              id={`${step.clientId}-queue-source`}
+              className="v5-input"
+              disabled={disabled}
+              value={
+                typeof step.params.source === "string"
+                  ? step.params.source
+                  : OPERATOR_MACRO_QUEUE_SOURCE.TRAY_SCAN
+              }
+              onChange={(event) => patchParams({ source: event.target.value })}
+            >
+              <option value={OPERATOR_MACRO_QUEUE_SOURCE.APPEARED_ALONGSIDE}>
+                Appeared alongside
+              </option>
+              <option value={OPERATOR_MACRO_QUEUE_SOURCE.TRAY_SCAN}>Tray scan</option>
+            </select>
+          </div>
+          <div className="v5-field">
+            <label className="v5-field__label" htmlFor={`${step.clientId}-queue-limit`}>
+              Limit
+            </label>
+            <input
+              id={`${step.clientId}-queue-limit`}
+              type="number"
+              className="v5-input"
+              min={1}
+              max={MAX_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT}
+              disabled={disabled}
+              value={
+                typeof step.params.limit === "number"
+                  ? step.params.limit
+                  : DEFAULT_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT
+              }
+              onChange={(event) => {
+                const parsed = Number(event.target.value);
+                patchParams({
+                  limit: Number.isFinite(parsed)
+                    ? Math.min(
+                        MAX_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT,
+                        Math.max(1, Math.trunc(parsed))
+                      )
+                    : DEFAULT_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT,
+                });
+              }}
+            />
+          </div>
+        </>
+      );
+    default:
+      return null;
+  }
+}
+
+type OperatorMacroStepsEditorProps = {
+  steps: OperatorMacroStepDraft[];
+  disabled: boolean;
+  onChange: (steps: OperatorMacroStepDraft[]) => void;
+};
+
+function OperatorMacroStepsEditor({
+  steps,
+  disabled,
+  onChange,
+}: OperatorMacroStepsEditorProps) {
+  const [stepTypeToAdd, setStepTypeToAdd] = useState<OperatorMacroStepTypeV1>(
+    OPERATOR_MACRO_STEP_TYPE.ENRICH
+  );
+
+  const updateStep = (
+    clientId: string,
+    patch: Partial<Pick<OperatorMacroStepDraft, "type" | "params">>
+  ) => {
+    onChange(
+      steps.map((step) => {
+        if (step.clientId !== clientId) {
+          return step;
+        }
+        if (patch.type && patch.type !== step.type && isOperatorMacroStepTypeV1(patch.type)) {
+          const defaults = createDefaultOperatorMacroStep(patch.type);
+          return {
+            clientId: step.clientId,
+            type: defaults.type,
+            params: { ...defaults.params },
+          };
+        }
+        return {
+          ...step,
+          ...patch,
+          params: patch.params ?? step.params,
+        };
+      })
+    );
+  };
+
+  const moveStep = (clientId: string, direction: -1 | 1) => {
+    const index = steps.findIndex((step) => step.clientId === clientId);
+    if (index < 0) {
+      return;
+    }
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= steps.length) {
+      return;
+    }
+    const nextSteps = [...steps];
+    const [item] = nextSteps.splice(index, 1);
+    if (!item) {
+      return;
+    }
+    nextSteps.splice(nextIndex, 0, item);
+    onChange(nextSteps);
+  };
+
+  const removeStep = (clientId: string) => {
+    onChange(steps.filter((step) => step.clientId !== clientId));
+  };
+
+  const addStep = () => {
+    if (steps.length >= MAX_OPERATOR_MACRO_STEPS) {
+      return;
+    }
+    const defaults = createDefaultOperatorMacroStep(stepTypeToAdd);
+    onChange([
+      ...steps,
+      operatorMacroStepDraftFromStep(
+        {
+          type: defaults.type,
+          params: defaults.params as Record<string, unknown>,
+        },
+        createOperatorMacroStepDraftId()
+      ),
+    ]);
+  };
+
+  return (
+    <fieldset className="v5-field" disabled={disabled}>
+      <legend className="v5-field__label">Steps</legend>
+      {steps.length === 0 ? (
+        <span className="v5-status v5-status--muted">Add at least one step.</span>
+      ) : (
+        <ul className="v5-domain-list" aria-label="Macro steps">
+          {steps.map((step, index) => {
+            const stepError = operatorMacroStepDraftValidationError(step, index);
+            const stepType = isOperatorMacroStepTypeV1(step.type)
+              ? step.type
+              : OPERATOR_MACRO_STEP_TYPE.ENRICH;
+            return (
+              <li key={step.clientId} className="v5-domain-list__item">
+                <div style={{ display: "grid", gap: 12, flex: 1 }}>
+                  <div className="v5-field" style={{ margin: 0 }}>
+                    <label
+                      className="v5-field__label"
+                      htmlFor={`${step.clientId}-step-type`}
+                    >
+                      Step {index + 1}
+                    </label>
+                    <select
+                      id={`${step.clientId}-step-type`}
+                      className="v5-input"
+                      disabled={disabled}
+                      value={stepType}
+                      onChange={(event) => {
+                        const nextType = event.target.value;
+                        if (isOperatorMacroStepTypeV1(nextType)) {
+                          updateStep(step.clientId, { type: nextType });
+                        }
+                      }}
+                    >
+                      {OPERATOR_MACRO_STEP_TYPE_V1_ORDER.map((type) => (
+                        <option key={type} value={type}>
+                          {OPERATOR_MACRO_STEP_TYPE_LABEL[type]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <OperatorMacroStepFieldsEditor
+                    step={step}
+                    disabled={disabled}
+                    onParamsChange={(params) =>
+                      updateStep(step.clientId, { params })
+                    }
+                  />
+                  {stepError ? (
+                    <span className="v5-status v5-status--error" role="alert">
+                      {stepError}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="v5-actions" style={{ flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="v5-btn v5-btn--link"
+                    disabled={disabled || index === 0}
+                    onClick={() => moveStep(step.clientId, -1)}
+                    aria-label={`Move step ${index + 1} up`}
+                  >
+                    Move up
+                  </button>
+                  <button
+                    type="button"
+                    className="v5-btn v5-btn--link"
+                    disabled={disabled || index === steps.length - 1}
+                    onClick={() => moveStep(step.clientId, 1)}
+                    aria-label={`Move step ${index + 1} down`}
+                  >
+                    Move down
+                  </button>
+                  <button
+                    type="button"
+                    className="v5-btn v5-btn--link"
+                    disabled={disabled || steps.length <= 1}
+                    onClick={() => removeStep(step.clientId)}
+                    aria-label={`Remove step ${index + 1}`}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <div className="v5-actions" style={{ marginTop: 12, flexWrap: "wrap" }}>
+        <select
+          className="v5-input"
+          aria-label="Step type to add"
+          disabled={disabled || steps.length >= MAX_OPERATOR_MACRO_STEPS}
+          value={stepTypeToAdd}
+          onChange={(event) => {
+            const nextType = event.target.value;
+            if (isOperatorMacroStepTypeV1(nextType)) {
+              setStepTypeToAdd(nextType);
+            }
+          }}
+        >
+          {OPERATOR_MACRO_STEP_TYPE_V1_ORDER.map((type) => (
+            <option key={type} value={type}>
+              {OPERATOR_MACRO_STEP_TYPE_LABEL[type]}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="v5-btn"
+          disabled={disabled || steps.length >= MAX_OPERATOR_MACRO_STEPS}
+          onClick={addStep}
+        >
+          Add step
+        </button>
+      </div>
+      <span className="v5-row__hint" style={{ display: "block", marginTop: 8 }}>
+        {steps.length} / {MAX_OPERATOR_MACRO_STEPS} steps
+      </span>
+    </fieldset>
+  );
+}
+
+type OperatorMacrosListEditorProps = {
+  macros: readonly OperatorMacro[];
+  disabled: boolean;
+  onCreate: () => void;
+  onEdit: (macroId: string) => void;
+  onDuplicate: (macroId: string) => void;
+  onDelete: (macroId: string) => void;
+  onMoveUp: (macroId: string) => void;
+  onMoveDown: (macroId: string) => void;
+};
+
+function OperatorMacrosListEditor({
+  macros,
+  disabled,
+  onCreate,
+  onEdit,
+  onDuplicate,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+}: OperatorMacrosListEditorProps) {
+  return (
+    <div className="v5-field">
+      <div className="v5-actions" style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className="v5-btn v5-btn--primary"
+          disabled={disabled}
+          onClick={onCreate}
+        >
+          Create macro
+        </button>
+      </div>
+      {macros.length === 0 ? (
+        <span className="v5-status v5-status--muted">No macros stored yet.</span>
+      ) : (
+        <ul className="v5-domain-list" aria-label="Operator macros">
+          {macros.map((macro, index) => {
+            const builtIn = macro.metadata.builtIn;
+            const stepLabel =
+              macro.steps.length === 1 ? "1 step" : `${macro.steps.length} steps`;
+            return (
+              <li key={macro.id} className="v5-domain-list__item">
+                <div style={{ display: "grid", gap: 4, flex: 1 }}>
+                  <span>
+                    <strong>{macro.name}</strong>{" "}
+                    <code>{macro.id}</code>
+                    {builtIn ? (
+                      <span className="v5-status v5-status--muted"> Built-in</span>
+                    ) : null}
+                  </span>
+                  <span className="v5-row__hint" style={{ margin: 0 }}>
+                    {stepLabel} · {formatOperatorMacroTriggerSummary(macro.triggers)}
+                    {macro.metadata.description
+                      ? ` · ${macro.metadata.description}`
+                      : ""}
+                  </span>
+                </div>
+                <div className="v5-actions" style={{ flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="v5-btn v5-btn--link"
+                    disabled={disabled || index === 0}
+                    onClick={() => onMoveUp(macro.id)}
+                    aria-label={`Move ${macro.name} up`}
+                  >
+                    Move up
+                  </button>
+                  <button
+                    type="button"
+                    className="v5-btn v5-btn--link"
+                    disabled={disabled || index === macros.length - 1}
+                    onClick={() => onMoveDown(macro.id)}
+                    aria-label={`Move ${macro.name} down`}
+                  >
+                    Move down
+                  </button>
+                  <button
+                    type="button"
+                    className="v5-btn v5-btn--link"
+                    disabled={disabled || builtIn}
+                    onClick={() => onEdit(macro.id)}
+                    aria-label={`Edit ${macro.name}`}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="v5-btn v5-btn--link"
+                    disabled={disabled}
+                    onClick={() => onDuplicate(macro.id)}
+                    aria-label={`Duplicate ${macro.name}`}
+                  >
+                    Duplicate
+                  </button>
+                  {!builtIn ? (
+                    <button
+                      type="button"
+                      className="v5-btn v5-btn--link"
+                      disabled={disabled}
+                      onClick={() => onDelete(macro.id)}
+                      aria-label={`Delete ${macro.name}`}
+                    >
+                      Delete
+                    </button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
   );
 }
 
@@ -760,6 +1572,7 @@ function createEmptyApiKeyFieldStates(): Record<ApiKeySlot, ApiKeyFieldState> {
 export function Options() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const settingsPackImportInputRef = useRef<HTMLInputElement>(null);
+  const operatorMacroPackImportInputRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [activeSection, setActiveSection] = useState("overview");
   const [collapsedSections, setCollapsedSections] = useState<
@@ -772,6 +1585,7 @@ export function Options() {
     sources: true,
     "local-ai-summary": true,
     trust: true,
+    "operator-macros": true,
     cache: true,
     backup: true,
     "api-keys": true,
@@ -884,6 +1698,47 @@ export function Options() {
   const [fieldStates, setFieldStates] = useState<Record<ApiKeySlot, ApiKeyFieldState>>(
     createEmptyApiKeyFieldStates()
   );
+  const [operatorMacros, setOperatorMacros] = useState<OperatorMacro[]>([]);
+  const [operatorMacroEditorMode, setOperatorMacroEditorMode] = useState<
+    "create" | "edit" | null
+  >(null);
+  const [operatorMacroEditorTargetId, setOperatorMacroEditorTargetId] = useState<
+    string | null
+  >(null);
+  const [operatorMacroEditorDraft, setOperatorMacroEditorDraft] =
+    useState<OperatorMacroEditorDraft>(createEmptyOperatorMacroEditorDraft());
+  const [operatorMacroEditorError, setOperatorMacroEditorError] = useState<
+    string | null
+  >(null);
+  const [operatorMacroActionState, setOperatorMacroActionState] = useState<
+    "idle" | "busy" | "error"
+  >("idle");
+  const [operatorMacroFeedback, setOperatorMacroFeedback] = useState<string | null>(
+    null
+  );
+  const [operatorMacroPackExportState, setOperatorMacroPackExportState] = useState<
+    "idle" | "exporting" | "exported" | "error"
+  >("idle");
+  const [operatorMacroPackImportPreview, setOperatorMacroPackImportPreview] =
+    useState<OperatorMacroPackImportPreview | null>(null);
+  const [operatorMacroPackImportRawJson, setOperatorMacroPackImportRawJson] = useState<
+    string | null
+  >(null);
+  const [operatorMacroPackImportState, setOperatorMacroPackImportState] = useState<
+    "idle" | "importing" | "imported" | "error"
+  >("idle");
+
+  const reloadOperatorMacros = async (): Promise<void> => {
+    await ensureBuiltInOperatorMacros();
+    const macros = await listStoredOperatorMacros();
+    setOperatorMacros(macros);
+  };
+
+  useEffect(() => {
+    void reloadOperatorMacros().catch(() => {
+      setOperatorMacros([]);
+    });
+  }, [settingsReloadToken]);
 
   useEffect(() => {
     setReady(false);
@@ -1356,6 +2211,328 @@ export function Options() {
     const next = domainDenylist.filter((item) => item !== entry);
     setDomainDenylistState(next);
     void setDomainDenylist(next);
+  };
+
+  const handleOpenCreateOperatorMacro = () => {
+    setOperatorMacroEditorMode("create");
+    setOperatorMacroEditorTargetId(null);
+    setOperatorMacroEditorDraft(createEmptyOperatorMacroEditorDraft());
+    setOperatorMacroEditorError(null);
+  };
+
+  const handleOpenEditOperatorMacro = (macroId: string) => {
+    const macro = operatorMacros.find((entry) => entry.id === macroId);
+    if (!macro) {
+      return;
+    }
+    setOperatorMacroEditorMode("edit");
+    setOperatorMacroEditorTargetId(macro.id);
+    setOperatorMacroEditorDraft(operatorMacroEditorDraftFromMacro(macro));
+    setOperatorMacroEditorError(null);
+  };
+
+  const handleCloseOperatorMacroEditor = () => {
+    setOperatorMacroEditorMode(null);
+    setOperatorMacroEditorTargetId(null);
+    setOperatorMacroEditorDraft(createEmptyOperatorMacroEditorDraft());
+    setOperatorMacroEditorError(null);
+  };
+
+  const handleSaveOperatorMacroEditor = () => {
+    const name = normalizeOperatorMacroName(operatorMacroEditorDraft.name);
+    if (!name) {
+      setOperatorMacroEditorError("Macro name is required.");
+      return;
+    }
+
+    const triggers = operatorMacroEditorDraft.triggers;
+    if (!triggers.palette && !triggers.tray && !triggers.context) {
+      setOperatorMacroEditorError("Enable at least one trigger surface.");
+      return;
+    }
+
+    const editorSteps = operatorMacroEditorDraft.steps.map(({ type, params }) => ({
+      type,
+      params,
+    }));
+    const stepsError = validateOperatorMacroEditorSteps(editorSteps);
+    if (stepsError) {
+      setOperatorMacroEditorError(stepsError);
+      return;
+    }
+
+    let serializedSteps: OperatorMacroStep[];
+    try {
+      serializedSteps = serializeOperatorMacroEditorSteps(editorSteps);
+    } catch {
+      setOperatorMacroEditorError("Macro steps could not be saved.");
+      return;
+    }
+
+    setOperatorMacroActionState("busy");
+    setOperatorMacroEditorError(null);
+
+    if (operatorMacroEditorMode === "create") {
+      const id =
+        normalizeOperatorMacroId(operatorMacroEditorDraft.id) ??
+        suggestOperatorMacroIdFromName(name);
+      if (!id) {
+        setOperatorMacroActionState("error");
+        setOperatorMacroEditorError(
+          "Macro id must start with a letter and use lowercase letters, numbers, and hyphens only."
+        );
+        return;
+      }
+      if (operatorMacros.some((macro) => macro.id === id)) {
+        setOperatorMacroActionState("error");
+        setOperatorMacroEditorError("A macro with this id already exists.");
+        return;
+      }
+
+      void createStoredOperatorMacro({
+        id,
+        name,
+        steps: serializedSteps,
+        triggers,
+        metadata: {
+          description: operatorMacroEditorDraft.description.trim(),
+          builtIn: false,
+        },
+      })
+        .then(async (created) => {
+          if (!created) {
+            setOperatorMacroActionState("error");
+            setOperatorMacroEditorError("Macro could not be created.");
+            return;
+          }
+          await reloadOperatorMacros();
+          setOperatorMacroActionState("idle");
+          setOperatorMacroFeedback(`Created macro ${created.name}.`);
+          handleCloseOperatorMacroEditor();
+        })
+        .catch(() => {
+          setOperatorMacroActionState("error");
+          setOperatorMacroEditorError("Macro could not be created.");
+        });
+      return;
+    }
+
+    if (operatorMacroEditorMode !== "edit" || !operatorMacroEditorTargetId) {
+      setOperatorMacroActionState("idle");
+      return;
+    }
+
+    const existing = operatorMacros.find(
+      (macro) => macro.id === operatorMacroEditorTargetId
+    );
+    if (!existing || existing.metadata.builtIn) {
+      setOperatorMacroActionState("error");
+      setOperatorMacroEditorError("Macro could not be found.");
+      return;
+    }
+
+    void saveStoredOperatorMacro({
+      ...existing,
+      name,
+      steps: serializedSteps,
+      triggers,
+      metadata: {
+        ...existing.metadata,
+        description: operatorMacroEditorDraft.description.trim(),
+        updatedAt: Date.now(),
+      },
+    })
+      .then(async (saved) => {
+        if (!saved) {
+          setOperatorMacroActionState("error");
+          setOperatorMacroEditorError("Macro could not be saved.");
+          return;
+        }
+        await reloadOperatorMacros();
+        setOperatorMacroActionState("idle");
+        setOperatorMacroFeedback(`Saved macro ${name}.`);
+        handleCloseOperatorMacroEditor();
+      })
+      .catch(() => {
+        setOperatorMacroActionState("error");
+        setOperatorMacroEditorError("Macro could not be saved.");
+      });
+  };
+
+  const handleDuplicateOperatorMacro = (macroId: string) => {
+    setOperatorMacroActionState("busy");
+    setOperatorMacroFeedback(null);
+    void duplicateStoredOperatorMacro(macroId)
+      .then(async (duplicate) => {
+        if (!duplicate) {
+          setOperatorMacroActionState("error");
+          setOperatorMacroFeedback("Macro could not be duplicated.");
+          return;
+        }
+        await reloadOperatorMacros();
+        setOperatorMacroActionState("idle");
+        setOperatorMacroFeedback(`Duplicated macro as ${duplicate.name}.`);
+      })
+      .catch(() => {
+        setOperatorMacroActionState("error");
+        setOperatorMacroFeedback("Macro could not be duplicated.");
+      });
+  };
+
+  const handleDeleteOperatorMacro = (macroId: string) => {
+    setOperatorMacroActionState("busy");
+    setOperatorMacroFeedback(null);
+    void deleteStoredOperatorMacro(macroId)
+      .then(async (deleted) => {
+        if (!deleted) {
+          setOperatorMacroActionState("error");
+          setOperatorMacroFeedback("Macro could not be deleted.");
+          return;
+        }
+        await reloadOperatorMacros();
+        setOperatorMacroActionState("idle");
+        setOperatorMacroFeedback("Macro deleted.");
+      })
+      .catch(() => {
+        setOperatorMacroActionState("error");
+        setOperatorMacroFeedback("Macro could not be deleted.");
+      });
+  };
+
+  const persistOperatorMacroOrder = (nextMacros: OperatorMacro[]) => {
+    setOperatorMacroActionState("busy");
+    setOperatorMacroFeedback(null);
+    void reorderStoredOperatorMacros(nextMacros.map((macro) => macro.id))
+      .then(async (reordered) => {
+        if (!reordered) {
+          setOperatorMacroActionState("error");
+          setOperatorMacroFeedback("Macro order could not be saved.");
+          return;
+        }
+        await reloadOperatorMacros();
+        setOperatorMacroActionState("idle");
+      })
+      .catch(() => {
+        setOperatorMacroActionState("error");
+        setOperatorMacroFeedback("Macro order could not be saved.");
+      });
+  };
+
+  const handleMoveOperatorMacroUp = (macroId: string) => {
+    const index = operatorMacros.findIndex((macro) => macro.id === macroId);
+    if (index <= 0) {
+      return;
+    }
+    const nextMacros = [...operatorMacros];
+    const [entry] = nextMacros.splice(index, 1);
+    if (!entry) {
+      return;
+    }
+    nextMacros.splice(index - 1, 0, entry);
+    setOperatorMacros(nextMacros);
+    persistOperatorMacroOrder(nextMacros);
+  };
+
+  const handleMoveOperatorMacroDown = (macroId: string) => {
+    const index = operatorMacros.findIndex((macro) => macro.id === macroId);
+    if (index === -1 || index >= operatorMacros.length - 1) {
+      return;
+    }
+    const nextMacros = [...operatorMacros];
+    const [entry] = nextMacros.splice(index, 1);
+    if (!entry) {
+      return;
+    }
+    nextMacros.splice(index + 1, 0, entry);
+    setOperatorMacros(nextMacros);
+    persistOperatorMacroOrder(nextMacros);
+  };
+
+  const handleExportOperatorMacroPack = () => {
+    setOperatorMacroPackExportState("exporting");
+    setOperatorMacroFeedback(null);
+    void exportUserOperatorMacroPackJson()
+      .then((json) => {
+        downloadOperatorMacroPackExport(json);
+        setOperatorMacroPackExportState("exported");
+        setOperatorMacroFeedback("Exported user macros.");
+      })
+      .catch(() => {
+        setOperatorMacroPackExportState("error");
+        setOperatorMacroFeedback("Macro pack could not be exported.");
+        setOperatorMacroActionState("error");
+      });
+  };
+
+  const handleOperatorMacroPackImportClick = () => {
+    operatorMacroPackImportInputRef.current?.click();
+  };
+
+  const clearOperatorMacroPackImportPreview = () => {
+    setOperatorMacroPackImportPreview(null);
+    setOperatorMacroPackImportRawJson(null);
+  };
+
+  const handleOperatorMacroPackImportCancel = () => {
+    clearOperatorMacroPackImportPreview();
+    setOperatorMacroPackImportState("idle");
+  };
+
+  const handleOperatorMacroPackImportConfirm = () => {
+    if (!operatorMacroPackImportRawJson) {
+      return;
+    }
+
+    setOperatorMacroPackImportState("importing");
+    setOperatorMacroActionState("busy");
+    setOperatorMacroFeedback(null);
+    void importUserOperatorMacroPackJson(operatorMacroPackImportRawJson)
+      .then(async () => {
+        clearOperatorMacroPackImportPreview();
+        setOperatorMacroPackImportState("imported");
+        setOperatorMacroActionState("idle");
+        setOperatorMacroFeedback("Imported user macros.");
+        await reloadOperatorMacros();
+      })
+      .catch(() => {
+        setOperatorMacroPackImportState("error");
+        setOperatorMacroActionState("error");
+        setOperatorMacroFeedback("Macro pack could not be imported.");
+      });
+  };
+
+  const handleOperatorMacroPackImportFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    setOperatorMacroPackImportState("idle");
+    setOperatorMacroActionState("idle");
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rawJson = typeof reader.result === "string" ? reader.result : "";
+      try {
+        const preview = buildOperatorMacroPackImportPreview(operatorMacros, rawJson);
+        setOperatorMacroPackImportPreview(preview);
+        setOperatorMacroPackImportRawJson(rawJson);
+      } catch {
+        clearOperatorMacroPackImportPreview();
+        setOperatorMacroPackImportState("error");
+        setOperatorMacroFeedback("Macro pack could not be imported.");
+        setOperatorMacroActionState("error");
+      }
+    };
+    reader.onerror = () => {
+      clearOperatorMacroPackImportPreview();
+      setOperatorMacroPackImportState("error");
+      setOperatorMacroFeedback("Macro pack could not be imported.");
+      setOperatorMacroActionState("error");
+    };
+    reader.readAsText(file);
   };
 
   const handleApplyDomainPolicyPreset = (presetId: string) => {
@@ -3038,6 +4215,137 @@ export function Options() {
             </div>
           </section>
 
+          <section
+            id="operator-macros"
+            className="v5-card"
+            aria-labelledby="operator-macros-heading"
+          >
+            <div className="v5-card__head">
+              <h2 id="operator-macros-heading" className="v5-card__title">
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections["operator-macros"]}
+                  aria-controls="operator-macros-body"
+                  onClick={() => toggleSection("operator-macros")}
+                >
+                  <span className="v5-card__toggle-text">Operator Macros</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
+              </h2>
+              <p className="v5-card__desc">
+                Create local-only step sequences for repeatable analyst playbooks.
+                Macros stay on this browser profile and never sync through Vera5
+                cloud infrastructure.
+              </p>
+            </div>
+            <div
+              id="operator-macros-body"
+              className="v5-card__body"
+              hidden={collapsedSections["operator-macros"]}
+            >
+              <span
+                className="v5-status v5-status--muted"
+                style={{ display: "block", marginBottom: 12 }}
+              >
+                Built-in playbooks ship with the extension. Create, duplicate,
+                reorder, and delete your own macros here. Configure individual
+                steps from the macro editor.
+              </span>
+              <ul
+                className="v5-domain-list"
+                aria-label="Suggested macros by page profile"
+                style={{ marginBottom: 12 }}
+              >
+                {PAGE_CONTEXT_TYPE_ORDER.filter(
+                  (pageContextType) =>
+                    PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE[pageContextType]
+                ).map((pageContextType) => (
+                  <li key={pageContextType} className="v5-domain-list__item">
+                    <span className="v5-row__hint" style={{ margin: 0 }}>
+                      {PAGE_CONTEXT_TYPE_LABEL[pageContextType]} suggests{" "}
+                      <code>
+                        {PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE[pageContextType]}
+                      </code>
+                      {" "}
+                      unless a per-site page profile override is active.
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {operatorMacroFeedback ? (
+                <span
+                  className={`v5-status${
+                    operatorMacroActionState === "error"
+                      ? " v5-status--error"
+                      : " v5-status--success"
+                  }`}
+                  role="status"
+                  style={{ display: "block", marginBottom: 12 }}
+                >
+                  {operatorMacroActionState === "error" ? null : <CheckIcon />}
+                  {operatorMacroFeedback}
+                </span>
+              ) : null}
+              <OperatorMacrosListEditor
+                macros={operatorMacros}
+                disabled={!ready || operatorMacroActionState === "busy"}
+                onCreate={handleOpenCreateOperatorMacro}
+                onEdit={handleOpenEditOperatorMacro}
+                onDuplicate={handleDuplicateOperatorMacro}
+                onDelete={handleDeleteOperatorMacro}
+                onMoveUp={handleMoveOperatorMacroUp}
+                onMoveDown={handleMoveOperatorMacroDown}
+              />
+              <div className="v5-actions" style={{ marginTop: 16, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="v5-btn"
+                  disabled={
+                    !ready ||
+                    operatorMacroActionState === "busy" ||
+                    operatorMacroPackExportState === "exporting"
+                  }
+                  onClick={handleExportOperatorMacroPack}
+                  aria-label="Export user macro pack JSON"
+                >
+                  {operatorMacroPackExportState === "exporting"
+                    ? "Exporting…"
+                    : "Export macro pack"}
+                </button>
+                <button
+                  type="button"
+                  className="v5-btn"
+                  disabled={
+                    !ready ||
+                    operatorMacroActionState === "busy" ||
+                    operatorMacroPackImportState === "importing"
+                  }
+                  onClick={handleOperatorMacroPackImportClick}
+                  aria-label="Import user macro pack JSON"
+                >
+                  {operatorMacroPackImportState === "importing"
+                    ? "Importing…"
+                    : "Import macro pack"}
+                </button>
+                <input
+                  ref={operatorMacroPackImportInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  aria-label="Import user macro pack JSON file"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={{ display: "none" }}
+                  onChange={handleOperatorMacroPackImportFileChange}
+                />
+              </div>
+              <span className="v5-row__hint" style={{ display: "block", marginTop: 8 }}>
+                Export or import your custom macros as JSON for backup across browser
+                profiles. Built-in playbooks and API keys are never included.
+              </span>
+            </div>
+          </section>
+
           <section id="cache" className="v5-card" aria-labelledby="cache-heading">
             <div className="v5-card__head">
               <h2 id="cache-heading" className="v5-card__title">
@@ -3333,6 +4641,84 @@ export function Options() {
         </div>
       </div>
 
+      {operatorMacroPackImportPreview ? (
+        <div
+          className="v5-consent-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              handleOperatorMacroPackImportCancel();
+            }
+          }}
+        >
+          <div
+            className="v5-consent-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="operator-macro-pack-import-title"
+            aria-describedby="operator-macro-pack-import-body"
+          >
+            <h2
+              id="operator-macro-pack-import-title"
+              className="v5-consent-dialog__title"
+            >
+              Review macro pack import
+            </h2>
+            <div id="operator-macro-pack-import-body" className="v5-consent-dialog__body">
+              <p>
+                Applying this pack adds or updates your custom macros. Built-in
+                playbooks on this profile stay unchanged.
+              </p>
+              {operatorMacroPackImportPreview.entries.length === 0 ? (
+                <p>This pack does not include any macros.</p>
+              ) : (
+                <ul className="v5-settings-pack-diff">
+                  {operatorMacroPackImportPreview.entries.map((entry) => (
+                    <li
+                      key={entry.macroId}
+                      className="v5-settings-pack-diff__item"
+                    >
+                      <span className="v5-settings-pack-diff__label">
+                        {entry.macroName} <code>{entry.macroId}</code>
+                      </span>
+                      <span className="v5-settings-pack-diff__values">
+                        {entry.action === "add"
+                          ? "Add"
+                          : entry.action === "update"
+                            ? "Update"
+                            : "Skip"}
+                        {entry.reason ? ` · ${entry.reason}` : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="v5-consent-dialog__actions">
+              <button
+                type="button"
+                className="v5-btn"
+                disabled={operatorMacroPackImportState === "importing"}
+                onClick={handleOperatorMacroPackImportCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="v5-btn v5-btn--primary"
+                disabled={operatorMacroPackImportState === "importing"}
+                onClick={handleOperatorMacroPackImportConfirm}
+                aria-label="Apply macro pack import"
+              >
+                {operatorMacroPackImportState === "importing"
+                  ? "Applying…"
+                  : "Apply pack"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {settingsPackImportPreview ? (
         <div
           className="v5-consent-backdrop"
@@ -3478,6 +4864,179 @@ export function Options() {
                 onClick={handleAttributeHrefConsentConfirm}
               >
                 Enable attribute scan
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {operatorMacroEditorMode ? (
+        <div
+          className="v5-consent-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              handleCloseOperatorMacroEditor();
+            }
+          }}
+        >
+          <div
+            className="v5-consent-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="operator-macro-editor-title"
+            aria-describedby="operator-macro-editor-body"
+          >
+            <h2 id="operator-macro-editor-title" className="v5-consent-dialog__title">
+              {operatorMacroEditorMode === "create" ? "Create macro" : "Edit macro"}
+            </h2>
+            <div id="operator-macro-editor-body" className="v5-consent-dialog__body">
+              <div className="v5-field">
+                <label className="v5-field__label" htmlFor="operator-macro-name">
+                  Name
+                </label>
+                <input
+                  id="operator-macro-name"
+                  type="text"
+                  className="v5-input"
+                  value={operatorMacroEditorDraft.name}
+                  maxLength={MAX_OPERATOR_MACRO_NAME_LENGTH}
+                  disabled={operatorMacroActionState === "busy"}
+                  onChange={(event) => {
+                    const name = event.target.value;
+                    setOperatorMacroEditorDraft((draft) => ({
+                      ...draft,
+                      name,
+                      id:
+                        operatorMacroEditorMode === "create" && draft.id.trim().length === 0
+                          ? suggestOperatorMacroIdFromName(name)
+                          : draft.id,
+                    }));
+                  }}
+                />
+              </div>
+              {operatorMacroEditorMode === "create" ? (
+                <div className="v5-field">
+                  <label className="v5-field__label" htmlFor="operator-macro-id">
+                    Macro id
+                  </label>
+                  <input
+                    id="operator-macro-id"
+                    type="text"
+                    className="v5-input"
+                    value={operatorMacroEditorDraft.id}
+                    maxLength={MAX_OPERATOR_MACRO_ID_LENGTH}
+                    disabled={operatorMacroActionState === "busy"}
+                    onChange={(event) =>
+                      setOperatorMacroEditorDraft((draft) => ({
+                        ...draft,
+                        id: event.target.value,
+                      }))
+                    }
+                  />
+                  <span className="v5-row__hint" style={{ display: "block", marginTop: 8 }}>
+                    Lowercase letters, numbers, and hyphens. Must start with a letter.
+                  </span>
+                </div>
+              ) : (
+                <div className="v5-field">
+                  <span className="v5-field__label">Macro id</span>
+                  <code>{operatorMacroEditorDraft.id}</code>
+                </div>
+              )}
+              <div className="v5-field">
+                <label
+                  className="v5-field__label"
+                  htmlFor="operator-macro-description"
+                >
+                  Description
+                </label>
+                <textarea
+                  id="operator-macro-description"
+                  className="v5-input"
+                  rows={3}
+                  value={operatorMacroEditorDraft.description}
+                  maxLength={MAX_OPERATOR_MACRO_DESCRIPTION_LENGTH}
+                  disabled={operatorMacroActionState === "busy"}
+                  onChange={(event) =>
+                    setOperatorMacroEditorDraft((draft) => ({
+                      ...draft,
+                      description: event.target.value,
+                    }))
+                  }
+                />
+              </div>
+              <OperatorMacroStepsEditor
+                steps={operatorMacroEditorDraft.steps}
+                disabled={operatorMacroActionState === "busy"}
+                onChange={(steps) =>
+                  setOperatorMacroEditorDraft((draft) => ({
+                    ...draft,
+                    steps,
+                  }))
+                }
+              />
+              <fieldset className="v5-field" disabled={operatorMacroActionState === "busy"}>
+                <legend className="v5-field__label">Triggers</legend>
+                <ToggleRow
+                  label="Command palette"
+                  ariaLabel="Register macro in command palette"
+                  checked={operatorMacroEditorDraft.triggers.palette}
+                  disabled={operatorMacroActionState === "busy"}
+                  onChange={(checked) =>
+                    setOperatorMacroEditorDraft((draft) => ({
+                      ...draft,
+                      triggers: { ...draft.triggers, palette: checked },
+                    }))
+                  }
+                />
+                <ToggleRow
+                  label="IOC tray"
+                  ariaLabel="Register macro in IOC tray"
+                  checked={operatorMacroEditorDraft.triggers.tray}
+                  disabled={operatorMacroActionState === "busy"}
+                  onChange={(checked) =>
+                    setOperatorMacroEditorDraft((draft) => ({
+                      ...draft,
+                      triggers: { ...draft.triggers, tray: checked },
+                    }))
+                  }
+                />
+                <ToggleRow
+                  label="Context menu"
+                  ariaLabel="Register macro in context menu"
+                  checked={operatorMacroEditorDraft.triggers.context}
+                  disabled={operatorMacroActionState === "busy"}
+                  onChange={(checked) =>
+                    setOperatorMacroEditorDraft((draft) => ({
+                      ...draft,
+                      triggers: { ...draft.triggers, context: checked },
+                    }))
+                  }
+                />
+              </fieldset>
+              {operatorMacroEditorError ? (
+                <span className="v5-status v5-status--error" role="alert">
+                  {operatorMacroEditorError}
+                </span>
+              ) : null}
+            </div>
+            <div className="v5-consent-dialog__actions">
+              <button
+                type="button"
+                className="v5-btn"
+                disabled={operatorMacroActionState === "busy"}
+                onClick={handleCloseOperatorMacroEditor}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="v5-btn v5-btn--primary"
+                disabled={operatorMacroActionState === "busy"}
+                onClick={handleSaveOperatorMacroEditor}
+              >
+                {operatorMacroActionState === "busy" ? "Saving…" : "Save macro"}
               </button>
             </div>
           </div>

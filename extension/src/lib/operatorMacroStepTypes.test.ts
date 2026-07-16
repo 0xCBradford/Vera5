@@ -7,6 +7,7 @@ import {
 } from "./operatorMacro";
 import {
   DEFAULT_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT,
+  MAX_OPERATOR_MACRO_LIVE_ENRICH_CALLS_PER_RUN,
   OPERATOR_MACRO_EXPORT_DESTINATION,
   OPERATOR_MACRO_IOC_SCOPE,
   OPERATOR_MACRO_NOTE_TEMPLATE_MODE,
@@ -14,6 +15,8 @@ import {
   OPERATOR_MACRO_QUEUE_SOURCE,
   OPERATOR_MACRO_STEP_PARAMS_SCHEMA_VERSION,
   OPERATOR_MACRO_STEP_TYPE,
+  OPERATOR_MACRO_STEP_TYPE_V1_ORDER,
+  OPERATOR_MACRO_STEP_TYPE_V1_SET,
   normalizeOperatorMacroApplyNoteTemplateStepParams,
   normalizeOperatorMacroEnrichStepParams,
   normalizeOperatorMacroExportMarkdownStepParams,
@@ -23,6 +26,28 @@ import {
 } from "./operatorMacroStepTypes";
 
 describe("operatorMacroStepTypes v1", () => {
+  it("caps live enrich calls per macro run at the default queue limit", () => {
+    expect(MAX_OPERATOR_MACRO_LIVE_ENRICH_CALLS_PER_RUN).toBe(
+      DEFAULT_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT
+    );
+  });
+
+  it("lists every v1 step type exactly once for schema validation", () => {
+    expect(OPERATOR_MACRO_STEP_TYPE_V1_ORDER).toEqual([
+      OPERATOR_MACRO_STEP_TYPE.ENRICH,
+      OPERATOR_MACRO_STEP_TYPE.EXPORT_MARKDOWN,
+      OPERATOR_MACRO_STEP_TYPE.OPEN_PIVOT,
+      OPERATOR_MACRO_STEP_TYPE.APPLY_NOTE_TEMPLATE,
+      OPERATOR_MACRO_STEP_TYPE.QUEUE_RELATED_IOCS,
+    ]);
+    expect(OPERATOR_MACRO_STEP_TYPE_V1_ORDER).toHaveLength(
+      Object.keys(OPERATOR_MACRO_STEP_TYPE).length
+    );
+    for (const stepType of OPERATOR_MACRO_STEP_TYPE_V1_ORDER) {
+      expect(OPERATOR_MACRO_STEP_TYPE_V1_SET.has(stepType)).toBe(true);
+    }
+  });
+
   it("normalizes enrich step params with scope and forceRefresh", () => {
     expect(
       normalizeOperatorMacroEnrichStepParams({

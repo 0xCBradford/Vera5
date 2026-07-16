@@ -5,16 +5,20 @@ import {
   createEmptyOperatorMacrosStore,
   createStoredOperatorMacro,
   deleteStoredOperatorMacro,
+  duplicateStoredOperatorMacro,
   ensureBuiltInOperatorMacros,
+  exportUserOperatorMacroPackJson,
   getOperatorMacrosStore,
   getStoredOperatorMacro,
   hydrateOperatorMacrosStore,
   importStoredOperatorMacroFromJson,
+  importUserOperatorMacroPackJson,
   listStoredOperatorMacros,
   MAX_STORED_OPERATOR_MACROS,
   normalizeOperatorMacrosStore,
   OPERATOR_MACRO_STORE_SCHEMA_VERSION,
   persistOperatorMacrosStore,
+  reorderStoredOperatorMacros,
   saveStoredOperatorMacro,
   STORAGE_KEY_OPERATOR_MACROS,
 } from "./operatorMacroStorage";
@@ -133,6 +137,51 @@ describe("operatorMacroStorage", () => {
     expect(store[STORAGE_KEY_OPERATOR_MACROS]).toBeUndefined();
   });
 
+  it("round-trips a multi-step macro with preserved step order", async () => {
+    const macro = createOperatorMacro({
+      id: "multi-step-round-trip",
+      name: "Multi-step round trip",
+      steps: [
+        { type: "enrich", params: { scope: "selection", forceRefresh: true } },
+        {
+          type: "exportMarkdown",
+          params: {
+            templateId: "markdown-report",
+            destination: "clipboard",
+            scope: "selection",
+          },
+        },
+        {
+          type: "openPivot",
+          params: { providers: ["otx"], openMode: "all" },
+        },
+      ],
+      triggers: { palette: true, tray: true, context: false },
+      metadata: {
+        description: "Storage round-trip fixture",
+        tags: ["round-trip"],
+        updatedAt: 400,
+      },
+    });
+
+    expect(await saveStoredOperatorMacro(macro)).toBe(true);
+    const stored = await getStoredOperatorMacro("multi-step-round-trip");
+    expect(stored).toEqual(macro);
+    expect(stored?.steps.map((step) => step.type)).toEqual([
+      "enrich",
+      "exportMarkdown",
+      "openPivot",
+    ]);
+
+    const listed = await listStoredOperatorMacros();
+    expect(listed.find((entry) => entry.id === "multi-step-round-trip")).toEqual(macro);
+
+    const reloaded = await getOperatorMacrosStore();
+    expect(
+      reloaded.macros.find((entry) => entry.id === "multi-step-round-trip")?.steps
+    ).toEqual(macro.steps);
+  });
+
   it("creates stored macros through the storage helper", async () => {
     const created = await createStoredOperatorMacro({
       id: "palette-run",
@@ -165,7 +214,7 @@ describe("operatorMacroStorage", () => {
       macros: [older, newer, ...extras],
     });
 
-    expect(normalized.macros.find((macro) => macro.id === "shared-id")?.name).toBe("Newer");
+    expect(normalized.macros.find((macro) => macro.id === "shared-id")?.name).toBe("Older");
     expect(normalized.macros).toHaveLength(MAX_STORED_OPERATOR_MACROS);
   });
 
@@ -255,5 +304,70 @@ describe("operatorMacroStorage", () => {
     const stored = await getStoredOperatorMacro(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK);
     expect(stored?.name).toBe("Custom override");
     expect(stored?.metadata.builtIn).toBe(false);
+  });
+
+  it("preserves macro list order when saving and reordering", async () => {
+    const first = buildMacro({ id: "macro-a", name: "Macro A", updatedAt: 300 });
+    const second = buildMacro({ id: "macro-b", name: "Macro B", updatedAt: 100 });
+    await persistOperatorMacrosStore({
+      schemaVersion: OPERATOR_MACRO_STORE_SCHEMA_VERSION,
+      macros: [first, second],
+    });
+
+    await expect(listStoredOperatorMacros()).resolves.toEqual([first, second]);
+
+    expect(
+      await reorderStoredOperatorMacros(["macro-b", "macro-a"])
+    ).toBe(true);
+    await expect(listStoredOperatorMacros()).resolves.toEqual([second, first]);
+  });
+
+  it("duplicates a macro after the source entry with a unique id", async () => {
+    const source = buildMacro({ id: "source-macro", name: "Source macro", updatedAt: 10 });
+    await saveStoredOperatorMacro(source);
+
+    const duplicate = await duplicateStoredOperatorMacro("source-macro");
+    expect(duplicate?.id).toBe("source-macro-copy");
+    expect(duplicate?.name).toBe("Source macro (copy)");
+    expect(duplicate?.metadata.builtIn).toBe(false);
+
+    await expect(listStoredOperatorMacros()).resolves.toEqual([
+      source,
+      expect.objectContaining({ id: "source-macro-copy" }),
+    ]);
+  });
+
+  it("refuses to delete built-in macros", async () => {
+    await ensureBuiltInOperatorMacros();
+    expect(await deleteStoredOperatorMacro(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK)).toBe(
+      false
+    );
+    await expect(getStoredOperatorMacro(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK)).resolves.not.toBeNull();
+  });
+
+  it("exports and imports user macro packs without built-ins or secrets", async () => {
+    await createStoredOperatorMacro({
+      id: "pack-export",
+      name: "Pack export",
+      steps: [{ type: "enrich", params: { scope: "selection" } }],
+      triggers: { palette: true },
+      metadata: { description: "Portable macro" },
+    });
+    await ensureBuiltInOperatorMacros();
+
+    const exportedJson = await exportUserOperatorMacroPackJson();
+    expect(exportedJson).toContain("pack-export");
+    expect(exportedJson).not.toContain(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK);
+
+    await deleteStoredOperatorMacro("pack-export");
+    await expect(getStoredOperatorMacro("pack-export")).resolves.toBeNull();
+
+    await importUserOperatorMacroPackJson(exportedJson);
+    await expect(getStoredOperatorMacro("pack-export")).resolves.toMatchObject({
+      id: "pack-export",
+      name: "Pack export",
+      metadata: expect.objectContaining({ builtIn: false }),
+    });
+    await expect(getStoredOperatorMacro(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK)).resolves.not.toBeNull();
   });
 });

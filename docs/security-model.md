@@ -35,7 +35,7 @@ Permission rationale below matches this behavior.
 - **`storage`** does not send data to Vera5 servers; it is local browser storage only.
 - **`activeTab`** does not by itself read page content until you interact with the extension in that tab (combined with host access below for declared content scripts).
 - **`scripting`** is not used to run remote code, `eval`, or maintainer-hosted scripts—all executable code ships inside the extension package reviewers install.
-- **`contextMenus`** adds a selection action only; it does not bypass domain policy, quiet mode, pre-query disclosure, or manual-only defaults.
+- **`contextMenus`** adds selection actions (**Enrich selection with Vera5**, **Run macro on selection**) only; they do not bypass domain policy, quiet mode, pre-query disclosure, or manual-only defaults. Macro runs still use the shared content-script runner and trust gates.
 
 ## Host permissions
 

@@ -4,7 +4,10 @@ import {
   type CommandPaletteCommand,
 } from "../lib/commandRegistry";
 import { ensureVera5UiStyles } from "../lib/vera5UiStyles";
-import { registerCoreCommandPaletteCommands } from "./commandPaletteCommands";
+import {
+  registerCoreCommandPaletteCommands,
+  registerOperatorMacroPaletteCommands,
+} from "./commandPaletteCommands";
 import { CONTENT_MESSAGE } from "./constants";
 
 export const COMMAND_PALETTE_HOST_ID = "vera5-command-palette-host";
@@ -255,6 +258,12 @@ export function openCommandPalette(doc: Document = document): void {
   }
   renderCommandList(doc);
   input?.focus();
+
+  void registerOperatorMacroPaletteCommands().then(() => {
+    if (paletteState.open) {
+      renderCommandList(doc);
+    }
+  });
 }
 
 export function closeCommandPalette(doc: Document = document): void {
@@ -303,6 +312,7 @@ export function isToggleCommandPaletteMessage(
 
 export function setupCommandPaletteListener(): void {
   registerCoreCommandPaletteCommands();
+  void registerOperatorMacroPaletteCommands();
 
   chrome.runtime.onMessage.addListener((message) => {
     if (isToggleCommandPaletteMessage(message)) {

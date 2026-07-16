@@ -8,6 +8,7 @@ import {
   MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
 } from "../lib/macroStepActions";
 import {
+  MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE,
   MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE,
 } from "../lib/storage";
 import * as vera5Storage from "../lib/storage";
@@ -225,7 +226,12 @@ describe("handleEnrichSelectionRequest", () => {
     const response = await handleEnrichSelectionRequest();
     expect(response).toEqual({
       ok: true,
-      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: true },
+      payload: {
+        value: "192.0.2.1",
+        type: "ipv4",
+        trustGateBlocked: true,
+        abortMessage: DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
+      },
     });
     expect(
       document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
@@ -260,12 +266,51 @@ describe("handleEnrichSelectionRequest", () => {
     });
     expect(response).toEqual({
       ok: true,
-      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: true },
+      payload: {
+        value: "192.0.2.1",
+        type: "ipv4",
+        trustGateBlocked: true,
+        abortMessage: DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
+      },
     });
     expect(document.body.textContent).toContain(
       DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE
     );
     expect(enrichmentBackgroundFetch.runBackgroundEnrichment).not.toHaveBeenCalled();
+  });
+
+  it("aborts macro enrich and shows clear UI when pre-query disclosure is declined", async () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 192.0.2.1 today.";
+    document.body.replaceChildren(paragraph);
+
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    vi.spyOn(enrichmentBackgroundFetch, "runBackgroundEnrichment").mockResolvedValue(
+      "cancelled"
+    );
+
+    const result = await runOperatorMacroEnrichStep(
+      {
+        scope: "selection",
+        forceRefresh: false,
+      },
+      document
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      value: "192.0.2.1",
+      type: "ipv4",
+      trustGateBlocked: true,
+      abortMessage: MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE,
+    });
+    expect(document.body.textContent).toContain(
+      MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE
+    );
   });
 
   it("runs built-in macro enrich steps through the selection trust pipeline", async () => {
@@ -513,7 +558,12 @@ describe("setupEnrichSelectionListener", () => {
 
     expect(response).toEqual({
       ok: true,
-      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: true },
+      payload: {
+        value: "192.0.2.1",
+        type: "ipv4",
+        trustGateBlocked: true,
+        abortMessage: DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE,
+      },
     });
     expect(
       document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)
@@ -600,7 +650,12 @@ describe("setupEnrichSelectionListener", () => {
 
     expect(response).toEqual({
       ok: true,
-      payload: { value: "192.0.2.1", type: "ipv4", trustGateBlocked: true },
+      payload: {
+        value: "192.0.2.1",
+        type: "ipv4",
+        trustGateBlocked: true,
+        abortMessage: MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE,
+      },
     });
     expect(
       document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)

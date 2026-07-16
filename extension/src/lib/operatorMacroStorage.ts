@@ -6,19 +6,24 @@ import {
 } from "./extensionContext";
 import {
   createOperatorMacro,
+  mergeImportedOperatorMacroPack,
   normalizeOperatorMacro,
   normalizeOperatorMacroId,
+  normalizeOperatorMacroName,
   OperatorMacroImportError,
   parseImportedOperatorMacroJson,
+  parseOperatorMacroPackJson,
+  serializeOperatorMacroPack,
   type CreateOperatorMacroInput,
   type OperatorMacro,
+  MAX_STORED_OPERATOR_MACROS,
 } from "./operatorMacro";
 import { getBuiltInOperatorMacros } from "./builtInOperatorMacros";
 import { assertBuiltInOperatorMacroEnrichTrustContracts } from "./operatorMacroEnrichTrust";
 
 export const OPERATOR_MACRO_STORE_SCHEMA_VERSION = 1;
 export const STORAGE_KEY_OPERATOR_MACROS = "operatorMacros";
-export const MAX_STORED_OPERATOR_MACROS = 64;
+export { MAX_STORED_OPERATOR_MACROS } from "./operatorMacro";
 
 export type OperatorMacrosStore = {
   schemaVersion: typeof OPERATOR_MACRO_STORE_SCHEMA_VERSION;
@@ -81,19 +86,16 @@ export function normalizeOperatorMacrosStore(value: unknown): OperatorMacrosStor
     return createEmptyOperatorMacrosStore();
   }
 
-  const macrosById = new Map<string, OperatorMacro>();
+  const macros: OperatorMacro[] = [];
+  const seenIds = new Set<string>();
   for (const macro of record.macros) {
     const normalized = normalizeOperatorMacro(macro);
-    if (!normalized) {
+    if (!normalized || seenIds.has(normalized.id)) {
       continue;
     }
-    const existing = macrosById.get(normalized.id);
-    if (!existing || compareOperatorMacros(normalized, existing) < 0) {
-      macrosById.set(normalized.id, normalized);
-    }
+    seenIds.add(normalized.id);
+    macros.push(normalized);
   }
-
-  const macros = [...macrosById.values()].sort(compareOperatorMacros);
   if (macros.length > MAX_STORED_OPERATOR_MACROS) {
     return buildOperatorMacrosStorePayload(macros.slice(0, MAX_STORED_OPERATOR_MACROS));
   }
@@ -196,9 +198,17 @@ export async function saveStoredOperatorMacro(macro: OperatorMacro): Promise<boo
   }
 
   const store = await getOperatorMacrosStore();
-  const nextMacros = store.macros.filter((entry) => entry.id !== normalized.id);
-  nextMacros.push(normalized);
-  nextMacros.sort(compareOperatorMacros);
+  const existingIndex = store.macros.findIndex((entry) => entry.id === normalized.id);
+  const nextMacros =
+    existingIndex === -1
+      ? [...store.macros, normalized]
+      : store.macros.map((entry, index) =>
+          index === existingIndex ? normalized : entry
+        );
+
+  if (nextMacros.length > MAX_STORED_OPERATOR_MACROS) {
+    return false;
+  }
 
   await persistOperatorMacrosStore(buildOperatorMacrosStorePayload(nextMacros));
   return true;
@@ -211,6 +221,11 @@ export async function deleteStoredOperatorMacro(macroId: string): Promise<boolea
   }
 
   const store = await getOperatorMacrosStore();
+  const target = store.macros.find((entry) => entry.id === id);
+  if (!target || target.metadata.builtIn) {
+    return false;
+  }
+
   const nextMacros = store.macros.filter((entry) => entry.id !== id);
   if (nextMacros.length === store.macros.length) {
     return false;
@@ -238,6 +253,20 @@ export async function createStoredOperatorMacro(
   return saved ? macro : null;
 }
 
+export async function importUserOperatorMacroPackJson(
+  rawJson: string
+): Promise<void> {
+  const pack = parseOperatorMacroPackJson(rawJson);
+  const store = await getOperatorMacrosStore();
+  const merged = mergeImportedOperatorMacroPack(store.macros, pack);
+  await persistOperatorMacrosStore(buildOperatorMacrosStorePayload(merged.macros));
+}
+
+export async function exportUserOperatorMacroPackJson(): Promise<string> {
+  const macros = await listStoredOperatorMacros();
+  return serializeOperatorMacroPack(macros);
+}
+
 export async function importStoredOperatorMacroFromJson(
   rawJson: string
 ): Promise<OperatorMacro> {
@@ -247,6 +276,112 @@ export async function importStoredOperatorMacroFromJson(
     throw new OperatorMacroImportError("Macro could not be saved.");
   }
   return macro;
+}
+
+export async function reorderStoredOperatorMacros(
+  orderedIds: readonly string[]
+): Promise<boolean> {
+  const store = await getOperatorMacrosStore();
+  const macrosById = new Map(store.macros.map((macro) => [macro.id, macro]));
+  const nextMacros: OperatorMacro[] = [];
+  const usedIds = new Set<string>();
+
+  for (const rawId of orderedIds) {
+    const id = normalizeOperatorMacroId(rawId);
+    if (!id || usedIds.has(id)) {
+      continue;
+    }
+    const macro = macrosById.get(id);
+    if (!macro) {
+      continue;
+    }
+    nextMacros.push(macro);
+    usedIds.add(id);
+  }
+
+  for (const macro of store.macros) {
+    if (usedIds.has(macro.id)) {
+      continue;
+    }
+    nextMacros.push(macro);
+    usedIds.add(macro.id);
+  }
+
+  if (nextMacros.length !== store.macros.length) {
+    return false;
+  }
+
+  await persistOperatorMacrosStore(buildOperatorMacrosStorePayload(nextMacros));
+  return true;
+}
+
+export async function duplicateStoredOperatorMacro(
+  sourceMacroId: string,
+  input: { id?: string; name?: string } = {}
+): Promise<OperatorMacro | null> {
+  const sourceId = normalizeOperatorMacroId(sourceMacroId);
+  if (!sourceId) {
+    return null;
+  }
+
+  const source = await getStoredOperatorMacro(sourceId);
+  if (!source) {
+    return null;
+  }
+
+  const store = await getOperatorMacrosStore();
+  const reservedIds = new Set(store.macros.map((macro) => macro.id));
+  let nextId = normalizeOperatorMacroId(input.id);
+  if (!nextId) {
+    const baseId = `${source.id}-copy`;
+    nextId = baseId;
+    let suffix = 2;
+    while (reservedIds.has(nextId)) {
+      nextId = `${baseId}-${suffix}`;
+      suffix += 1;
+    }
+  }
+  if (reservedIds.has(nextId)) {
+    return null;
+  }
+
+  const nextName =
+    normalizeOperatorMacroName(input.name) ?? `${source.name} (copy)`;
+
+  let duplicate: OperatorMacro;
+  try {
+    duplicate = createOperatorMacro({
+      id: nextId,
+      name: nextName,
+      steps: source.steps.map((step) => ({
+        type: step.type,
+        params: { ...step.params },
+      })),
+      triggers: { ...source.triggers },
+      metadata: {
+        description: source.metadata.description,
+        builtIn: false,
+        tags: [...source.metadata.tags],
+      },
+    });
+  } catch {
+    return null;
+  }
+
+  const sourceIndex = store.macros.findIndex((macro) => macro.id === sourceId);
+  const nextMacros = [...store.macros];
+  if (sourceIndex === -1) {
+    nextMacros.push(duplicate);
+  } else {
+    nextMacros.splice(sourceIndex + 1, 0, duplicate);
+  }
+
+  if (nextMacros.length > MAX_STORED_OPERATOR_MACROS) {
+    return null;
+  }
+
+  await persistOperatorMacrosStore(buildOperatorMacrosStorePayload(nextMacros));
+  return duplicate;
 }
 
 export async function ensureBuiltInOperatorMacros(): Promise<void> {

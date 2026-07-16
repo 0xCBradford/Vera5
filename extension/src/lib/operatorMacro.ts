@@ -1,9 +1,48 @@
 import {
   isOperatorMacroStepTypeV1,
   normalizeOperatorMacroStepV1,
+  operatorMacroStepParamsToRecord,
 } from "./operatorMacroStepTypes";
 
 export const OPERATOR_MACRO_SCHEMA_VERSION = 1;
+
+export const OPERATOR_MACRO_TRAY_RUN_ACTION_LABEL = "Run macro…";
+export const OPERATOR_MACRO_TRAY_RUN_FILTERED_ACTION_LABEL = "Run macro on filtered…";
+export const OPERATOR_MACRO_TRAY_RUN_PICKER_HEADING = "Run macro";
+export const OPERATOR_MACRO_TRAY_RUN_FILTERED_PICKER_HEADING =
+  "Run macro on filtered indicators";
+export const OPERATOR_MACRO_TRAY_NO_MACROS_TEXT =
+  "No tray-enabled macros yet. Enable the tray trigger on a macro in settings.";
+
+export const OPERATOR_MACRO_CONTEXT_RUN_ON_SELECTION_LABEL =
+  "Run macro on selection";
+export const OPERATOR_MACRO_CONTEXT_MENU_PARENT_ID =
+  "vera5-run-macro-on-selection";
+export const OPERATOR_MACRO_CONTEXT_MENU_ITEM_ID_PREFIX =
+  "vera5-run-macro-on-selection:";
+export const OPERATOR_MACRO_CONTEXT_MENU_EMPTY_ITEM_ID =
+  "vera5-run-macro-on-selection-empty";
+export const OPERATOR_MACRO_CONTEXT_MENU_EMPTY_ITEM_TITLE =
+  "No macros with context-menu trigger enabled";
+
+export function operatorMacroContextMenuItemId(macroId: string): string {
+  return `${OPERATOR_MACRO_CONTEXT_MENU_ITEM_ID_PREFIX}${macroId.trim()}`;
+}
+
+export function parseOperatorMacroContextMenuItemId(
+  menuItemId: string | number
+): string | null {
+  if (typeof menuItemId !== "string") {
+    return null;
+  }
+  if (!menuItemId.startsWith(OPERATOR_MACRO_CONTEXT_MENU_ITEM_ID_PREFIX)) {
+    return null;
+  }
+  const macroId = menuItemId
+    .slice(OPERATOR_MACRO_CONTEXT_MENU_ITEM_ID_PREFIX.length)
+    .trim();
+  return macroId.length > 0 ? macroId : null;
+}
 
 export const MAX_OPERATOR_MACRO_ID_LENGTH = 64;
 export const MAX_OPERATOR_MACRO_NAME_LENGTH = 120;
@@ -11,6 +50,7 @@ export const MAX_OPERATOR_MACRO_DESCRIPTION_LENGTH = 2000;
 export const MAX_OPERATOR_MACRO_TAGS = 16;
 export const MAX_OPERATOR_MACRO_TAG_LENGTH = 48;
 export const MAX_OPERATOR_MACRO_STEPS = 32;
+export const MAX_STORED_OPERATOR_MACROS = 64;
 
 const OPERATOR_MACRO_ID_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -444,4 +484,360 @@ export function createOperatorMacro(input: CreateOperatorMacroInput): OperatorMa
 
 export function serializeOperatorMacro(macro: OperatorMacro): OperatorMacro {
   return normalizeOperatorMacro(macro) ?? macro;
+}
+
+export type OperatorMacroEditorStepDraft = {
+  type: string;
+  params: Record<string, unknown>;
+};
+
+export function validateOperatorMacroEditorSteps(
+  steps: readonly OperatorMacroEditorStepDraft[]
+): string | null {
+  if (steps.length === 0) {
+    return "Add at least one macro step.";
+  }
+  if (steps.length > MAX_OPERATOR_MACRO_STEPS) {
+    return `Macros can include at most ${MAX_OPERATOR_MACRO_STEPS} steps.`;
+  }
+
+  for (let index = 0; index < steps.length; index += 1) {
+    const step = steps[index];
+    if (!step) {
+      return `Step ${index + 1} is invalid.`;
+    }
+    if (!isOperatorMacroStepTypeV1(step.type)) {
+      return `Step ${index + 1} uses an unsupported step type.`;
+    }
+    if (normalizeOperatorMacroStepV1(step) === null) {
+      return `Step ${index + 1} has invalid parameters.`;
+    }
+  }
+
+  return null;
+}
+
+export function serializeOperatorMacroEditorSteps(
+  steps: readonly OperatorMacroEditorStepDraft[]
+): OperatorMacroStep[] {
+  const validationError = validateOperatorMacroEditorSteps(steps);
+  if (validationError) {
+    throw new Error(validationError);
+  }
+
+  const serialized: OperatorMacroStep[] = [];
+  for (const step of steps) {
+    const normalized = normalizeOperatorMacroStepV1(step);
+    if (!normalized) {
+      throw new Error("Macro step could not be serialized.");
+    }
+    serialized.push({
+      type: normalized.type,
+      params: operatorMacroStepParamsToRecord(
+        normalized.params as Parameters<typeof operatorMacroStepParamsToRecord>[0]
+      ),
+    });
+  }
+  return serialized;
+}
+
+export const OPERATOR_MACRO_PACK_SCHEMA_VERSION = 1;
+
+export const OPERATOR_MACRO_PACK_EXPORT_FILENAME = "vera5-operator-macros.json";
+
+export type OperatorMacroPackDocument = {
+  schemaVersion: typeof OPERATOR_MACRO_PACK_SCHEMA_VERSION;
+  exportedAt: string;
+  macros: OperatorMacro[];
+};
+
+export type OperatorMacroPackImportAction = "add" | "update" | "skip";
+
+export type OperatorMacroPackImportDiffEntry = {
+  macroId: string;
+  macroName: string;
+  action: OperatorMacroPackImportAction;
+  reason?: string;
+};
+
+export type OperatorMacroPackImportPreview = {
+  pack: OperatorMacroPackDocument;
+  entries: OperatorMacroPackImportDiffEntry[];
+};
+
+export class OperatorMacroPackImportError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "OperatorMacroPackImportError";
+  }
+}
+
+const FORBIDDEN_OPERATOR_MACRO_PACK_KEY_FRAGMENTS = [
+  "apikey",
+  "api_key",
+  "token",
+  "secret",
+  "password",
+  "credential",
+] as const;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isForbiddenOperatorMacroPackKey(key: string): boolean {
+  const normalized = key.trim().toLowerCase().replace(/[-_\s]/g, "");
+  return FORBIDDEN_OPERATOR_MACRO_PACK_KEY_FRAGMENTS.some((fragment) =>
+    normalized.includes(fragment.replace(/[-_\s]/g, ""))
+  );
+}
+
+export function assertNoSecretsInOperatorMacroPack(value: unknown): void {
+  if (!isRecord(value)) {
+    return;
+  }
+  for (const [key, child] of Object.entries(value)) {
+    if (isForbiddenOperatorMacroPackKey(key)) {
+      throw new OperatorMacroPackImportError(
+        "Macro pack must not include API keys, tokens, or secrets."
+      );
+    }
+    assertNoSecretsInOperatorMacroPack(child);
+  }
+}
+
+function readIsoExportTimestamp(value: unknown): string {
+  if (typeof value === "string" && value.trim().length > 0) {
+    return value.trim();
+  }
+  return new Date().toISOString();
+}
+
+export function isOperatorMacroPackDocument(value: unknown): value is OperatorMacroPackDocument {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (value.schemaVersion !== OPERATOR_MACRO_PACK_SCHEMA_VERSION) {
+    return false;
+  }
+  return Array.isArray(value.macros);
+}
+
+function assertNotSingleMacroPackDocument(value: unknown): void {
+  if (!isRecord(value) || Array.isArray(value.macros)) {
+    return;
+  }
+  if (
+    value.schemaVersion === OPERATOR_MACRO_SCHEMA_VERSION &&
+    typeof value.id === "string"
+  ) {
+    throw new OperatorMacroPackImportError(
+      "This file is a single macro export. Choose a macro pack backup file instead."
+    );
+  }
+}
+
+export function validateOperatorMacroPackDocument(value: unknown): OperatorMacroPackDocument {
+  assertNotSingleMacroPackDocument(value);
+  if (!isRecord(value)) {
+    throw new OperatorMacroPackImportError("Macro pack import must be a JSON object.");
+  }
+  if (value.schemaVersion !== OPERATOR_MACRO_PACK_SCHEMA_VERSION) {
+    throw new OperatorMacroPackImportError("Unsupported macro pack schema version.");
+  }
+  if (!Array.isArray(value.macros)) {
+    throw new OperatorMacroPackImportError("Macro pack must include a macros array.");
+  }
+  if (value.macros.length > MAX_STORED_OPERATOR_MACROS) {
+    throw new OperatorMacroPackImportError(
+      `Macro pack exceeds maximum of ${MAX_STORED_OPERATOR_MACROS} macros.`
+    );
+  }
+
+  assertNoSecretsInOperatorMacroPack(value);
+
+  const macros: OperatorMacro[] = [];
+  for (let index = 0; index < value.macros.length; index += 1) {
+    let macro: OperatorMacro;
+    try {
+      macro = validateImportedOperatorMacro(value.macros[index]);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Macro could not be validated.";
+      throw new OperatorMacroPackImportError(`Macro at index ${index}: ${message}`);
+    }
+    if (macro.metadata.builtIn) {
+      throw new OperatorMacroPackImportError(
+        `Macro at index ${index} is marked built-in and cannot be imported from a pack.`
+      );
+    }
+    macros.push({
+      ...macro,
+      metadata: {
+        ...macro.metadata,
+        builtIn: false,
+        updatedAt: macro.metadata.updatedAt ?? Date.now(),
+      },
+    });
+  }
+
+  return {
+    schemaVersion: OPERATOR_MACRO_PACK_SCHEMA_VERSION,
+    exportedAt: readIsoExportTimestamp(value.exportedAt),
+    macros,
+  };
+}
+
+export function parseOperatorMacroPackJson(rawJson: string): OperatorMacroPackDocument {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(rawJson);
+  } catch {
+    throw new OperatorMacroPackImportError("Invalid JSON.");
+  }
+  return validateOperatorMacroPackDocument(parsed);
+}
+
+export function buildOperatorMacroPackDocument(
+  macros: readonly OperatorMacro[]
+): OperatorMacroPackDocument {
+  const userMacros = macros
+    .filter((macro) => !macro.metadata.builtIn)
+    .map((macro) =>
+      serializeOperatorMacro({
+        ...macro,
+        metadata: {
+          ...macro.metadata,
+          builtIn: false,
+        },
+      })
+    );
+
+  const document: OperatorMacroPackDocument = {
+    schemaVersion: OPERATOR_MACRO_PACK_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    macros: [...userMacros],
+  };
+  assertNoSecretsInOperatorMacroPack(document);
+  return document;
+}
+
+export function serializeOperatorMacroPack(macros: readonly OperatorMacro[]): string {
+  return JSON.stringify(buildOperatorMacroPackDocument(macros), null, 2);
+}
+
+export function downloadOperatorMacroPackExport(
+  json: string,
+  filename = OPERATOR_MACRO_PACK_EXPORT_FILENAME
+): void {
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+export function buildOperatorMacroPackImportPreview(
+  currentMacros: readonly OperatorMacro[],
+  rawJson: string
+): OperatorMacroPackImportPreview {
+  const pack = parseOperatorMacroPackJson(rawJson);
+  return {
+    pack,
+    entries: buildOperatorMacroPackImportDiff(currentMacros, pack),
+  };
+}
+
+export function buildOperatorMacroPackImportDiff(
+  currentMacros: readonly OperatorMacro[],
+  pack: OperatorMacroPackDocument
+): OperatorMacroPackImportDiffEntry[] {
+  const builtInIds = new Set(
+    currentMacros.filter((macro) => macro.metadata.builtIn).map((macro) => macro.id)
+  );
+  const existingById = new Map(currentMacros.map((macro) => [macro.id, macro]));
+  const entries: OperatorMacroPackImportDiffEntry[] = [];
+
+  for (const macro of pack.macros) {
+    if (builtInIds.has(macro.id)) {
+      entries.push({
+        macroId: macro.id,
+        macroName: macro.name,
+        action: "skip",
+        reason: "Id is reserved by a built-in playbook.",
+      });
+      continue;
+    }
+
+    const existing = existingById.get(macro.id);
+    if (existing) {
+      entries.push({
+        macroId: macro.id,
+        macroName: macro.name,
+        action: "update",
+      });
+      continue;
+    }
+
+    entries.push({
+      macroId: macro.id,
+      macroName: macro.name,
+      action: "add",
+    });
+  }
+
+  return entries;
+}
+
+export function mergeImportedOperatorMacroPack(
+  currentMacros: readonly OperatorMacro[],
+  pack: OperatorMacroPackDocument
+): { macros: OperatorMacro[]; entries: OperatorMacroPackImportDiffEntry[] } {
+  const entries = buildOperatorMacroPackImportDiff(currentMacros, pack);
+  const incomingById = new Map(
+    pack.macros.map((macro) => [
+      macro.id,
+      {
+        ...macro,
+        metadata: {
+          ...macro.metadata,
+          builtIn: false,
+          updatedAt: Date.now(),
+        },
+      },
+    ])
+  );
+  const skippedIds = new Set(
+    entries.filter((entry) => entry.action === "skip").map((entry) => entry.macroId)
+  );
+  const nextMacros: OperatorMacro[] = [];
+  const appliedIncomingIds = new Set<string>();
+
+  for (const macro of currentMacros) {
+    const incoming = incomingById.get(macro.id);
+    if (incoming && !skippedIds.has(macro.id) && !macro.metadata.builtIn) {
+      nextMacros.push(incoming);
+      appliedIncomingIds.add(macro.id);
+      continue;
+    }
+    nextMacros.push(macro);
+  }
+
+  for (const macro of pack.macros) {
+    if (skippedIds.has(macro.id) || appliedIncomingIds.has(macro.id)) {
+      continue;
+    }
+    nextMacros.push(incomingById.get(macro.id)!);
+    appliedIncomingIds.add(macro.id);
+  }
+
+  if (nextMacros.length > MAX_STORED_OPERATOR_MACROS) {
+    throw new OperatorMacroPackImportError(
+      `Import would exceed the maximum of ${MAX_STORED_OPERATOR_MACROS} stored macros.`
+    );
+  }
+
+  return { macros: nextMacros, entries };
 }

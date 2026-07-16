@@ -5,6 +5,10 @@ import {
   ANALYST_MODE_PRESET_SOC_ID,
   type AnalystModePresetId,
 } from "./analystModePresets";
+import {
+  BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK,
+  BUILT_IN_OPERATOR_MACRO_ID_DFIR_TRIAGE,
+} from "./builtInOperatorMacros";
 import type { ExportTemplateId } from "./exportTemplates";
 import {
   PIVOT_PROVIDER,
@@ -1669,6 +1673,81 @@ export function resolveEffectiveDefaultExportTemplateId(
     pageContextType ?? PAGE_CONTEXT_TYPE.GENERIC
   );
   return contextTemplateId ?? profileDefaultExportTemplateId;
+}
+
+export const PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_SCHEMA_VERSION = 1;
+
+export const PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE: Partial<
+  Record<PageContextType, string>
+> = {
+  [PAGE_CONTEXT_TYPE.CTI_PLATFORM]: BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK,
+  [PAGE_CONTEXT_TYPE.MALWARE_BLOG]: BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK,
+  [PAGE_CONTEXT_TYPE.SANDBOX_REPORT]: BUILT_IN_OPERATOR_MACRO_ID_DFIR_TRIAGE,
+};
+
+export type PageContextDefaultOperatorMacroOverridesRecord = Partial<
+  Record<PageContextType, string>
+>;
+
+export function normalizePageContextDefaultOperatorMacroOverrides(
+  value: unknown
+): PageContextDefaultOperatorMacroOverridesRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const record: PageContextDefaultOperatorMacroOverridesRecord = {};
+  for (const [rawType, rawMacroId] of Object.entries(value)) {
+    if (!isPageContextType(rawType)) {
+      continue;
+    }
+    if (typeof rawMacroId !== "string") {
+      continue;
+    }
+    const macroId = rawMacroId.trim().toLowerCase();
+    if (macroId.length === 0) {
+      continue;
+    }
+    record[rawType] = macroId;
+  }
+  return record;
+}
+
+export function resolveDefaultOperatorMacroIdForPageContext(
+  pageContextType: PageContextType | unknown,
+  userOverrides: PageContextDefaultOperatorMacroOverridesRecord = {}
+): string | null {
+  const normalized = normalizePageContextType(pageContextType);
+  if (normalized === PAGE_CONTEXT_TYPE.GENERIC) {
+    return null;
+  }
+
+  const userOverride = userOverrides[normalized];
+  if (typeof userOverride === "string" && userOverride.trim().length > 0) {
+    return userOverride.trim().toLowerCase();
+  }
+
+  return PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE[normalized] ?? null;
+}
+
+export function resolvePageContextDefaultOperatorMacroSuggestion(input: {
+  pageContextType: PageContextType | unknown;
+  pageOrigin: string | null;
+  siteModeOverrides: PageContextSiteModeOverridesRecord;
+  userMacroOverrides?: PageContextDefaultOperatorMacroOverridesRecord;
+}): string | null {
+  if (input.pageOrigin === null) {
+    return null;
+  }
+
+  if (hasPageContextSiteModeOverride(input.siteModeOverrides, input.pageOrigin)) {
+    return null;
+  }
+
+  return resolveDefaultOperatorMacroIdForPageContext(
+    input.pageContextType,
+    input.userMacroOverrides ?? {}
+  );
 }
 
 export function resolvePageContextAnalystPresetApplication(input: {

@@ -18,12 +18,17 @@ import { attemptAutoEnrichmentFetch } from "./enrichmentAutoFetch";
 import {
   cancelPendingHoverEnrichment,
   presentEnrichmentTrustGateBlocked,
+  presentOperatorMacroDisclosureDeclined,
   resolveIndicatorEnrichmentTrustGate,
   resolveOperatorMacroEnrichStepTrustGates,
   resolvePageEnrichmentTrustGate,
   runBackgroundEnrichment,
   type EnrichmentTrustGateResult,
 } from "./enrichmentBackgroundFetch";
+import {
+  MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE,
+  OPERATOR_MACRO_ENRICH_TRUST_ABORT_FALLBACK_MESSAGE,
+} from "../lib/storage";
 import {
   loadWorkspaceEnrichmentSourceContext,
 } from "./enrichmentSourceStorage";
@@ -374,8 +379,19 @@ export type OperatorMacroEnrichStepRunResult =
       value: string;
       type: IocType;
       trustGateBlocked: boolean;
+      abortMessage?: string;
     }
   | { ok: false; error: string };
+
+function resolveOperatorMacroEnrichAbortMessage(
+  abortMessage: string | undefined
+): string {
+  const trimmed = abortMessage?.trim() ?? "";
+  if (trimmed.length > 0) {
+    return trimmed;
+  }
+  return OPERATOR_MACRO_ENRICH_TRUST_ABORT_FALLBACK_MESSAGE;
+}
 
 export async function runOperatorMacroEnrichStep(
   rawParams: Record<string, unknown> | OperatorMacroEnrichStepParams,
@@ -388,6 +404,7 @@ export async function runOperatorMacroEnrichStep(
     const response = await handleEnrichSelectionRequest(doc, {
       macroStepType: stepType,
       bypassCache: params.forceRefresh,
+      awaitEnrichment: true,
     });
     if (!response.ok) {
       return { ok: false, error: response.error ?? "Enrich step failed." };
@@ -398,17 +415,26 @@ export async function runOperatorMacroEnrichStep(
           value: string;
           type: IocType;
           trustGateBlocked?: boolean;
+          abortMessage?: string;
         }
       | undefined;
     if (!payload) {
       return { ok: false, error: "Enrich step failed." };
     }
 
+    const trustGateBlocked = payload.trustGateBlocked === true;
     return {
       ok: true,
       value: payload.value,
       type: payload.type,
-      trustGateBlocked: payload.trustGateBlocked === true,
+      trustGateBlocked,
+      ...(trustGateBlocked
+        ? {
+            abortMessage: resolveOperatorMacroEnrichAbortMessage(
+              payload.abortMessage
+            ),
+          }
+        : {}),
     };
   }
 
@@ -435,6 +461,7 @@ export async function runOperatorMacroEnrichStep(
       value: hoverPayload.value,
       type: hoverPayload.type,
       trustGateBlocked: true,
+      abortMessage: trustGate.errorMessage,
     };
   }
 
@@ -442,17 +469,44 @@ export async function runOperatorMacroEnrichStep(
   const result = await runBackgroundEnrichment(hoverPayload, doc, {
     bypassCache: params.forceRefresh,
   });
+  if (result === "cancelled") {
+    presentOperatorMacroDisclosureDeclined(hoverPayload, doc);
+    return {
+      ok: true,
+      value: hoverPayload.value,
+      type: hoverPayload.type,
+      trustGateBlocked: true,
+      abortMessage: MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE,
+    };
+  }
+  if (result === "blocked") {
+    const blockedPayload = getLastHoverCardPayload();
+    const abortMessage =
+      blockedPayload?.errorMessage?.trim() ||
+      OPERATOR_MACRO_ENRICH_TRUST_ABORT_FALLBACK_MESSAGE;
+    return {
+      ok: true,
+      value: hoverPayload.value,
+      type: hoverPayload.type,
+      trustGateBlocked: true,
+      abortMessage,
+    };
+  }
   return {
     ok: true,
     value: hoverPayload.value,
     type: hoverPayload.type,
-    trustGateBlocked: result === "blocked" || result === "cancelled",
+    trustGateBlocked: false,
   };
 }
 
 export async function handleEnrichSelectionRequest(
   doc: Document = document,
-  options: { macroStepType?: string; bypassCache?: boolean } = {}
+  options: {
+    macroStepType?: string;
+    bypassCache?: boolean;
+    awaitEnrichment?: boolean;
+  } = {}
 ): Promise<MessageResponse> {
   const selection = doc.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
@@ -476,6 +530,67 @@ export async function handleEnrichSelectionRequest(
         value: resolved.value,
         type: resolved.type,
         trustGateBlocked: true,
+        abortMessage: trustGate.errorMessage,
+      },
+    };
+  }
+
+  const awaitEnrichment =
+    options.awaitEnrichment === true ||
+    (typeof options.macroStepType === "string" &&
+      options.macroStepType.trim().length > 0 &&
+      isMacroEnrichStepType(options.macroStepType));
+
+  if (awaitEnrichment) {
+    const opened = await openEnrichmentForResolvedSelection(resolved, doc, {
+      enrichmentTrigger: "none",
+    });
+    if (!opened) {
+      return { ok: false, error: "No indicator found in selection." };
+    }
+
+    const hoverPayload = getLastHoverCardPayload();
+    if (!hoverPayload) {
+      return { ok: false, error: "Enrich step failed." };
+    }
+
+    cancelPendingHoverEnrichment();
+    const result = await runBackgroundEnrichment(hoverPayload, doc, {
+      bypassCache: options.bypassCache !== false,
+    });
+    if (result === "cancelled") {
+      presentOperatorMacroDisclosureDeclined(hoverPayload, doc);
+      return {
+        ok: true,
+        payload: {
+          value: resolved.value,
+          type: resolved.type,
+          trustGateBlocked: true,
+          abortMessage: MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE,
+        },
+      };
+    }
+    if (result === "blocked") {
+      const blockedPayload = getLastHoverCardPayload();
+      return {
+        ok: true,
+        payload: {
+          value: resolved.value,
+          type: resolved.type,
+          trustGateBlocked: true,
+          abortMessage:
+            blockedPayload?.errorMessage?.trim() ||
+            OPERATOR_MACRO_ENRICH_TRUST_ABORT_FALLBACK_MESSAGE,
+        },
+      };
+    }
+
+    return {
+      ok: true,
+      payload: {
+        value: resolved.value,
+        type: resolved.type,
+        trustGateBlocked: false,
       },
     };
   }

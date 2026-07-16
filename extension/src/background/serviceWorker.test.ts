@@ -35,11 +35,15 @@ vi.mock("../lib/storageMigration", () => ({
 
 const ensureBuiltInOperatorMacros = vi.fn(async () => undefined);
 
+const listStoredOperatorMacros = vi.fn(async () => [] as const);
+
 vi.mock("../lib/operatorMacroStorage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/operatorMacroStorage")>();
   return {
     ...actual,
     ensureBuiltInOperatorMacros: () => ensureBuiltInOperatorMacros(),
+    listStoredOperatorMacros: (...args: unknown[]) =>
+      listStoredOperatorMacros(...args),
   };
 });
 
@@ -211,6 +215,12 @@ describe("service worker scan-page command routing", () => {
     callback?.();
   });
   const openOptionsPage = vi.fn(async () => undefined);
+  const storageOnChangedListeners: Array<
+    (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => void
+  > = [];
 
   beforeEach(async () => {
     vi.resetModules();
@@ -227,6 +237,8 @@ describe("service worker scan-page command routing", () => {
     openOptionsPage.mockReset();
     runStorageMigrationOnExtensionUpdate.mockReset();
     ensureBuiltInOperatorMacros.mockReset();
+    listStoredOperatorMacros.mockReset();
+    listStoredOperatorMacros.mockResolvedValue([]);
     emitInvestigationSessionMacroRunTimelineEvent.mockReset();
     runStorageMigrationOnExtensionUpdate.mockResolvedValue({
       migrated: false,
@@ -235,6 +247,7 @@ describe("service worker scan-page command routing", () => {
     });
     tabsQuery.mockResolvedValue([{ id: 42 }]);
     tabsSendMessage.mockResolvedValue({ ok: true, payload: { count: 2 } });
+    storageOnChangedListeners.length = 0;
 
     vi.stubGlobal("chrome", {
       runtime: {
@@ -273,6 +286,16 @@ describe("service worker scan-page command routing", () => {
         onRemoved: { addListener: vi.fn() },
       },
       storage: {
+        onChanged: {
+          addListener: (
+            listener: (
+              changes: Record<string, chrome.storage.StorageChange>,
+              areaName: string
+            ) => void
+          ) => {
+            storageOnChangedListeners.push(listener);
+          },
+        },
         session: {
           get: vi.fn(async () => ({})),
           set: vi.fn(async () => undefined),
@@ -282,6 +305,9 @@ describe("service worker scan-page command routing", () => {
     });
 
     await import("./serviceWorker");
+    await vi.waitFor(() => {
+      expect(contextMenusCreate).toHaveBeenCalled();
+    });
   });
 
   afterEach(() => {
@@ -325,15 +351,31 @@ describe("service worker scan-page command routing", () => {
     expect(tabsSendMessage).not.toHaveBeenCalled();
   });
 
-  it("registers the enrich selection context menu on install", () => {
+  it("registers enrich selection and Run macro on selection menus on install", async () => {
     expect(onInstalledCallback).toBeDefined();
+    contextMenusCreate.mockClear();
+    contextMenusRemoveAll.mockClear();
     onInstalledCallback!({ reason: "update" });
 
-    expect(contextMenusRemoveAll).toHaveBeenCalledTimes(1);
-    expect(contextMenusCreate).toHaveBeenCalledWith({
-      id: "enrich-with-vera5",
-      title: "Enrich selection with Vera5",
-      contexts: ["selection"],
+    await vi.waitFor(() => {
+      expect(contextMenusRemoveAll).toHaveBeenCalled();
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "enrich-with-vera5",
+        title: "Enrich selection with Vera5",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-run-macro-on-selection",
+        title: "Run macro on selection",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-run-macro-on-selection-empty",
+        parentId: "vera5-run-macro-on-selection",
+        title: "No macros with context-menu trigger enabled",
+        contexts: ["selection"],
+        enabled: false,
+      });
     });
     expect(openOptionsPage).not.toHaveBeenCalled();
     expect(runStorageMigrationOnExtensionUpdate).toHaveBeenCalledTimes(1);
@@ -373,6 +415,45 @@ describe("service worker scan-page command routing", () => {
       stepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
     });
     expect(enrichSelectionMessage().type).toBe(MESSAGE.ENRICH_SELECTION);
+  });
+
+  it("sends RUN_OPERATOR_MACRO activeSelection through the shared runner path", async () => {
+    const { createOperatorMacro } = await import("../lib/operatorMacro");
+    listStoredOperatorMacros.mockResolvedValue([
+      createOperatorMacro({
+        id: "context-macro",
+        name: "Context playbook",
+        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        triggers: { palette: false, tray: false, context: true },
+      }),
+    ]);
+    contextMenusCreate.mockClear();
+    contextMenusRemoveAll.mockClear();
+    const { registerVera5ContextMenus } = await import("./serviceWorker");
+    await registerVera5ContextMenus();
+    await vi.waitFor(() => {
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-run-macro-on-selection:context-macro",
+        parentId: "vera5-run-macro-on-selection",
+        title: "Context playbook",
+        contexts: ["selection"],
+      });
+    });
+
+    expect(onContextMenuClickedCallback).toBeDefined();
+    tabsSendMessage.mockClear();
+    onContextMenuClickedCallback!(
+      { menuItemId: "vera5-run-macro-on-selection:context-macro" },
+      { id: 88 }
+    );
+
+    await vi.waitFor(() => {
+      expect(tabsSendMessage).toHaveBeenCalledWith(88, {
+        type: MESSAGE.RUN_OPERATOR_MACRO,
+        macroId: "context-macro",
+        target: { mode: "activeSelection" },
+      });
+    });
   });
 
   it("ignores unrelated context menu clicks", async () => {

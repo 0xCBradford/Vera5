@@ -43,7 +43,10 @@ import {
   resolvePageContextSourceStatusLabel,
   resolveAnalystModePresetIdForPageContext,
   resolveDefaultExportTemplateIdForPageContext,
+  resolveDefaultOperatorMacroIdForPageContext,
   resolveEffectiveDefaultExportTemplateId,
+  resolvePageContextDefaultOperatorMacroSuggestion,
+  normalizePageContextDefaultOperatorMacroOverrides,
   normalizePageContextSiteModeOverrides,
   parsePageContextOrigin,
   resolvePageContextForActiveTab,
@@ -57,6 +60,10 @@ import {
   ANALYST_MODE_PRESET_SOC,
   ANALYST_MODE_PRESET_SOC_ID,
 } from "./analystModePresets";
+import {
+  BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK,
+  BUILT_IN_OPERATOR_MACRO_ID_DFIR_TRIAGE,
+} from "./builtInOperatorMacros";
 
 describe("pageContext contract", () => {
   it("exposes a versioned classifier contract with generic fallback", () => {
@@ -530,6 +537,95 @@ describe("pageContext analyst mode preset alignment", () => {
     expect(effective.pageContextType).toBe(PAGE_CONTEXT_TYPE.CTI_PLATFORM);
     expect(effective.pageUrl).toBe(classification.pageUrl);
     expect(effective.matchedSignals).toEqual(classification.matchedSignals);
+  });
+});
+
+describe("pageContext default operator macro suggestions", () => {
+  it("maps CTI and DFIR-oriented page types to built-in macros", () => {
+    expect(
+      resolveDefaultOperatorMacroIdForPageContext(PAGE_CONTEXT_TYPE.CTI_PLATFORM)
+    ).toBe(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK);
+    expect(
+      resolveDefaultOperatorMacroIdForPageContext(PAGE_CONTEXT_TYPE.MALWARE_BLOG)
+    ).toBe(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK);
+    expect(
+      resolveDefaultOperatorMacroIdForPageContext(PAGE_CONTEXT_TYPE.SANDBOX_REPORT)
+    ).toBe(BUILT_IN_OPERATOR_MACRO_ID_DFIR_TRIAGE);
+    expect(
+      resolveDefaultOperatorMacroIdForPageContext(PAGE_CONTEXT_TYPE.SOC_DASHBOARD)
+    ).toBeNull();
+    expect(
+      resolveDefaultOperatorMacroIdForPageContext(PAGE_CONTEXT_TYPE.CASE_TICKET)
+    ).toBeNull();
+    expect(
+      resolveDefaultOperatorMacroIdForPageContext(PAGE_CONTEXT_TYPE.GENERIC)
+    ).toBeNull();
+  });
+
+  it("prefers a per-page-type user macro override when present", () => {
+    const overrides = normalizePageContextDefaultOperatorMacroOverrides({
+      cti_platform: "ticket-export",
+      malware_blog: "  Custom-Macro  ",
+    });
+
+    expect(
+      resolveDefaultOperatorMacroIdForPageContext(
+        PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+        overrides
+      )
+    ).toBe("ticket-export");
+    expect(
+      resolveDefaultOperatorMacroIdForPageContext(
+        PAGE_CONTEXT_TYPE.MALWARE_BLOG,
+        overrides
+      )
+    ).toBe("custom-macro");
+    expect(
+      resolveDefaultOperatorMacroIdForPageContext(
+        PAGE_CONTEXT_TYPE.SANDBOX_REPORT,
+        overrides
+      )
+    ).toBe(BUILT_IN_OPERATOR_MACRO_ID_DFIR_TRIAGE);
+  });
+
+  it("suggests the mapped macro when the site has no page-context override", () => {
+    expect(
+      resolvePageContextDefaultOperatorMacroSuggestion({
+        pageContextType: PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+        pageOrigin: "otx.alienvault.com",
+        siteModeOverrides: {},
+      })
+    ).toBe(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK);
+
+    expect(
+      resolvePageContextDefaultOperatorMacroSuggestion({
+        pageContextType: PAGE_CONTEXT_TYPE.SANDBOX_REPORT,
+        pageOrigin: "www.virustotal.com",
+        siteModeOverrides: {},
+      })
+    ).toBe(BUILT_IN_OPERATOR_MACRO_ID_DFIR_TRIAGE);
+  });
+
+  it("skips macro suggestion when a per-site page-context override is active", () => {
+    expect(
+      resolvePageContextDefaultOperatorMacroSuggestion({
+        pageContextType: PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+        pageOrigin: "otx.alienvault.com",
+        siteModeOverrides: {
+          "otx.alienvault.com": PAGE_CONTEXT_TYPE.SOC_DASHBOARD,
+        },
+      })
+    ).toBeNull();
+  });
+
+  it("skips macro suggestion when page origin is unavailable", () => {
+    expect(
+      resolvePageContextDefaultOperatorMacroSuggestion({
+        pageContextType: PAGE_CONTEXT_TYPE.CTI_PLATFORM,
+        pageOrigin: null,
+        siteModeOverrides: {},
+      })
+    ).toBeNull();
   });
 });
 

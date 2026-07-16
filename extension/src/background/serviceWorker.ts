@@ -7,14 +7,27 @@ import {
 } from "../lib/macroStepActions";
 import {
   enrichSelectionMessage,
+  runOperatorMacroMessage,
   scanPageMessage,
   toggleCommandPaletteMessage,
 } from "../lib/messages";
+import {
+  OPERATOR_MACRO_CONTEXT_MENU_EMPTY_ITEM_ID,
+  OPERATOR_MACRO_CONTEXT_MENU_EMPTY_ITEM_TITLE,
+  OPERATOR_MACRO_CONTEXT_MENU_PARENT_ID,
+  OPERATOR_MACRO_CONTEXT_RUN_ON_SELECTION_LABEL,
+  operatorMacroContextMenuItemId,
+  parseOperatorMacroContextMenuItemId,
+} from "../lib/operatorMacro";
+import {
+  ensureBuiltInOperatorMacros,
+  listStoredOperatorMacros,
+  STORAGE_KEY_OPERATOR_MACROS,
+} from "../lib/operatorMacroStorage";
 import { clearTabPageContext } from "../lib/pageContextStorage";
 import { clearTabScanSnapshot } from "../lib/tabScanSnapshotStorage";
 import { runStorageMigrationOnExtensionUpdate } from "../lib/storageMigration";
 import { setupQuietModeActionBadgeListener } from "../lib/storage";
-import { ensureBuiltInOperatorMacros } from "../lib/operatorMacroStorage";
 import { routeIncomingMessageAsync } from "./messageRouter";
 
 setupQuietModeActionBadgeListener();
@@ -38,18 +51,56 @@ if (typeof chrome.sidePanel?.setPanelBehavior === "function") {
     .catch(() => {});
 }
 
-export function registerEnrichSelectionContextMenu(): void {
-  const contextMenuActionId =
+function resolveEnrichSelectionContextMenuActionId(): string {
+  return (
     getMacroStepContextMenuActionId(MACRO_STEP_TYPE_OPEN_FROM_SELECTION) ??
-    CONTEXT_MENU_ENRICH_SELECTION_ID;
+    CONTEXT_MENU_ENRICH_SELECTION_ID
+  );
+}
+
+export async function registerVera5ContextMenus(): Promise<void> {
+  await ensureBuiltInOperatorMacros();
+  const contextMacros = (await listStoredOperatorMacros()).filter(
+    (macro) => macro.triggers.context
+  );
+  const enrichMenuId = resolveEnrichSelectionContextMenuActionId();
 
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({
-      id: contextMenuActionId,
+      id: enrichMenuId,
       title: CONTEXT_MENU_ENRICH_SELECTION_TITLE,
       contexts: ["selection"],
     });
+    chrome.contextMenus.create({
+      id: OPERATOR_MACRO_CONTEXT_MENU_PARENT_ID,
+      title: OPERATOR_MACRO_CONTEXT_RUN_ON_SELECTION_LABEL,
+      contexts: ["selection"],
+    });
+
+    if (contextMacros.length === 0) {
+      chrome.contextMenus.create({
+        id: OPERATOR_MACRO_CONTEXT_MENU_EMPTY_ITEM_ID,
+        parentId: OPERATOR_MACRO_CONTEXT_MENU_PARENT_ID,
+        title: OPERATOR_MACRO_CONTEXT_MENU_EMPTY_ITEM_TITLE,
+        contexts: ["selection"],
+        enabled: false,
+      });
+      return;
+    }
+
+    for (const macro of contextMacros) {
+      chrome.contextMenus.create({
+        id: operatorMacroContextMenuItemId(macro.id),
+        parentId: OPERATOR_MACRO_CONTEXT_MENU_PARENT_ID,
+        title: macro.name,
+        contexts: ["selection"],
+      });
+    }
   });
+}
+
+export function registerEnrichSelectionContextMenu(): void {
+  void registerVera5ContextMenus();
 }
 
 async function sendMessageToTab(tabId: number, message: unknown): Promise<void> {
@@ -85,15 +136,21 @@ async function sendEnrichSelectionToTab(tabId: number): Promise<void> {
   );
 }
 
-function resolveEnrichSelectionContextMenuActionId(): string {
-  return (
-    getMacroStepContextMenuActionId(MACRO_STEP_TYPE_OPEN_FROM_SELECTION) ??
-    CONTEXT_MENU_ENRICH_SELECTION_ID
+async function sendRunOperatorMacroOnSelectionToTab(
+  tabId: number,
+  macroId: string
+): Promise<void> {
+  await sendMessageToTab(
+    tabId,
+    runOperatorMacroMessage({
+      macroId,
+      target: { mode: "activeSelection" },
+    })
   );
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
-  registerEnrichSelectionContextMenu();
+  void registerVera5ContextMenus();
   void ensureBuiltInOperatorMacros();
   if (details.reason === "update") {
     void runStorageMigrationOnExtensionUpdate();
@@ -103,17 +160,38 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
-chrome.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId !== resolveEnrichSelectionContextMenuActionId()) {
-    return;
-  }
-  if (!tab?.id) {
-    return;
-  }
-  emitInvestigationSessionMacroRunTimelineEvent({
-    stepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+void registerVera5ContextMenus();
+
+if (typeof chrome.storage?.onChanged?.addListener === "function") {
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local" || !changes[STORAGE_KEY_OPERATOR_MACROS]) {
+      return;
+    }
+    void registerVera5ContextMenus();
   });
-  void sendEnrichSelectionToTab(tab.id);
+}
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === resolveEnrichSelectionContextMenuActionId()) {
+    if (!tab?.id) {
+      return;
+    }
+    emitInvestigationSessionMacroRunTimelineEvent({
+      stepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+    });
+    void sendEnrichSelectionToTab(tab.id);
+    return;
+  }
+
+  if (info.menuItemId === OPERATOR_MACRO_CONTEXT_MENU_EMPTY_ITEM_ID) {
+    return;
+  }
+
+  const macroId = parseOperatorMacroContextMenuItemId(info.menuItemId);
+  if (!macroId || !tab?.id) {
+    return;
+  }
+  void sendRunOperatorMacroOnSelectionToTab(tab.id, macroId);
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {

@@ -79,6 +79,9 @@ export type OperatorMacroQueueSource =
 export const MAX_OPERATOR_MACRO_NOTE_TEMPLATE_TEXT_LENGTH = 4000;
 export const MAX_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT = 64;
 export const DEFAULT_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT = 8;
+/** Hard cap on live enrich attempts (enrich + queued IOC enrich) per macro run. */
+export const MAX_OPERATOR_MACRO_LIVE_ENRICH_CALLS_PER_RUN =
+  DEFAULT_OPERATOR_MACRO_QUEUE_RELATED_IOC_LIMIT;
 export const MAX_OPERATOR_MACRO_OPEN_PIVOT_PROVIDERS = 13;
 
 export type OperatorMacroEnrichStepParams = {
@@ -394,6 +397,65 @@ export function normalizeOperatorMacroStepV1(
       };
     default:
       return null;
+  }
+}
+
+export const OPERATOR_MACRO_STEP_TYPE_LABEL: Record<OperatorMacroStepTypeV1, string> = {
+  [OPERATOR_MACRO_STEP_TYPE.ENRICH]: "Enrich",
+  [OPERATOR_MACRO_STEP_TYPE.EXPORT_MARKDOWN]: "Export Markdown",
+  [OPERATOR_MACRO_STEP_TYPE.OPEN_PIVOT]: "Open pivot",
+  [OPERATOR_MACRO_STEP_TYPE.APPLY_NOTE_TEMPLATE]: "Apply note template",
+  [OPERATOR_MACRO_STEP_TYPE.QUEUE_RELATED_IOCS]: "Queue related IOCs",
+};
+
+export function createDefaultOperatorMacroStep(
+  stepType: OperatorMacroStepTypeV1
+): OperatorMacroNormalizedStep {
+  switch (stepType) {
+    case OPERATOR_MACRO_STEP_TYPE.ENRICH:
+      return {
+        type: stepType,
+        params: normalizeOperatorMacroEnrichStepParams({}),
+      };
+    case OPERATOR_MACRO_STEP_TYPE.EXPORT_MARKDOWN: {
+      const params = normalizeOperatorMacroExportMarkdownStepParams({
+        templateId: "markdown-report",
+        destination: OPERATOR_MACRO_EXPORT_DESTINATION.CLIPBOARD,
+        scope: OPERATOR_MACRO_IOC_SCOPE.SELECTION,
+      });
+      if (!params) {
+        throw new Error("Default export step could not be created.");
+      }
+      return { type: stepType, params };
+    }
+    case OPERATOR_MACRO_STEP_TYPE.OPEN_PIVOT:
+      return {
+        type: stepType,
+        params: normalizeOperatorMacroOpenPivotStepParams({
+          providers: [],
+          openMode: OPERATOR_MACRO_PIVOT_OPEN_MODE.FIRST,
+        }),
+      };
+    case OPERATOR_MACRO_STEP_TYPE.APPLY_NOTE_TEMPLATE: {
+      const params = normalizeOperatorMacroApplyNoteTemplateStepParams({
+        templateText: "Analyst note:",
+        mode: OPERATOR_MACRO_NOTE_TEMPLATE_MODE.APPEND,
+        scope: OPERATOR_MACRO_IOC_SCOPE.ACTIVE_IOC,
+      });
+      if (!params) {
+        throw new Error("Default note template step could not be created.");
+      }
+      return { type: stepType, params };
+    }
+    case OPERATOR_MACRO_STEP_TYPE.QUEUE_RELATED_IOCS:
+      return {
+        type: stepType,
+        params: normalizeOperatorMacroQueueRelatedIocsStepParams({
+          source: OPERATOR_MACRO_QUEUE_SOURCE.TRAY_SCAN,
+        }),
+      };
+    default:
+      throw new Error("Unsupported macro step type.");
   }
 }
 

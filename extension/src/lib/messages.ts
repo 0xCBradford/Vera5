@@ -32,6 +32,7 @@ export const MESSAGE = {
   OPEN_EXTENSION_POPUP: "OPEN_EXTENSION_POPUP",
   OPEN_SITE_PERMISSIONS: "OPEN_SITE_PERMISSIONS",
   TOGGLE_COMMAND_PALETTE: "TOGGLE_COMMAND_PALETTE",
+  RUN_OPERATOR_MACRO: "RUN_OPERATOR_MACRO",
   GET_ACTIVE_INVESTIGATION_SESSION: "GET_ACTIVE_INVESTIGATION_SESSION",
   CREATE_INVESTIGATION_SESSION: "CREATE_INVESTIGATION_SESSION",
   UPDATE_INVESTIGATION_SESSION_TITLE: "UPDATE_INVESTIGATION_SESSION_TITLE",
@@ -110,6 +111,19 @@ export type OpenSitePermissionsMessage = {
 };
 export type ToggleCommandPaletteMessage = {
   type: typeof MESSAGE.TOGGLE_COMMAND_PALETTE;
+};
+export type OperatorMacroTrayTargetEntry = {
+  value: string;
+  iocType: IocType;
+  anchorId: string;
+};
+export type RunOperatorMacroMessage = {
+  type: typeof MESSAGE.RUN_OPERATOR_MACRO;
+  macroId: string;
+  target:
+    | { mode: "selection"; entry: OperatorMacroTrayTargetEntry }
+    | { mode: "filtered"; entries: OperatorMacroTrayTargetEntry[] }
+    | { mode: "activeSelection" };
 };
 export type GetActiveInvestigationSessionMessage = {
   type: typeof MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION;
@@ -193,6 +207,7 @@ export type Vera5Message =
   | OpenExtensionPopupMessage
   | OpenSitePermissionsMessage
   | ToggleCommandPaletteMessage
+  | RunOperatorMacroMessage
   | GetActiveInvestigationSessionMessage
   | CreateInvestigationSessionMessage
   | UpdateInvestigationSessionTitleMessage
@@ -358,6 +373,62 @@ export function openSitePermissionsMessage(): OpenSitePermissionsMessage {
 
 export function toggleCommandPaletteMessage(): ToggleCommandPaletteMessage {
   return { type: MESSAGE.TOGGLE_COMMAND_PALETTE };
+}
+
+export function runOperatorMacroMessage(input: {
+  macroId: string;
+  target: RunOperatorMacroMessage["target"];
+}): RunOperatorMacroMessage {
+  return {
+    type: MESSAGE.RUN_OPERATOR_MACRO,
+    macroId: input.macroId.trim(),
+    target: input.target,
+  };
+}
+
+export function isRunOperatorMacroMessage(raw: unknown): raw is RunOperatorMacroMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  if (record.type !== MESSAGE.RUN_OPERATOR_MACRO) {
+    return false;
+  }
+  if (typeof record.macroId !== "string" || record.macroId.trim().length === 0) {
+    return false;
+  }
+  if (record.target === null || typeof record.target !== "object" || Array.isArray(record.target)) {
+    return false;
+  }
+  const target = record.target as Record<string, unknown>;
+  if (target.mode === "selection") {
+    return isOperatorMacroTrayTargetEntry(target.entry);
+  }
+  if (target.mode === "filtered") {
+    return (
+      Array.isArray(target.entries) &&
+      target.entries.every((entry) => isOperatorMacroTrayTargetEntry(entry))
+    );
+  }
+  if (target.mode === "activeSelection") {
+    return true;
+  }
+  return false;
+}
+
+function isOperatorMacroTrayTargetEntry(value: unknown): value is OperatorMacroTrayTargetEntry {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.value === "string" &&
+    record.value.trim().length > 0 &&
+    typeof record.anchorId === "string" &&
+    record.anchorId.trim().length > 0 &&
+    typeof record.iocType === "string" &&
+    (Object.values(IOC_TYPE) as string[]).includes(record.iocType)
+  );
 }
 
 export function getActiveInvestigationSessionMessage(): GetActiveInvestigationSessionMessage {
@@ -990,6 +1061,9 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   }
   if (type === MESSAGE.OPEN_EXTENSION_POPUP) {
     return isOpenExtensionPopupMessage(raw);
+  }
+  if (type === MESSAGE.RUN_OPERATOR_MACRO) {
+    return isRunOperatorMacroMessage(raw);
   }
   return (
     type === MESSAGE.PING ||

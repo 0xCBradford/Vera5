@@ -7,6 +7,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
 import { serializeSettingsPack } from "../lib/settingsPack";
+import { serializeOperatorMacroPack } from "../lib/operatorMacro";
+import { STORAGE_KEY_OPERATOR_MACROS } from "../lib/operatorMacroStorage";
 import { STORAGE_KEY_API_KEYS, createDefaultVera5Settings } from "../lib/storage";
 import { STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED } from "../lib/storage";
 import {
@@ -1686,5 +1688,367 @@ describe("Options domain policy controls", () => {
 
     expect(store[STORAGE_KEY_ANALYST_MODE_PRESET_ID]).toBe("dfir");
     expect(store[STORAGE_KEY_QUIET_MODE]).toBe(true);
+  });
+});
+
+describe("Options operator macros", () => {
+  let store: Record<string, unknown>;
+  let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+  beforeEach(() => {
+    store = {};
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    vi.unstubAllGlobals();
+  });
+
+  async function openOperatorMacrosSection(): Promise<ParentNode> {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const navButton = [...mounted.container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Operator Macros"
+    );
+    expect(navButton).toBeDefined();
+
+    await act(async () => {
+      navButton!.click();
+      await Promise.resolve();
+    });
+
+    const sectionToggle = mounted.container.querySelector(
+      "#operator-macros-heading button"
+    ) as HTMLButtonElement | null;
+    expect(sectionToggle).not.toBeNull();
+
+    await act(async () => {
+      sectionToggle!.click();
+      await Promise.resolve();
+    });
+
+    return mounted.container;
+  }
+
+  it("renders built-in macros in the operator macros section", async () => {
+    const container = await openOperatorMacrosSection();
+    expect(container.textContent).toContain("CTI Deep Check");
+    expect(container.textContent).toContain("DFIR Triage");
+    expect(container.textContent).toContain("Built-in");
+  });
+
+  it("creates, duplicates, and deletes a user macro", async () => {
+    const container = await openOperatorMacrosSection();
+
+    const createButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Create macro"
+    ) as HTMLButtonElement;
+    expect(createButton).toBeDefined();
+
+    await act(async () => {
+      createButton.click();
+      await Promise.resolve();
+    });
+
+    const nameInput = container.querySelector(
+      "#operator-macro-name"
+    ) as HTMLInputElement;
+    const idInput = container.querySelector(
+      "#operator-macro-id"
+    ) as HTMLInputElement;
+    expect(nameInput).not.toBeNull();
+    expect(idInput).not.toBeNull();
+
+    const setInputValue = (input: HTMLInputElement, value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    await act(async () => {
+      setInputValue(nameInput, "Ticket export");
+      setInputValue(idInput, "ticket-export");
+      await Promise.resolve();
+    });
+
+    const saveButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Save macro"
+    ) as HTMLButtonElement;
+    expect(saveButton).toBeDefined();
+
+    await act(async () => {
+      saveButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Ticket export");
+    expect(container.textContent).toContain("ticket-export");
+    expect(container.textContent).toContain("1 step");
+
+    const editButton = [...container.querySelectorAll("button")].find(
+      (button) => button.getAttribute("aria-label") === "Edit Ticket export"
+    ) as HTMLButtonElement;
+    expect(editButton).toBeDefined();
+
+    await act(async () => {
+      editButton.click();
+      await Promise.resolve();
+    });
+
+    const addStepButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Add step"
+    ) as HTMLButtonElement;
+    expect(addStepButton).toBeDefined();
+
+    await act(async () => {
+      addStepButton.click();
+      await Promise.resolve();
+    });
+
+    const saveAfterStepsButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Save macro"
+    ) as HTMLButtonElement;
+    expect(saveAfterStepsButton).toBeDefined();
+
+    await act(async () => {
+      saveAfterStepsButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("2 steps");
+
+    const duplicateButton = [...container.querySelectorAll("button")].find(
+      (button) => button.getAttribute("aria-label") === "Duplicate Ticket export"
+    ) as HTMLButtonElement;
+    expect(duplicateButton).toBeDefined();
+
+    await act(async () => {
+      duplicateButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Ticket export (copy)");
+
+    const deleteButton = [...container.querySelectorAll("button")].find(
+      (button) => button.getAttribute("aria-label") === "Delete Ticket export"
+    ) as HTMLButtonElement;
+    expect(deleteButton).toBeDefined();
+
+    await act(async () => {
+      deleteButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      [...container.querySelectorAll("code")].some((node) => node.textContent === "ticket-export")
+    ).toBe(false);
+    expect(container.textContent).toContain("ticket-export-copy");
+  });
+
+  it("blocks save when a note template step has empty text", async () => {
+    const container = await openOperatorMacrosSection();
+
+    const createButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Create macro"
+    ) as HTMLButtonElement;
+    expect(createButton).toBeDefined();
+
+    await act(async () => {
+      createButton.click();
+      await Promise.resolve();
+    });
+
+    const nameInput = container.querySelector(
+      "#operator-macro-name"
+    ) as HTMLInputElement;
+    const idInput = container.querySelector(
+      "#operator-macro-id"
+    ) as HTMLInputElement;
+    expect(nameInput).not.toBeNull();
+    expect(idInput).not.toBeNull();
+
+    const setInputValue = (input: HTMLInputElement, value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    await act(async () => {
+      setInputValue(nameInput, "Note macro");
+      setInputValue(idInput, "note-macro");
+      await Promise.resolve();
+    });
+
+    const stepTypeSelect = container.querySelector(
+      '[aria-label="Step type to add"]'
+    ) as HTMLSelectElement;
+    expect(stepTypeSelect).not.toBeNull();
+
+    await act(async () => {
+      stepTypeSelect.value = "applyNoteTemplate";
+      stepTypeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const addStepButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Add step"
+    ) as HTMLButtonElement;
+    expect(addStepButton).toBeDefined();
+
+    await act(async () => {
+      addStepButton.click();
+      await Promise.resolve();
+    });
+
+    const noteTemplateTextarea = container.querySelector(
+      'textarea[id$="-note-template-text"]'
+    ) as HTMLTextAreaElement;
+    expect(noteTemplateTextarea).not.toBeNull();
+
+    const setTextareaValue = (textarea: HTMLTextAreaElement, value: string) => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(textarea, value);
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    await act(async () => {
+      setTextareaValue(noteTemplateTextarea, "   ");
+      await Promise.resolve();
+    });
+
+    const saveButton = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Save macro"
+    ) as HTMLButtonElement;
+    expect(saveButton).toBeDefined();
+
+    await act(async () => {
+      saveButton.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("has invalid parameters");
+    expect(
+      [...container.querySelectorAll("code")].some((node) => node.textContent === "note-macro")
+    ).toBe(false);
+  });
+
+  it("renders macro pack export and import controls", async () => {
+    const container = await openOperatorMacrosSection();
+    expect(
+      container.querySelector('button[aria-label="Export user macro pack JSON"]')
+    ).not.toBeNull();
+    expect(
+      container.querySelector('button[aria-label="Import user macro pack JSON"]')
+    ).not.toBeNull();
+    expect(container.textContent).toContain(
+      "Built-in playbooks and API keys are never included"
+    );
+  });
+
+  it("shows a preview and applies macro pack import after confirmation", async () => {
+    const packJson = serializeOperatorMacroPack([
+      {
+        schemaVersion: 1,
+        id: "imported-pack-macro",
+        name: "Imported pack macro",
+        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        triggers: { palette: true, tray: false, context: false },
+        metadata: {
+          description: "Portable",
+          builtIn: false,
+          tags: [],
+          updatedAt: 1,
+        },
+      },
+    ]);
+
+    const container = await openOperatorMacrosSection();
+    const fileInput = container.querySelector(
+      'input[aria-label="Import user macro pack JSON file"]'
+    ) as HTMLInputElement;
+    const file = new File([packJson], "vera5-operator-macros.json", {
+      type: "application/json",
+    });
+
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", {
+        configurable: true,
+        value: [file],
+      });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(container.textContent).toContain("Review macro pack import");
+    expect(container.textContent).toContain("Imported pack macro");
+    expect(container.textContent).toContain("imported-pack-macro");
+
+    const applyButton = container.querySelector(
+      'button[aria-label="Apply macro pack import"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      applyButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const stored = store[STORAGE_KEY_OPERATOR_MACROS] as {
+      macros: Array<{ id: string }>;
+    };
+    expect(stored.macros.some((macro) => macro.id === "imported-pack-macro")).toBe(
+      true
+    );
+    expect(container.textContent).toContain("Imported user macros");
   });
 });

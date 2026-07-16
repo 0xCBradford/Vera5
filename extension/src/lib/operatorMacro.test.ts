@@ -4,15 +4,25 @@ import {
   DEFAULT_OPERATOR_MACRO_TRIGGERS,
   listEnabledOperatorMacroTriggers,
   MAX_OPERATOR_MACRO_STEPS,
+  MAX_STORED_OPERATOR_MACROS,
   normalizeOperatorMacro,
   normalizeOperatorMacroStep,
   normalizeOperatorMacroTriggersFromList,
   OperatorMacroImportError,
+  OperatorMacroPackImportError,
+  OPERATOR_MACRO_PACK_SCHEMA_VERSION,
   OPERATOR_MACRO_SCHEMA_VERSION,
   OPERATOR_MACRO_TRIGGER,
+  buildOperatorMacroPackDocument,
+  buildOperatorMacroPackImportPreview,
+  mergeImportedOperatorMacroPack,
   parseImportedOperatorMacroJson,
+  parseOperatorMacroPackJson,
+  serializeOperatorMacroEditorSteps,
+  serializeOperatorMacroPack,
   validateImportedOperatorMacro,
   validateImportedOperatorMacroSteps,
+  validateOperatorMacroEditorSteps,
 } from "./operatorMacro";
 
 describe("operatorMacro schema", () => {
@@ -203,6 +213,103 @@ describe("operatorMacro schema", () => {
   });
 });
 
+describe("operatorMacro editor steps", () => {
+  it("rejects empty step lists", () => {
+    expect(validateOperatorMacroEditorSteps([])).toMatch(/at least one macro step/i);
+  });
+
+  it("rejects invalid exportMarkdown steps missing templateId", () => {
+    expect(
+      validateOperatorMacroEditorSteps([
+        {
+          type: "exportMarkdown",
+          params: { destination: "clipboard", scope: "selection" },
+        },
+      ])
+    ).toMatch(/invalid parameters/i);
+  });
+
+  it("serializes valid editor steps into stored macro steps", () => {
+    expect(
+      serializeOperatorMacroEditorSteps([
+        { type: "enrich", params: { scope: "selection", forceRefresh: false } },
+        {
+          type: "exportMarkdown",
+          params: {
+            templateId: "markdown-report",
+            destination: "clipboard",
+            scope: "selection",
+          },
+        },
+      ])
+    ).toEqual([
+      {
+        type: "enrich",
+        params: {
+          schemaVersion: 1,
+          scope: "selection",
+          forceRefresh: false,
+        },
+      },
+      {
+        type: "exportMarkdown",
+        params: {
+          schemaVersion: 1,
+          templateId: "markdown-report",
+          destination: "clipboard",
+          scope: "selection",
+        },
+      },
+    ]);
+  });
+
+  it("preserves authored step order through create and editor serialize", () => {
+    const orderedTypes = [
+      "enrich",
+      "queueRelatedIocs",
+      "applyNoteTemplate",
+      "exportMarkdown",
+      "openPivot",
+    ] as const;
+
+    const created = createOperatorMacro({
+      id: "ordered-steps",
+      name: "Ordered steps",
+      steps: [
+        { type: "enrich", params: { scope: "selection" } },
+        { type: "queueRelatedIocs", params: { source: "trayScan", limit: 4 } },
+        {
+          type: "applyNoteTemplate",
+          params: { templateText: "Note", mode: "append", scope: "activeIoc" },
+        },
+        {
+          type: "exportMarkdown",
+          params: {
+            templateId: "markdown-report",
+            destination: "clipboard",
+            scope: "selection",
+          },
+        },
+        {
+          type: "openPivot",
+          params: { providers: [], openMode: "first" },
+        },
+      ],
+      triggers: { palette: true },
+    });
+
+    expect(created.steps.map((step) => step.type)).toEqual([...orderedTypes]);
+
+    const serialized = serializeOperatorMacroEditorSteps(
+      created.steps.map((step) => ({
+        type: step.type,
+        params: step.params,
+      }))
+    );
+    expect(serialized.map((step) => step.type)).toEqual([...orderedTypes]);
+  });
+});
+
 function buildImportableMacro(overrides: Record<string, unknown> = {}) {
   return {
     schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
@@ -283,5 +390,180 @@ describe("operatorMacro import validation", () => {
         })
       )
     ).toThrow(/at least one trigger/i);
+  });
+});
+
+describe("operatorMacro pack export/import", () => {
+  it("builds a user-only macro pack document", () => {
+    const pack = buildOperatorMacroPackDocument([
+      {
+        schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+        id: "user-macro",
+        name: "User macro",
+        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        triggers: { palette: true, tray: false, context: false },
+        metadata: {
+          description: "Custom",
+          builtIn: false,
+          tags: [],
+          updatedAt: 10,
+        },
+      },
+      {
+        schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+        id: "cti-deep-check",
+        name: "CTI Deep Check",
+        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        triggers: { palette: true, tray: false, context: false },
+        metadata: {
+          description: "Built-in",
+          builtIn: true,
+          tags: [],
+          updatedAt: 20,
+        },
+      },
+    ]);
+
+    expect(pack.schemaVersion).toBe(OPERATOR_MACRO_PACK_SCHEMA_VERSION);
+    expect(pack.macros).toHaveLength(1);
+    expect(pack.macros[0]?.id).toBe("user-macro");
+  });
+
+  it("parses and merges macro packs with add and update actions", () => {
+    const current = [
+      {
+        schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+        id: "existing",
+        name: "Existing",
+        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        triggers: { palette: true, tray: false, context: false },
+        metadata: {
+          description: "",
+          builtIn: false,
+          tags: [],
+          updatedAt: 1,
+        },
+      },
+      {
+        schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+        id: "cti-deep-check",
+        name: "CTI Deep Check",
+        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        triggers: { palette: true, tray: false, context: false },
+        metadata: {
+          description: "",
+          builtIn: true,
+          tags: [],
+          updatedAt: 2,
+        },
+      },
+    ] as const;
+
+    const rawJson = serializeOperatorMacroPack([
+      {
+        schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+        id: "existing",
+        name: "Existing updated",
+        steps: [
+          { type: "enrich", params: { scope: "activeIoc" } },
+          {
+            type: "exportMarkdown",
+            params: {
+              templateId: "markdown-report",
+              destination: "clipboard",
+              scope: "selection",
+            },
+          },
+        ],
+        triggers: { palette: true, tray: true, context: false },
+        metadata: {
+          description: "Updated",
+          builtIn: false,
+          tags: [],
+          updatedAt: 3,
+        },
+      },
+      {
+        schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+        id: "new-macro",
+        name: "New macro",
+        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        triggers: { palette: true, tray: false, context: false },
+        metadata: {
+          description: "",
+          builtIn: false,
+          tags: [],
+          updatedAt: 4,
+        },
+      },
+      {
+        schemaVersion: OPERATOR_MACRO_SCHEMA_VERSION,
+        id: "cti-deep-check",
+        name: "Should skip",
+        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        triggers: { palette: true, tray: false, context: false },
+        metadata: {
+          description: "",
+          builtIn: false,
+          tags: [],
+          updatedAt: 5,
+        },
+      },
+    ]);
+
+    const preview = buildOperatorMacroPackImportPreview([...current], rawJson);
+    expect(preview.entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ macroId: "existing", action: "update" }),
+        expect.objectContaining({ macroId: "new-macro", action: "add" }),
+        expect.objectContaining({
+          macroId: "cti-deep-check",
+          action: "skip",
+        }),
+      ])
+    );
+
+    const merged = mergeImportedOperatorMacroPack([...current], preview.pack);
+    expect(merged.macros.map((macro) => macro.id)).toEqual([
+      "existing",
+      "cti-deep-check",
+      "new-macro",
+    ]);
+    expect(merged.macros[0]?.name).toBe("Existing updated");
+    expect(merged.macros[0]?.steps).toHaveLength(2);
+    expect(merged.macros[1]?.metadata.builtIn).toBe(true);
+  });
+
+  it("rejects macro packs with secrets or single-macro documents", () => {
+    expect(() =>
+      parseOperatorMacroPackJson(
+        JSON.stringify({
+          schemaVersion: OPERATOR_MACRO_PACK_SCHEMA_VERSION,
+          exportedAt: "2026-07-08T00:00:00.000Z",
+          macros: [],
+          apiKeys: { abuseipdb: "secret" },
+        })
+      )
+    ).toThrow(OperatorMacroPackImportError);
+
+    expect(() =>
+      parseOperatorMacroPackJson(JSON.stringify(buildImportableMacro()))
+    ).toThrow(/single macro export/i);
+  });
+
+  it("rejects oversized macro packs", () => {
+    const macros = Array.from({ length: MAX_STORED_OPERATOR_MACROS + 1 }, (_, index) =>
+      buildImportableMacro({ id: `macro-${index}`, name: `Macro ${index}` })
+    );
+
+    expect(() =>
+      parseOperatorMacroPackJson(
+        JSON.stringify({
+          schemaVersion: OPERATOR_MACRO_PACK_SCHEMA_VERSION,
+          exportedAt: "2026-07-08T00:00:00.000Z",
+          macros,
+        })
+      )
+    ).toThrow(new RegExp(`maximum of ${MAX_STORED_OPERATOR_MACROS} macros`, "i"));
   });
 });

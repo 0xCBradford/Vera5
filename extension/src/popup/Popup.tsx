@@ -5,10 +5,23 @@ import {
   enrichSelectionMessage,
   getSelectionActionStateMessage,
   reopenInvestigationHistoryMessage,
+  runOperatorMacroMessage,
   scanPageMessage,
   scanSelectionMessage,
   type MessageResponse,
 } from "../lib/messages";
+import type { OperatorMacro } from "../lib/operatorMacro";
+import {
+  OPERATOR_MACRO_TRAY_NO_MACROS_TEXT,
+  OPERATOR_MACRO_TRAY_RUN_ACTION_LABEL,
+  OPERATOR_MACRO_TRAY_RUN_FILTERED_ACTION_LABEL,
+  OPERATOR_MACRO_TRAY_RUN_FILTERED_PICKER_HEADING,
+  OPERATOR_MACRO_TRAY_RUN_PICKER_HEADING,
+} from "../lib/operatorMacro";
+import {
+  ensureBuiltInOperatorMacros,
+  listStoredOperatorMacros,
+} from "../lib/operatorMacroStorage";
 import {
   getTabScanTrayFilter,
   saveTabScanTrayFilter,
@@ -757,6 +770,359 @@ function AddFilteredToCollectionPanel({
           >
             {IOC_COLLECTION_SAVE_TO_NEW_LABEL}
           </button>
+          {feedback ? (
+            <p
+              aria-live="polite"
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: POPUP_THEME.muted,
+                lineHeight: 1.4,
+              }}
+            >
+              {feedback}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+async function sendRunOperatorMacroToActiveTab(
+  message: ReturnType<typeof runOperatorMacroMessage>
+): Promise<MessageResponse> {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    return { ok: false, error: "No active tab." };
+  }
+  try {
+    return (await chrome.tabs.sendMessage(tab.id, message)) as MessageResponse;
+  } catch {
+    return { ok: false, error: "Could not reach the page. Scan the page first." };
+  }
+}
+
+function formatOperatorMacroRunFeedback(
+  response: MessageResponse,
+  successMessage: string,
+  failureFallback: string
+): string {
+  if (!response.ok) {
+    return response.error || failureFallback;
+  }
+  const payload = response.payload as { warning?: unknown } | undefined;
+  if (typeof payload?.warning === "string" && payload.warning.trim().length > 0) {
+    return `${successMessage} ${payload.warning.trim()}`;
+  }
+  return successMessage;
+}
+
+function toOperatorMacroTrayTargetEntry(entry: TabScanSummaryEntry) {
+  return {
+    value: entry.value,
+    iocType: entry.type,
+    anchorId: entry.anchorId,
+  };
+}
+
+function RunMacroTrayPanel({
+  entry,
+  open,
+  onToggle,
+  feedback,
+  onFeedback,
+}: {
+  entry: TabScanSummaryEntry;
+  open: boolean;
+  onToggle: () => void;
+  feedback: string | null;
+  onFeedback: (message: string | null) => void;
+}) {
+  const [macros, setMacros] = useState<OperatorMacro[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [runningMacroId, setRunningMacroId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void ensureBuiltInOperatorMacros()
+      .then(() => listStoredOperatorMacros())
+      .then((list) => {
+        if (!cancelled) {
+          setMacros(list.filter((macro) => macro.triggers.tray));
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMacros([]);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const handleRun = async (macro: OperatorMacro) => {
+    setRunningMacroId(macro.id);
+    const response = await sendRunOperatorMacroToActiveTab(
+      runOperatorMacroMessage({
+        macroId: macro.id,
+        target: {
+          mode: "selection",
+          entry: toOperatorMacroTrayTargetEntry(entry),
+        },
+      })
+    );
+    setRunningMacroId(null);
+    onFeedback(
+      formatOperatorMacroRunFeedback(
+        response,
+        `Ran ${macro.name} on ${entry.value}.`,
+        `Could not run ${macro.name}.`
+      )
+    );
+  };
+
+  return (
+    <div
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      style={{ marginTop: 4 }}
+    >
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-label={`${OPERATOR_MACRO_TRAY_RUN_ACTION_LABEL} for ${entry.value}`}
+        style={{
+          border: "none",
+          background: "transparent",
+          color: POPUP_THEME.muted,
+          cursor: "pointer",
+          fontSize: 11,
+          fontWeight: 600,
+          padding: 0,
+        }}
+      >
+        {OPERATOR_MACRO_TRAY_RUN_ACTION_LABEL}
+      </button>
+      {open ? (
+        <div
+          role="group"
+          aria-label={OPERATOR_MACRO_TRAY_RUN_PICKER_HEADING}
+          style={{
+            marginTop: 6,
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: `1px solid ${POPUP_THEME.border}`,
+            backgroundColor: POPUP_THEME.surface,
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 8px",
+              fontSize: 12,
+              fontWeight: 700,
+              color: POPUP_THEME.accentText,
+            }}
+          >
+            {OPERATOR_MACRO_TRAY_RUN_PICKER_HEADING}
+          </p>
+          {loading ? (
+            <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>
+              Loading macros…
+            </p>
+          ) : macros.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>
+              {OPERATOR_MACRO_TRAY_NO_MACROS_TEXT}
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {macros.map((macro) => (
+                <button
+                  key={macro.id}
+                  type="button"
+                  disabled={runningMacroId !== null}
+                  onClick={() => void handleRun(macro)}
+                  style={{
+                    ...buttonStyle,
+                    width: "100%",
+                    textAlign: "left",
+                    cursor: runningMacroId !== null ? "default" : "pointer",
+                  }}
+                >
+                  {runningMacroId === macro.id ? `Running ${macro.name}…` : macro.name}
+                </button>
+              ))}
+            </div>
+          )}
+          {feedback ? (
+            <p
+              aria-live="polite"
+              style={{
+                margin: "8px 0 0",
+                fontSize: 12,
+                color: POPUP_THEME.muted,
+                lineHeight: 1.4,
+              }}
+            >
+              {feedback}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RunMacroOnFilteredPanel({
+  entries,
+  open,
+  onToggle,
+  feedback,
+  onFeedback,
+}: {
+  entries: TabScanSummaryEntry[];
+  open: boolean;
+  onToggle: () => void;
+  feedback: string | null;
+  onFeedback: (message: string | null) => void;
+}) {
+  const [macros, setMacros] = useState<OperatorMacro[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [runningMacroId, setRunningMacroId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    let cancelled = false;
+    setLoading(true);
+    void ensureBuiltInOperatorMacros()
+      .then(() => listStoredOperatorMacros())
+      .then((list) => {
+        if (!cancelled) {
+          setMacros(list.filter((macro) => macro.triggers.tray));
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMacros([]);
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
+  const handleRun = async (macro: OperatorMacro) => {
+    setRunningMacroId(macro.id);
+    const response = await sendRunOperatorMacroToActiveTab(
+      runOperatorMacroMessage({
+        macroId: macro.id,
+        target: {
+          mode: "filtered",
+          entries: entries.map(toOperatorMacroTrayTargetEntry),
+        },
+      })
+    );
+    setRunningMacroId(null);
+    onFeedback(
+      formatOperatorMacroRunFeedback(
+        response,
+        `Ran ${macro.name} on ${entries.length} filtered indicator${
+          entries.length === 1 ? "" : "s"
+        }.`,
+        `Could not run ${macro.name}.`
+      )
+    );
+  };
+
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        disabled={entries.length === 0}
+        style={{
+          border: "none",
+          background: "transparent",
+          color: POPUP_THEME.muted,
+          cursor: entries.length === 0 ? "default" : "pointer",
+          fontSize: 11,
+          fontWeight: 600,
+          padding: 0,
+          opacity: entries.length === 0 ? 0.65 : 1,
+        }}
+      >
+        {`${OPERATOR_MACRO_TRAY_RUN_FILTERED_ACTION_LABEL} (${entries.length})`}
+      </button>
+      {open ? (
+        <div
+          role="group"
+          aria-label={OPERATOR_MACRO_TRAY_RUN_FILTERED_PICKER_HEADING}
+          style={{
+            marginTop: 6,
+            padding: "8px 10px",
+            borderRadius: 6,
+            border: `1px solid ${POPUP_THEME.border}`,
+            backgroundColor: POPUP_THEME.surface,
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 8px",
+              fontSize: 12,
+              fontWeight: 700,
+              color: POPUP_THEME.accentText,
+            }}
+          >
+            {OPERATOR_MACRO_TRAY_RUN_FILTERED_PICKER_HEADING}
+          </p>
+          {loading ? (
+            <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>
+              Loading macros…
+            </p>
+          ) : macros.length === 0 ? (
+            <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>
+              {OPERATOR_MACRO_TRAY_NO_MACROS_TEXT}
+            </p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {macros.map((macro) => (
+                <button
+                  key={macro.id}
+                  type="button"
+                  disabled={runningMacroId !== null || entries.length === 0}
+                  onClick={() => void handleRun(macro)}
+                  style={{
+                    ...buttonStyle,
+                    width: "100%",
+                    textAlign: "left",
+                    cursor:
+                      runningMacroId !== null || entries.length === 0
+                        ? "default"
+                        : "pointer",
+                  }}
+                >
+                  {runningMacroId === macro.id ? `Running ${macro.name}…` : macro.name}
+                </button>
+              ))}
+            </div>
+          )}
           {feedback ? (
             <p
               aria-live="polite"
@@ -2516,6 +2882,12 @@ export function Popup() {
   const [addFilteredToCollectionFeedback, setAddFilteredToCollectionFeedback] = useState<
     string | null
   >(null);
+  const [runMacroTrayAnchorId, setRunMacroTrayAnchorId] = useState<string | null>(null);
+  const [runMacroTrayFeedback, setRunMacroTrayFeedback] = useState<string | null>(null);
+  const [runMacroOnFilteredOpen, setRunMacroOnFilteredOpen] = useState(false);
+  const [runMacroOnFilteredFeedback, setRunMacroOnFilteredFeedback] = useState<string | null>(
+    null
+  );
   const [promoteSessionToCollectionOpen, setPromoteSessionToCollectionOpen] = useState(false);
   const [promoteSessionToCollectionFeedback, setPromoteSessionToCollectionFeedback] =
     useState<string | null>(null);
@@ -4892,6 +5264,16 @@ export function Popup() {
                 feedback={addFilteredToCollectionFeedback}
                 onFeedback={setAddFilteredToCollectionFeedback}
               />
+              <RunMacroOnFilteredPanel
+                entries={filteredEntries}
+                open={runMacroOnFilteredOpen}
+                onToggle={() => {
+                  setRunMacroOnFilteredFeedback(null);
+                  setRunMacroOnFilteredOpen((current) => !current);
+                }}
+                feedback={runMacroOnFilteredFeedback}
+                onFeedback={setRunMacroOnFilteredFeedback}
+              />
               {trayNavigationMessage ? (
                 <p
                   role="alert"
@@ -5027,6 +5409,22 @@ export function Popup() {
                         onToggle={() => {
                           setSaveToCollectionFeedback(null);
                           setSaveToCollectionAnchorId((current) =>
+                            current === entry.anchorId ? null : entry.anchorId
+                          );
+                        }}
+                      />
+                      <RunMacroTrayPanel
+                        entry={entry}
+                        open={runMacroTrayAnchorId === entry.anchorId}
+                        feedback={
+                          runMacroTrayAnchorId === entry.anchorId
+                            ? runMacroTrayFeedback
+                            : null
+                        }
+                        onFeedback={setRunMacroTrayFeedback}
+                        onToggle={() => {
+                          setRunMacroTrayFeedback(null);
+                          setRunMacroTrayAnchorId((current) =>
                             current === entry.anchorId ? null : entry.anchorId
                           );
                         }}

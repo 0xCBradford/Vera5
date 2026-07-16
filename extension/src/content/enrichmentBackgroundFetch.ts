@@ -12,13 +12,15 @@ import {
 } from "../lib/enrichmentPolicy";
 import { isExtensionContextInvalidated, logUnlessBenignExtensionError } from "../lib/extensionContext";
 import { recordInvestigationHistoryEntry } from "../lib/investigationHistoryStorage";
-import type { IocType } from "../lib/iocRegex";
 import {
   hasAnyEnabledLiveEnrichmentSource,
   listEnabledLiveEnrichmentSourceIds,
 } from "../lib/enrichmentSourceSelection";
 import type { EnrichmentSourceId } from "../lib/enrichmentSourceRegistry";
 import { resolveMultiSourceEnrichmentView } from "../lib/hoverCardEnrichment";
+import {
+  MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE,
+} from "../lib/storage";
 import {
   requestEnrichmentFromServiceWorker,
   type ContentEnrichmentSourceResult,
@@ -45,6 +47,13 @@ export const DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE =
 
 export const INTERNAL_ASSET_ENRICHMENT_BLOCKED_MESSAGE =
   "Threat intelligence queries are blocked for this indicator because it matches a configured internal asset list.";
+
+export {
+  MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE,
+  MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE,
+  OPERATOR_MACRO_ENRICH_TRUST_ABORT_FALLBACK_MESSAGE,
+  OPERATOR_MACRO_RUN_ABORTED_FALLBACK_MESSAGE,
+} from "../lib/storage";
 
 export type EnrichmentTrustGateBlock = {
   errorCode: string;
@@ -145,6 +154,20 @@ export function presentEnrichmentTrustGateBlocked(
       errorCode: block.errorCode,
       errorMessage: block.errorMessage,
       preQueryDisclosure: undefined,
+    },
+    doc
+  );
+}
+
+export function presentOperatorMacroDisclosureDeclined(
+  payload: HoverCardOverlayPayload,
+  doc: Document = document
+): void {
+  presentEnrichmentTrustGateBlocked(
+    payload,
+    {
+      errorCode: ENRICHMENT_ERROR_CODE.DISCLOSURE_DECLINED,
+      errorMessage: MACRO_ENRICH_DISCLOSURE_DECLINED_ABORT_MESSAGE,
     },
     doc
   );
