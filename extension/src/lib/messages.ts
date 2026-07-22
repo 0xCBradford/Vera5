@@ -71,6 +71,8 @@ export type NavigateToIocAnchorMessage = {
   anchorId: string;
   iocType?: IocType;
   value?: string;
+  /** When `"none"`, scroll/focus the highlight without requesting live enrichment. */
+  enrichmentTrigger?: "manual" | "auto" | "none";
 };
 export type ReopenInvestigationHistoryMessage = {
   type: typeof MESSAGE.REOPEN_INVESTIGATION_HISTORY;
@@ -262,15 +264,22 @@ export function getSelectionActionStateMessage(): GetSelectionActionStateMessage
 
 export function navigateToIocAnchorMessage(
   anchorId: string,
-  fallback?: { iocType: IocType; value: string }
+  options?: {
+    iocType?: IocType;
+    value?: string;
+    enrichmentTrigger?: "manual" | "auto" | "none";
+  }
 ): NavigateToIocAnchorMessage {
   const message: NavigateToIocAnchorMessage = {
     type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
     anchorId,
   };
-  if (fallback) {
-    message.iocType = fallback.iocType;
-    message.value = fallback.value.trim();
+  if (options?.iocType !== undefined && options.value !== undefined) {
+    message.iocType = options.iocType;
+    message.value = options.value.trim();
+  }
+  if (options?.enrichmentTrigger !== undefined) {
+    message.enrichmentTrigger = options.enrichmentTrigger;
   }
   return message;
 }
@@ -314,6 +323,15 @@ export function isNavigateToIocAnchorMessage(
       return false;
     }
     if (typeof record.value !== "string" || record.value.trim().length === 0) {
+      return false;
+    }
+  }
+  if (record.enrichmentTrigger !== undefined) {
+    if (
+      record.enrichmentTrigger !== "manual" &&
+      record.enrichmentTrigger !== "auto" &&
+      record.enrichmentTrigger !== "none"
+    ) {
       return false;
     }
   }

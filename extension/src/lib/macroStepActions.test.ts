@@ -114,12 +114,16 @@ describe("macroStepActions", () => {
     emitInvestigationSessionMacroRunTimelineEvent({
       stepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
       macroId: "triage-selection",
+      stepIndex: 0,
+      runStatus: "success",
       iocValue: "8.8.8.8",
     });
 
     expect(recordActiveInvestigationSessionMacroRunEvent).toHaveBeenCalledWith({
       stepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
       macroId: "triage-selection",
+      stepIndex: 0,
+      runStatus: "success",
       iocValue: "8.8.8.8",
       iocType: undefined,
       now: undefined,

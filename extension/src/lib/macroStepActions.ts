@@ -9,6 +9,7 @@ import {
   getQuietMode,
   MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE,
 } from "./storage";
+import type { MacroRunStatus } from "./timelineEvent";
 
 export const MACRO_STEP_TYPE_OPEN_FROM_SELECTION = "openFromSelection" as const;
 
@@ -91,6 +92,8 @@ export function listRegisteredMacroStepContextMenuActionIds(): ReadonlyMap<
 export function emitInvestigationSessionMacroRunTimelineEvent(input: {
   stepType: string;
   macroId?: string;
+  stepIndex?: number;
+  runStatus?: MacroRunStatus;
   iocValue?: string;
   iocType?: IocType;
   now?: number;
@@ -103,6 +106,8 @@ export function emitInvestigationSessionMacroRunTimelineEvent(input: {
   void recordActiveInvestigationSessionMacroRunEvent({
     stepType,
     macroId: input.macroId,
+    stepIndex: input.stepIndex,
+    runStatus: input.runStatus,
     iocValue: input.iocValue,
     iocType: input.iocType,
     now: input.now,

@@ -167,7 +167,17 @@ Operator macros compose the hooks above with step types that map to existing exp
 | `applyNoteTemplate` | Apply an analyst note template to the active IOC | Shipped; extends per-IOC notes on the hover card. |
 | `queueRelatedIocs` | Queue related IOCs from the tray scan | Shipped; respects per-run queue limits. |
 
-User-defined macros will be editable in settings, exportable as JSON without API keys, and runnable from the command palette or tray alongside built-in playbooks.
+Each configurable step type accepts a small, validated parameter set. Unknown step types and out-of-range values are rejected or clamped on import so a shared macro can never widen scope beyond these options:
+
+| Step type | Configurable parameters (allowed values, default) |
+|-----------|---------------------------------------------------|
+| `enrich` | `scope`: `selection` or `activeIoc` (default `selection`; `trayFiltered` falls back to `selection`). `forceRefresh`: re-query even when a cached result exists (default off). |
+| `exportMarkdown` | `templateId`: any export template id (see [export-artifacts.md](export-artifacts.md); required—no default). `destination`: `clipboard` or `download` (default `clipboard`). `scope`: `selection`, `activeIoc`, or `trayFiltered` (default `selection`). |
+| `openPivot` | `providers`: ordered subset of enrichment source ids to emphasize (empty opens all attributed pivots; capped at 13, duplicates removed). `openMode`: `first` (one tab) or `all` (default `first`). |
+| `applyNoteTemplate` | `templateText`: note body, up to 4000 characters (required). `mode`: `append` or `replace` (default `append`). `scope`: `selection` or `activeIoc`. |
+| `queueRelatedIocs` | `source`: `trayScan` (current page tray snapshot) or `appearedAlongside` (default `appearedAlongside`; built-in **DFIR Triage** uses `trayScan`). `limit`: 1–64 related indicators (default 8). |
+
+User-defined macros are editable in **Vera5 Settings → Operator Macros**, exportable and importable as JSON without API keys, and runnable from the command palette or IOC tray alongside built-in playbooks.
 
 ### Built-in playbooks
 
@@ -224,6 +234,10 @@ Macro runs must not bypass analyst consent or hostname policy:
 - Live enrichments per macro run are capped (default **8** attempts across `enrich` steps and `queueRelatedIocs` queue items, including tray **Run macro on filtered…**). When the cap is hit, the hover card and tray show a **quota warning** and remaining enrich work for that run is skipped—no unbounded vendor fan-out.
 
 Built-in and custom macros register in the command palette alongside core commands rather than replacing the palette registry.
+
+### Macros vs single-action commands
+
+Palette- and tray-triggered macros **supersede** running fixed, single-action operator commands one at a time whenever you have a repeatable flow. Instead of separately invoking **Enrich selection**, then an export command, then opening pivots, then adding a note for each indicator, a macro runs that whole ordered sequence from one palette result or one tray **Run macro…** action. The individual commands (**Scan page**, **Enrich selection**, **Copy filtered Markdown**, **Export tray subset**, context-menu **Enrich selection with Vera5**, and the rest) stay available for one-off actions—macros do not remove them. Both paths share the same command registry, on-page runner, and trust gates, so a macro never becomes a parallel or less-restricted way to enrich.
 
 ## Before you start
 
@@ -496,6 +510,55 @@ Every event includes:
 
 Events **never** include API keys, raw vendor JSON secrets, or full page content—only indicator keys and short attribution summaries you would already see on the hover card or export menus.
 
+### Investigation replay segment mapping
+
+Investigation **replay** does not capture a second event stream. It **projects** the session `TimelineEvent` log into ordered **`ReplaySegment`** records for step-through playback and markdown transcripts. Playback is read-only: stepping a segment does not re-run live vendor enrichment or call screen/video capture APIs.
+
+From the popup **Investigation replay** panel, **Copy transcript** / **Download transcript** produce a local markdown handoff with the session title, page URL, export timestamp, and an ordered step table (action, indicator, timestamps, and short detail lines). Choose a **Transcript template**: **Markdown report** (default table layout), **Obsidian note** (YAML frontmatter with overlapping `session` / `page_url` / `exported_at` / `source` fields), or **Analyst update** (compact prose). An optional **Include IOC & enrichment appendix** toggle appends session-memory IOC content—Markdown report uses the Indicators / Enrichment details sections; Obsidian note and Analyst update reuse those same ticket-template IOC renderers (no vendor raw dumps). Transcripts do not upload data or re-query vendors.
+
+#### Shared payload fields
+
+| Timeline event field | Replay segment field | Notes |
+|----------------------|----------------------|-------|
+| `schemaVersion` | `schemaVersion` | Replay segments use their own schema version (**1**); projection does not rewrite timeline events. |
+| `type` | `action` | Mapped per the table below when the timeline type is replayable. |
+| `sessionId` | `sessionId` | Same investigation session id. |
+| `iocKey` | `iocKey` | Same normalized indicator key (may be empty for session-scoped events). |
+| `timestamp` | `timestamp` | Same epoch milliseconds; segments sort by timestamp with stable tie-breakers. |
+| `sourceAttributionSummary` | `sourceAttributionSummary` | Same attribution line (max **500** characters). Secret-shaped JSON (API keys, tokens) is redacted with `[redacted]` using the same rules as session and timeline exports. |
+| `templateId` | `templateId` | Copied on **`export`** → **`export`** projections when present. |
+| `macroId` | `macroId` | Copied on **`macroRun`** → **`macroRun`** when the operator macro runner recorded the step. |
+| `stepIndex` | `stepIndex` | Zero-based macro step index from the runner (optional on older events). |
+| `runStatus` | `runStatus` | `success` or `aborted` for the recorded macro step outcome. |
+| *(n/a)* | `id` | Deterministic replay segment id derived from session, timestamp, action, ioc key, and (for macro runs) step index / status when present. |
+| *(n/a)* | `sourceTimelineEventType` | Set to the originating timeline `type` when the segment was projected from the event log. |
+
+#### Timeline `type` → replay `action`
+
+| Timeline `type` | Replay `action` | Ingest behavior |
+|-----------------|-----------------|-----------------|
+| `scan` | `scan` | Projected |
+| `enrich` | `enrich` | Projected |
+| `export` | `export` | Projected (preserves `templateId`) |
+| `watchlistTag` | `watchlistTag` | Projected |
+| `macroRun` | `macroRun` | Projected (preserves `macroId`, `stepIndex`, `runStatus` when present) |
+| `redetect` | — | Captured on the timeline only; **not** projected into v1 replay segments |
+
+Replay also defines **`select`** and **`note`** actions for playback of indicator focus and analyst-note steps. Those actions are part of the replay model; they are **not** separate timeline capture types and do not create a parallel event pipeline.
+
+#### Single capture pipeline (invariant)
+
+| Surface | Reads | Writes events? |
+|---------|-------|----------------|
+| Session timeline UI / filters | `TimelineEvent[]` on the investigation session | No (display only) |
+| Timeline export | Same `TimelineEvent[]` | No (export only) |
+| Investigation replay ingest | Same `TimelineEvent[]` → `ReplaySegment[]` | No (projection only) |
+| Scan / enrich / export / label / macro / redetect paths | — | Yes — emit `TimelineEvent` into the session store |
+
+Operators always see one chronological truth: what the session recorded. Replay and export never invent alternate field names for the same capture.
+
+Replay payloads **never** retain API keys or raw vendor secret fields. Create, normalize, ingest, and JSON serialization paths redact secret-shaped material from free-text fields (notably `sourceAttributionSummary`) before playback or handoff.
+
 ### JSON examples
 
 Enrichment event:
@@ -522,6 +585,22 @@ Export with template:
   "timestamp": 1700000001000,
   "sourceAttributionSummary": "",
   "templateId": "jira-comment"
+}
+```
+
+Operator macro step (structured fields from the macro runner):
+
+```json
+{
+  "schemaVersion": 1,
+  "type": "macroRun",
+  "sessionId": "vera5-inv-a1b2c3d4",
+  "iocKey": "8.8.8.8",
+  "timestamp": 1700000001500,
+  "sourceAttributionSummary": "cti-deep-check: enrich",
+  "macroId": "cti-deep-check",
+  "stepIndex": 0,
+  "runStatus": "success"
 }
 ```
 

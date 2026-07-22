@@ -4,6 +4,7 @@ import {
   TIMELINE_EVENT_SCHEMA_VERSION,
   TIMELINE_EVENT_TYPE,
   TIMELINE_EVENT_TYPE_ORDER,
+  MACRO_RUN_STATUS,
   createTimelineEvent,
   filterTimelineEventsForAppend,
   isTimelineEventRapidDuplicate,
@@ -121,6 +122,47 @@ describe("timelineEvent payload", () => {
     ).toBe("triage-selection: openFromSelection");
   });
 
+  it("stores structured macro run id, step index, and run status on macroRun events", () => {
+    const event = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+      sessionId: "vera5-inv-macro",
+      iocKey: "8.8.8.8",
+      timestamp: 1_700_000_000_010,
+      sourceAttributionSummary: "triage: enrich",
+      macroId: "triage",
+      stepIndex: 2,
+      runStatus: MACRO_RUN_STATUS.SUCCESS,
+    });
+
+    expect(event).toEqual({
+      schemaVersion: TIMELINE_EVENT_SCHEMA_VERSION,
+      type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+      sessionId: "vera5-inv-macro",
+      iocKey: "8.8.8.8",
+      timestamp: 1_700_000_000_010,
+      sourceAttributionSummary: "triage: enrich",
+      macroId: "triage",
+      stepIndex: 2,
+      runStatus: "success",
+    });
+    expect(normalizeTimelineEvent(event)).toEqual(event);
+  });
+
+  it("rejects invalid macro run stepIndex or runStatus on normalize", () => {
+    const base = {
+      schemaVersion: TIMELINE_EVENT_SCHEMA_VERSION,
+      type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+      sessionId: "vera5-inv-macro",
+      iocKey: "8.8.8.8",
+      timestamp: 1_700_000_000_011,
+      sourceAttributionSummary: "",
+      macroId: "triage",
+    };
+    expect(normalizeTimelineEvent({ ...base, stepIndex: -1 })).toBeNull();
+    expect(normalizeTimelineEvent({ ...base, stepIndex: 1.5 })).toBeNull();
+    expect(normalizeTimelineEvent({ ...base, runStatus: "failed" })).toBeNull();
+  });
+
   it("normalizes stored timeline event records", () => {
     expect(
       normalizeTimelineEvent({
@@ -214,6 +256,54 @@ describe("timelineEvent deduplication", () => {
     expect(filterTimelineEventsForAppend(existing, [duplicate, later])).toEqual([
       later,
     ]);
+  });
+
+  it("keeps distinct macro run steps on the same IOC within the dedup window", () => {
+    const existing = [
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+        sessionId,
+        iocKey: "8.8.8.8",
+        timestamp: 1_000,
+        macroId: "triage",
+        stepIndex: 0,
+        runStatus: MACRO_RUN_STATUS.SUCCESS,
+      }),
+    ];
+    const nextStep = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+      sessionId,
+      iocKey: "8.8.8.8",
+      timestamp: 1_100,
+      macroId: "triage",
+      stepIndex: 1,
+      runStatus: MACRO_RUN_STATUS.SUCCESS,
+    });
+    const abortSameStep = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+      sessionId,
+      iocKey: "8.8.8.8",
+      timestamp: 1_200,
+      macroId: "triage",
+      stepIndex: 0,
+      runStatus: MACRO_RUN_STATUS.ABORTED,
+    });
+    const duplicateSuccess = createTimelineEvent({
+      type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+      sessionId,
+      iocKey: "8.8.8.8",
+      timestamp: 1_300,
+      macroId: "triage",
+      stepIndex: 0,
+      runStatus: MACRO_RUN_STATUS.SUCCESS,
+    });
+
+    expect(isTimelineEventRapidDuplicate(existing, nextStep)).toBe(false);
+    expect(isTimelineEventRapidDuplicate(existing, abortSameStep)).toBe(false);
+    expect(isTimelineEventRapidDuplicate(existing, duplicateSuccess)).toBe(true);
+    expect(
+      filterTimelineEventsForAppend(existing, [nextStep, abortSameStep, duplicateSuccess])
+    ).toEqual([nextStep, abortSameStep]);
   });
 
   it("keeps events when the type or iocKey differs", () => {

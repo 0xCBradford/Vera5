@@ -18,14 +18,8 @@ import {
   OPERATOR_MACRO_TRAY_RUN_FILTERED_PICKER_HEADING,
   OPERATOR_MACRO_TRAY_RUN_PICKER_HEADING,
 } from "../lib/operatorMacro";
-import {
-  ensureBuiltInOperatorMacros,
-  listStoredOperatorMacros,
-} from "../lib/operatorMacroStorage";
-import {
-  getTabScanTrayFilter,
-  saveTabScanTrayFilter,
-} from "../lib/tabScanSnapshotStorage";
+import { ensureBuiltInOperatorMacros, listStoredOperatorMacros } from "../lib/operatorMacroStorage";
+import { getTabScanTrayFilter, saveTabScanTrayFilter } from "../lib/tabScanSnapshotStorage";
 import { requestTabPageContextForActiveTab } from "../lib/pageContextClient";
 import {
   PAGE_CONTEXT_TYPE,
@@ -179,6 +173,44 @@ import {
   type TimelineEventTypeFilter,
 } from "../lib/timelineEvent";
 import {
+  buildReplaySegmentDetailView,
+  buildReplayStepJumpAriaLabel,
+  clampReplayStepIndex,
+  copyInvestigationReplayTranscriptToClipboard,
+  downloadInvestigationReplayTranscriptFile,
+  formatReplayStepListLabel,
+  formatReplayStepPositionLabel,
+  ingestReplaySegmentsFromInvestigationSession,
+  INVESTIGATION_REPLAY_COPY_TRANSCRIPT_LABEL,
+  INVESTIGATION_REPLAY_DETAIL_ARIA_LABEL,
+  INVESTIGATION_REPLAY_DETAIL_ACTION_LABEL,
+  INVESTIGATION_REPLAY_DETAIL_ATTRIBUTION_LABEL,
+  INVESTIGATION_REPLAY_DETAIL_IOC_LABEL,
+  INVESTIGATION_REPLAY_DETAIL_TEMPLATE_LABEL,
+  INVESTIGATION_REPLAY_DOWNLOAD_TRANSCRIPT_LABEL,
+  INVESTIGATION_REPLAY_EMPTY_TEXT,
+  INVESTIGATION_REPLAY_EXPORT_GROUP_ARIA_LABEL,
+  INVESTIGATION_REPLAY_EXPORT_SECTION_LABEL,
+  INVESTIGATION_REPLAY_EXPORT_TEMPLATE_LABEL,
+  INVESTIGATION_REPLAY_INCLUDE_MEMORY_APPENDIX_LABEL,
+  INVESTIGATION_REPLAY_LIST_ARIA_LABEL,
+  INVESTIGATION_REPLAY_NAV_GROUP_ARIA_LABEL,
+  INVESTIGATION_REPLAY_NEXT_LABEL,
+  INVESTIGATION_REPLAY_PREVIOUS_LABEL,
+  INVESTIGATION_REPLAY_SECTION_LABEL,
+  INVESTIGATION_REPLAY_TRANSCRIPT_TEMPLATE_IDS,
+  isReplaySegmentNavigable,
+  jumpToReplayStepIndex,
+  resolveInvestigationReplayTranscriptCopyFeedback,
+  resolveInvestigationReplayTranscriptDownloadFeedback,
+  resolveReplayNextStepIndex,
+  resolveReplayPreviousStepIndex,
+  type InvestigationReplayTranscriptExportInput,
+  type InvestigationReplayTranscriptTemplateId,
+  type ReplaySegment,
+} from "../lib/replaySegment";
+import type { NormalizedEnrichmentRecord } from "../lib/enrichmentExport";
+import {
   buildInvestigationHistoryRowAriaLabel,
   buildInvestigationHistorySessionLinkSummary,
   countInvestigationHistoryEntriesForSession,
@@ -190,7 +222,10 @@ import {
   resolveInvestigationHistorySessionTitle,
   type InvestigationHistoryEntry,
 } from "../lib/investigationHistory";
-import { listInvestigationHistoryEntries, clearInvestigationHistory } from "../lib/investigationHistoryStorage";
+import {
+  listInvestigationHistoryEntries,
+  clearInvestigationHistory,
+} from "../lib/investigationHistoryStorage";
 import {
   buildAddFilteredToCollectionActionLabel,
   buildIocCollectionSummaryLine,
@@ -256,11 +291,7 @@ import {
   type EnrichmentSourceOpsRow,
   type EnrichmentSourceOpsSnapshot,
 } from "../lib/enrichmentSourceOps";
-import {
-  clearPopupPanelFocus,
-  POPUP_PANEL,
-  readPopupPanelFocus,
-} from "../lib/popupPanelFocus";
+import { clearPopupPanelFocus, POPUP_PANEL, readPopupPanelFocus } from "../lib/popupPanelFocus";
 import { VERA5_COLOR, VERA5_FONT } from "../lib/theme";
 import {
   resolveWorkspaceTrayView,
@@ -937,9 +968,7 @@ function RunMacroTrayPanel({
             {OPERATOR_MACRO_TRAY_RUN_PICKER_HEADING}
           </p>
           {loading ? (
-            <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>
-              Loading macros…
-            </p>
+            <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>Loading macros…</p>
           ) : macros.length === 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>
               {OPERATOR_MACRO_TRAY_NO_MACROS_TEXT}
@@ -1093,9 +1122,7 @@ function RunMacroOnFilteredPanel({
             {OPERATOR_MACRO_TRAY_RUN_FILTERED_PICKER_HEADING}
           </p>
           {loading ? (
-            <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>
-              Loading macros…
-            </p>
+            <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>Loading macros…</p>
           ) : macros.length === 0 ? (
             <p style={{ margin: 0, fontSize: 12, color: POPUP_THEME.muted }}>
               {OPERATOR_MACRO_TRAY_NO_MACROS_TEXT}
@@ -1112,10 +1139,7 @@ function RunMacroOnFilteredPanel({
                     ...buttonStyle,
                     width: "100%",
                     textAlign: "left",
-                    cursor:
-                      runningMacroId !== null || entries.length === 0
-                        ? "default"
-                        : "pointer",
+                    cursor: runningMacroId !== null || entries.length === 0 ? "default" : "pointer",
                   }}
                 >
                   {runningMacroId === macro.id ? `Running ${macro.name}…` : macro.name}
@@ -1164,12 +1188,14 @@ function PromoteSessionToCollectionPanel({
 
   const handlePromote = async () => {
     if (sessionMembers.length === 0) {
-      onFeedback(formatPromoteSessionToCollectionFeedback({
-        collectionName: collectionName.trim() || session.title,
-        addedCount: 0,
-        duplicateCount: 0,
-        totalCount: 0,
-      }));
+      onFeedback(
+        formatPromoteSessionToCollectionFeedback({
+          collectionName: collectionName.trim() || session.title,
+          addedCount: 0,
+          duplicateCount: 0,
+          totalCount: 0,
+        })
+      );
       return;
     }
 
@@ -1327,9 +1353,7 @@ function InvestigationSessionTimelinePanel({
   const [timeRangeEndInput, setTimeRangeEndInput] = useState("");
   const [exportTemplateId, setExportTemplateId] =
     useState<InvestigationTimelineMarkdownTemplateId>("markdown-report");
-  const [timelineExportMessage, setTimelineExportMessage] = useState<string | null>(
-    null
-  );
+  const [timelineExportMessage, setTimelineExportMessage] = useState<string | null>(null);
 
   useEffect(() => {
     setFilter(createDefaultTimelineEventFilter());
@@ -1344,10 +1368,7 @@ function InvestigationSessionTimelinePanel({
     () => timelineEventHasSessionScopeEntries(events),
     [events]
   );
-  const filteredEvents = useMemo(
-    () => filterTimelineEvents(events, filter),
-    [events, filter]
-  );
+  const filteredEvents = useMemo(() => filterTimelineEvents(events, filter), [events, filter]);
 
   const buildTimelineExportInput = (): InvestigationTimelineExportInput => ({
     session: {
@@ -1484,9 +1505,7 @@ function InvestigationSessionTimelinePanel({
           </span>
         </span>
         {event.sourceAttributionSummary ? (
-          <span style={{ color: POPUP_THEME.muted }}>
-            {event.sourceAttributionSummary}
-          </span>
+          <span style={{ color: POPUP_THEME.muted }}>{event.sourceAttributionSummary}</span>
         ) : null}
         {event.templateId ? (
           <span style={{ color: POPUP_THEME.muted }}>
@@ -1548,9 +1567,7 @@ function InvestigationSessionTimelinePanel({
                   {SESSION_TIMELINE_FILTER_ALL_IOCS_LABEL}
                 </option>
                 {showSessionScopeOption ? (
-                  <option value={TIMELINE_EVENT_IOC_FILTER_SESSION_SCOPE}>
-                    Session scope
-                  </option>
+                  <option value={TIMELINE_EVENT_IOC_FILTER_SESSION_SCOPE}>Session scope</option>
                 ) : null}
                 {iocOptions.map((iocKey) => (
                   <option key={iocKey} value={iocKey}>
@@ -1657,10 +1674,7 @@ function InvestigationSessionTimelinePanel({
                 {filteredEvents.map((event, index) => renderTimelineEvent(event, index))}
               </ol>
               {navigationMessage ? (
-                <p
-                  aria-live="polite"
-                  style={{ ...trayStatusStyle(), margin: "8px 0 0" }}
-                >
+                <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "8px 0 0" }}>
                   {navigationMessage}
                 </p>
               ) : null}
@@ -1771,6 +1785,395 @@ function InvestigationSessionTimelinePanel({
   );
 }
 
+export function InvestigationReplayPanel({
+  sessionId,
+  sessionTitle,
+  sessionPageUrl,
+  segments,
+  onActivateSegment,
+  navigationMessage,
+  resolveSessionMemoryRecords,
+}: {
+  sessionId: string;
+  sessionTitle: string;
+  sessionPageUrl: string;
+  segments: readonly ReplaySegment[];
+  onActivateSegment?: (segment: ReplaySegment) => void;
+  navigationMessage?: string | null;
+  resolveSessionMemoryRecords?: () => Promise<readonly NormalizedEnrichmentRecord[]>;
+}) {
+  const [stepIndex, setStepIndex] = useState(() =>
+    clampReplayStepIndex(0, segments.length)
+  );
+  const [transcriptExportMessage, setTranscriptExportMessage] = useState<
+    string | null
+  >(null);
+  const [includeMemoryAppendix, setIncludeMemoryAppendix] = useState(true);
+  const [transcriptTemplateId, setTranscriptTemplateId] =
+    useState<InvestigationReplayTranscriptTemplateId>("markdown-report");
+
+  useEffect(() => {
+    setStepIndex(clampReplayStepIndex(0, segments.length));
+    setTranscriptExportMessage(null);
+    setIncludeMemoryAppendix(true);
+    setTranscriptTemplateId("markdown-report");
+  }, [sessionId, segments.length]);
+
+  const previousStepIndex = resolveReplayPreviousStepIndex(stepIndex, segments.length);
+  const nextStepIndex = resolveReplayNextStepIndex(stepIndex, segments.length);
+  const positionLabel = formatReplayStepPositionLabel(stepIndex, segments.length);
+  const currentSegment = stepIndex >= 0 ? segments[stepIndex] : undefined;
+  const currentDetail = currentSegment
+    ? buildReplaySegmentDetailView(currentSegment)
+    : null;
+
+  const transcriptTemplateSelectStyle: CSSProperties = {
+    display: "block",
+    width: "100%",
+    marginTop: 4,
+    padding: "4px 6px",
+    borderRadius: 4,
+    border: `1px solid ${POPUP_THEME.border}`,
+    backgroundColor: POPUP_THEME.trayRowBg,
+    color: POPUP_THEME.text,
+    fontSize: 12,
+  };
+
+  const buildTranscriptExportInput = async (): Promise<InvestigationReplayTranscriptExportInput> => {
+    const base: InvestigationReplayTranscriptExportInput = {
+      session: {
+        id: sessionId,
+        title: sessionTitle,
+        pageUrl: sessionPageUrl,
+      },
+      segments,
+      includeMemoryAppendix,
+      templateId: transcriptTemplateId,
+    };
+    if (!includeMemoryAppendix || !resolveSessionMemoryRecords) {
+      return base;
+    }
+    const records = await resolveSessionMemoryRecords();
+    return {
+      ...base,
+      records,
+    };
+  };
+
+  const handleCopyTranscript = () => {
+    void (async () => {
+      const exportInput = await buildTranscriptExportInput();
+      const copied = await copyInvestigationReplayTranscriptToClipboard(exportInput);
+      setTranscriptExportMessage(
+        resolveInvestigationReplayTranscriptCopyFeedback({
+          copied,
+          stepCount: segments.length,
+          templateId: transcriptTemplateId,
+        })
+      );
+    })();
+  };
+
+  const handleDownloadTranscript = () => {
+    void (async () => {
+      const exportInput = await buildTranscriptExportInput();
+      const downloaded = downloadInvestigationReplayTranscriptFile(exportInput);
+      setTranscriptExportMessage(
+        resolveInvestigationReplayTranscriptDownloadFeedback({
+          downloaded,
+          stepCount: segments.length,
+          templateId: transcriptTemplateId,
+        })
+      );
+    })();
+  };
+
+  const goToStep = (targetStepIndex: number) => {
+    const jumped = jumpToReplayStepIndex(targetStepIndex, segments.length);
+    if (jumped === null) {
+      return;
+    }
+    setStepIndex(jumped);
+    const segment = segments[jumped];
+    if (segment && isReplaySegmentNavigable(segment)) {
+      onActivateSegment?.(segment);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 10, marginBottom: 10 }}>
+      <h3
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          margin: "0 0 8px",
+          color: POPUP_THEME.accentText,
+        }}
+      >
+        {INVESTIGATION_REPLAY_SECTION_LABEL}
+      </h3>
+      {segments.length === 0 ? (
+        <p style={{ ...trayStatusStyle(), margin: 0 }} aria-live="polite">
+          {INVESTIGATION_REPLAY_EMPTY_TEXT}
+        </p>
+      ) : (
+        <>
+          <div
+            role="group"
+            aria-label={INVESTIGATION_REPLAY_NAV_GROUP_ARIA_LABEL}
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: 6,
+              marginBottom: 8,
+            }}
+          >
+            <button
+              type="button"
+              aria-label={INVESTIGATION_REPLAY_PREVIOUS_LABEL}
+              disabled={previousStepIndex === null}
+              onClick={() => {
+                if (previousStepIndex !== null) {
+                  goToStep(previousStepIndex);
+                }
+              }}
+              style={sessionActionButtonStyle()}
+            >
+              {INVESTIGATION_REPLAY_PREVIOUS_LABEL}
+            </button>
+            <span
+              aria-live="polite"
+              style={{
+                fontSize: 12,
+                color: POPUP_THEME.muted,
+                minWidth: 88,
+              }}
+            >
+              {positionLabel}
+            </span>
+            <button
+              type="button"
+              aria-label={INVESTIGATION_REPLAY_NEXT_LABEL}
+              disabled={nextStepIndex === null}
+              onClick={() => {
+                if (nextStepIndex !== null) {
+                  goToStep(nextStepIndex);
+                }
+              }}
+              style={sessionActionButtonStyle()}
+            >
+              {INVESTIGATION_REPLAY_NEXT_LABEL}
+            </button>
+          </div>
+          {currentDetail ? (
+            <div
+              aria-label={INVESTIGATION_REPLAY_DETAIL_ARIA_LABEL}
+              aria-live="polite"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 4,
+                padding: "8px",
+                marginBottom: 8,
+                borderRadius: 6,
+                backgroundColor: POPUP_THEME.trayRowBg,
+                border: `1px solid ${POPUP_THEME.border}`,
+                fontSize: 12,
+                lineHeight: 1.4,
+              }}
+            >
+              <span style={{ color: POPUP_THEME.text }}>
+                <span style={{ color: POPUP_THEME.muted }}>
+                  {INVESTIGATION_REPLAY_DETAIL_ACTION_LABEL}:{" "}
+                </span>
+                {currentDetail.actionLabel}
+              </span>
+              <span style={{ color: POPUP_THEME.text }}>
+                <span style={{ color: POPUP_THEME.muted }}>
+                  {INVESTIGATION_REPLAY_DETAIL_IOC_LABEL}:{" "}
+                </span>
+                <span
+                  title={currentDetail.iocFull}
+                  style={{ fontFamily: VERA5_FONT.mono, wordBreak: "break-all" }}
+                >
+                  {currentDetail.iocDisplay}
+                </span>
+              </span>
+              {currentDetail.sourceAttributionSummary ? (
+                <span style={{ color: POPUP_THEME.muted }}>
+                  <span>{INVESTIGATION_REPLAY_DETAIL_ATTRIBUTION_LABEL}: </span>
+                  {currentDetail.sourceAttributionSummary}
+                </span>
+              ) : null}
+              {currentDetail.templateLabel ? (
+                <span style={{ color: POPUP_THEME.muted }}>
+                  <span>{INVESTIGATION_REPLAY_DETAIL_TEMPLATE_LABEL}: </span>
+                  {currentDetail.templateLabel}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          <ol
+            aria-label={INVESTIGATION_REPLAY_LIST_ARIA_LABEL}
+            style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              maxHeight: 220,
+              overflowY: "auto",
+            }}
+          >
+            {segments.map((segment, index) => {
+              const selected = index === stepIndex;
+              return (
+                <li
+                  key={segment.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-current={selected ? "step" : undefined}
+                  aria-label={buildReplayStepJumpAriaLabel(segment, index, selected)}
+                  onClick={() => goToStep(index)}
+                  onKeyDown={(keyboardEvent) => {
+                    if (keyboardEvent.key !== "Enter" && keyboardEvent.key !== " ") {
+                      return;
+                    }
+                    keyboardEvent.preventDefault();
+                    goToStep(index);
+                  }}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                    padding: "6px 8px",
+                    borderRadius: 6,
+                    backgroundColor: selected
+                      ? POPUP_THEME.filterActiveBg
+                      : POPUP_THEME.trayRowBg,
+                    border: selected
+                      ? `1px solid ${POPUP_THEME.accent}`
+                      : `1px solid transparent`,
+                    fontSize: 12,
+                    lineHeight: 1.4,
+                    cursor: "pointer",
+                    color: POPUP_THEME.text,
+                  }}
+                >
+                  {formatReplayStepListLabel(segment, index)}
+                </li>
+              );
+            })}
+          </ol>
+          <div style={{ marginTop: 10 }}>
+            <h4
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                margin: "0 0 8px",
+                color: POPUP_THEME.accentText,
+              }}
+            >
+              {INVESTIGATION_REPLAY_EXPORT_SECTION_LABEL}
+            </h4>
+            <label
+              style={{
+                display: "block",
+                fontSize: 12,
+                color: POPUP_THEME.text,
+                marginBottom: 8,
+              }}
+            >
+              {INVESTIGATION_REPLAY_EXPORT_TEMPLATE_LABEL}
+              <select
+                value={transcriptTemplateId}
+                aria-label={INVESTIGATION_REPLAY_EXPORT_TEMPLATE_LABEL}
+                onChange={(event) => {
+                  setTranscriptExportMessage(null);
+                  setTranscriptTemplateId(
+                    event.target.value as InvestigationReplayTranscriptTemplateId
+                  );
+                }}
+                style={transcriptTemplateSelectStyle}
+              >
+                {INVESTIGATION_REPLAY_TRANSCRIPT_TEMPLATE_IDS.map((templateId) => (
+                  <option key={templateId} value={templateId}>
+                    {getExportTemplateLabel(templateId)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {resolveSessionMemoryRecords ? (
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  fontSize: 12,
+                  color: POPUP_THEME.text,
+                  marginBottom: 8,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={includeMemoryAppendix}
+                  aria-label={INVESTIGATION_REPLAY_INCLUDE_MEMORY_APPENDIX_LABEL}
+                  onChange={(event) => {
+                    setTranscriptExportMessage(null);
+                    setIncludeMemoryAppendix(event.target.checked);
+                  }}
+                />
+                {INVESTIGATION_REPLAY_INCLUDE_MEMORY_APPENDIX_LABEL}
+              </label>
+            ) : null}
+            <div
+              role="group"
+              aria-label={INVESTIGATION_REPLAY_EXPORT_GROUP_ARIA_LABEL}
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 6,
+              }}
+            >
+              <button
+                type="button"
+                aria-label={INVESTIGATION_REPLAY_COPY_TRANSCRIPT_LABEL}
+                onClick={handleCopyTranscript}
+                style={sessionActionButtonStyle()}
+              >
+                {INVESTIGATION_REPLAY_COPY_TRANSCRIPT_LABEL}
+              </button>
+              <button
+                type="button"
+                aria-label={INVESTIGATION_REPLAY_DOWNLOAD_TRANSCRIPT_LABEL}
+                onClick={handleDownloadTranscript}
+                style={sessionActionButtonStyle()}
+              >
+                {INVESTIGATION_REPLAY_DOWNLOAD_TRANSCRIPT_LABEL}
+              </button>
+            </div>
+            {transcriptExportMessage ? (
+              <p
+                aria-live="polite"
+                style={{ ...trayStatusStyle(), margin: "8px 0 0" }}
+              >
+                {transcriptExportMessage}
+              </p>
+            ) : null}
+          </div>
+          {navigationMessage ? (
+            <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "8px 0 0" }}>
+              {navigationMessage}
+            </p>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+}
+
 function CollectionsManagerPanel() {
   const [collections, setCollections] = useState<IocCollection[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1851,10 +2254,7 @@ function CollectionsManagerPanel() {
     })();
   };
 
-  const handleRemoveMember = (
-    collectionId: string,
-    member: IocCollectionMember
-  ) => {
+  const handleRemoveMember = (collectionId: string, member: IocCollectionMember) => {
     void (async () => {
       const result = await requestRemoveIocFromCollection({
         collectionId,
@@ -1867,62 +2267,58 @@ function CollectionsManagerPanel() {
   };
 
   const handleOpenCollectionMember = (member: IocCollectionMember) => {
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(async ([tab]) => {
-        if (!tab?.id) {
-          setNavigationMessage(
-            resolveCollectionMemberOpenFeedback({
-              tabId: undefined,
-              summary: null,
-              member,
-              entryFound: false,
-            })
-          );
-          return;
-        }
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        setNavigationMessage(
+          resolveCollectionMemberOpenFeedback({
+            tabId: undefined,
+            summary: null,
+            member,
+            entryFound: false,
+          })
+        );
+        return;
+      }
 
-        const summary = await requestTabScanSummaryForActiveTab();
-        const entry = summary
-          ? findTabScanSummaryEntryForCollectionMember(summary, member)
-          : null;
-        const preNavigationFeedback = resolveCollectionMemberOpenFeedback({
-          tabId: tab.id,
-          summary,
-          member,
-          entryFound: entry !== null,
-        });
-        if (preNavigationFeedback || !entry) {
-          setNavigationMessage(preNavigationFeedback);
-          return;
-        }
-
-        try {
-          const response = await chrome.tabs.sendMessage(
-            tab.id,
-            navigateToIocAnchorMessage(entry.anchorId)
-          );
-          setNavigationMessage(
-            resolveCollectionMemberOpenFeedback({
-              tabId: tab.id,
-              summary,
-              member,
-              entryFound: true,
-              response,
-            })
-          );
-        } catch {
-          setNavigationMessage(
-            resolveCollectionMemberOpenFeedback({
-              tabId: tab.id,
-              summary,
-              member,
-              entryFound: true,
-              sendFailed: true,
-            })
-          );
-        }
+      const summary = await requestTabScanSummaryForActiveTab();
+      const entry = summary ? findTabScanSummaryEntryForCollectionMember(summary, member) : null;
+      const preNavigationFeedback = resolveCollectionMemberOpenFeedback({
+        tabId: tab.id,
+        summary,
+        member,
+        entryFound: entry !== null,
       });
+      if (preNavigationFeedback || !entry) {
+        setNavigationMessage(preNavigationFeedback);
+        return;
+      }
+
+      try {
+        const response = await chrome.tabs.sendMessage(
+          tab.id,
+          navigateToIocAnchorMessage(entry.anchorId)
+        );
+        setNavigationMessage(
+          resolveCollectionMemberOpenFeedback({
+            tabId: tab.id,
+            summary,
+            member,
+            entryFound: true,
+            response,
+          })
+        );
+      } catch {
+        setNavigationMessage(
+          resolveCollectionMemberOpenFeedback({
+            tabId: tab.id,
+            summary,
+            member,
+            entryFound: true,
+            sendFailed: true,
+          })
+        );
+      }
+    });
   };
 
   const handleExportCollectionMarkdown = (collection: IocCollection) => {
@@ -2021,267 +2417,261 @@ function CollectionsManagerPanel() {
         </button>
       </h2>
       <div id="popup-collections-body" hidden={collectionsCollapsed}>
-      {loading ? (
-        <p style={trayStatusStyle()} aria-live="polite">
-          Loading collections…
-        </p>
-      ) : collections.length === 0 ? (
-        <p style={trayStatusStyle()} aria-live="polite">
-          {IOC_COLLECTION_MANAGER_EMPTY_TEXT}
-        </p>
-      ) : (
-        <ul
-          aria-label={IOC_COLLECTION_MANAGER_LIST_ARIA_LABEL}
-          style={{
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-            display: "flex",
-            flexDirection: "column",
-            gap: 8,
-            maxHeight: 240,
-            overflowY: "auto",
-          }}
-        >
-          {collections.map((collection) => {
-            const isExpanded = expandedCollectionId === collection.id;
-            const isRenaming = renamingCollectionId === collection.id;
+        {loading ? (
+          <p style={trayStatusStyle()} aria-live="polite">
+            Loading collections…
+          </p>
+        ) : collections.length === 0 ? (
+          <p style={trayStatusStyle()} aria-live="polite">
+            {IOC_COLLECTION_MANAGER_EMPTY_TEXT}
+          </p>
+        ) : (
+          <ul
+            aria-label={IOC_COLLECTION_MANAGER_LIST_ARIA_LABEL}
+            style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              maxHeight: 240,
+              overflowY: "auto",
+            }}
+          >
+            {collections.map((collection) => {
+              const isExpanded = expandedCollectionId === collection.id;
+              const isRenaming = renamingCollectionId === collection.id;
 
-            return (
-              <li
-                key={collection.id}
-                style={{
-                  border: `1px solid ${POPUP_THEME.border}`,
-                  borderRadius: 6,
-                  padding: 8,
-                  backgroundColor: POPUP_THEME.trayRowBg,
-                }}
-              >
-                {isRenaming ? (
-                  <>
-                    <input
-                      type="text"
-                      value={renameDraft}
-                      onChange={(event) => setRenameDraft(event.target.value)}
-                      aria-label={`Rename ${collection.name}`}
-                      style={{
-                        display: "block",
-                        width: "100%",
-                        marginBottom: 8,
-                        padding: "6px 8px",
-                        borderRadius: 6,
-                        border: `1px solid ${POPUP_THEME.border}`,
-                        backgroundColor: POPUP_THEME.buttonBg,
-                        color: POPUP_THEME.text,
-                        boxSizing: "border-box",
-                      }}
-                    />
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleSaveRenameCollection(collection.id)}
-                        style={sessionActionButtonStyle()}
-                      >
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleCancelRenameCollection}
-                        style={sessionActionButtonStyle()}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div
-                      style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: POPUP_THEME.text,
-                        wordBreak: "break-word",
-                        marginBottom: 4,
-                      }}
-                    >
-                      {collection.name}
-                    </div>
-                    <p
-                      style={{
-                        fontSize: 11,
-                        margin: "0 0 8px",
-                        color: POPUP_THEME.muted,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      {buildIocCollectionSummaryLine(collection)}
-                    </p>
-                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleToggleMembers(collection.id)}
-                        style={sessionActionButtonStyle()}
-                        aria-expanded={isExpanded}
-                      >
-                        {isExpanded
-                          ? IOC_COLLECTION_HIDE_MEMBERS_LABEL
-                          : IOC_COLLECTION_VIEW_MEMBERS_LABEL}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleStartRenameCollection(collection)}
-                        style={sessionActionButtonStyle()}
-                      >
-                        {IOC_COLLECTION_RENAME_LABEL}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteCollection(collection.id)}
-                        style={sessionActionButtonStyle()}
-                      >
-                        {IOC_COLLECTION_DELETE_LABEL}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleExportCollectionMarkdown(collection)}
-                        style={sessionActionButtonStyle()}
-                      >
-                        {IOC_COLLECTION_EXPORT_MARKDOWN_LABEL}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleExportCollectionJson(collection)}
-                        style={sessionActionButtonStyle()}
-                      >
-                        {IOC_COLLECTION_EXPORT_JSON_LABEL}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleExportCollectionCsv(collection)}
-                        style={sessionActionButtonStyle()}
-                      >
-                        {IOC_COLLECTION_EXPORT_CSV_LABEL}
-                      </button>
-                    </div>
-                    {isExpanded ? (
-                      <div style={{ marginTop: 8 }}>
-                        <div
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            color: POPUP_THEME.accentText,
-                            marginBottom: 6,
-                          }}
+              return (
+                <li
+                  key={collection.id}
+                  style={{
+                    border: `1px solid ${POPUP_THEME.border}`,
+                    borderRadius: 6,
+                    padding: 8,
+                    backgroundColor: POPUP_THEME.trayRowBg,
+                  }}
+                >
+                  {isRenaming ? (
+                    <>
+                      <input
+                        type="text"
+                        value={renameDraft}
+                        onChange={(event) => setRenameDraft(event.target.value)}
+                        aria-label={`Rename ${collection.name}`}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          marginBottom: 8,
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          border: `1px solid ${POPUP_THEME.border}`,
+                          backgroundColor: POPUP_THEME.buttonBg,
+                          color: POPUP_THEME.text,
+                          boxSizing: "border-box",
+                        }}
+                      />
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveRenameCollection(collection.id)}
+                          style={sessionActionButtonStyle()}
                         >
-                          {IOC_COLLECTION_MEMBERS_HEADING}
-                        </div>
-                        {collection.members.length === 0 ? (
-                          <p style={{ ...trayStatusStyle(), margin: 0 }}>
-                            {IOC_COLLECTION_MEMBERS_EMPTY_TEXT}
-                          </p>
-                        ) : (
-                          <ul
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelRenameCollection}
+                          style={sessionActionButtonStyle()}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: POPUP_THEME.text,
+                          wordBreak: "break-word",
+                          marginBottom: 4,
+                        }}
+                      >
+                        {collection.name}
+                      </div>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          margin: "0 0 8px",
+                          color: POPUP_THEME.muted,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {buildIocCollectionSummaryLine(collection)}
+                      </p>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleMembers(collection.id)}
+                          style={sessionActionButtonStyle()}
+                          aria-expanded={isExpanded}
+                        >
+                          {isExpanded
+                            ? IOC_COLLECTION_HIDE_MEMBERS_LABEL
+                            : IOC_COLLECTION_VIEW_MEMBERS_LABEL}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleStartRenameCollection(collection)}
+                          style={sessionActionButtonStyle()}
+                        >
+                          {IOC_COLLECTION_RENAME_LABEL}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteCollection(collection.id)}
+                          style={sessionActionButtonStyle()}
+                        >
+                          {IOC_COLLECTION_DELETE_LABEL}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleExportCollectionMarkdown(collection)}
+                          style={sessionActionButtonStyle()}
+                        >
+                          {IOC_COLLECTION_EXPORT_MARKDOWN_LABEL}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleExportCollectionJson(collection)}
+                          style={sessionActionButtonStyle()}
+                        >
+                          {IOC_COLLECTION_EXPORT_JSON_LABEL}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleExportCollectionCsv(collection)}
+                          style={sessionActionButtonStyle()}
+                        >
+                          {IOC_COLLECTION_EXPORT_CSV_LABEL}
+                        </button>
+                      </div>
+                      {isExpanded ? (
+                        <div style={{ marginTop: 8 }}>
+                          <div
                             style={{
-                              listStyle: "none",
-                              margin: 0,
-                              padding: 0,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 6,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              color: POPUP_THEME.accentText,
+                              marginBottom: 6,
                             }}
                           >
-                            {collection.members.map((member) => (
-                              <li
-                                key={`${member.iocType}:${member.value}`}
-                                style={{
-                                  display: "flex",
-                                  alignItems: "flex-start",
-                                  justifyContent: "space-between",
-                                  gap: 8,
-                                  borderTop: `1px solid ${POPUP_THEME.border}`,
-                                  paddingTop: 6,
-                                }}
-                              >
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenCollectionMember(member)}
-                                  aria-label={buildTrayRowNavigationAriaLabel(member.value)}
+                            {IOC_COLLECTION_MEMBERS_HEADING}
+                          </div>
+                          {collection.members.length === 0 ? (
+                            <p style={{ ...trayStatusStyle(), margin: 0 }}>
+                              {IOC_COLLECTION_MEMBERS_EMPTY_TEXT}
+                            </p>
+                          ) : (
+                            <ul
+                              style={{
+                                listStyle: "none",
+                                margin: 0,
+                                padding: 0,
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: 6,
+                              }}
+                            >
+                              {collection.members.map((member) => (
+                                <li
+                                  key={`${member.iocType}:${member.value}`}
                                   style={{
-                                    fontSize: 11,
-                                    color: POPUP_THEME.text,
-                                    wordBreak: "break-all",
-                                    flex: 1,
-                                    textAlign: "left",
-                                    padding: 0,
-                                    border: "none",
-                                    background: "transparent",
-                                    cursor: "pointer",
+                                    display: "flex",
+                                    alignItems: "flex-start",
+                                    justifyContent: "space-between",
+                                    gap: 8,
+                                    borderTop: `1px solid ${POPUP_THEME.border}`,
+                                    paddingTop: 6,
                                   }}
                                 >
-                                  <span style={{ color: POPUP_THEME.muted }}>
-                                    {IOC_TYPE_TRAY_LABEL[member.iocType]}:{" "}
-                                  </span>
-                                  {member.value}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleRemoveMember(collection.id, member)
-                                  }
-                                  style={sessionActionButtonStyle()}
-                                >
-                                  {IOC_COLLECTION_REMOVE_MEMBER_LABEL}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    ) : null}
-                  </>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {navigationMessage ? (
-        <p
-          role="alert"
-          aria-live="polite"
-          style={{
-            fontSize: 12,
-            margin: "8px 0 0",
-            color: POPUP_THEME.error,
-            lineHeight: 1.5,
-          }}
-        >
-          {navigationMessage}
-        </p>
-      ) : null}
-      {exportMessage ? (
-        <p
-          aria-live="polite"
-          style={{
-            fontSize: 12,
-            margin: navigationMessage ? "6px 0 0" : "8px 0 0",
-            color: POPUP_THEME.muted,
-            lineHeight: 1.5,
-          }}
-        >
-          {exportMessage}
-        </p>
-      ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenCollectionMember(member)}
+                                    aria-label={buildTrayRowNavigationAriaLabel(member.value)}
+                                    style={{
+                                      fontSize: 11,
+                                      color: POPUP_THEME.text,
+                                      wordBreak: "break-all",
+                                      flex: 1,
+                                      textAlign: "left",
+                                      padding: 0,
+                                      border: "none",
+                                      background: "transparent",
+                                      cursor: "pointer",
+                                    }}
+                                  >
+                                    <span style={{ color: POPUP_THEME.muted }}>
+                                      {IOC_TYPE_TRAY_LABEL[member.iocType]}:{" "}
+                                    </span>
+                                    {member.value}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveMember(collection.id, member)}
+                                    style={sessionActionButtonStyle()}
+                                  >
+                                    {IOC_COLLECTION_REMOVE_MEMBER_LABEL}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {navigationMessage ? (
+          <p
+            role="alert"
+            aria-live="polite"
+            style={{
+              fontSize: 12,
+              margin: "8px 0 0",
+              color: POPUP_THEME.error,
+              lineHeight: 1.5,
+            }}
+          >
+            {navigationMessage}
+          </p>
+        ) : null}
+        {exportMessage ? (
+          <p
+            aria-live="polite"
+            style={{
+              fontSize: 12,
+              margin: navigationMessage ? "6px 0 0" : "8px 0 0",
+              color: POPUP_THEME.muted,
+              lineHeight: 1.5,
+            }}
+          >
+            {exportMessage}
+          </p>
+        ) : null}
       </div>
     </section>
   );
 }
 
-function WhyDetectedTrayDetails({
-  entry,
-}: {
-  entry: TabScanSummaryEntry;
-}) {
+function WhyDetectedTrayDetails({ entry }: { entry: TabScanSummaryEntry }) {
   const view = buildWhyDetectedView({
     type: entry.type,
     ruleId: entry.ruleId,
@@ -2372,9 +2762,7 @@ function CoOccurrenceTrayDetails({
         {HOVER_CARD_CO_OCCURRENCE_LABEL}
       </summary>
       <div style={{ marginTop: 4 }}>
-        {view.contextLabel ? (
-          <p style={{ margin: "0 0 4px" }}>{view.contextLabel}</p>
-        ) : null}
+        {view.contextLabel ? <p style={{ margin: "0 0 4px" }}>{view.contextLabel}</p> : null}
         <ul style={{ margin: 0, paddingLeft: 16 }}>
           {buildCoOccurrenceEntryDisplaysForView(view).map((display) => (
             <li key={`${display.anchorId}-${display.typeLabel}`}>
@@ -2382,11 +2770,7 @@ function CoOccurrenceTrayDetails({
                 type="button"
                 className="vera5-tray-co-occurrence-item"
                 aria-label={formatCoOccurrenceEntryNavigateAriaLabel(display)}
-                title={
-                  display.displayValue !== display.fullValue
-                    ? display.fullValue
-                    : undefined
-                }
+                title={display.displayValue !== display.fullValue ? display.fullValue : undefined}
                 onClick={(event) => {
                   event.stopPropagation();
                   onNavigateToRelated({
@@ -2551,10 +2935,7 @@ function IndicatorDetailPane({
             lineHeight: 1.4,
           }}
         />
-        <span
-          aria-live="polite"
-          style={{ fontSize: 10, color: POPUP_THEME.muted, minHeight: 12 }}
-        >
+        <span aria-live="polite" style={{ fontSize: 10, color: POPUP_THEME.muted, minHeight: 12 }}>
           {noteStatusLabel}
         </span>
       </label>
@@ -2684,10 +3065,9 @@ async function requestSelectionActionStateForActiveTab(): Promise<SelectionActio
   }
 
   try {
-    const response = (await chrome.tabs.sendMessage(
-      tab.id,
-      getSelectionActionStateMessage()
-    )) as MessageResponse | undefined;
+    const response = (await chrome.tabs.sendMessage(tab.id, getSelectionActionStateMessage())) as
+      | MessageResponse
+      | undefined;
     return parseSelectionActionStateResponse(response);
   } catch {
     return EMPTY_SELECTION_ACTION_STATE;
@@ -2740,9 +3120,7 @@ export function trayEnrichmentHintStyle(
   return { ...base, color: POPUP_THEME.muted };
 }
 
-export function pageContextBadgeStyle(options?: {
-  isOverride?: boolean;
-}): CSSProperties {
+export function pageContextBadgeStyle(options?: { isOverride?: boolean }): CSSProperties {
   const isOverride = options?.isOverride === true;
   return {
     flexShrink: 0,
@@ -2777,9 +3155,7 @@ function sessionActionButtonStyle(): CSSProperties {
   };
 }
 
-function sourceOpsStatusColor(
-  statusLabel: string
-): string {
+function sourceOpsStatusColor(statusLabel: string): string {
   if (
     statusLabel === "OK" ||
     statusLabel === "Cached" ||
@@ -2811,39 +3187,28 @@ export function Popup() {
   const [highlightEnabled, setHighlightEnabledState] = useState(true);
   const [quietModeActive, setQuietModeActive] = useState(false);
   const [ready, setReady] = useState(false);
-  const [scanState, setScanState] = useState<"idle" | "scanning" | "done" | "error">(
-    "idle"
-  );
+  const [scanState, setScanState] = useState<"idle" | "scanning" | "done" | "error">("idle");
   const [scanSummary, setScanSummary] = useState<TabScanSummary | null>(null);
-  const [activePageContextType, setActivePageContextType] =
-    useState<PageContextType | null>(null);
+  const [activePageContextType, setActivePageContextType] = useState<PageContextType | null>(null);
   const [activePageContextSource, setActivePageContextSource] =
     useState<PageContextSource>("auto_detect");
-  const [activePageContextPageOrigin, setActivePageContextPageOrigin] = useState<
-    string | null
-  >(null);
-  const [typeFilter, setTypeFilter] = useState<IocTypeFilter>("all");
-  const [trayFilterReady, setTrayFilterReady] = useState(false);
-  const [trayNavigationMessage, setTrayNavigationMessage] = useState<string | null>(
+  const [activePageContextPageOrigin, setActivePageContextPageOrigin] = useState<string | null>(
     null
   );
-  const [timelineNavigationMessage, setTimelineNavigationMessage] = useState<
-    string | null
-  >(null);
+  const [typeFilter, setTypeFilter] = useState<IocTypeFilter>("all");
+  const [trayFilterReady, setTrayFilterReady] = useState(false);
+  const [trayNavigationMessage, setTrayNavigationMessage] = useState<string | null>(null);
+  const [timelineNavigationMessage, setTimelineNavigationMessage] = useState<string | null>(null);
+  const [replayNavigationMessage, setReplayNavigationMessage] = useState<string | null>(null);
   const [trayEnrichmentStatuses, setTrayEnrichmentStatuses] = useState<
     Record<string, TrayEntryEnrichmentStatus>
   >({});
-  const [selectedDetailEntry, setSelectedDetailEntry] =
-    useState<TabScanSummaryEntry | null>(null);
+  const [selectedDetailEntry, setSelectedDetailEntry] = useState<TabScanSummaryEntry | null>(null);
   const [analystNote, setAnalystNote] = useState("");
-  const [analystNoteStatus, setAnalystNoteStatus] =
-    useState<AnalystNoteSaveStatus>("idle");
-  const [detailEnrichState, setDetailEnrichState] =
-    useState<DetailEnrichState>("idle");
+  const [analystNoteStatus, setAnalystNoteStatus] = useState<AnalystNoteSaveStatus>("idle");
+  const [detailEnrichState, setDetailEnrichState] = useState<DetailEnrichState>("idle");
   const analystNoteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [selectionEnrichMessage, setSelectionEnrichMessage] = useState<string | null>(
-    null
-  );
+  const [selectionEnrichMessage, setSelectionEnrichMessage] = useState<string | null>(null);
   const [textSelectionAvailable, setTextSelectionAvailable] = useState(false);
   const [selectionEnrichAvailable, setSelectionEnrichAvailable] = useState(false);
   const [sessionTitle, setSessionTitle] = useState(DEFAULT_INVESTIGATION_SESSION_TITLE);
@@ -2856,28 +3221,18 @@ export function Popup() {
   const [sourceOps, setSourceOps] = useState<EnrichmentSourceOpsSnapshot | null>(null);
   const [sourceOpsReady, setSourceOpsReady] = useState(false);
   const [sourceOpsCollapsed, setSourceOpsCollapsed] = useState(true);
-  const [clearingSourceCacheId, setClearingSourceCacheId] = useState<string | null>(
-    null
-  );
-  const [sourceOpsClearFeedback, setSourceOpsClearFeedback] = useState<string | null>(
-    null
-  );
+  const [clearingSourceCacheId, setClearingSourceCacheId] = useState<string | null>(null);
+  const [sourceOpsClearFeedback, setSourceOpsClearFeedback] = useState<string | null>(null);
   const [investigationCollapsed, setInvestigationCollapsed] = useState(true);
   const [historyEntries, setHistoryEntries] = useState<InvestigationHistoryEntry[]>([]);
   const [historyReady, setHistoryReady] = useState(false);
   const [historyCollapsed, setHistoryCollapsed] = useState(true);
-  const [historyNavigationMessage, setHistoryNavigationMessage] = useState<string | null>(
-    null
-  );
+  const [historyNavigationMessage, setHistoryNavigationMessage] = useState<string | null>(null);
   const [historyClearConfirmOpen, setHistoryClearConfirmOpen] = useState(false);
   const [historyClearing, setHistoryClearing] = useState(false);
   const [historyClearFeedback, setHistoryClearFeedback] = useState<string | null>(null);
-  const [saveToCollectionAnchorId, setSaveToCollectionAnchorId] = useState<string | null>(
-    null
-  );
-  const [saveToCollectionFeedback, setSaveToCollectionFeedback] = useState<string | null>(
-    null
-  );
+  const [saveToCollectionAnchorId, setSaveToCollectionAnchorId] = useState<string | null>(null);
+  const [saveToCollectionFeedback, setSaveToCollectionFeedback] = useState<string | null>(null);
   const [addFilteredToCollectionOpen, setAddFilteredToCollectionOpen] = useState(false);
   const [addFilteredToCollectionFeedback, setAddFilteredToCollectionFeedback] = useState<
     string | null
@@ -2885,12 +3240,11 @@ export function Popup() {
   const [runMacroTrayAnchorId, setRunMacroTrayAnchorId] = useState<string | null>(null);
   const [runMacroTrayFeedback, setRunMacroTrayFeedback] = useState<string | null>(null);
   const [runMacroOnFilteredOpen, setRunMacroOnFilteredOpen] = useState(false);
-  const [runMacroOnFilteredFeedback, setRunMacroOnFilteredFeedback] = useState<string | null>(
-    null
-  );
+  const [runMacroOnFilteredFeedback, setRunMacroOnFilteredFeedback] = useState<string | null>(null);
   const [promoteSessionToCollectionOpen, setPromoteSessionToCollectionOpen] = useState(false);
-  const [promoteSessionToCollectionFeedback, setPromoteSessionToCollectionFeedback] =
-    useState<string | null>(null);
+  const [promoteSessionToCollectionFeedback, setPromoteSessionToCollectionFeedback] = useState<
+    string | null
+  >(null);
   const [trayPageCoOccurrenceIndex, setTrayPageCoOccurrenceIndex] =
     useState<PageIocCoOccurrenceIndex | null>(null);
 
@@ -2900,12 +3254,9 @@ export function Popup() {
       getPageContextSiteModeOverrides(),
     ]);
     const classifiedType = context?.pageContextType ?? PAGE_CONTEXT_TYPE.GENERIC;
-    const pageOrigin =
-      context?.pageUrl || (await resolveActiveTabPageUrl()) || null;
+    const pageOrigin = context?.pageUrl || (await resolveActiveTabPageUrl()) || null;
     const normalizedOrigin =
-      typeof pageOrigin === "string" && pageOrigin.trim().length > 0
-        ? pageOrigin
-        : null;
+      typeof pageOrigin === "string" && pageOrigin.trim().length > 0 ? pageOrigin : null;
     const display = resolveActivePageContextDisplay({
       classifiedPageContextType: classifiedType,
       siteModeOverrides: overrides,
@@ -2920,8 +3271,8 @@ export function Popup() {
     if (!activePageContextPageOrigin) {
       return;
     }
-    void removePageContextSiteModeOverrideForOrigin(activePageContextPageOrigin).then(
-      () => refreshActivePageContext()
+    void removePageContextSiteModeOverrideForOrigin(activePageContextPageOrigin).then(() =>
+      refreshActivePageContext()
     );
   };
 
@@ -2954,16 +3305,14 @@ export function Popup() {
   };
 
   useEffect(() => {
-    void Promise.all([
-      getExtensionEnabled(),
-      getHighlightEnabled(),
-      getQuietMode(),
-    ]).then(([extensionValue, highlightValue, quietModeValue]) => {
-      setEnabled(extensionValue);
-      setHighlightEnabledState(highlightValue);
-      setQuietModeActive(quietModeValue);
-      setReady(true);
-    });
+    void Promise.all([getExtensionEnabled(), getHighlightEnabled(), getQuietMode()]).then(
+      ([extensionValue, highlightValue, quietModeValue]) => {
+        setEnabled(extensionValue);
+        setHighlightEnabledState(highlightValue);
+        setQuietModeActive(quietModeValue);
+        setReady(true);
+      }
+    );
     void requestTabScanSummaryForActiveTab().then((summary) => {
       if (summary) {
         setScanSummary(summary);
@@ -3114,23 +3463,15 @@ export function Popup() {
     if (!onChanged?.addListener || !selectedDetailEntry) {
       return;
     }
-    const listener = (
-      changes: Record<string, { newValue?: unknown }>,
-      areaName: string
-    ): void => {
+    const listener = (changes: Record<string, { newValue?: unknown }>, areaName: string): void => {
       if (areaName !== "local" || !changes[STORAGE_KEY_ANALYST_NOTES]) {
         return;
       }
       const active = document.activeElement;
-      if (
-        active instanceof HTMLTextAreaElement &&
-        active.dataset.vera5AnalystNote === "true"
-      ) {
+      if (active instanceof HTMLTextAreaElement && active.dataset.vera5AnalystNote === "true") {
         return;
       }
-      const record = normalizeAnalystNotesRecord(
-        changes[STORAGE_KEY_ANALYST_NOTES].newValue
-      );
+      const record = normalizeAnalystNotesRecord(changes[STORAGE_KEY_ANALYST_NOTES].newValue);
       setAnalystNote(record[normalizeIocNoteKey(selectedDetailEntry.value)] ?? "");
     };
     onChanged.addListener(listener);
@@ -3194,11 +3535,8 @@ export function Popup() {
   }, []);
 
   const trayView = resolvePopupTrayView({ enabled, scanState, scanSummary });
-  const activePageContextBadgeLabel = resolveActivePageContextBadgeLabel(
-    activePageContextType
-  );
-  const activePageContextSourceLabel =
-    resolvePageContextSourceStatusLabel(activePageContextSource);
+  const activePageContextBadgeLabel = resolveActivePageContextBadgeLabel(activePageContextType);
+  const activePageContextSourceLabel = resolvePageContextSourceStatusLabel(activePageContextSource);
   const activePageContextOverrideActive = activePageContextSource === "override";
 
   const filteredEntries = useMemo(() => {
@@ -3232,6 +3570,13 @@ export function Popup() {
       return [];
     }
     return sortTimelineEventsChronologically(activeSession.timelineEvents);
+  }, [activeSession]);
+
+  const sessionReplaySegments = useMemo(() => {
+    if (!activeSession) {
+      return [];
+    }
+    return ingestReplaySegmentsFromInvestigationSession(activeSession);
   }, [activeSession]);
 
   const investigationSessionTitlesById = useMemo(() => {
@@ -3288,8 +3633,7 @@ export function Popup() {
     void (async () => {
       const pageUrl = await resolveActiveTabPageUrl();
       const normalizedTitle =
-        normalizeInvestigationSessionTitle(sessionTitle) ??
-        DEFAULT_INVESTIGATION_SESSION_TITLE;
+        normalizeInvestigationSessionTitle(sessionTitle) ?? DEFAULT_INVESTIGATION_SESSION_TITLE;
       const session = await requestCreateInvestigationSession({
         title: normalizedTitle,
         pageUrl,
@@ -3469,47 +3813,45 @@ export function Popup() {
   };
 
   const handleHistoryRowActivate = (entry: InvestigationHistoryEntry) => {
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(async ([tab]) => {
-        if (!tab?.id) {
-          setHistoryNavigationMessage(
-            resolveInvestigationHistoryReopenFeedback({
-              tabId: undefined,
-              ioc: entry.ioc,
-              pageOrigin: entry.pageOrigin,
-            })
-          );
-          return;
-        }
-        try {
-          const response = await chrome.tabs.sendMessage(
-            tab.id,
-            reopenInvestigationHistoryMessage({
-              ioc: entry.ioc,
-              iocType: entry.iocType,
-              pageOrigin: entry.pageOrigin,
-            })
-          );
-          setHistoryNavigationMessage(
-            resolveInvestigationHistoryReopenFeedback({
-              tabId: tab.id,
-              response,
-              ioc: entry.ioc,
-              pageOrigin: entry.pageOrigin,
-            })
-          );
-        } catch {
-          setHistoryNavigationMessage(
-            resolveInvestigationHistoryReopenFeedback({
-              tabId: tab.id,
-              sendFailed: true,
-              ioc: entry.ioc,
-              pageOrigin: entry.pageOrigin,
-            })
-          );
-        }
-      });
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        setHistoryNavigationMessage(
+          resolveInvestigationHistoryReopenFeedback({
+            tabId: undefined,
+            ioc: entry.ioc,
+            pageOrigin: entry.pageOrigin,
+          })
+        );
+        return;
+      }
+      try {
+        const response = await chrome.tabs.sendMessage(
+          tab.id,
+          reopenInvestigationHistoryMessage({
+            ioc: entry.ioc,
+            iocType: entry.iocType,
+            pageOrigin: entry.pageOrigin,
+          })
+        );
+        setHistoryNavigationMessage(
+          resolveInvestigationHistoryReopenFeedback({
+            tabId: tab.id,
+            response,
+            ioc: entry.ioc,
+            pageOrigin: entry.pageOrigin,
+          })
+        );
+      } catch {
+        setHistoryNavigationMessage(
+          resolveInvestigationHistoryReopenFeedback({
+            tabId: tab.id,
+            sendFailed: true,
+            ioc: entry.ioc,
+            pageOrigin: entry.pageOrigin,
+          })
+        );
+      }
+    });
   };
 
   const handleRequestClearHistory = () => {
@@ -3551,9 +3893,7 @@ export function Popup() {
           })
         );
       } catch {
-        setSourceOpsClearFeedback(
-          `Could not clear cache for ${row.displayName}. Try again.`
-        );
+        setSourceOpsClearFeedback(`Could not clear cache for ${row.displayName}. Try again.`);
       } finally {
         setClearingSourceCacheId(null);
       }
@@ -3565,42 +3905,38 @@ export function Popup() {
     value: string;
     iocType?: TabScanSummaryEntry["type"];
   }) => {
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(async ([tab]) => {
-        if (!tab?.id) {
-          setTrayNavigationMessage(
-            resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: input.value })
-          );
-          return;
-        }
-        try {
-          const response = await chrome.tabs.sendMessage(
-            tab.id,
-            navigateToIocAnchorMessage(
-              input.anchorId,
-              input.iocType
-                ? { iocType: input.iocType, value: input.value }
-                : undefined
-            )
-          );
-          setTrayNavigationMessage(
-            resolveTrayNavigationFeedback({
-              tabId: tab.id,
-              response,
-              indicatorValue: input.value,
-            })
-          );
-        } catch {
-          setTrayNavigationMessage(
-            resolveTrayNavigationFeedback({
-              tabId: tab.id,
-              sendFailed: true,
-              indicatorValue: input.value,
-            })
-          );
-        }
-      });
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        setTrayNavigationMessage(
+          resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: input.value })
+        );
+        return;
+      }
+      try {
+        const response = await chrome.tabs.sendMessage(
+          tab.id,
+          navigateToIocAnchorMessage(
+            input.anchorId,
+            input.iocType ? { iocType: input.iocType, value: input.value } : undefined
+          )
+        );
+        setTrayNavigationMessage(
+          resolveTrayNavigationFeedback({
+            tabId: tab.id,
+            response,
+            indicatorValue: input.value,
+          })
+        );
+      } catch {
+        setTrayNavigationMessage(
+          resolveTrayNavigationFeedback({
+            tabId: tab.id,
+            sendFailed: true,
+            indicatorValue: input.value,
+          })
+        );
+      }
+    });
   };
 
   const navigateToTrayEntry = (entry: TabScanSummaryEntry) => {
@@ -3612,37 +3948,35 @@ export function Popup() {
   };
 
   const navigateToTimelineEntry = (entry: TabScanSummaryEntry) => {
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(async ([tab]) => {
-        if (!tab?.id) {
-          setTimelineNavigationMessage(
-            resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: entry.value })
-          );
-          return;
-        }
-        try {
-          const response = await chrome.tabs.sendMessage(
-            tab.id,
-            navigateToIocAnchorMessage(entry.anchorId)
-          );
-          setTimelineNavigationMessage(
-            resolveTrayNavigationFeedback({
-              tabId: tab.id,
-              response,
-              indicatorValue: entry.value,
-            })
-          );
-        } catch {
-          setTimelineNavigationMessage(
-            resolveTrayNavigationFeedback({
-              tabId: tab.id,
-              sendFailed: true,
-              indicatorValue: entry.value,
-            })
-          );
-        }
-      });
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        setTimelineNavigationMessage(
+          resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: entry.value })
+        );
+        return;
+      }
+      try {
+        const response = await chrome.tabs.sendMessage(
+          tab.id,
+          navigateToIocAnchorMessage(entry.anchorId)
+        );
+        setTimelineNavigationMessage(
+          resolveTrayNavigationFeedback({
+            tabId: tab.id,
+            response,
+            indicatorValue: entry.value,
+          })
+        );
+      } catch {
+        setTimelineNavigationMessage(
+          resolveTrayNavigationFeedback({
+            tabId: tab.id,
+            sendFailed: true,
+            indicatorValue: entry.value,
+          })
+        );
+      }
+    });
   };
 
   // Activating a tray row both opens the detail pane (the side panel's primary
@@ -3669,6 +4003,60 @@ export function Popup() {
 
     setSelectedDetailEntry(entry);
     navigateToTimelineEntry(entry);
+  };
+
+  const navigateToReplayEntry = (entry: TabScanSummaryEntry) => {
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        setReplayNavigationMessage(
+          resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: entry.value })
+        );
+        return;
+      }
+      try {
+        const response = await chrome.tabs.sendMessage(
+          tab.id,
+          navigateToIocAnchorMessage(entry.anchorId, {
+            iocType: entry.type,
+            value: entry.value,
+            enrichmentTrigger: "none",
+          })
+        );
+        setReplayNavigationMessage(
+          resolveTrayNavigationFeedback({
+            tabId: tab.id,
+            response,
+            indicatorValue: entry.value,
+          })
+        );
+      } catch {
+        setReplayNavigationMessage(
+          resolveTrayNavigationFeedback({
+            tabId: tab.id,
+            sendFailed: true,
+            indicatorValue: entry.value,
+          })
+        );
+      }
+    });
+  };
+
+  const handleReplaySegmentActivate = (segment: ReplaySegment) => {
+    if (!isReplaySegmentNavigable(segment)) {
+      return;
+    }
+
+    const entry = findTabScanSummaryEntryForIndicatorValue(scanSummary, segment.iocKey);
+    if (!entry) {
+      setReplayNavigationMessage(
+        scanSummary
+          ? `${segment.iocKey} is not on the current page. Scan again to refresh the list.`
+          : `Scan this page to locate ${segment.iocKey} on the page.`
+      );
+      return;
+    }
+
+    navigateToReplayEntry(entry);
   };
 
   const handleAnalystNoteChange = (value: string) => {
@@ -3726,42 +4114,33 @@ export function Popup() {
     setTypeFilter("all");
     setTrayFilterReady(false);
     setTrayNavigationMessage(null);
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(([tab]) => {
-        if (tab?.id) {
-          void saveTabScanTrayFilter(tab.id, "all");
-        }
-      });
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(async ([tab]) => {
-        if (!tab?.id) {
-          setScanState("error");
-          return;
-        }
-        try {
-          const response = await chrome.tabs.sendMessage(tab.id, scanPageMessage());
-          if (
-            response &&
-            typeof response === "object" &&
-            "ok" in response &&
-            response.ok === true
-          ) {
-            const summary = await requestTabScanSummaryForActiveTab();
-            if (summary !== null) {
-              setScanSummary(summary);
-              setScanState("done");
-              await refreshActivePageContext();
-              await refreshInvestigationSessionState();
-              return;
-            }
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (tab?.id) {
+        void saveTabScanTrayFilter(tab.id, "all");
+      }
+    });
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        setScanState("error");
+        return;
+      }
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, scanPageMessage());
+        if (response && typeof response === "object" && "ok" in response && response.ok === true) {
+          const summary = await requestTabScanSummaryForActiveTab();
+          if (summary !== null) {
+            setScanSummary(summary);
+            setScanState("done");
+            await refreshActivePageContext();
+            await refreshInvestigationSessionState();
+            return;
           }
-          setScanState("error");
-        } catch {
-          setScanState("error");
         }
-      });
+        setScanState("error");
+      } catch {
+        setScanState("error");
+      }
+    });
   };
 
   const handleScanSelection = () => {
@@ -3774,42 +4153,33 @@ export function Popup() {
     setTypeFilter("all");
     setTrayFilterReady(false);
     setTrayNavigationMessage(null);
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(([tab]) => {
-        if (tab?.id) {
-          void saveTabScanTrayFilter(tab.id, "all");
-        }
-      });
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(async ([tab]) => {
-        if (!tab?.id) {
-          setScanState("error");
-          return;
-        }
-        try {
-          const response = await chrome.tabs.sendMessage(tab.id, scanSelectionMessage());
-          if (
-            response &&
-            typeof response === "object" &&
-            "ok" in response &&
-            response.ok === true
-          ) {
-            const summary = await requestTabScanSummaryForActiveTab();
-            if (summary !== null) {
-              setScanSummary(summary);
-              setScanState("done");
-              await refreshActivePageContext();
-              await refreshInvestigationSessionState();
-              return;
-            }
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+      if (tab?.id) {
+        void saveTabScanTrayFilter(tab.id, "all");
+      }
+    });
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        setScanState("error");
+        return;
+      }
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, scanSelectionMessage());
+        if (response && typeof response === "object" && "ok" in response && response.ok === true) {
+          const summary = await requestTabScanSummaryForActiveTab();
+          if (summary !== null) {
+            setScanSummary(summary);
+            setScanState("done");
+            await refreshActivePageContext();
+            await refreshInvestigationSessionState();
+            return;
           }
-          setScanState("error");
-        } catch {
-          setScanState("error");
         }
-      });
+        setScanState("error");
+      } catch {
+        setScanState("error");
+      }
+    });
   };
 
   const handleEnrichSelection = () => {
@@ -3817,37 +4187,28 @@ export function Popup() {
       return;
     }
     setSelectionEnrichMessage(null);
-    void chrome.tabs
-      .query({ active: true, currentWindow: true })
-      .then(async ([tab]) => {
-        if (!tab?.id) {
-          setSelectionEnrichMessage("Could not reach this page. Reload the tab and try again.");
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        setSelectionEnrichMessage("Could not reach this page. Reload the tab and try again.");
+        return;
+      }
+      try {
+        const response = await chrome.tabs.sendMessage(tab.id, enrichSelectionMessage());
+        if (response && typeof response === "object" && "ok" in response && response.ok === true) {
           return;
         }
-        try {
-          const response = await chrome.tabs.sendMessage(tab.id, enrichSelectionMessage());
-          if (
-            response &&
-            typeof response === "object" &&
-            "ok" in response &&
-            response.ok === true
-          ) {
-            return;
-          }
-          const errorMessage =
-            response &&
-            typeof response === "object" &&
-            "error" in response &&
-            typeof response.error === "string"
-              ? response.error
-              : "Enrichment failed. Reload the tab and try again.";
-          setSelectionEnrichMessage(errorMessage);
-        } catch {
-          setSelectionEnrichMessage(
-            "Could not reach this page. Reload the tab and try again."
-          );
-        }
-      });
+        const errorMessage =
+          response &&
+          typeof response === "object" &&
+          "error" in response &&
+          typeof response.error === "string"
+            ? response.error
+            : "Enrichment failed. Reload the tab and try again.";
+        setSelectionEnrichMessage(errorMessage);
+      } catch {
+        setSelectionEnrichMessage("Could not reach this page. Reload the tab and try again.");
+      }
+    });
   };
 
   const scanSelectionDisabled =
@@ -3879,106 +4240,12 @@ export function Popup() {
           margin: "0 0 14px",
         }}
       >
-        <svg
+        <img
           aria-hidden="true"
-          viewBox="0 0 1197 1178"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
+          src="icons/logo-mark.png"
+          alt=""
           style={{ width: 24, height: 24, flex: "0 0 auto" }}
-        >
-          <line
-            x1="7.5"
-            y1="-7.5"
-            x2="438.506"
-            y2="-7.5"
-            transform="matrix(-0.999985 -0.00550504 0.00392659 -0.999992 833.294 307.353)"
-            stroke="#FFB224"
-            strokeWidth="15"
-            strokeLinecap="round"
-          />
-          <line
-            x1="387.294"
-            y1="251.583"
-            x2="830.294"
-            y2="251.583"
-            stroke="#FFB224"
-            strokeWidth="15"
-          />
-          <path
-            d="M586.763 776.721L585.966 777.324L4.29366 8.68633L5.09106 8.08289L586.763 776.721Z"
-            fill="#FFB224"
-          />
-          <path
-            d="M596.09 778.804L595.299 778.192L1193.29 4.08288L1194.09 4.69421L596.09 778.804Z"
-            fill="#FFB224"
-          />
-          <line
-            x1="394.794"
-            y1="247.083"
-            x2="394.794"
-            y2="319.083"
-            stroke="#FFB224"
-            strokeWidth="15"
-          />
-          <path
-            d="M828.797 317.442L598.768 528.083"
-            stroke="#FFB224"
-            strokeWidth="15"
-            strokeLinecap="round"
-          />
-          <path
-            d="M593.757 528.083L400.323 345.328"
-            stroke="#FFB224"
-            strokeWidth="15"
-            strokeLinecap="round"
-          />
-          <path
-            d="M494.198 363.761L707.501 366.692L599.831 469.234L494.198 363.761Z"
-            fill="#262D36"
-            stroke="#FFB224"
-            strokeWidth="15"
-          />
-          <path
-            d="M587.794 590.583L585.794 775.583L20.2936 28.0829L587.794 590.583Z"
-            fill="#262D36"
-            stroke="#13171C"
-            strokeWidth="12"
-          />
-          <path
-            d="M1173.29 31.5829L587.794 1164.08L23.2936 33.5829L584.294 775.083L586.794 780.083H594.794L1173.29 31.5829Z"
-            fill="#1A2027"
-            stroke="#13171C"
-          />
-          <path
-            d="M596.784 585.461C598.745 587.406 598.758 590.571 596.814 592.532C594.87 594.493 591.704 594.506 589.743 592.562L1.84403 9.60348C-0.116813 7.65911 -0.130171 4.49332 1.81419 2.53248C3.75856 0.571633 6.92435 0.558275 8.8852 2.50264L596.784 585.461Z"
-            fill="#FFB224"
-          />
-          <path
-            d="M591.005 1170.14C592.239 1172.61 591.237 1175.61 588.767 1176.85C586.296 1178.08 583.293 1177.08 582.059 1174.61L0.528187 10.5558C-0.705917 8.08547 0.296229 5.08245 2.76654 3.84834C5.23686 2.61424 8.23988 3.61638 9.47398 6.0867L591.005 1170.14Z"
-            fill="#FFB224"
-          />
-          <path
-            d="M598.794 590.583L597.298 775.078L1174.79 28.0829L598.794 590.583Z"
-            fill="#262D36"
-          />
-          <path
-            d="M597.294 775.583L598.794 590.583L1174.79 28.0829L597.294 775.083"
-            stroke="#13171C"
-            strokeWidth="12"
-          />
-          <path
-            d="M1187.73 1.42334C1189.7 -0.506288 1192.87 -0.469239 1194.8 1.5061C1196.73 3.48145 1196.69 6.64706 1194.72 8.57669L596.87 592.589C594.895 594.519 591.729 594.482 589.8 592.506C587.87 590.531 587.907 587.365 589.882 585.436L1187.73 1.42334Z"
-            fill="#FFB224"
-          />
-          <path
-            d="M1187.11 4.9312C1188.38 2.47845 1191.4 1.51793 1193.85 2.78614C1196.31 4.05435 1197.27 7.07105 1196 9.52399L593.59 1174.64C592.322 1177.09 589.305 1178.05 586.852 1176.79C584.399 1175.52 583.439 1172.5 584.707 1170.05L1187.11 4.9312Z"
-            fill="#FFB224"
-          />
-          <path
-            d="M593.346 1166.93L583.346 1166.85L588.294 584.04L598.293 584.125L593.346 1166.93Z"
-            fill="#FFB224"
-          />
-        </svg>
+        />
         <span>
           Vera
           <span
@@ -4081,9 +4348,7 @@ export function Popup() {
             textAlign: "left",
           }}
         >
-          <span style={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.2 }}>
-            Extension enabled
-          </span>
+          <span style={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.2 }}>Extension enabled</span>
           <span
             aria-hidden="true"
             style={{
@@ -4150,9 +4415,7 @@ export function Popup() {
               height: 16,
               borderRadius: 999,
               background: highlightEnabled ? POPUP_THEME.accent : POPUP_THEME.buttonBg,
-              border: `1px solid ${
-                highlightEnabled ? POPUP_THEME.accent : POPUP_THEME.border
-              }`,
+              border: `1px solid ${highlightEnabled ? POPUP_THEME.accent : POPUP_THEME.border}`,
               transition: "background 0.15s ease, border-color 0.15s ease",
             }}
           >
@@ -4173,71 +4436,71 @@ export function Popup() {
         </button>
       </div>
       <div style={actionButtonGroupStyle}>
-      <button
-        type="button"
-        disabled={!ready || !enabled || scanState === "scanning"}
-        className="v5-btn v5-btn--primary"
-        onClick={handleScanPage}
-        style={{
-          ...primaryButtonStyle,
-          cursor: !ready || !enabled ? "not-allowed" : "pointer",
-          opacity: !ready || !enabled ? 0.65 : 1,
-        }}
-      >
-        {scanState === "scanning" ? "Scanning…" : "Scan page"}
-      </button>
-      <button
-        type="button"
-        disabled={scanSelectionDisabled}
-        className={scanSelectionDisabled ? "v5-btn" : "v5-btn v5-btn--primary"}
-        onClick={handleScanSelection}
-        style={{
-          ...(scanSelectionDisabled ? buttonStyle : primaryButtonStyle),
-          cursor: scanSelectionDisabled ? "not-allowed" : "pointer",
-          opacity: scanSelectionDisabled ? 0.65 : 1,
-        }}
-      >
-        {scanState === "scanning" ? "Scanning…" : "Scan selection"}
-      </button>
-      <button
-        type="button"
-        disabled={enrichSelectionDisabled}
-        className={enrichSelectionDisabled ? "v5-btn" : "v5-btn v5-btn--primary"}
-        onClick={handleEnrichSelection}
-        style={{
-          ...(enrichSelectionDisabled ? buttonStyle : primaryButtonStyle),
-          cursor: enrichSelectionDisabled ? "not-allowed" : "pointer",
-          opacity: enrichSelectionDisabled ? 0.65 : 1,
-        }}
-      >
-        Enrich selection
-      </button>
-      <button
-        type="button"
-        disabled={!ready}
-        className="v5-btn"
-        onClick={handleOpenSettings}
-        style={{
-          ...buttonStyle,
-          cursor: ready ? "pointer" : "not-allowed",
-          opacity: ready ? 1 : 0.65,
-        }}
-      >
-        Settings
-      </button>
-      <button
-        type="button"
-        disabled={!ready}
-        className="v5-btn"
-        onClick={handleOpenPermissions}
-        style={{
-          ...buttonStyle,
-          cursor: ready ? "pointer" : "not-allowed",
-          opacity: ready ? 1 : 0.65,
-        }}
-      >
-        Permissions
-      </button>
+        <button
+          type="button"
+          disabled={!ready || !enabled || scanState === "scanning"}
+          className="v5-btn v5-btn--primary"
+          onClick={handleScanPage}
+          style={{
+            ...primaryButtonStyle,
+            cursor: !ready || !enabled ? "not-allowed" : "pointer",
+            opacity: !ready || !enabled ? 0.65 : 1,
+          }}
+        >
+          {scanState === "scanning" ? "Scanning…" : "Scan page"}
+        </button>
+        <button
+          type="button"
+          disabled={scanSelectionDisabled}
+          className={scanSelectionDisabled ? "v5-btn" : "v5-btn v5-btn--primary"}
+          onClick={handleScanSelection}
+          style={{
+            ...(scanSelectionDisabled ? buttonStyle : primaryButtonStyle),
+            cursor: scanSelectionDisabled ? "not-allowed" : "pointer",
+            opacity: scanSelectionDisabled ? 0.65 : 1,
+          }}
+        >
+          {scanState === "scanning" ? "Scanning…" : "Scan selection"}
+        </button>
+        <button
+          type="button"
+          disabled={enrichSelectionDisabled}
+          className={enrichSelectionDisabled ? "v5-btn" : "v5-btn v5-btn--primary"}
+          onClick={handleEnrichSelection}
+          style={{
+            ...(enrichSelectionDisabled ? buttonStyle : primaryButtonStyle),
+            cursor: enrichSelectionDisabled ? "not-allowed" : "pointer",
+            opacity: enrichSelectionDisabled ? 0.65 : 1,
+          }}
+        >
+          Enrich selection
+        </button>
+        <button
+          type="button"
+          disabled={!ready}
+          className="v5-btn"
+          onClick={handleOpenSettings}
+          style={{
+            ...buttonStyle,
+            cursor: ready ? "pointer" : "not-allowed",
+            opacity: ready ? 1 : 0.65,
+          }}
+        >
+          Settings
+        </button>
+        <button
+          type="button"
+          disabled={!ready}
+          className="v5-btn"
+          onClick={handleOpenPermissions}
+          style={{
+            ...buttonStyle,
+            cursor: ready ? "pointer" : "not-allowed",
+            opacity: ready ? 1 : 0.65,
+          }}
+        >
+          Permissions
+        </button>
       </div>
       <section
         aria-label="Investigation session"
@@ -4295,349 +4558,359 @@ export function Popup() {
           </button>
         </h2>
         <div id="popup-investigation-body" hidden={investigationCollapsed}>
-        {!activeSession && sessionTitleReady ? (
-          <p style={trayStatusStyle()} aria-live="polite">
-            {INVESTIGATION_SESSION_EMPTY_STATE_TEXT}
-          </p>
-        ) : null}
-        <label
-          style={{
-            display: "block",
-            fontSize: 12,
-            color: POPUP_THEME.text,
-            marginBottom: 8,
-          }}
-        >
-          Session title
-          <input
-            type="text"
-            value={sessionTitle}
-            disabled={!ready || !sessionTitleReady}
-            onChange={(event) => setSessionTitle(event.target.value)}
-            onBlur={handleSessionTitleBlur}
-            aria-label="Session title"
+          {!activeSession && sessionTitleReady ? (
+            <p style={trayStatusStyle()} aria-live="polite">
+              {INVESTIGATION_SESSION_EMPTY_STATE_TEXT}
+            </p>
+          ) : null}
+          <label
             style={{
               display: "block",
-              width: "100%",
-              marginTop: 4,
-              padding: "8px 10px",
-              borderRadius: 6,
-              border: `1px solid ${POPUP_THEME.border}`,
-              backgroundColor: POPUP_THEME.buttonBg,
+              fontSize: 12,
               color: POPUP_THEME.text,
-              boxSizing: "border-box",
+              marginBottom: 8,
             }}
-          />
-        </label>
-        {activeSession ? (
-          <>
-            <p
-              aria-live="polite"
+          >
+            Session title
+            <input
+              type="text"
+              value={sessionTitle}
+              disabled={!ready || !sessionTitleReady}
+              onChange={(event) => setSessionTitle(event.target.value)}
+              onBlur={handleSessionTitleBlur}
+              aria-label="Session title"
               style={{
-                fontSize: 12,
-                margin: "0 0 4px",
-                color: POPUP_THEME.muted,
-                lineHeight: 1.5,
+                display: "block",
+                width: "100%",
+                marginTop: 4,
+                padding: "8px 10px",
+                borderRadius: 6,
+                border: `1px solid ${POPUP_THEME.border}`,
+                backgroundColor: POPUP_THEME.buttonBg,
+                color: POPUP_THEME.text,
+                boxSizing: "border-box",
               }}
-            >
-              {sessionIocCountText}
-            </p>
-            {sessionTypeBreakdownText ? (
+            />
+          </label>
+          {activeSession ? (
+            <>
               <p
+                aria-live="polite"
                 style={{
                   fontSize: 12,
                   margin: "0 0 4px",
-                  color: POPUP_THEME.text,
-                  lineHeight: 1.5,
-                }}
-              >
-                {sessionTypeBreakdownText}
-              </p>
-            ) : null}
-            {sessionActivitySummaryText ? (
-              <p
-                style={{
-                  fontSize: 12,
-                  margin: "0 0 10px",
                   color: POPUP_THEME.muted,
                   lineHeight: 1.5,
                 }}
               >
-                {sessionActivitySummaryText}
+                {sessionIocCountText}
               </p>
-            ) : (
-              <div style={{ marginBottom: 10 }} />
-            )}
-            <PromoteSessionToCollectionPanel
-              session={activeSession}
-              open={promoteSessionToCollectionOpen}
-              onToggle={() => {
-                setPromoteSessionToCollectionFeedback(null);
-                setPromoteSessionToCollectionOpen((current) => !current);
-              }}
-              feedback={promoteSessionToCollectionFeedback}
-              onFeedback={setPromoteSessionToCollectionFeedback}
-            />
-            <InvestigationSessionTimelinePanel
-              sessionId={activeSession.id}
-              sessionTitle={activeSession.title}
-              sessionPageUrl={activeSession.pageUrl}
-              events={sessionTimelineEvents}
-              onActivateEvent={handleTimelineEventActivate}
-              navigationMessage={timelineNavigationMessage}
-            />
-          </>
-        ) : null}
-        <button
-          type="button"
-          disabled={!ready || !sessionTitleReady}
-          onClick={handleNewSession}
-          style={{
-            ...buttonStyle,
-            marginBottom: 0,
-            cursor: ready && sessionTitleReady ? "pointer" : "not-allowed",
-            opacity: ready && sessionTitleReady ? 1 : 0.65,
-          }}
-        >
-          New session
-        </button>
-        {activeSession ? (
-          <>
-            <h3
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                margin: "12px 0 8px",
-                color: POPUP_THEME.accentText,
-              }}
-            >
-              Export session
-            </h3>
-            <div
-              role="group"
-              aria-label="Copy session export"
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 6,
-                marginBottom: 8,
-              }}
-            >
-              {INVESTIGATION_SESSION_EXPORT_ACTIONS.map(({ format, label }) => (
-                <button
-                  key={`copy-${format}`}
-                  type="button"
-                  disabled={!ready || !sessionTitleReady}
-                  onClick={() => handleCopySessionExport(format)}
-                  style={sessionActionButtonStyle()}
+              {sessionTypeBreakdownText ? (
+                <p
+                  style={{
+                    fontSize: 12,
+                    margin: "0 0 4px",
+                    color: POPUP_THEME.text,
+                    lineHeight: 1.5,
+                  }}
                 >
-                  Copy {label}
-                </button>
-              ))}
-            </div>
-            <div
-              role="group"
-              aria-label="Download session export"
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 6,
-                marginBottom: sessionExportMessage ? 8 : 0,
-              }}
-            >
-              {INVESTIGATION_SESSION_EXPORT_ACTIONS.map(({ format, label }) => (
-                <button
-                  key={`download-${format}`}
-                  type="button"
-                  disabled={!ready || !sessionTitleReady}
-                  onClick={() => handleDownloadSessionExport(format)}
-                  style={sessionActionButtonStyle()}
+                  {sessionTypeBreakdownText}
+                </p>
+              ) : null}
+              {sessionActivitySummaryText ? (
+                <p
+                  style={{
+                    fontSize: 12,
+                    margin: "0 0 10px",
+                    color: POPUP_THEME.muted,
+                    lineHeight: 1.5,
+                  }}
                 >
-                  Download {label}
-                </button>
-              ))}
-            </div>
-            {sessionExportMessage ? (
-              <p aria-live="polite" style={trayStatusStyle()}>
-                {sessionExportMessage}
-              </p>
-            ) : null}
-          </>
-        ) : null}
-        {recentSessions.length > 0 ? (
-          <>
-            <h3
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                margin: "12px 0 8px",
-                color: POPUP_THEME.accentText,
-              }}
-            >
-              Recent sessions
-            </h3>
-            <ul
-              aria-label="Recent investigation sessions"
-              style={{
-                listStyle: "none",
-                margin: 0,
-                padding: 0,
-                display: "flex",
-                flexDirection: "column",
-                gap: 8,
-                maxHeight: 180,
-                overflowY: "auto",
-              }}
-            >
-              {recentSessions.map((session) => {
-                const isActive = activeSession?.id === session.id;
-                const breakdown = buildInvestigationSessionTypeBreakdownText(session);
-                const isRenaming = renamingSessionId === session.id;
-
-                return (
-                  <li
-                    key={session.id}
-                    style={{
-                      border: `1px solid ${
-                        isActive ? POPUP_THEME.accent : POPUP_THEME.border
-                      }`,
-                      borderRadius: 6,
-                      padding: 8,
-                      backgroundColor: POPUP_THEME.trayRowBg,
-                    }}
+                  {sessionActivitySummaryText}
+                </p>
+              ) : (
+                <div style={{ marginBottom: 10 }} />
+              )}
+              <PromoteSessionToCollectionPanel
+                session={activeSession}
+                open={promoteSessionToCollectionOpen}
+                onToggle={() => {
+                  setPromoteSessionToCollectionFeedback(null);
+                  setPromoteSessionToCollectionOpen((current) => !current);
+                }}
+                feedback={promoteSessionToCollectionFeedback}
+                onFeedback={setPromoteSessionToCollectionFeedback}
+              />
+              <InvestigationSessionTimelinePanel
+                sessionId={activeSession.id}
+                sessionTitle={activeSession.title}
+                sessionPageUrl={activeSession.pageUrl}
+                events={sessionTimelineEvents}
+                onActivateEvent={handleTimelineEventActivate}
+                navigationMessage={timelineNavigationMessage}
+              />
+              <InvestigationReplayPanel
+                sessionId={activeSession.id}
+                sessionTitle={activeSession.title}
+                sessionPageUrl={activeSession.pageUrl}
+                segments={sessionReplaySegments}
+                onActivateSegment={handleReplaySegmentActivate}
+                navigationMessage={replayNavigationMessage}
+                resolveSessionMemoryRecords={async () => {
+                  const input = await resolveActiveSessionExportInput();
+                  return input?.records ?? [];
+                }}
+              />
+            </>
+          ) : null}
+          <button
+            type="button"
+            disabled={!ready || !sessionTitleReady}
+            onClick={handleNewSession}
+            style={{
+              ...buttonStyle,
+              marginBottom: 0,
+              cursor: ready && sessionTitleReady ? "pointer" : "not-allowed",
+              opacity: ready && sessionTitleReady ? 1 : 0.65,
+            }}
+          >
+            New session
+          </button>
+          {activeSession ? (
+            <>
+              <h3
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  margin: "12px 0 8px",
+                  color: POPUP_THEME.accentText,
+                }}
+              >
+                Export session
+              </h3>
+              <div
+                role="group"
+                aria-label="Copy session export"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 6,
+                  marginBottom: 8,
+                }}
+              >
+                {INVESTIGATION_SESSION_EXPORT_ACTIONS.map(({ format, label }) => (
+                  <button
+                    key={`copy-${format}`}
+                    type="button"
+                    disabled={!ready || !sessionTitleReady}
+                    onClick={() => handleCopySessionExport(format)}
+                    style={sessionActionButtonStyle()}
                   >
-                    {isRenaming ? (
-                      <>
-                        <input
-                          type="text"
-                          value={renameDraft}
-                          onChange={(event) => setRenameDraft(event.target.value)}
-                          aria-label={`Rename ${session.title}`}
-                          style={{
-                            display: "block",
-                            width: "100%",
-                            marginBottom: 8,
-                            padding: "6px 8px",
-                            borderRadius: 6,
-                            border: `1px solid ${POPUP_THEME.border}`,
-                            backgroundColor: POPUP_THEME.buttonBg,
-                            color: POPUP_THEME.text,
-                            boxSizing: "border-box",
-                          }}
-                        />
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            onClick={() => handleSaveRenameSession(session.id)}
-                            style={sessionActionButtonStyle()}
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleCancelRenameSession}
-                            style={sessionActionButtonStyle()}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            gap: 8,
-                            marginBottom: 4,
-                          }}
-                        >
-                          <strong
+                    Copy {label}
+                  </button>
+                ))}
+              </div>
+              <div
+                role="group"
+                aria-label="Download session export"
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 6,
+                  marginBottom: sessionExportMessage ? 8 : 0,
+                }}
+              >
+                {INVESTIGATION_SESSION_EXPORT_ACTIONS.map(({ format, label }) => (
+                  <button
+                    key={`download-${format}`}
+                    type="button"
+                    disabled={!ready || !sessionTitleReady}
+                    onClick={() => handleDownloadSessionExport(format)}
+                    style={sessionActionButtonStyle()}
+                  >
+                    Download {label}
+                  </button>
+                ))}
+              </div>
+              {sessionExportMessage ? (
+                <p aria-live="polite" style={trayStatusStyle()}>
+                  {sessionExportMessage}
+                </p>
+              ) : null}
+            </>
+          ) : null}
+          {recentSessions.length > 0 ? (
+            <>
+              <h3
+                style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  margin: "12px 0 8px",
+                  color: POPUP_THEME.accentText,
+                }}
+              >
+                Recent sessions
+              </h3>
+              <ul
+                aria-label="Recent investigation sessions"
+                style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  maxHeight: 180,
+                  overflowY: "auto",
+                }}
+              >
+                {recentSessions.map((session) => {
+                  const isActive = activeSession?.id === session.id;
+                  const breakdown = buildInvestigationSessionTypeBreakdownText(session);
+                  const isRenaming = renamingSessionId === session.id;
+
+                  return (
+                    <li
+                      key={session.id}
+                      style={{
+                        border: `1px solid ${isActive ? POPUP_THEME.accent : POPUP_THEME.border}`,
+                        borderRadius: 6,
+                        padding: 8,
+                        backgroundColor: POPUP_THEME.trayRowBg,
+                      }}
+                    >
+                      {isRenaming ? (
+                        <>
+                          <input
+                            type="text"
+                            value={renameDraft}
+                            onChange={(event) => setRenameDraft(event.target.value)}
+                            aria-label={`Rename ${session.title}`}
                             style={{
-                              fontSize: 12,
+                              display: "block",
+                              width: "100%",
+                              marginBottom: 8,
+                              padding: "6px 8px",
+                              borderRadius: 6,
+                              border: `1px solid ${POPUP_THEME.border}`,
+                              backgroundColor: POPUP_THEME.buttonBg,
                               color: POPUP_THEME.text,
-                              wordBreak: "break-word",
+                              boxSizing: "border-box",
+                            }}
+                          />
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            <button
+                              type="button"
+                              onClick={() => handleSaveRenameSession(session.id)}
+                              style={sessionActionButtonStyle()}
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleCancelRenameSession}
+                              style={sessionActionButtonStyle()}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              gap: 8,
+                              marginBottom: 4,
                             }}
                           >
-                            {session.title}
-                          </strong>
-                          {isActive ? (
-                            <span
+                            <strong
                               style={{
-                                flexShrink: 0,
-                                fontSize: 10,
-                                fontWeight: 700,
-                                color: POPUP_THEME.accent,
+                                fontSize: 12,
+                                color: POPUP_THEME.text,
+                                wordBreak: "break-word",
                               }}
                             >
-                              Active
-                            </span>
-                          ) : null}
-                        </div>
-                        <p
-                          style={{
-                            fontSize: 11,
-                            margin: "0 0 4px",
-                            color: POPUP_THEME.muted,
-                            lineHeight: 1.45,
-                          }}
-                        >
-                          {buildInvestigationSessionIocCountText(session.totalIocCount)}
-                        </p>
-                        {breakdown ? (
+                              {session.title}
+                            </strong>
+                            {isActive ? (
+                              <span
+                                style={{
+                                  flexShrink: 0,
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: POPUP_THEME.accent,
+                                }}
+                              >
+                                Active
+                              </span>
+                            ) : null}
+                          </div>
                           <p
                             style={{
                               fontSize: 11,
-                              margin: "0 0 8px",
-                              color: POPUP_THEME.text,
+                              margin: "0 0 4px",
+                              color: POPUP_THEME.muted,
                               lineHeight: 1.45,
                             }}
                           >
-                            {breakdown}
+                            {buildInvestigationSessionIocCountText(session.totalIocCount)}
                           </p>
-                        ) : null}
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                          {!isActive ? (
+                          {breakdown ? (
+                            <p
+                              style={{
+                                fontSize: 11,
+                                margin: "0 0 8px",
+                                color: POPUP_THEME.text,
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              {breakdown}
+                            </p>
+                          ) : null}
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            {!isActive ? (
+                              <button
+                                type="button"
+                                onClick={() => handleReopenSession(session.id)}
+                                style={sessionActionButtonStyle()}
+                              >
+                                Reopen
+                              </button>
+                            ) : null}
                             <button
                               type="button"
-                              onClick={() => handleReopenSession(session.id)}
+                              onClick={() => handleStartRenameSession(session)}
                               style={sessionActionButtonStyle()}
                             >
-                              Reopen
+                              Rename
                             </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => handleStartRenameSession(session)}
-                            style={sessionActionButtonStyle()}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleArchiveSession(session.id)}
-                            style={sessionActionButtonStyle()}
-                          >
-                            Archive
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteSession(session.id)}
-                            style={sessionActionButtonStyle()}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        ) : (
-          <p style={{ ...trayStatusStyle(), marginTop: 12 }}>No saved sessions yet.</p>
-        )}
+                            <button
+                              type="button"
+                              onClick={() => handleArchiveSession(session.id)}
+                              style={sessionActionButtonStyle()}
+                            >
+                              Archive
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSession(session.id)}
+                              style={sessionActionButtonStyle()}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : (
+            <p style={{ ...trayStatusStyle(), marginTop: 12 }}>No saved sessions yet.</p>
+          )}
         </div>
       </section>
       <section
@@ -4749,68 +5022,68 @@ export function Popup() {
                   );
 
                   return (
-                  <li
-                    key={entry.id}
-                    role="button"
-                    tabIndex={0}
-                    data-vera5-history-entry="true"
-                    data-vera5-type={entry.iocType}
-                    data-vera5-value={entry.ioc}
-                    data-vera5-session-id={entry.sessionId ?? undefined}
-                    aria-label={buildInvestigationHistoryRowAriaLabel(entry, sessionTitle)}
-                    onClick={() => handleHistoryRowActivate(entry)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter" && event.key !== " ") {
-                        return;
-                      }
-                      event.preventDefault();
-                      handleHistoryRowActivate(entry);
-                    }}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                      padding: "6px 8px",
-                      borderRadius: 6,
-                      border: linkedToActiveSession
-                        ? `1px solid ${POPUP_THEME.accent}`
-                        : "1px solid transparent",
-                      backgroundColor: POPUP_THEME.trayRowBg,
-                      fontSize: 12,
-                      lineHeight: 1.4,
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span
+                    <li
+                      key={entry.id}
+                      role="button"
+                      tabIndex={0}
+                      data-vera5-history-entry="true"
+                      data-vera5-type={entry.iocType}
+                      data-vera5-value={entry.ioc}
+                      data-vera5-session-id={entry.sessionId ?? undefined}
+                      aria-label={buildInvestigationHistoryRowAriaLabel(entry, sessionTitle)}
+                      onClick={() => handleHistoryRowActivate(entry)}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") {
+                          return;
+                        }
+                        event.preventDefault();
+                        handleHistoryRowActivate(entry);
+                      }}
                       style={{
-                        fontFamily: "monospace",
-                        wordBreak: "break-all",
-                        color: POPUP_THEME.text,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                        padding: "6px 8px",
+                        borderRadius: 6,
+                        border: linkedToActiveSession
+                          ? `1px solid ${POPUP_THEME.accent}`
+                          : "1px solid transparent",
+                        backgroundColor: POPUP_THEME.trayRowBg,
+                        fontSize: 12,
+                        lineHeight: 1.4,
+                        cursor: "pointer",
                       }}
                     >
-                      {entry.ioc}
-                    </span>
-                    <span style={{ color: POPUP_THEME.muted, fontSize: 11 }}>
-                      {entry.pageOrigin}
-                    </span>
-                    {sessionTitle ? (
                       <span
                         style={{
-                          color: linkedToActiveSession
-                            ? POPUP_THEME.accentText
-                            : POPUP_THEME.muted,
-                          fontSize: 11,
+                          fontFamily: "monospace",
+                          wordBreak: "break-all",
+                          color: POPUP_THEME.text,
                         }}
                       >
-                        {linkedToActiveSession
-                          ? "Linked to this session"
-                          : `Session: ${sessionTitle}`}
+                        {entry.ioc}
                       </span>
-                    ) : null}
-                    <span style={{ color: POPUP_THEME.muted, fontSize: 11 }}>
-                      {formatInvestigationHistoryTimestamp(entry.enrichedAt)}
-                    </span>
-                  </li>
+                      <span style={{ color: POPUP_THEME.muted, fontSize: 11 }}>
+                        {entry.pageOrigin}
+                      </span>
+                      {sessionTitle ? (
+                        <span
+                          style={{
+                            color: linkedToActiveSession
+                              ? POPUP_THEME.accentText
+                              : POPUP_THEME.muted,
+                            fontSize: 11,
+                          }}
+                        >
+                          {linkedToActiveSession
+                            ? "Linked to this session"
+                            : `Session: ${sessionTitle}`}
+                        </span>
+                      ) : null}
+                      <span style={{ color: POPUP_THEME.muted, fontSize: 11 }}>
+                        {formatInvestigationHistoryTimestamp(entry.enrichedAt)}
+                      </span>
+                    </li>
                   );
                 })}
               </ul>
@@ -4926,189 +5199,179 @@ export function Popup() {
           </button>
         </h2>
         <div id="popup-source-ops-body" hidden={sourceOpsCollapsed}>
-        {!sourceOpsReady ? (
-          <p style={trayStatusStyle()} aria-live="polite">
-            Loading source status…
-          </p>
-        ) : !sourceOps ? (
-          <p style={trayStatusStyle()} aria-live="polite">
-            Source status unavailable.
-          </p>
-        ) : (
-          <>
-            <p
-              aria-live="polite"
-              style={{
-                fontSize: 12,
-                margin: "0 0 4px",
-                color: sourceOps.globalCooldownActive
-                  ? POPUP_THEME.error
-                  : POPUP_THEME.muted,
-                lineHeight: 1.5,
-              }}
-            >
-              {formatEnrichmentSourceOpsCooldownLabel(sourceOps)}
+          {!sourceOpsReady ? (
+            <p style={trayStatusStyle()} aria-live="polite">
+              Loading source status…
             </p>
-            <p
-              style={{
-                fontSize: 12,
-                margin: "0 0 4px",
-                color: POPUP_THEME.muted,
-                lineHeight: 1.5,
-              }}
-            >
-              Last cache clear:{" "}
-              {formatEnrichmentCacheClearedAtLabel(sourceOps.lastCacheClearAt)}
+          ) : !sourceOps ? (
+            <p style={trayStatusStyle()} aria-live="polite">
+              Source status unavailable.
             </p>
-            <p
-              style={{
-                fontSize: 12,
-                margin: "0 0 4px",
-                color: POPUP_THEME.text,
-                lineHeight: 1.5,
-              }}
-            >
-              Cache entries: {sourceOps.totalCacheEntryCount}
-            </p>
-            <p
-              style={{
-                fontSize: 11,
-                margin: "0 0 10px",
-                color: POPUP_THEME.muted,
-                lineHeight: 1.45,
-              }}
-            >
-              Vendor quota hints are orientation only; confirm effective limits in
-              each vendor account.
-            </p>
-            {sourceOpsClearFeedback ? (
-              <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "0 0 10px" }}>
-                {sourceOpsClearFeedback}
+          ) : (
+            <>
+              <p
+                aria-live="polite"
+                style={{
+                  fontSize: 12,
+                  margin: "0 0 4px",
+                  color: sourceOps.globalCooldownActive ? POPUP_THEME.error : POPUP_THEME.muted,
+                  lineHeight: 1.5,
+                }}
+              >
+                {formatEnrichmentSourceOpsCooldownLabel(sourceOps)}
               </p>
-            ) : null}
-            <ul
-              aria-label="Enrichment source status"
-              style={{
-                listStyle: "none",
-                margin: 0,
-                padding: 0,
-                display: "flex",
-                flexDirection: "column",
-                gap: 6,
-                maxHeight: 220,
-                overflowY: "auto",
-              }}
-            >
-              {sourceOps.sources.map((row) => {
-                const statusLabel = formatEnrichmentSourceLastStatusLabel(
-                  row.lastStatus
-                );
-                const lastErrorLabel = formatEnrichmentSourceLastErrorLabel(
-                  row.lastStatus
-                );
-                return (
-                  <li
-                    key={row.sourceId}
-                    style={{
-                      border: `1px solid ${POPUP_THEME.border}`,
-                      borderRadius: 6,
-                      padding: "6px 8px",
-                      backgroundColor: POPUP_THEME.trayRowBg,
-                      display: "grid",
-                      gridTemplateColumns: "minmax(0, 1fr) auto",
-                      gap: 8,
-                      alignItems: "start",
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: POPUP_THEME.text,
-                          wordBreak: "break-word",
-                        }}
-                      >
-                        {row.displayName}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: sourceOpsStatusColor(statusLabel),
-                          marginTop: 2,
-                        }}
-                      >
-                        Last status: {statusLabel}
-                      </div>
-                      {lastErrorLabel ? (
+              <p
+                style={{
+                  fontSize: 12,
+                  margin: "0 0 4px",
+                  color: POPUP_THEME.muted,
+                  lineHeight: 1.5,
+                }}
+              >
+                Last cache clear: {formatEnrichmentCacheClearedAtLabel(sourceOps.lastCacheClearAt)}
+              </p>
+              <p
+                style={{
+                  fontSize: 12,
+                  margin: "0 0 4px",
+                  color: POPUP_THEME.text,
+                  lineHeight: 1.5,
+                }}
+              >
+                Cache entries: {sourceOps.totalCacheEntryCount}
+              </p>
+              <p
+                style={{
+                  fontSize: 11,
+                  margin: "0 0 10px",
+                  color: POPUP_THEME.muted,
+                  lineHeight: 1.45,
+                }}
+              >
+                Vendor quota hints are orientation only; confirm effective limits in each vendor
+                account.
+              </p>
+              {sourceOpsClearFeedback ? (
+                <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "0 0 10px" }}>
+                  {sourceOpsClearFeedback}
+                </p>
+              ) : null}
+              <ul
+                aria-label="Enrichment source status"
+                style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6,
+                  maxHeight: 220,
+                  overflowY: "auto",
+                }}
+              >
+                {sourceOps.sources.map((row) => {
+                  const statusLabel = formatEnrichmentSourceLastStatusLabel(row.lastStatus);
+                  const lastErrorLabel = formatEnrichmentSourceLastErrorLabel(row.lastStatus);
+                  return (
+                    <li
+                      key={row.sourceId}
+                      style={{
+                        border: `1px solid ${POPUP_THEME.border}`,
+                        borderRadius: 6,
+                        padding: "6px 8px",
+                        backgroundColor: POPUP_THEME.trayRowBg,
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr) auto",
+                        gap: 8,
+                        alignItems: "start",
+                      }}
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 600,
+                            color: POPUP_THEME.text,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {row.displayName}
+                        </div>
                         <div
                           style={{
                             fontSize: 11,
-                            color: POPUP_THEME.error,
+                            color: sourceOpsStatusColor(statusLabel),
                             marginTop: 2,
                           }}
                         >
-                          Last error: {lastErrorLabel}
+                          Last status: {statusLabel}
                         </div>
-                      ) : null}
+                        {lastErrorLabel ? (
+                          <div
+                            style={{
+                              fontSize: 11,
+                              color: POPUP_THEME.error,
+                              marginTop: 2,
+                            }}
+                          >
+                            Last error: {lastErrorLabel}
+                          </div>
+                        ) : null}
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: POPUP_THEME.muted,
+                            marginTop: 2,
+                            lineHeight: 1.45,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          Vendor quota: {row.quotaHint}
+                        </div>
+                      </div>
                       <div
                         style={{
-                          fontSize: 11,
-                          color: POPUP_THEME.muted,
-                          marginTop: 2,
-                          lineHeight: 1.45,
-                          wordBreak: "break-word",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "flex-end",
+                          gap: 6,
                         }}
                       >
-                        Vendor quota: {row.quotaHint}
+                        <span
+                          style={{
+                            flexShrink: 0,
+                            fontSize: 11,
+                            color: POPUP_THEME.muted,
+                            whiteSpace: "nowrap",
+                            textAlign: "right",
+                          }}
+                        >
+                          {formatEnrichmentSourceCacheEntryCountLabel(row.cacheEntryCount)}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={
+                            !sourceOpsReady ||
+                            row.cacheEntryCount === 0 ||
+                            clearingSourceCacheId === row.sourceId
+                          }
+                          onClick={() => handleClearSourceCache(row)}
+                          aria-label={`Clear cache for ${row.displayName}`}
+                          style={sessionActionButtonStyle()}
+                        >
+                          {clearingSourceCacheId === row.sourceId ? "Clearing…" : "Clear cache"}
+                        </button>
                       </div>
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "flex-end",
-                        gap: 6,
-                      }}
-                    >
-                      <span
-                        style={{
-                          flexShrink: 0,
-                          fontSize: 11,
-                          color: POPUP_THEME.muted,
-                          whiteSpace: "nowrap",
-                          textAlign: "right",
-                        }}
-                      >
-                        {formatEnrichmentSourceCacheEntryCountLabel(
-                          row.cacheEntryCount
-                        )}
-                      </span>
-                      <button
-                        type="button"
-                        disabled={
-                          !sourceOpsReady ||
-                          row.cacheEntryCount === 0 ||
-                          clearingSourceCacheId === row.sourceId
-                        }
-                        onClick={() => handleClearSourceCache(row)}
-                        aria-label={`Clear cache for ${row.displayName}`}
-                        style={sessionActionButtonStyle()}
-                      >
-                        {clearingSourceCacheId === row.sourceId
-                          ? "Clearing…"
-                          : "Clear cache"}
-                      </button>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
         </div>
       </section>
-      {scanState === "error" ? (        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
+      {scanState === "error" ? (
+        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
           Scan failed. Reload the tab and try again.
         </p>
       ) : null}
@@ -5207,9 +5470,7 @@ export function Popup() {
             </div>
           </div>
           {trayView === "prompt" ? (
-            <p style={trayStatusStyle()}>
-              Scan this page to list detected indicators.
-            </p>
+            <p style={trayStatusStyle()}>Scan this page to list detected indicators.</p>
           ) : null}
           {trayView === "scanning" ? (
             <p style={trayStatusStyle()} aria-live="polite">
@@ -5239,20 +5500,19 @@ export function Popup() {
                 >
                   All ({scanSummary.totalCount})
                 </button>
-                {listIocTypesPresentInSummaryForPageContext(
-                  scanSummary,
-                  activePageContextType
-                ).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    aria-pressed={typeFilter === type}
-                    onClick={() => setTypeFilter(type)}
-                    style={filterChipStyle(typeFilter === type)}
-                  >
-                    {IOC_TYPE_TRAY_LABEL[type]} ({scanSummary.countByType[type] ?? 0})
-                  </button>
-                ))}
+                {listIocTypesPresentInSummaryForPageContext(scanSummary, activePageContextType).map(
+                  (type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      aria-pressed={typeFilter === type}
+                      onClick={() => setTypeFilter(type)}
+                      style={filterChipStyle(typeFilter === type)}
+                    >
+                      {IOC_TYPE_TRAY_LABEL[type]} ({scanSummary.countByType[type] ?? 0})
+                    </button>
+                  )
+                )}
               </div>
               <AddFilteredToCollectionPanel
                 entries={filteredEntries}
@@ -5291,9 +5551,7 @@ export function Popup() {
               {selectedDetailEntry ? (
                 <IndicatorDetailPane
                   entry={selectedDetailEntry}
-                  enrichmentStatus={
-                    trayEnrichmentStatuses[selectedDetailEntry.anchorId]
-                  }
+                  enrichmentStatus={trayEnrichmentStatuses[selectedDetailEntry.anchorId]}
                   note={analystNote}
                   noteStatus={analystNoteStatus}
                   enrichState={detailEnrichState}
@@ -5321,128 +5579,121 @@ export function Popup() {
                     const provenance = resolveTrayEntryMatchProvenance(entry);
 
                     return (
-                    <li
-                      key={entry.anchorId}
-                      role="button"
-                      tabIndex={0}
-                      data-vera5-tray-entry="true"
-                      data-vera5-type={entry.type}
-                      data-vera5-value={entry.value}
-                      data-vera5-anchor-id={entry.anchorId}
-                      data-vera5-rule-id={provenance?.ruleId}
-                      data-vera5-source-text-hint={provenance?.sourceTextHint}
-                      aria-label={buildTrayRowNavigationAriaLabel(
-                        entry.value,
-                        enrichmentStatus
-                      )}
-                      onClick={() => handleTrayRowActivate(entry)}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") {
-                          return;
-                        }
-                        event.preventDefault();
-                        handleTrayRowActivate(entry);
-                      }}
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                        padding: "6px 8px",
-                        borderRadius: 6,
-                        border: "1px solid transparent",
-                        backgroundColor: POPUP_THEME.trayRowBg,
-                        fontSize: 12,
-                        lineHeight: 1.4,
-                        cursor: "pointer",
-                      }}
-                    >
-                      <div
+                      <li
+                        key={entry.anchorId}
+                        role="button"
+                        tabIndex={0}
+                        data-vera5-tray-entry="true"
+                        data-vera5-type={entry.type}
+                        data-vera5-value={entry.value}
+                        data-vera5-anchor-id={entry.anchorId}
+                        data-vera5-rule-id={provenance?.ruleId}
+                        data-vera5-source-text-hint={provenance?.sourceTextHint}
+                        aria-label={buildTrayRowNavigationAriaLabel(entry.value, enrichmentStatus)}
+                        onClick={() => handleTrayRowActivate(entry)}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") {
+                            return;
+                          }
+                          event.preventDefault();
+                          handleTrayRowActivate(entry);
+                        }}
                         style={{
                           display: "flex",
-                          alignItems: "flex-start",
-                          gap: 8,
+                          flexDirection: "column",
+                          gap: 6,
+                          padding: "6px 8px",
+                          borderRadius: 6,
+                          border: "1px solid transparent",
+                          backgroundColor: POPUP_THEME.trayRowBg,
+                          fontSize: 12,
+                          lineHeight: 1.4,
+                          cursor: "pointer",
                         }}
                       >
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          flexShrink: 0,
-                          padding: "1px 6px",
-                          borderRadius: 4,
-                          backgroundColor: POPUP_THEME.buttonBg,
-                          color: POPUP_THEME.muted,
-                          fontSize: 10,
-                          fontWeight: 700,
-                        }}
-                      >
-                        {IOC_TYPE_TRAY_LABEL[entry.type]}
-                      </span>
-                      <span
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: 8,
-                          flex: 1,
-                          minWidth: 0,
-                        }}
-                      >
-                        <TrayIndicatorValue entry={entry} />
-                        {enrichmentStatus ? (
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "flex-start",
+                            gap: 8,
+                          }}
+                        >
                           <span
                             aria-hidden="true"
-                            style={trayEnrichmentHintStyle(enrichmentStatus.badgeText)}
+                            style={{
+                              flexShrink: 0,
+                              padding: "1px 6px",
+                              borderRadius: 4,
+                              backgroundColor: POPUP_THEME.buttonBg,
+                              color: POPUP_THEME.muted,
+                              fontSize: 10,
+                              fontWeight: 700,
+                            }}
                           >
-                            {formatTrayRowEnrichmentHint(enrichmentStatus)}
+                            {IOC_TYPE_TRAY_LABEL[entry.type]}
                           </span>
-                        ) : null}
-                      </span>
-                      </div>
-                      <SaveToCollectionTrayPanel
-                        entry={entry}
-                        open={saveToCollectionAnchorId === entry.anchorId}
-                        feedback={
-                          saveToCollectionAnchorId === entry.anchorId
-                            ? saveToCollectionFeedback
-                            : null
-                        }
-                        onFeedback={setSaveToCollectionFeedback}
-                        onToggle={() => {
-                          setSaveToCollectionFeedback(null);
-                          setSaveToCollectionAnchorId((current) =>
-                            current === entry.anchorId ? null : entry.anchorId
-                          );
-                        }}
-                      />
-                      <RunMacroTrayPanel
-                        entry={entry}
-                        open={runMacroTrayAnchorId === entry.anchorId}
-                        feedback={
-                          runMacroTrayAnchorId === entry.anchorId
-                            ? runMacroTrayFeedback
-                            : null
-                        }
-                        onFeedback={setRunMacroTrayFeedback}
-                        onToggle={() => {
-                          setRunMacroTrayFeedback(null);
-                          setRunMacroTrayAnchorId((current) =>
-                            current === entry.anchorId ? null : entry.anchorId
-                          );
-                        }}
-                      />
-                      <WhyDetectedTrayDetails entry={entry} />
-                      <CoOccurrenceTrayDetails
-                        entry={entry}
-                        pageIndex={trayPageCoOccurrenceIndex}
-                        onNavigateToRelated={sendNavigateToIocAnchor}
-                      />
-                    </li>
+                          <span
+                            style={{
+                              display: "flex",
+                              alignItems: "flex-start",
+                              gap: 8,
+                              flex: 1,
+                              minWidth: 0,
+                            }}
+                          >
+                            <TrayIndicatorValue entry={entry} />
+                            {enrichmentStatus ? (
+                              <span
+                                aria-hidden="true"
+                                style={trayEnrichmentHintStyle(enrichmentStatus.badgeText)}
+                              >
+                                {formatTrayRowEnrichmentHint(enrichmentStatus)}
+                              </span>
+                            ) : null}
+                          </span>
+                        </div>
+                        <SaveToCollectionTrayPanel
+                          entry={entry}
+                          open={saveToCollectionAnchorId === entry.anchorId}
+                          feedback={
+                            saveToCollectionAnchorId === entry.anchorId
+                              ? saveToCollectionFeedback
+                              : null
+                          }
+                          onFeedback={setSaveToCollectionFeedback}
+                          onToggle={() => {
+                            setSaveToCollectionFeedback(null);
+                            setSaveToCollectionAnchorId((current) =>
+                              current === entry.anchorId ? null : entry.anchorId
+                            );
+                          }}
+                        />
+                        <RunMacroTrayPanel
+                          entry={entry}
+                          open={runMacroTrayAnchorId === entry.anchorId}
+                          feedback={
+                            runMacroTrayAnchorId === entry.anchorId ? runMacroTrayFeedback : null
+                          }
+                          onFeedback={setRunMacroTrayFeedback}
+                          onToggle={() => {
+                            setRunMacroTrayFeedback(null);
+                            setRunMacroTrayAnchorId((current) =>
+                              current === entry.anchorId ? null : entry.anchorId
+                            );
+                          }}
+                        />
+                        <WhyDetectedTrayDetails entry={entry} />
+                        <CoOccurrenceTrayDetails
+                          entry={entry}
+                          pageIndex={trayPageCoOccurrenceIndex}
+                          onNavigateToRelated={sendNavigateToIocAnchor}
+                        />
+                      </li>
                     );
                   })}
                 </ul>
               ) : (
-                <p style={trayStatusStyle()}>
-                  No indicators match this filter.
-                </p>
+                <p style={trayStatusStyle()}>No indicators match this filter.</p>
               )}
             </>
           ) : null}

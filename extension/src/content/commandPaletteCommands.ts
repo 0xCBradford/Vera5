@@ -41,6 +41,7 @@ import {
   OPERATOR_MACRO_QUEUE_SOURCE,
   OPERATOR_MACRO_STEP_TYPE,
 } from "../lib/operatorMacroStepTypes";
+import { MACRO_RUN_STATUS } from "../lib/timelineEvent";
 import { ENRICHMENT_SOURCE_OPS_SECTION_TITLE } from "../lib/enrichmentSourceOps";
 import {
   getQuietMode,
@@ -234,7 +235,8 @@ async function resolveMacroExportRecords(
 async function runOperatorMacroExportMarkdownStep(
   step: OperatorMacroStep,
   context: OperatorMacroRunContext,
-  macroId: string
+  macroId: string,
+  stepIndex: number
 ): Promise<boolean> {
   const params = normalizeOperatorMacroExportMarkdownStepParams(step.params);
   if (!params) {
@@ -275,6 +277,8 @@ async function runOperatorMacroExportMarkdownStep(
   emitInvestigationSessionMacroRunTimelineEvent({
     stepType: OPERATOR_MACRO_STEP_TYPE.EXPORT_MARKDOWN,
     macroId,
+    stepIndex,
+    runStatus: MACRO_RUN_STATUS.SUCCESS,
     iocValue: records[0]?.ioc,
     iocType: records[0]?.iocType,
   });
@@ -284,7 +288,8 @@ async function runOperatorMacroExportMarkdownStep(
 function runOperatorMacroOpenPivotStep(
   step: OperatorMacroStep,
   context: OperatorMacroRunContext,
-  macroId: string
+  macroId: string,
+  stepIndex: number
 ): boolean {
   const params = normalizeOperatorMacroOpenPivotStepParams(step.params);
   const ioc = resolveMacroRunIoc(context, OPERATOR_MACRO_IOC_SCOPE.ACTIVE_IOC);
@@ -312,6 +317,8 @@ function runOperatorMacroOpenPivotStep(
   emitInvestigationSessionMacroRunTimelineEvent({
     stepType: OPERATOR_MACRO_STEP_TYPE.OPEN_PIVOT,
     macroId,
+    stepIndex,
+    runStatus: MACRO_RUN_STATUS.SUCCESS,
     iocValue: ioc.value,
     iocType: ioc.type,
   });
@@ -321,7 +328,8 @@ function runOperatorMacroOpenPivotStep(
 function runOperatorMacroApplyNoteTemplateStep(
   step: OperatorMacroStep,
   context: OperatorMacroRunContext,
-  macroId: string
+  macroId: string,
+  stepIndex: number
 ): boolean {
   const params = normalizeOperatorMacroApplyNoteTemplateStepParams(step.params);
   if (!params) {
@@ -343,6 +351,8 @@ function runOperatorMacroApplyNoteTemplateStep(
   emitInvestigationSessionMacroRunTimelineEvent({
     stepType: OPERATOR_MACRO_STEP_TYPE.APPLY_NOTE_TEMPLATE,
     macroId,
+    stepIndex,
+    runStatus: MACRO_RUN_STATUS.SUCCESS,
     iocValue: ioc.value,
     iocType: ioc.type,
   });
@@ -357,6 +367,7 @@ async function runOperatorMacroQueueRelatedIocsStep(
   step: OperatorMacroStep,
   context: OperatorMacroRunContext,
   macroId: string,
+  stepIndex: number,
   doc: Document
 ): Promise<OperatorMacroStepRunOutcome> {
   const params = normalizeOperatorMacroQueueRelatedIocsStepParams(step.params);
@@ -433,6 +444,8 @@ async function runOperatorMacroQueueRelatedIocsStep(
   emitInvestigationSessionMacroRunTimelineEvent({
     stepType: OPERATOR_MACRO_STEP_TYPE.QUEUE_RELATED_IOCS,
     macroId,
+    stepIndex,
+    runStatus: MACRO_RUN_STATUS.SUCCESS,
     iocValue: context.iocValue,
     iocType: context.iocType,
   });
@@ -465,6 +478,7 @@ function adaptOperatorMacroStepForTraySeed(
 async function runOperatorMacroStep(
   macroId: string,
   step: OperatorMacroStep,
+  stepIndex: number,
   context: OperatorMacroRunContext,
   doc: Document
 ): Promise<OperatorMacroStepRunOutcome> {
@@ -505,6 +519,8 @@ async function runOperatorMacroStep(
       emitInvestigationSessionMacroRunTimelineEvent({
         stepType: OPERATOR_MACRO_STEP_TYPE.ENRICH,
         macroId,
+        stepIndex,
+        runStatus: MACRO_RUN_STATUS.SUCCESS,
         iocValue: result.value,
         iocType: result.type,
       });
@@ -512,22 +528,39 @@ async function runOperatorMacroStep(
     }
     case OPERATOR_MACRO_STEP_TYPE.EXPORT_MARKDOWN:
       return {
-        continued: await runOperatorMacroExportMarkdownStep(step, context, macroId),
+        continued: await runOperatorMacroExportMarkdownStep(
+          step,
+          context,
+          macroId,
+          stepIndex
+        ),
       };
     case OPERATOR_MACRO_STEP_TYPE.OPEN_PIVOT:
       return {
-        continued: await runOperatorMacroOpenPivotStep(step, context, macroId),
+        continued: await runOperatorMacroOpenPivotStep(
+          step,
+          context,
+          macroId,
+          stepIndex
+        ),
       };
     case OPERATOR_MACRO_STEP_TYPE.APPLY_NOTE_TEMPLATE:
       return {
         continued: await runOperatorMacroApplyNoteTemplateStep(
           step,
           context,
-          macroId
+          macroId,
+          stepIndex
         ),
       };
     case OPERATOR_MACRO_STEP_TYPE.QUEUE_RELATED_IOCS:
-      return runOperatorMacroQueueRelatedIocsStep(step, context, macroId, doc);
+      return runOperatorMacroQueueRelatedIocsStep(
+        step,
+        context,
+        macroId,
+        stepIndex,
+        doc
+      );
     default:
       return { continued: false };
   }
@@ -569,14 +602,28 @@ export async function runOperatorMacro(
   };
   const useTraySeed = seed !== undefined;
 
-  for (const step of macro.steps) {
+  for (let stepIndex = 0; stepIndex < macro.steps.length; stepIndex += 1) {
+    const step = macro.steps[stepIndex];
+    if (!step) {
+      continue;
+    }
+    const adaptedStep = adaptOperatorMacroStepForTraySeed(step, useTraySeed);
     const outcome = await runOperatorMacroStep(
       macro.id,
-      adaptOperatorMacroStepForTraySeed(step, useTraySeed),
+      adaptedStep,
+      stepIndex,
       context,
       doc
     );
     if (!outcome.continued) {
+      emitInvestigationSessionMacroRunTimelineEvent({
+        stepType: adaptedStep.type,
+        macroId: macro.id,
+        stepIndex,
+        runStatus: MACRO_RUN_STATUS.ABORTED,
+        iocValue: context.iocValue,
+        iocType: context.iocType,
+      });
       return {
         status: "aborted",
         message:

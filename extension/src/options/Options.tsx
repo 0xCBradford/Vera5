@@ -164,16 +164,10 @@ import {
   normalizeDomainPolicyEntry,
   type DomainPolicyMode,
 } from "../lib/domainPolicy";
-import {
-  ANALYST_MODE_PRESETS,
-  type AnalystModePresetId,
-} from "../lib/analystModePresets";
+import { ANALYST_MODE_PRESETS, type AnalystModePresetId } from "../lib/analystModePresets";
 import { normalizeInternalAssetCidrRange } from "../lib/internalAssetPolicy";
 
-const API_KEY_FIELD_SLOTS: ApiKeySlot[] = [
-  ...OPTIONS_API_KEY_SLOTS,
-  CENSYS_SECRET_API_KEY_SLOT,
-];
+const API_KEY_FIELD_SLOTS: ApiKeySlot[] = [...OPTIONS_API_KEY_SLOTS, CENSYS_SECRET_API_KEY_SLOT];
 
 const INSTALL_QUICK_START_KEY_SLOTS = LIVE_ENRICHMENT_SOURCE_ORDER.filter(
   (sourceId): sourceId is ApiKeySlot => OPTIONS_API_KEY_SLOTS.includes(sourceId)
@@ -290,9 +284,10 @@ function createDefaultSourceEnabledState(): EnrichmentSourceEnabledRecord {
 }
 
 function createDefaultSourceCacheTtlDrafts(): Record<EnrichmentSourceId, string> {
-  return Object.fromEntries(
-    ENRICHMENT_SOURCE_ORDER.map((sourceId) => [sourceId, ""])
-  ) as Record<EnrichmentSourceId, string>;
+  return Object.fromEntries(ENRICHMENT_SOURCE_ORDER.map((sourceId) => [sourceId, ""])) as Record<
+    EnrichmentSourceId,
+    string
+  >;
 }
 
 function formatSourceCacheTtlDrafts(
@@ -315,21 +310,13 @@ function scrollToSection(id: string): void {
     return;
   }
   const behavior: ScrollBehavior =
-    typeof window !== "undefined" && prefersReducedMotion(window)
-      ? "auto"
-      : "smooth";
+    typeof window !== "undefined" && prefersReducedMotion(window) ? "auto" : "smooth";
   element.scrollIntoView({ behavior, block: "start" });
 }
 
 function CheckIcon() {
   return (
-    <svg
-      width="11"
-      height="11"
-      viewBox="0 0 12 12"
-      fill="none"
-      aria-hidden="true"
-    >
+    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
       <path
         d="M2.5 6.3 5 8.6l4.5-5"
         stroke="currentColor"
@@ -344,15 +331,7 @@ function CheckIcon() {
 function LockIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect
-        x="3"
-        y="7"
-        width="10"
-        height="6.5"
-        rx="1.5"
-        stroke="currentColor"
-        strokeWidth="1.3"
-      />
+      <rect x="3" y="7" width="10" height="6.5" rx="1.5" stroke="currentColor" strokeWidth="1.3" />
       <path
         d="M5.2 7V5.2a2.8 2.8 0 0 1 5.6 0V7"
         stroke="currentColor"
@@ -397,26 +376,14 @@ type ToggleRowProps = {
   onChange: (checked: boolean) => void;
 };
 
-function ToggleRow({
-  label,
-  hint,
-  ariaLabel,
-  checked,
-  disabled,
-  onChange,
-}: ToggleRowProps) {
+function ToggleRow({ label, hint, ariaLabel, checked, disabled, onChange }: ToggleRowProps) {
   return (
     <label className="v5-row" style={{ cursor: disabled ? "wait" : "pointer" }}>
       <span className="v5-row__text">
         <span className="v5-row__label">{label}</span>
         {hint ? <span className="v5-row__hint">{hint}</span> : null}
       </span>
-      <Switch
-        ariaLabel={ariaLabel}
-        checked={checked}
-        disabled={disabled}
-        onChange={onChange}
-      />
+      <Switch ariaLabel={ariaLabel} checked={checked} disabled={disabled} onChange={onChange} />
     </label>
   );
 }
@@ -473,9 +440,7 @@ function createEmptyOperatorMacroEditorDraft(): OperatorMacroEditorDraft {
   };
 }
 
-function operatorMacroEditorDraftFromMacro(
-  macro: OperatorMacro
-): OperatorMacroEditorDraft {
+function operatorMacroEditorDraftFromMacro(macro: OperatorMacro): OperatorMacroEditorDraft {
   return {
     id: macro.id,
     name: macro.name,
@@ -520,9 +485,7 @@ const OPERATOR_MACRO_IOC_SCOPE_LABEL: Record<string, string> = {
   [OPERATOR_MACRO_IOC_SCOPE.TRAY_FILTERED]: "Tray filtered",
 };
 
-function readOperatorMacroStepProviders(
-  params: Record<string, unknown>
-): EnrichmentSourceId[] {
+function readOperatorMacroStepProviders(params: Record<string, unknown>): EnrichmentSourceId[] {
   if (!Array.isArray(params.providers)) {
     return [];
   }
@@ -601,10 +564,7 @@ function OperatorMacroStepFieldsEditor({
       return (
         <>
           <div className="v5-field">
-            <label
-              className="v5-field__label"
-              htmlFor={`${step.clientId}-export-template`}
-            >
+            <label className="v5-field__label" htmlFor={`${step.clientId}-export-template`}>
               Export template
             </label>
             <select
@@ -626,10 +586,7 @@ function OperatorMacroStepFieldsEditor({
             </select>
           </div>
           <div className="v5-field">
-            <label
-              className="v5-field__label"
-              htmlFor={`${step.clientId}-export-destination`}
-            >
+            <label className="v5-field__label" htmlFor={`${step.clientId}-export-destination`}>
               Destination
             </label>
             <select
@@ -643,12 +600,8 @@ function OperatorMacroStepFieldsEditor({
               }
               onChange={(event) => patchParams({ destination: event.target.value })}
             >
-              <option value={OPERATOR_MACRO_EXPORT_DESTINATION.CLIPBOARD}>
-                Clipboard
-              </option>
-              <option value={OPERATOR_MACRO_EXPORT_DESTINATION.DOWNLOAD}>
-                Download
-              </option>
+              <option value={OPERATOR_MACRO_EXPORT_DESTINATION.CLIPBOARD}>Clipboard</option>
+              <option value={OPERATOR_MACRO_EXPORT_DESTINATION.DOWNLOAD}>Download</option>
             </select>
           </div>
           <div className="v5-field">
@@ -746,10 +699,7 @@ function OperatorMacroStepFieldsEditor({
       return (
         <>
           <div className="v5-field">
-            <label
-              className="v5-field__label"
-              htmlFor={`${step.clientId}-note-template-text`}
-            >
+            <label className="v5-field__label" htmlFor={`${step.clientId}-note-template-text`}>
               Template text
             </label>
             <textarea
@@ -758,9 +708,7 @@ function OperatorMacroStepFieldsEditor({
               rows={4}
               disabled={disabled}
               maxLength={MAX_OPERATOR_MACRO_NOTE_TEMPLATE_TEXT_LENGTH}
-              value={
-                typeof step.params.templateText === "string" ? step.params.templateText : ""
-              }
+              value={typeof step.params.templateText === "string" ? step.params.templateText : ""}
               onChange={(event) => patchParams({ templateText: event.target.value })}
             />
           </div>
@@ -874,11 +822,7 @@ type OperatorMacroStepsEditorProps = {
   onChange: (steps: OperatorMacroStepDraft[]) => void;
 };
 
-function OperatorMacroStepsEditor({
-  steps,
-  disabled,
-  onChange,
-}: OperatorMacroStepsEditorProps) {
+function OperatorMacroStepsEditor({ steps, disabled, onChange }: OperatorMacroStepsEditorProps) {
   const [stepTypeToAdd, setStepTypeToAdd] = useState<OperatorMacroStepTypeV1>(
     OPERATOR_MACRO_STEP_TYPE.ENRICH
   );
@@ -964,10 +908,7 @@ function OperatorMacroStepsEditor({
               <li key={step.clientId} className="v5-domain-list__item">
                 <div style={{ display: "grid", gap: 12, flex: 1 }}>
                   <div className="v5-field" style={{ margin: 0 }}>
-                    <label
-                      className="v5-field__label"
-                      htmlFor={`${step.clientId}-step-type`}
-                    >
+                    <label className="v5-field__label" htmlFor={`${step.clientId}-step-type`}>
                       Step {index + 1}
                     </label>
                     <select
@@ -992,9 +933,7 @@ function OperatorMacroStepsEditor({
                   <OperatorMacroStepFieldsEditor
                     step={step}
                     disabled={disabled}
-                    onParamsChange={(params) =>
-                      updateStep(step.clientId, { params })
-                    }
+                    onParamsChange={(params) => updateStep(step.clientId, { params })}
                   />
                   {stepError ? (
                     <span className="v5-status v5-status--error" role="alert">
@@ -1110,23 +1049,17 @@ function OperatorMacrosListEditor({
         <ul className="v5-domain-list" aria-label="Operator macros">
           {macros.map((macro, index) => {
             const builtIn = macro.metadata.builtIn;
-            const stepLabel =
-              macro.steps.length === 1 ? "1 step" : `${macro.steps.length} steps`;
+            const stepLabel = macro.steps.length === 1 ? "1 step" : `${macro.steps.length} steps`;
             return (
               <li key={macro.id} className="v5-domain-list__item">
                 <div style={{ display: "grid", gap: 4, flex: 1 }}>
                   <span>
-                    <strong>{macro.name}</strong>{" "}
-                    <code>{macro.id}</code>
-                    {builtIn ? (
-                      <span className="v5-status v5-status--muted"> Built-in</span>
-                    ) : null}
+                    <strong>{macro.name}</strong> <code>{macro.id}</code>
+                    {builtIn ? <span className="v5-status v5-status--muted"> Built-in</span> : null}
                   </span>
                   <span className="v5-row__hint" style={{ margin: 0 }}>
                     {stepLabel} · {formatOperatorMacroTriggerSummary(macro.triggers)}
-                    {macro.metadata.description
-                      ? ` · ${macro.metadata.description}`
-                      : ""}
+                    {macro.metadata.description ? ` · ${macro.metadata.description}` : ""}
                   </span>
                 </div>
                 <div className="v5-actions" style={{ flexWrap: "wrap" }}>
@@ -1215,10 +1148,7 @@ function DomainPolicyListEditor({
   return (
     <div className="v5-field">
       <span className="v5-field__label">{label}</span>
-      <span
-        className="v5-status v5-status--muted"
-        style={{ display: "block", marginBottom: 8 }}
-      >
+      <span className="v5-status v5-status--muted" style={{ display: "block", marginBottom: 8 }}>
         {hint}
       </span>
       <form
@@ -1299,10 +1229,7 @@ function InternalAssetVendorLabelListEditor({
   return (
     <div className="v5-field">
       <span className="v5-field__label">{label}</span>
-      <span
-        className="v5-status v5-status--muted"
-        style={{ display: "block", marginBottom: 8 }}
-      >
+      <span className="v5-status v5-status--muted" style={{ display: "block", marginBottom: 8 }}>
         {hint}
       </span>
       <form
@@ -1345,10 +1272,7 @@ function InternalAssetVendorLabelListEditor({
       ) : (
         <ul className="v5-domain-list" aria-label={`${label} entries`}>
           {entries.map((entry) => (
-            <li
-              key={`${entry.label}::${entry.pattern}`}
-              className="v5-domain-list__item"
-            >
+            <li key={`${entry.label}::${entry.pattern}`} className="v5-domain-list__item">
               <code>
                 {entry.label} ({entry.pattern})
               </code>
@@ -1397,9 +1321,7 @@ function ApiKeyField({
   onPersist,
   onSaved,
 }: ApiKeyFieldProps) {
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
-    "idle"
-  );
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [revealed, setRevealed] = useState(false);
   const latestDraftRef = useRef(fieldState.draft);
   const latestEditingRef = useRef(fieldState.editing);
@@ -1575,9 +1497,7 @@ export function Options() {
   const operatorMacroPackImportInputRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [activeSection, setActiveSection] = useState("overview");
-  const [collapsedSections, setCollapsedSections] = useState<
-    Record<string, boolean>
-  >(() => ({
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>(() => ({
     overview: true,
     scanning: true,
     indicators: true,
@@ -1596,75 +1516,59 @@ export function Options() {
   const [quietModeActive, setQuietModeActiveState] = useState(false);
   const [enrichmentSourceEnabled, setEnrichmentSourceEnabledState] =
     useState<EnrichmentSourceEnabledRecord>(createDefaultSourceEnabledState());
-  const [iocTypeEnabled, setIocTypeEnabledState] =
-    useState<IocTypeEnabledRecord>(createDefaultIocTypeEnabledState());
+  const [iocTypeEnabled, setIocTypeEnabledState] = useState<IocTypeEnabledRecord>(
+    createDefaultIocTypeEnabledState()
+  );
   const [includePrivateIpv4, setIncludePrivateIpv4State] = useState(false);
   const [localBackendEnabled, setLocalBackendEnabledState] = useState(false);
   const [localLlmSummaryEnabled, setLocalLlmSummaryEnabledState] = useState(false);
-  const [attributeHrefExtractionEnabled, setAttributeHrefExtractionEnabledState] =
-    useState(false);
+  const [attributeHrefExtractionEnabled, setAttributeHrefExtractionEnabledState] = useState(false);
   const [
     attributeHrefExtractionConsentAcknowledged,
     setAttributeHrefExtractionConsentAcknowledgedState,
   ] = useState(false);
-  const [showAttributeHrefConsentDialog, setShowAttributeHrefConsentDialog] =
-    useState(false);
-  const [rememberSiteChoicesOnConfirm, setRememberSiteChoicesOnConfirm] =
-    useState(false);
+  const [showAttributeHrefConsentDialog, setShowAttributeHrefConsentDialog] = useState(false);
+  const [rememberSiteChoicesOnConfirm, setRememberSiteChoicesOnConfirm] = useState(false);
   const [
     attributeHrefExtractionRememberSiteChoices,
     setAttributeHrefExtractionRememberSiteChoicesState,
   ] = useState(false);
-  const [
-    attributeHrefExtractionSitePreferences,
-    setAttributeHrefExtractionSitePreferencesState,
-  ] = useState<AttributeHrefSitePreferencesRecord>({});
+  const [attributeHrefExtractionSitePreferences, setAttributeHrefExtractionSitePreferencesState] =
+    useState<AttributeHrefSitePreferencesRecord>({});
   const [attributeHrefSitePreferenceHostDraft, setAttributeHrefSitePreferenceHostDraft] =
     useState("");
   const [attributeHrefSitePreferenceModeDraft, setAttributeHrefSitePreferenceModeDraft] =
     useState<AttributeHrefSitePreference>("off");
-  const [
-    pageContextSiteModeOverrides,
-    setPageContextSiteModeOverridesState,
-  ] = useState<PageContextSiteModeOverridesRecord>({});
+  const [pageContextSiteModeOverrides, setPageContextSiteModeOverridesState] =
+    useState<PageContextSiteModeOverridesRecord>({});
   const [pageContextSiteModeOverrideHostDraft, setPageContextSiteModeOverrideHostDraft] =
     useState("");
   const [pageContextSiteModeOverrideTypeDraft, setPageContextSiteModeOverrideTypeDraft] =
     useState<PageContextType>(PAGE_CONTEXT_TYPE.SOC_DASHBOARD);
-  const [activeTabPageContextOverrideHost, setActiveTabPageContextOverrideHost] =
-    useState<string | null>(null);
-  const [showDisabledSourcesInWorkspace, setShowDisabledSourcesInWorkspaceState] =
-    useState(false);
+  const [activeTabPageContextOverrideHost, setActiveTabPageContextOverrideHost] = useState<
+    string | null
+  >(null);
+  const [showDisabledSourcesInWorkspace, setShowDisabledSourcesInWorkspaceState] = useState(false);
   const [showPreQueryNotices, setShowPreQueryNoticesState] = useState(true);
-  const [, setPreQueryNoticePreferenceConfiguredState] =
-    useState(false);
-  const [installQuickStartCompleted, setInstallQuickStartCompletedState] =
-    useState(true);
+  const [, setPreQueryNoticePreferenceConfiguredState] = useState(false);
+  const [installQuickStartCompleted, setInstallQuickStartCompletedState] = useState(true);
   const [quickStartStep, setQuickStartStep] = useState<InstallQuickStartStep>(0);
   const [domainPolicyMode, setDomainPolicyModeState] = useState<DomainPolicyMode>(
     DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT
   );
   const [domainAllowlist, setDomainAllowlistState] = useState<string[]>([]);
   const [domainDenylist, setDomainDenylistState] = useState<string[]>([]);
-  const [domainPolicyEnrichGateEnabled, setDomainPolicyEnrichGateEnabledState] =
-    useState(true);
-  const [internalAssetEnrichGateEnabled, setInternalAssetEnrichGateEnabledState] =
-    useState(true);
-  const [internalAssetDomains, setInternalAssetDomainsState] = useState<string[]>(
-    []
-  );
-  const [internalAssetCidrRanges, setInternalAssetCidrRangesState] = useState<
-    string[]
-  >([]);
+  const [domainPolicyEnrichGateEnabled, setDomainPolicyEnrichGateEnabledState] = useState(true);
+  const [internalAssetEnrichGateEnabled, setInternalAssetEnrichGateEnabledState] = useState(true);
+  const [internalAssetDomains, setInternalAssetDomainsState] = useState<string[]>([]);
+  const [internalAssetCidrRanges, setInternalAssetCidrRangesState] = useState<string[]>([]);
   const [internalAssetVendorLabels, setInternalAssetVendorLabelsState] = useState<
     InternalAssetVendorLabelEntry[]
   >([]);
   const [internalAssetDomainDraft, setInternalAssetDomainDraft] = useState("");
   const [internalAssetCidrDraft, setInternalAssetCidrDraft] = useState("");
-  const [internalAssetVendorLabelDraft, setInternalAssetVendorLabelDraft] =
-    useState("");
-  const [internalAssetVendorPatternDraft, setInternalAssetVendorPatternDraft] =
-    useState("");
+  const [internalAssetVendorLabelDraft, setInternalAssetVendorLabelDraft] = useState("");
+  const [internalAssetVendorPatternDraft, setInternalAssetVendorPatternDraft] = useState("");
   const [analystModePresetId, setAnalystModePresetIdState] = useState("");
   const [allowlistDraft, setAllowlistDraft] = useState("");
   const [denylistDraft, setDenylistDraft] = useState("");
@@ -1675,47 +1579,41 @@ export function Options() {
     Record<EnrichmentSourceId, string>
   >(createDefaultSourceCacheTtlDrafts());
   const [includeApiKeysInExport, setIncludeApiKeysInExport] = useState(false);
-  const [clearCacheState, setClearCacheState] = useState<
-    "idle" | "clearing" | "cleared" | "error"
-  >("idle");
-  const [exportState, setExportState] = useState<
-    "idle" | "exporting" | "exported" | "error"
-  >("idle");
+  const [clearCacheState, setClearCacheState] = useState<"idle" | "clearing" | "cleared" | "error">(
+    "idle"
+  );
+  const [exportState, setExportState] = useState<"idle" | "exporting" | "exported" | "error">(
+    "idle"
+  );
   const [settingsPackExportState, setSettingsPackExportState] = useState<
     "idle" | "exporting" | "exported" | "error"
   >("idle");
   const [settingsPackImportPreview, setSettingsPackImportPreview] =
     useState<SettingsPackImportPreview | null>(null);
-  const [settingsPackImportRawJson, setSettingsPackImportRawJson] = useState<
-    string | null
-  >(null);
+  const [settingsPackImportRawJson, setSettingsPackImportRawJson] = useState<string | null>(null);
   const [settingsPackImportState, setSettingsPackImportState] = useState<
     "idle" | "importing" | "imported" | "error"
   >("idle");
-  const [importState, setImportState] = useState<
-    "idle" | "importing" | "imported" | "error"
-  >("idle");
+  const [importState, setImportState] = useState<"idle" | "importing" | "imported" | "error">(
+    "idle"
+  );
   const [fieldStates, setFieldStates] = useState<Record<ApiKeySlot, ApiKeyFieldState>>(
     createEmptyApiKeyFieldStates()
   );
   const [operatorMacros, setOperatorMacros] = useState<OperatorMacro[]>([]);
-  const [operatorMacroEditorMode, setOperatorMacroEditorMode] = useState<
-    "create" | "edit" | null
-  >(null);
-  const [operatorMacroEditorTargetId, setOperatorMacroEditorTargetId] = useState<
-    string | null
-  >(null);
+  const [operatorMacroEditorMode, setOperatorMacroEditorMode] = useState<"create" | "edit" | null>(
+    null
+  );
+  const [operatorMacroEditorTargetId, setOperatorMacroEditorTargetId] = useState<string | null>(
+    null
+  );
   const [operatorMacroEditorDraft, setOperatorMacroEditorDraft] =
     useState<OperatorMacroEditorDraft>(createEmptyOperatorMacroEditorDraft());
-  const [operatorMacroEditorError, setOperatorMacroEditorError] = useState<
-    string | null
-  >(null);
+  const [operatorMacroEditorError, setOperatorMacroEditorError] = useState<string | null>(null);
   const [operatorMacroActionState, setOperatorMacroActionState] = useState<
     "idle" | "busy" | "error"
   >("idle");
-  const [operatorMacroFeedback, setOperatorMacroFeedback] = useState<string | null>(
-    null
-  );
+  const [operatorMacroFeedback, setOperatorMacroFeedback] = useState<string | null>(null);
   const [operatorMacroPackExportState, setOperatorMacroPackExportState] = useState<
     "idle" | "exporting" | "exported" | "error"
   >("idle");
@@ -1842,9 +1740,7 @@ export function Options() {
           setPageContextSiteModeOverridesState(pageContextSiteModeOverridesValue);
           setShowDisabledSourcesInWorkspaceState(showDisabledSourcesValue);
           setShowPreQueryNoticesState(showPreQueryNoticesValue);
-          setPreQueryNoticePreferenceConfiguredState(
-            preQueryNoticePreferenceConfiguredValue
-          );
+          setPreQueryNoticePreferenceConfiguredState(preQueryNoticePreferenceConfiguredValue);
           setInstallQuickStartCompletedState(installQuickStartCompletedValue);
           setDomainPolicyModeState(domainPolicyModeValue);
           setDomainAllowlistState(domainAllowlistValue);
@@ -1856,12 +1752,8 @@ export function Options() {
           setInternalAssetVendorLabelsState(internalAssetVendorLabelsValue);
           setAnalystModePresetIdState(analystModePresetIdValue);
           setGlobalCacheTtlSecondsState(String(globalCacheTtlValue));
-          setSourceCacheTtlDraftsState(
-            formatSourceCacheTtlDrafts(sourceCacheTtlValue)
-          );
-          setFieldStates(
-            Object.fromEntries(entries) as Record<ApiKeySlot, ApiKeyFieldState>
-          );
+          setSourceCacheTtlDraftsState(formatSourceCacheTtlDrafts(sourceCacheTtlValue));
+          setFieldStates(Object.fromEntries(entries) as Record<ApiKeySlot, ApiKeyFieldState>);
           setReady(true);
         }
       )
@@ -1876,9 +1768,7 @@ export function Options() {
     }
 
     void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-      const host = tab?.url
-        ? normalizePageContextSiteModeOverrideHost(tab.url)
-        : "";
+      const host = tab?.url ? normalizePageContextSiteModeOverrideHost(tab.url) : "";
       setActiveTabPageContextOverrideHost(host.length > 0 ? host : null);
     });
   }, [ready, pageContextSiteModeOverrides]);
@@ -1901,19 +1791,14 @@ export function Options() {
   ]);
 
   useEffect(() => {
-    if (
-      typeof IntersectionObserver === "undefined" ||
-      typeof document === "undefined"
-    ) {
+    if (typeof IntersectionObserver === "undefined" || typeof document === "undefined") {
       return;
     }
     const observer = new IntersectionObserver(
       (observerEntries) => {
         const visible = observerEntries
           .filter((entry) => entry.isIntersecting)
-          .sort(
-            (a, b) => a.boundingClientRect.top - b.boundingClientRect.top
-          );
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
         if (visible[0]?.target.id) {
           setActiveSection(visible[0].target.id);
         }
@@ -2047,9 +1932,7 @@ export function Options() {
   };
 
   const handleAddPageContextSiteModeOverride = () => {
-    const host = normalizePageContextSiteModeOverrideHost(
-      pageContextSiteModeOverrideHostDraft
-    );
+    const host = normalizePageContextSiteModeOverrideHost(pageContextSiteModeOverrideHostDraft);
     if (!host || pageContextSiteModeOverrides[host]) {
       setPageContextSiteModeOverrideHostDraft("");
       return;
@@ -2146,9 +2029,7 @@ export function Options() {
       return;
     }
     if (
-      internalAssetVendorLabels.some(
-        (entry) => entry.label === label && entry.pattern === pattern
-      )
+      internalAssetVendorLabels.some((entry) => entry.label === label && entry.pattern === pattern)
     ) {
       setInternalAssetVendorLabelDraft("");
       setInternalAssetVendorPatternDraft("");
@@ -2161,9 +2042,7 @@ export function Options() {
     void setInternalAssetVendorLabels(next);
   };
 
-  const handleRemoveInternalAssetVendorLabel = (
-    entry: InternalAssetVendorLabelEntry
-  ) => {
+  const handleRemoveInternalAssetVendorLabel = (entry: InternalAssetVendorLabelEntry) => {
     const next = internalAssetVendorLabels.filter(
       (item) => !(item.label === entry.label && item.pattern === entry.pattern)
     );
@@ -2322,9 +2201,7 @@ export function Options() {
       return;
     }
 
-    const existing = operatorMacros.find(
-      (macro) => macro.id === operatorMacroEditorTargetId
-    );
+    const existing = operatorMacros.find((macro) => macro.id === operatorMacroEditorTargetId);
     if (!existing || existing.metadata.builtIn) {
       setOperatorMacroActionState("error");
       setOperatorMacroEditorError("Macro could not be found.");
@@ -2501,9 +2378,7 @@ export function Options() {
       });
   };
 
-  const handleOperatorMacroPackImportFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleOperatorMacroPackImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) {
@@ -2565,10 +2440,7 @@ export function Options() {
   const handleQuickStartKeySaved = (slot: ApiKeySlot, value: string) => {
     handleSaved(slot, value);
     const trimmed = value.trim();
-    if (
-      trimmed.length > 0 &&
-      INSTALL_QUICK_START_KEY_SLOTS.includes(slot)
-    ) {
+    if (trimmed.length > 0 && INSTALL_QUICK_START_KEY_SLOTS.includes(slot)) {
       setEnrichmentSourceEnabledState((current) => ({
         ...current,
         [slot]: true,
@@ -2604,10 +2476,7 @@ export function Options() {
       return;
     }
 
-    const parsed = readStoredCacheTtlSeconds(
-      raw,
-      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS
-    );
+    const parsed = readStoredCacheTtlSeconds(raw, DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS);
     setSourceCacheTtlDraftsState((current) => ({
       ...current,
       [sourceId]: String(parsed),
@@ -2681,9 +2550,7 @@ export function Options() {
       });
   };
 
-  const handleSettingsPackImportFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleSettingsPackImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) {
@@ -2716,9 +2583,7 @@ export function Options() {
     importInputRef.current?.click();
   };
 
-  const handleImportFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) {
@@ -2900,105 +2765,7 @@ export function Options() {
         <aside className="v5-sidebar">
           <div className="v5-brand">
             <span className="v5-brand__mark" aria-hidden="true">
-              <svg
-                className="v5-brand__logo"
-                viewBox="0 0 1197 1178"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <line
-                  x1="7.5"
-                  y1="-7.5"
-                  x2="438.506"
-                  y2="-7.5"
-                  transform="matrix(-0.999985 -0.00550504 0.00392659 -0.999992 833.294 307.353)"
-                  stroke="#FFB224"
-                  strokeWidth="15"
-                  strokeLinecap="round"
-                />
-                <line
-                  x1="387.294"
-                  y1="251.583"
-                  x2="830.294"
-                  y2="251.583"
-                  stroke="#FFB224"
-                  strokeWidth="15"
-                />
-                <path
-                  d="M586.763 776.721L585.966 777.324L4.29366 8.68633L5.09106 8.08289L586.763 776.721Z"
-                  fill="#FFB224"
-                />
-                <path
-                  d="M596.09 778.804L595.299 778.192L1193.29 4.08288L1194.09 4.69421L596.09 778.804Z"
-                  fill="#FFB224"
-                />
-                <line
-                  x1="394.794"
-                  y1="247.083"
-                  x2="394.794"
-                  y2="319.083"
-                  stroke="#FFB224"
-                  strokeWidth="15"
-                />
-                <path
-                  d="M828.797 317.442L598.768 528.083"
-                  stroke="#FFB224"
-                  strokeWidth="15"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M593.757 528.083L400.323 345.328"
-                  stroke="#FFB224"
-                  strokeWidth="15"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M494.198 363.761L707.501 366.692L599.831 469.234L494.198 363.761Z"
-                  fill="#262D36"
-                  stroke="#FFB224"
-                  strokeWidth="15"
-                />
-                <path
-                  d="M587.794 590.583L585.794 775.583L20.2936 28.0829L587.794 590.583Z"
-                  fill="#262D36"
-                  stroke="#13171C"
-                  strokeWidth="12"
-                />
-                <path
-                  d="M1173.29 31.5829L587.794 1164.08L23.2936 33.5829L584.294 775.083L586.794 780.083H594.794L1173.29 31.5829Z"
-                  fill="#1A2027"
-                  stroke="#13171C"
-                />
-                <path
-                  d="M596.784 585.461C598.745 587.406 598.758 590.571 596.814 592.532C594.87 594.493 591.704 594.506 589.743 592.562L1.84403 9.60348C-0.116813 7.65911 -0.130171 4.49332 1.81419 2.53248C3.75856 0.571633 6.92435 0.558275 8.8852 2.50264L596.784 585.461Z"
-                  fill="#FFB224"
-                />
-                <path
-                  d="M591.005 1170.14C592.239 1172.61 591.237 1175.61 588.767 1176.85C586.296 1178.08 583.293 1177.08 582.059 1174.61L0.528187 10.5558C-0.705917 8.08547 0.296229 5.08245 2.76654 3.84834C5.23686 2.61424 8.23988 3.61638 9.47398 6.0867L591.005 1170.14Z"
-                  fill="#FFB224"
-                />
-                <path
-                  d="M598.794 590.583L597.298 775.078L1174.79 28.0829L598.794 590.583Z"
-                  fill="#262D36"
-                />
-                <path
-                  d="M597.294 775.583L598.794 590.583L1174.79 28.0829L597.294 775.083"
-                  stroke="#13171C"
-                  strokeWidth="12"
-                />
-                <path
-                  d="M1187.73 1.42334C1189.7 -0.506288 1192.87 -0.469239 1194.8 1.5061C1196.73 3.48145 1196.69 6.64706 1194.72 8.57669L596.87 592.589C594.895 594.519 591.729 594.482 589.8 592.506C587.87 590.531 587.907 587.365 589.882 585.436L1187.73 1.42334Z"
-                  fill="#FFB224"
-                />
-                <path
-                  d="M1187.11 4.9312C1188.38 2.47845 1191.4 1.51793 1193.85 2.78614C1196.31 4.05435 1197.27 7.07105 1196 9.52399L593.59 1174.64C592.322 1177.09 589.305 1178.05 586.852 1176.79C584.399 1175.52 583.439 1172.5 584.707 1170.05L1187.11 4.9312Z"
-                  fill="#FFB224"
-                />
-                <path
-                  d="M593.346 1166.93L583.346 1166.85L588.294 584.04L598.293 584.125L593.346 1166.93Z"
-                  fill="#FFB224"
-                />
-              </svg>
+              <img className="v5-brand__logo" src="icons/logo-mark.png" alt="" />
             </span>
             <span>
               <span className="v5-brand__name">
@@ -3047,10 +2814,7 @@ export function Options() {
           </header>
 
           {showInstallQuickStart ? (
-            <section
-              className="v5-card"
-              aria-labelledby="install-quick-start-heading"
-            >
+            <section className="v5-card" aria-labelledby="install-quick-start-heading">
               <div className="v5-card__head">
                 <p className="v5-card__desc" style={{ marginBottom: 8 }}>
                   Step {quickStartStep + 1} of {INSTALL_QUICK_START_STEP_LABELS.length}
@@ -3062,47 +2826,41 @@ export function Options() {
                 </h2>
                 {quickStartStep === 0 ? (
                   <p className="v5-card__desc">
-                    Vera5 runs locally in your browser—no Vera5-operated
-                    telemetry and no full-page upload. Pin the toolbar action,
-                    open an <code>http://</code> or <code>https://</code> page,
-                    and use <strong>Scan page</strong> from the popup or{" "}
-                    <strong>Ctrl+Shift+Y</strong> / <strong>Cmd+Shift+Y</strong>.
-                    Detection and highlighting work without API keys; live
-                    enrichment is optional. Serve the repository{" "}
-                    <code>examples/</code> folder over HTTP to try fixture pages.
+                    Vera5 runs locally in your browser—no Vera5-operated telemetry and no full-page
+                    upload. Pin the toolbar action, open an <code>http://</code> or{" "}
+                    <code>https://</code> page, and use <strong>Scan page</strong> from the popup or{" "}
+                    <strong>Ctrl+Shift+Y</strong> / <strong>Cmd+Shift+Y</strong>. Detection and
+                    highlighting work without API keys; live enrichment is optional. Serve the
+                    repository <code>examples/</code> folder over HTTP to try fixture pages.
                   </p>
                 ) : null}
                 {quickStartStep === 1 ? (
                   <p className="v5-card__desc">
                     Bring your own API keys for live enrichment. Keys stay in{" "}
-                    <code>chrome.storage.local</code> on this profile—Vera5 does
-                    not operate a shared enrichment backend. Only detected
-                    indicator values are sent to vendors you enable—not full page
-                    content. Only <strong>AbuseIPDB</strong>,{" "}
+                    <code>chrome.storage.local</code> on this profile—Vera5 does not operate a
+                    shared enrichment backend. Only detected indicator values are sent to vendors
+                    you enable—not full page content. Only <strong>AbuseIPDB</strong>,{" "}
                     <strong>OTX</strong>, <strong>URLScan.io</strong>, and{" "}
-                    <strong>GreyNoise</strong> perform live HTTPS queries today;
-                    add keys later under <strong>API keys</strong> if you skip
-                    this step.
+                    <strong>GreyNoise</strong> perform live HTTPS queries today; add keys later
+                    under <strong>API keys</strong> if you skip this step.
                   </p>
                 ) : null}
                 {quickStartStep === 2 ? (
                   <p className="v5-card__desc">
-                    <strong>Manual-only enrichment</strong> is the recommended
-                    default and stays on unless you turn it off below. Live threat
-                    intelligence runs only when you use the enrich control on a
-                    highlight—not when you open a card or scan a page.
+                    <strong>Manual-only enrichment</strong> is the recommended default and stays on
+                    unless you turn it off below. Live threat intelligence runs only when you use
+                    the enrich control on a highlight—not when you open a card or scan a page.
                     Auto-scan on page load stays off until you enable it under{" "}
                     <strong>Scanning</strong>.
                   </p>
                 ) : null}
                 {quickStartStep === 3 ? (
                   <p className="v5-card__desc">
-                    Trust controls ship with conservative defaults: domain and
-                    internal-asset enrich gates on, sensitive webmail patterns
-                    blocked, and auto-scan off. Choose whether to show a short
-                    notice before each live vendor query. With manual-only
-                    enrichment, queries still require your enrich action even
-                    when notices are dismissed.
+                    Trust controls ship with conservative defaults: domain and internal-asset enrich
+                    gates on, sensitive webmail patterns blocked, and auto-scan off. Choose whether
+                    to show a short notice before each live vendor query. With manual-only
+                    enrichment, queries still require your enrich action even when notices are
+                    dismissed.
                   </p>
                 ) : null}
               </div>
@@ -3112,9 +2870,7 @@ export function Options() {
                     <li className="v5-domain-list__item">
                       Load unpacked from <code>extension/dist/</code>
                     </li>
-                    <li className="v5-domain-list__item">
-                      Pin the Vera5 toolbar action
-                    </li>
+                    <li className="v5-domain-list__item">Pin the Vera5 toolbar action</li>
                     <li className="v5-domain-list__item">
                       Open a page tab and run <strong>Scan page</strong>
                     </li>
@@ -3153,13 +2909,11 @@ export function Options() {
                       style={{ marginTop: 16 }}
                     >
                       <li className="v5-domain-list__item">
-                        Auto-scan on page changes:{" "}
-                        {autoScanEnabled ? "on" : "off (recommended)"}
+                        Auto-scan on page changes: {autoScanEnabled ? "on" : "off (recommended)"}
                       </li>
                       <li className="v5-domain-list__item">
-                        Live enrichment sources: none enabled until you save a
-                        key and turn a source on, or enable keyless{" "}
-                        <strong>RDAP/WHOIS</strong> for domain registration
+                        Live enrichment sources: none enabled until you save a key and turn a source
+                        on, or enable keyless <strong>RDAP/WHOIS</strong> for domain registration
                         lookups
                       </li>
                     </ul>
@@ -3167,33 +2921,25 @@ export function Options() {
                 ) : null}
                 {quickStartStep === 3 ? (
                   <div>
-                    <ul
-                      className="v5-domain-list"
-                      aria-label="Default trust settings"
-                    >
+                    <ul className="v5-domain-list" aria-label="Default trust settings">
                       <li className="v5-domain-list__item">
-                        Domain policy: allow by default with a sensitive webmail
-                        denylist ({domainDenylist.length} host patterns)
+                        Domain policy: allow by default with a sensitive webmail denylist (
+                        {domainDenylist.length} host patterns)
                       </li>
                       <li className="v5-domain-list__item">
-                        Domain enrich gate:{" "}
-                        {domainPolicyEnrichGateEnabled ? "on" : "off"}
+                        Domain enrich gate: {domainPolicyEnrichGateEnabled ? "on" : "off"}
                       </li>
                       <li className="v5-domain-list__item">
-                        Internal asset enrich gate:{" "}
-                        {internalAssetEnrichGateEnabled ? "on" : "off"}
+                        Internal asset enrich gate: {internalAssetEnrichGateEnabled ? "on" : "off"}
                       </li>
                       <li className="v5-domain-list__item">
-                        Auto-scan on page changes:{" "}
-                        {autoScanEnabled ? "on" : "off (default)"}
+                        Auto-scan on page changes: {autoScanEnabled ? "on" : "off (default)"}
                       </li>
                     </ul>
                     <p className="v5-row__hint" style={{ marginTop: 16 }}>
-                      Pre-query notices name enabled vendors and the indicator
-                      value before a live fetch. Adjust domain policy, internal
-                      assets, and scanning under{" "}
-                      <strong>Trust &amp; Consent</strong> and{" "}
-                      <strong>Scanning</strong>.
+                      Pre-query notices name enabled vendors and the indicator value before a live
+                      fetch. Adjust domain policy, internal assets, and scanning under{" "}
+                      <strong>Trust &amp; Consent</strong> and <strong>Scanning</strong>.
                     </p>
                     <div
                       style={{
@@ -3206,18 +2952,14 @@ export function Options() {
                       <button
                         type="button"
                         className="v5-btn v5-btn--primary"
-                        onClick={() =>
-                          handlePreQueryNoticeFirstRunChoice(true)
-                        }
+                        onClick={() => handlePreQueryNoticeFirstRunChoice(true)}
                       >
                         Show pre-query notices (recommended)
                       </button>
                       <button
                         type="button"
                         className="v5-btn v5-btn--ghost"
-                        onClick={() =>
-                          handlePreQueryNoticeFirstRunChoice(false)
-                        }
+                        onClick={() => handlePreQueryNoticeFirstRunChoice(false)}
                       >
                         Skip pre-query notices
                       </button>
@@ -3225,19 +2967,13 @@ export function Options() {
                   </div>
                 ) : null}
                 {quickStartStep < 3 ? (
-                  <div
-                    className="v5-actions"
-                    style={{ marginTop: quickStartStep === 0 ? 16 : 0 }}
-                  >
+                  <div className="v5-actions" style={{ marginTop: quickStartStep === 0 ? 16 : 0 }}>
                     {quickStartStep > 0 ? (
                       <button
                         type="button"
                         className="v5-btn v5-btn--ghost"
                         onClick={() =>
-                          setQuickStartStep(
-                            (current) =>
-                              (current - 1) as InstallQuickStartStep
-                          )
+                          setQuickStartStep((current) => (current - 1) as InstallQuickStartStep)
                         }
                       >
                         Back
@@ -3247,10 +2983,7 @@ export function Options() {
                       type="button"
                       className="v5-btn v5-btn--primary"
                       onClick={() =>
-                        setQuickStartStep(
-                          (current) =>
-                            (current + 1) as InstallQuickStartStep
-                        )
+                        setQuickStartStep((current) => (current + 1) as InstallQuickStartStep)
                       }
                     >
                       {quickStartStep === 1 ? "Continue without keys" : "Continue"}
@@ -3261,11 +2994,7 @@ export function Options() {
             </section>
           ) : null}
 
-          <section
-            id="overview"
-            className="v5-card"
-            aria-labelledby="overview-heading"
-          >
+          <section id="overview" className="v5-card" aria-labelledby="overview-heading">
             <div className="v5-card__head">
               <h2 id="overview-heading" className="v5-card__title">
                 <button
@@ -3280,15 +3009,10 @@ export function Options() {
                 </button>
               </h2>
               <p className="v5-card__desc">
-                A snapshot of how VERA5 is currently scanning and enriching this
-                browser.
+                A snapshot of how VERA5 is currently scanning and enriching this browser.
               </p>
             </div>
-            <div
-              id="overview-body"
-              className="v5-card__body"
-              hidden={collapsedSections.overview}
-            >
+            <div id="overview-body" className="v5-card__body" hidden={collapsedSections.overview}>
               <div className="v5-overview-grid">
                 <div className="v5-stat">
                   <div className="v5-stat__label">Indicator types</div>
@@ -3328,9 +3052,7 @@ export function Options() {
                 </div>
                 <div className="v5-stat">
                   <div className="v5-stat__label">Cache lifetime</div>
-                  <div className="v5-stat__value">
-                    {formatCacheTtl(parsedGlobalTtl)}
-                  </div>
+                  <div className="v5-stat__value">{formatCacheTtl(parsedGlobalTtl)}</div>
                   <div className="v5-chips">
                     <span className="v5-chip v5-chip--muted">
                       {autoScanEnabled ? "Auto-scan on" : "Auto-scan off"}
@@ -3354,11 +3076,7 @@ export function Options() {
             </div>
           </section>
 
-          <section
-            id="scanning"
-            className="v5-card"
-            aria-labelledby="scanning-heading"
-          >
+          <section id="scanning" className="v5-card" aria-labelledby="scanning-heading">
             <div className="v5-card__head">
               <h2 id="scanning-heading" className="v5-card__title">
                 <button
@@ -3372,15 +3090,9 @@ export function Options() {
                   <span className="v5-card__chevron" aria-hidden="true" />
                 </button>
               </h2>
-              <p className="v5-card__desc">
-                Control when VERA5 inspects pages for indicators.
-              </p>
+              <p className="v5-card__desc">Control when VERA5 inspects pages for indicators.</p>
             </div>
-            <div
-              id="scanning-body"
-              className="v5-card__body"
-              hidden={collapsedSections.scanning}
-            >
+            <div id="scanning-body" className="v5-card__body" hidden={collapsedSections.scanning}>
               <ToggleRow
                 label="Automatically scan when the page changes"
                 hint="When off, scan only with Scan page in the popup or the keyboard shortcut."
@@ -3392,11 +3104,7 @@ export function Options() {
             </div>
           </section>
 
-          <section
-            id="indicators"
-            className="v5-card"
-            aria-labelledby="indicators-heading"
-          >
+          <section id="indicators" className="v5-card" aria-labelledby="indicators-heading">
             <div className="v5-card__head">
               <h2 id="indicators-heading" className="v5-card__title">
                 <button
@@ -3411,8 +3119,8 @@ export function Options() {
                 </button>
               </h2>
               <p className="v5-card__desc">
-                Choose which indicator types Vera5 detects during page scans.
-                Disabled types are omitted from highlights and scan counts.
+                Choose which indicator types Vera5 detects during page scans. Disabled types are
+                omitted from highlights and scan counts.
               </p>
             </div>
             <div
@@ -3428,18 +3136,12 @@ export function Options() {
                       className="v5-ioc-card__input"
                       checked={iocTypeEnabled[iocType] !== false}
                       disabled={!ready}
-                      onChange={(event) =>
-                        handleIocTypeToggle(iocType, event.target.checked)
-                      }
+                      onChange={(event) => handleIocTypeToggle(iocType, event.target.checked)}
                       aria-label={`Enable ${IOC_TYPE_OPTION_LABELS[iocType]}`}
                     />
-                    <span className="v5-ioc-card__badge">
-                      {IOC_TYPE_CODES[iocType]}
-                    </span>
+                    <span className="v5-ioc-card__badge">{IOC_TYPE_CODES[iocType]}</span>
                     <span className="v5-ioc-card__text">
-                      <span className="v5-ioc-card__name">
-                        {IOC_TYPE_SHORT_LABELS[iocType]}
-                      </span>
+                      <span className="v5-ioc-card__name">{IOC_TYPE_SHORT_LABELS[iocType]}</span>
                     </span>
                     <span className="v5-ioc-card__check">
                       <CheckIcon />
@@ -3450,11 +3152,7 @@ export function Options() {
             </div>
           </section>
 
-          <section
-            id="sources"
-            className="v5-card"
-            aria-labelledby="sources-heading"
-          >
+          <section id="sources" className="v5-card" aria-labelledby="sources-heading">
             <div className="v5-card__head">
               <h2 id="sources-heading" className="v5-card__title">
                 <button
@@ -3469,16 +3167,11 @@ export function Options() {
                 </button>
               </h2>
               <p className="v5-card__desc">
-                Choose which threat intelligence sources Vera5 may use when
-                enrichment is available. Disabled sources stay off the hover card
-                and are not queried.
+                Choose which threat intelligence sources Vera5 may use when enrichment is available.
+                Disabled sources stay off the hover card and are not queried.
               </p>
             </div>
-            <div
-              id="sources-body"
-              className="v5-card__body"
-              hidden={collapsedSections.sources}
-            >
+            <div id="sources-body" className="v5-card__body" hidden={collapsedSections.sources}>
               <ToggleRow
                 label="Use local backend"
                 hint="When on, Vera5 routes enrichment through an optional FastAPI server on this machine (127.0.0.1). When off, enrichment runs inside the extension."
@@ -3515,9 +3208,7 @@ export function Options() {
                             {ENRICHMENT_SOURCE_LABELS[sourceId]}
                           </span>
                           <span className={`v5-badge ${status.className}`}>
-                            {status.withDot ? (
-                              <span className="v5-badge__dot" />
-                            ) : null}
+                            {status.withDot ? <span className="v5-badge__dot" /> : null}
                             {status.label}
                           </span>
                         </span>
@@ -3526,9 +3217,7 @@ export function Options() {
                           ariaLabel={`Enable ${ENRICHMENT_SOURCE_LABELS[sourceId]}`}
                           checked={enrichmentSourceEnabled[sourceId] === true}
                           disabled={!ready}
-                          onChange={(checked) =>
-                            handleSourceToggle(sourceId, checked)
-                          }
+                          onChange={(checked) => handleSourceToggle(sourceId, checked)}
                         />
                       </div>
                       <div className="v5-source__body">
@@ -3537,10 +3226,7 @@ export function Options() {
                         </p>
                         <div className="v5-source__row">
                           <label style={{ display: "block" }}>
-                            <span
-                              className="v5-field__label"
-                              style={{ marginBottom: 6 }}
-                            >
+                            <span className="v5-field__label" style={{ marginBottom: 6 }}>
                               Cache lifetime (seconds, optional)
                             </span>
                             <input
@@ -3582,20 +3268,13 @@ export function Options() {
                   );
                 })}
               </div>
-              <p
-                className="v5-status v5-status--muted"
-                style={{ marginTop: 12, marginBottom: 0 }}
-              >
+              <p className="v5-status v5-status--muted" style={{ marginTop: 12, marginBottom: 0 }}>
                 {ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE}
               </p>
             </div>
           </section>
 
-          <section
-            id="api-keys"
-            className="v5-card"
-            aria-labelledby="api-keys-heading"
-          >
+          <section id="api-keys" className="v5-card" aria-labelledby="api-keys-heading">
             <div className="v5-card__head">
               <h2 id="api-keys-heading" className="v5-card__title">
                 <button
@@ -3610,8 +3289,8 @@ export function Options() {
                 </button>
               </h2>
               <p className="v5-card__desc">
-                Keys are stored locally in your browser. Vera5 does not operate a
-                shared enrichment service or receive your credentials.
+                Keys are stored locally in your browser. Vera5 does not operate a shared enrichment
+                service or receive your credentials.
               </p>
             </div>
             <div
@@ -3664,9 +3343,8 @@ export function Options() {
                 </button>
               </h2>
               <p className="v5-card__desc">
-                Optional narrative summaries from a model you run on this machine.
-                Vera5 sends normalized enrichment JSON only—never page content or
-                API keys.
+                Optional narrative summaries from a model you run on this machine. Vera5 sends
+                normalized enrichment JSON only—never page content or API keys.
               </p>
             </div>
             <div
@@ -3685,11 +3363,7 @@ export function Options() {
             </div>
           </section>
 
-          <section
-            id="trust"
-            className="v5-card"
-            aria-labelledby="trust-heading"
-          >
+          <section id="trust" className="v5-card" aria-labelledby="trust-heading">
             <div className="v5-card__head">
               <h2 id="trust-heading" className="v5-card__title">
                 <button
@@ -3704,15 +3378,10 @@ export function Options() {
                 </button>
               </h2>
               <p className="v5-card__desc">
-                Control transparency before live enrichment queries leave this
-                browser.
+                Control transparency before live enrichment queries leave this browser.
               </p>
             </div>
-            <div
-              id="trust-body"
-              className="v5-card__body"
-              hidden={collapsedSections.trust}
-            >
+            <div id="trust-body" className="v5-card__body" hidden={collapsedSections.trust}>
               <ToggleRow
                 label="Quiet mode"
                 hint="When on, Vera5 blocks outbound live vendor enrichment. Use this in sensitive environments where threat-intel API calls must not leave the browser."
@@ -3727,14 +3396,13 @@ export function Options() {
                 style={{ marginBottom: 16 }}
               >
                 <li className="v5-domain-list__item">
-                  <strong>Blocked while on:</strong> live vendor enrichment,
-                  bulk enrich queues, and macro enrich steps that would call
-                  vendors.
+                  <strong>Blocked while on:</strong> live vendor enrichment, bulk enrich queues, and
+                  macro enrich steps that would call vendors.
                 </li>
                 <li className="v5-domain-list__item">
-                  <strong>Still available:</strong> local indicator detection and
-                  highlights, cached enrichment on hover cards, and opening
-                  attributed pivot links you choose in a new tab.
+                  <strong>Still available:</strong> local indicator detection and highlights, cached
+                  enrichment on hover cards, and opening attributed pivot links you choose in a new
+                  tab.
                 </li>
               </ul>
               <ToggleRow
@@ -3753,21 +3421,16 @@ export function Options() {
                 disabled={!ready || !attributeHrefExtractionEnabled}
                 onChange={handleAttributeHrefRememberSiteChoicesToggle}
               />
-              {attributeHrefExtractionEnabled &&
-              attributeHrefExtractionRememberSiteChoices ? (
+              {attributeHrefExtractionEnabled && attributeHrefExtractionRememberSiteChoices ? (
                 <fieldset className="v5-field" disabled={!ready}>
-                  <legend className="v5-field__label">
-                    Per-site attribute scan overrides
-                  </legend>
+                  <legend className="v5-field__label">Per-site attribute scan overrides</legend>
                   <span
                     className="v5-status v5-status--muted"
                     style={{ display: "block", marginBottom: 8 }}
                   >
-                    Hostnames saved here apply only when link attribute scanning
-                    is enabled globally. Use{" "}
-                    <strong>Never scan attributes</strong> on sensitive sites or{" "}
-                    <strong>Always scan attributes</strong> on trusted CTI paste
-                    hosts.
+                    Hostnames saved here apply only when link attribute scanning is enabled
+                    globally. Use <strong>Never scan attributes</strong> on sensitive sites or{" "}
+                    <strong>Always scan attributes</strong> on trusted CTI paste hosts.
                   </span>
                   <form
                     className="v5-actions"
@@ -3810,9 +3473,7 @@ export function Options() {
                   </form>
                   <ul className="v5-domain-list" aria-label="Per-site overrides">
                     {Object.entries(attributeHrefExtractionSitePreferences)
-                      .sort(([leftHost], [rightHost]) =>
-                        leftHost.localeCompare(rightHost)
-                      )
+                      .sort(([leftHost], [rightHost]) => leftHost.localeCompare(rightHost))
                       .map(([host, preference]) => (
                         <li key={host} className="v5-domain-list__item">
                           <span>
@@ -3826,9 +3487,7 @@ export function Options() {
                             type="button"
                             className="v5-btn v5-btn--link"
                             aria-label={`Remove ${host} attribute scan override`}
-                            onClick={() =>
-                              handleRemoveAttributeHrefSitePreference(host)
-                            }
+                            onClick={() => handleRemoveAttributeHrefSitePreference(host)}
                           >
                             Remove
                           </button>
@@ -3851,23 +3510,18 @@ export function Options() {
                   className="v5-status v5-status--muted"
                   style={{ display: "block", marginBottom: 8 }}
                 >
-                  Controls auto-scan and live enrichment on the current tab
-                  hostname. Pattern syntax supports exact hosts, prefix wildcards
-                  such as <code>mail.*</code>, and suffix wildcards such as{" "}
-                  <code>*.corp.example</code>.
+                  Controls auto-scan and live enrichment on the current tab hostname. Pattern syntax
+                  supports exact hosts, prefix wildcards such as <code>mail.*</code>, and suffix
+                  wildcards such as <code>*.corp.example</code>.
                 </span>
                 <div className="v5-domain-mode">
                   <label className="v5-domain-mode__option">
                     <input
                       type="radio"
                       name="domainPolicyMode"
-                      checked={
-                        domainPolicyMode === DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT
-                      }
+                      checked={domainPolicyMode === DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT}
                       onChange={() =>
-                        handleDomainPolicyModeChange(
-                          DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT
-                        )
+                        handleDomainPolicyModeChange(DOMAIN_POLICY_MODE_ALLOW_BY_DEFAULT)
                       }
                     />
                     <span className="v5-row__text">
@@ -3881,13 +3535,9 @@ export function Options() {
                     <input
                       type="radio"
                       name="domainPolicyMode"
-                      checked={
-                        domainPolicyMode === DOMAIN_POLICY_MODE_DENY_BY_DEFAULT
-                      }
+                      checked={domainPolicyMode === DOMAIN_POLICY_MODE_DENY_BY_DEFAULT}
                       onChange={() =>
-                        handleDomainPolicyModeChange(
-                          DOMAIN_POLICY_MODE_DENY_BY_DEFAULT
-                        )
+                        handleDomainPolicyModeChange(DOMAIN_POLICY_MODE_DENY_BY_DEFAULT)
                       }
                     />
                     <span className="v5-row__text">
@@ -3913,10 +3563,9 @@ export function Options() {
                   className="v5-status v5-status--muted"
                   style={{ display: "block", marginBottom: 8 }}
                 >
-                  Vera5 ships <strong>allow by default</strong> as the product
-                  default with a built-in sensitive webmail denylist. Presets
-                  merge additional patterns into your lists without removing
-                  entries you added manually.
+                  Vera5 ships <strong>allow by default</strong> as the product default with a
+                  built-in sensitive webmail denylist. Presets merge additional patterns into your
+                  lists without removing entries you added manually.
                 </span>
                 <div className="v5-presets">
                   {DOMAIN_POLICY_PRESETS.map((preset) => (
@@ -3984,10 +3633,9 @@ export function Options() {
                   className="v5-status v5-status--muted"
                   style={{ display: "block", marginBottom: 8 }}
                 >
-                  Block live enrichment when an indicator matches your known
-                  internal domains, IPv4 CIDR ranges, or labeled vendor/SaaS
-                  hostname patterns. Lists apply to the indicator value, not
-                  the page hostname.
+                  Block live enrichment when an indicator matches your known internal domains, IPv4
+                  CIDR ranges, or labeled vendor/SaaS hostname patterns. Lists apply to the
+                  indicator value, not the page hostname.
                 </span>
               </div>
               <ToggleRow
@@ -4040,9 +3688,8 @@ export function Options() {
                   className="v5-status v5-status--muted"
                   style={{ display: "block", marginBottom: 8 }}
                 >
-                  Save a page-type override per hostname. Overrides persist
-                  locally and adjust IOC priority, tray layout, and export
-                  defaults for that site.
+                  Save a page-type override per hostname. Overrides persist locally and adjust IOC
+                  priority, tray layout, and export defaults for that site.
                 </span>
                 {activeTabPageContextOverrideHost &&
                 pageContextSiteModeOverrides[activeTabPageContextOverrideHost] ? (
@@ -4055,9 +3702,7 @@ export function Options() {
                     <strong>
                       {
                         PAGE_CONTEXT_TYPE_LABEL[
-                          pageContextSiteModeOverrides[
-                            activeTabPageContextOverrideHost
-                          ]!
+                          pageContextSiteModeOverrides[activeTabPageContextOverrideHost]!
                         ]
                       }
                     </strong>{" "}
@@ -4067,9 +3712,7 @@ export function Options() {
                       className="v5-btn v5-btn--link"
                       aria-label={`Reset ${activeTabPageContextOverrideHost} to auto-detect`}
                       onClick={() =>
-                        handleRemovePageContextSiteModeOverride(
-                          activeTabPageContextOverrideHost
-                        )
+                        handleRemovePageContextSiteModeOverride(activeTabPageContextOverrideHost)
                       }
                     >
                       Reset to auto-detect
@@ -4099,9 +3742,7 @@ export function Options() {
                     aria-label="Page context override type"
                     value={pageContextSiteModeOverrideTypeDraft}
                     onChange={(event) =>
-                      setPageContextSiteModeOverrideTypeDraft(
-                        event.target.value as PageContextType
-                      )
+                      setPageContextSiteModeOverrideTypeDraft(event.target.value as PageContextType)
                     }
                   >
                     {PAGE_CONTEXT_TYPE_ORDER.map((pageContextType) => (
@@ -4130,14 +3771,9 @@ export function Options() {
                     </button>
                   </div>
                 ) : null}
-                <ul
-                  className="v5-domain-list"
-                  aria-label="Page context site overrides"
-                >
+                <ul className="v5-domain-list" aria-label="Page context site overrides">
                   {Object.entries(pageContextSiteModeOverrides)
-                    .sort(([leftHost], [rightHost]) =>
-                      leftHost.localeCompare(rightHost)
-                    )
+                    .sort(([leftHost], [rightHost]) => leftHost.localeCompare(rightHost))
                     .map(([host, pageContextType]) => (
                       <li
                         key={host}
@@ -4162,9 +3798,7 @@ export function Options() {
                           type="button"
                           className="v5-btn v5-btn--link"
                           aria-label={`Reset ${host} to auto-detect`}
-                          onClick={() =>
-                            handleRemovePageContextSiteModeOverride(host)
-                          }
+                          onClick={() => handleRemovePageContextSiteModeOverride(host)}
                         >
                           Reset to auto-detect
                         </button>
@@ -4178,9 +3812,8 @@ export function Options() {
                   className="v5-status v5-status--muted"
                   style={{ display: "block", marginBottom: 8 }}
                 >
-                  Apply SOC, CTI, or DFIR defaults for enrichment toggles, quiet
-                  mode where recommended, the default export template, and
-                  recommended pivot ordering.
+                  Apply SOC, CTI, or DFIR defaults for enrichment toggles, quiet mode where
+                  recommended, the default export template, and recommended pivot ordering.
                 </span>
                 <div className="v5-presets">
                   {ANALYST_MODE_PRESETS.map((preset) => (
@@ -4188,9 +3821,7 @@ export function Options() {
                       key={preset.id}
                       type="button"
                       className={`v5-preset${
-                        analystModePresetId === preset.id
-                          ? " v5-preset--active"
-                          : ""
+                        analystModePresetId === preset.id ? " v5-preset--active" : ""
                       }`}
                       disabled={!ready}
                       aria-label={`Apply ${preset.label} preset`}
@@ -4234,9 +3865,8 @@ export function Options() {
                 </button>
               </h2>
               <p className="v5-card__desc">
-                Create local-only step sequences for repeatable analyst playbooks.
-                Macros stay on this browser profile and never sync through Vera5
-                cloud infrastructure.
+                Create local-only step sequences for repeatable analyst playbooks. Macros stay on
+                this browser profile and never sync through Vera5 cloud infrastructure.
               </p>
             </div>
             <div
@@ -4248,9 +3878,8 @@ export function Options() {
                 className="v5-status v5-status--muted"
                 style={{ display: "block", marginBottom: 12 }}
               >
-                Built-in playbooks ship with the extension. Create, duplicate,
-                reorder, and delete your own macros here. Configure individual
-                steps from the macro editor.
+                Built-in playbooks ship with the extension. Create, duplicate, reorder, and delete
+                your own macros here. Configure individual steps from the macro editor.
               </span>
               <ul
                 className="v5-domain-list"
@@ -4258,16 +3887,12 @@ export function Options() {
                 style={{ marginBottom: 12 }}
               >
                 {PAGE_CONTEXT_TYPE_ORDER.filter(
-                  (pageContextType) =>
-                    PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE[pageContextType]
+                  (pageContextType) => PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE[pageContextType]
                 ).map((pageContextType) => (
                   <li key={pageContextType} className="v5-domain-list__item">
                     <span className="v5-row__hint" style={{ margin: 0 }}>
                       {PAGE_CONTEXT_TYPE_LABEL[pageContextType]} suggests{" "}
-                      <code>
-                        {PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE[pageContextType]}
-                      </code>
-                      {" "}
+                      <code>{PAGE_CONTEXT_DEFAULT_OPERATOR_MACRO_BY_TYPE[pageContextType]}</code>{" "}
                       unless a per-site page profile override is active.
                     </span>
                   </li>
@@ -4340,8 +3965,8 @@ export function Options() {
                 />
               </div>
               <span className="v5-row__hint" style={{ display: "block", marginTop: 8 }}>
-                Export or import your custom macros as JSON for backup across browser
-                profiles. Built-in playbooks and API keys are never included.
+                Export or import your custom macros as JSON for backup across browser profiles.
+                Built-in playbooks and API keys are never included.
               </span>
             </div>
           </section>
@@ -4361,16 +3986,12 @@ export function Options() {
                 </button>
               </h2>
               <p className="v5-card__desc">
-                Vera5 stores recent threat intelligence responses locally to reduce
-                API usage. Clearing the cache removes saved responses; your settings
-                and API keys are not affected.
+                Vera5 stores recent threat intelligence responses locally to reduce API usage.
+                Clearing the cache removes saved responses; your settings and API keys are not
+                affected.
               </p>
             </div>
-            <div
-              id="cache-body"
-              className="v5-card__body"
-              hidden={collapsedSections.cache}
-            >
+            <div id="cache-body" className="v5-card__body" hidden={collapsedSections.cache}>
               <div className="v5-field">
                 <span className="v5-field__label">Default cache lifetime</span>
                 <div className="v5-presets">
@@ -4379,9 +4000,7 @@ export function Options() {
                       key={preset.seconds}
                       type="button"
                       className={`v5-preset${
-                        parsedGlobalTtl === preset.seconds
-                          ? " v5-preset--active"
-                          : ""
+                        parsedGlobalTtl === preset.seconds ? " v5-preset--active" : ""
                       }`}
                       disabled={!ready}
                       onClick={() => applyGlobalCachePreset(preset.seconds)}
@@ -4396,15 +4015,12 @@ export function Options() {
                   className="v5-input v5-input--sm"
                   value={globalCacheTtlSeconds}
                   disabled={!ready}
-                  onChange={(event) =>
-                    setGlobalCacheTtlSecondsState(event.target.value)
-                  }
+                  onChange={(event) => setGlobalCacheTtlSecondsState(event.target.value)}
                   onBlur={handleGlobalCacheTtlBlur}
                   aria-label="Default cache lifetime in seconds"
                 />
                 <span className="v5-status v5-status--muted">
-                  Custom value in seconds. Per-source overrides use this default
-                  when left blank.
+                  Custom value in seconds. Per-source overrides use this default when left blank.
                 </span>
               </div>
               <div className="v5-actions">
@@ -4432,11 +4048,7 @@ export function Options() {
             </div>
           </section>
 
-          <section
-            id="backup"
-            className="v5-card"
-            aria-labelledby="settings-backup-heading"
-          >
+          <section id="backup" className="v5-card" aria-labelledby="settings-backup-heading">
             <div className="v5-card__head">
               <h2 id="settings-backup-heading" className="v5-card__title">
                 <button
@@ -4451,18 +4063,13 @@ export function Options() {
                 </button>
               </h2>
               <p className="v5-card__desc">
-                Export your preferences as JSON to move them between profiles or
-                keep a backup. Export a settings pack to share connector toggles,
-                cache TTL, domain policy, and analyst mode without API keys. API
-                keys are excluded from settings packs and from full settings
-                exports unless you choose to include them.
+                Export your preferences as JSON to move them between profiles or keep a backup.
+                Export a settings pack to share connector toggles, cache TTL, domain policy, and
+                analyst mode without API keys. API keys are excluded from settings packs and from
+                full settings exports unless you choose to include them.
               </p>
             </div>
-            <div
-              id="backup-body"
-              className="v5-card__body"
-              hidden={collapsedSections.backup}
-            >
+            <div id="backup-body" className="v5-card__body" hidden={collapsedSections.backup}>
               <ToggleRow
                 label="Include API keys in export"
                 hint="Off by default. Only enable when exporting to a trusted location."
@@ -4488,9 +4095,7 @@ export function Options() {
                   onClick={handleExportSettingsPack}
                   aria-label="Export settings pack JSON"
                 >
-                  {settingsPackExportState === "exporting"
-                    ? "Exporting…"
-                    : "Export settings pack"}
+                  {settingsPackExportState === "exporting" ? "Exporting…" : "Export settings pack"}
                 </button>
                 <button
                   type="button"
@@ -4499,9 +4104,7 @@ export function Options() {
                   onClick={handleSettingsPackImportClick}
                   aria-label="Import settings pack JSON"
                 >
-                  {settingsPackImportState === "importing"
-                    ? "Importing…"
-                    : "Import settings pack"}
+                  {settingsPackImportState === "importing" ? "Importing…" : "Import settings pack"}
                 </button>
                 <button
                   type="button"
@@ -4579,16 +4182,9 @@ export function Options() {
             </div>
           </section>
 
-          <section
-            className="v5-card"
-            aria-labelledby="private-ipv4-heading"
-          >
+          <section className="v5-card" aria-labelledby="private-ipv4-heading">
             <div className="v5-card__head">
-              <h2
-                id="private-ipv4-heading"
-                className="v5-card__title"
-                style={{ fontSize: 18 }}
-              >
+              <h2 id="private-ipv4-heading" className="v5-card__title" style={{ fontSize: 18 }}>
                 <button
                   type="button"
                   className="v5-card__toggle"
@@ -4596,16 +4192,14 @@ export function Options() {
                   aria-controls="private-ipv4-body"
                   onClick={() => toggleSection("private-ipv4")}
                 >
-                  <span className="v5-card__toggle-text">
-                    Private-Space IPv4 Addresses
-                  </span>
+                  <span className="v5-card__toggle-text">Private-Space IPv4 Addresses</span>
                   <span className="v5-card__chevron" aria-hidden="true" />
                 </button>
               </h2>
               <p className="v5-card__desc">
-                A core control for SOC and lab workflows. When off, RFC1918,
-                loopback, and link-local IPv4 literals are omitted from page scans
-                so internal network addresses are never treated as indicators.
+                A core control for SOC and lab workflows. When off, RFC1918, loopback, and
+                link-local IPv4 literals are omitted from page scans so internal network addresses
+                are never treated as indicators.
               </p>
             </div>
             <div
@@ -4658,26 +4252,20 @@ export function Options() {
             aria-labelledby="operator-macro-pack-import-title"
             aria-describedby="operator-macro-pack-import-body"
           >
-            <h2
-              id="operator-macro-pack-import-title"
-              className="v5-consent-dialog__title"
-            >
+            <h2 id="operator-macro-pack-import-title" className="v5-consent-dialog__title">
               Review macro pack import
             </h2>
             <div id="operator-macro-pack-import-body" className="v5-consent-dialog__body">
               <p>
-                Applying this pack adds or updates your custom macros. Built-in
-                playbooks on this profile stay unchanged.
+                Applying this pack adds or updates your custom macros. Built-in playbooks on this
+                profile stay unchanged.
               </p>
               {operatorMacroPackImportPreview.entries.length === 0 ? (
                 <p>This pack does not include any macros.</p>
               ) : (
                 <ul className="v5-settings-pack-diff">
                   {operatorMacroPackImportPreview.entries.map((entry) => (
-                    <li
-                      key={entry.macroId}
-                      className="v5-settings-pack-diff__item"
-                    >
+                    <li key={entry.macroId} className="v5-settings-pack-diff__item">
                       <span className="v5-settings-pack-diff__label">
                         {entry.macroName} <code>{entry.macroId}</code>
                       </span>
@@ -4710,9 +4298,7 @@ export function Options() {
                 onClick={handleOperatorMacroPackImportConfirm}
                 aria-label="Apply macro pack import"
               >
-                {operatorMacroPackImportState === "importing"
-                  ? "Applying…"
-                  : "Apply pack"}
+                {operatorMacroPackImportState === "importing" ? "Applying…" : "Apply pack"}
               </button>
             </div>
           </div>
@@ -4736,17 +4322,13 @@ export function Options() {
             aria-labelledby="settings-pack-import-title"
             aria-describedby="settings-pack-import-body"
           >
-            <h2
-              id="settings-pack-import-title"
-              className="v5-consent-dialog__title"
-            >
+            <h2 id="settings-pack-import-title" className="v5-consent-dialog__title">
               Review settings pack import
             </h2>
             <div id="settings-pack-import-body" className="v5-consent-dialog__body">
               <p>
-                Applying this pack updates connector toggles, cache TTL, domain
-                policy, and analyst mode. API keys on this profile stay
-                unchanged.
+                Applying this pack updates connector toggles, cache TTL, domain policy, and analyst
+                mode. API keys on this profile stay unchanged.
               </p>
               <p>{SETTINGS_PACK_THREAT_PROFILE_PRECEDENCE_NOTE}</p>
               {settingsPackImportPreview.changes.length === 0 ? (
@@ -4755,9 +4337,7 @@ export function Options() {
                 <ul className="v5-settings-pack-diff">
                   {settingsPackImportPreview.changes.map((change) => (
                     <li key={change.field} className="v5-settings-pack-diff__item">
-                      <span className="v5-settings-pack-diff__label">
-                        {change.label}
-                      </span>
+                      <span className="v5-settings-pack-diff__label">{change.label}</span>
                       <span className="v5-settings-pack-diff__values">
                         {change.currentValue} → {change.incomingValue}
                       </span>
@@ -4782,9 +4362,7 @@ export function Options() {
                 onClick={handleSettingsPackImportConfirm}
                 aria-label="Apply settings pack import"
               >
-                {settingsPackImportState === "importing"
-                  ? "Applying…"
-                  : "Apply pack"}
+                {settingsPackImportState === "importing" ? "Applying…" : "Apply pack"}
               </button>
             </div>
           </div>
@@ -4813,19 +4391,18 @@ export function Options() {
             </h2>
             <div id="attribute-href-consent-body" className="v5-consent-dialog__body">
               <p>
-                Vera5 will read allowlisted link and attribute values (for example{" "}
-                <code>href</code> and <code>src</code>) on pages you scan—not only
-                visible text. Processing stays on this device; Vera5 does not upload
-                full pages or attribute dumps.
+                Vera5 will read allowlisted link and attribute values (for example <code>href</code>{" "}
+                and <code>src</code>) on pages you scan—not only visible text. Processing stays on
+                this device; Vera5 does not upload full pages or attribute dumps.
               </p>
               <p>
-                Live enrichment still sends only indicator values you explicitly
-                enrich to threat-intel vendors you configure. Password fields and
-                hidden inputs are never scanned.
+                Live enrichment still sends only indicator values you explicitly enrich to
+                threat-intel vendors you configure. Password fields and hidden inputs are never
+                scanned.
               </p>
               <p>
-                Use domain denylist presets on sensitive hosts if your policy requires
-                visible-text scanning only.
+                Use domain denylist presets on sensitive hosts if your policy requires visible-text
+                scanning only.
               </p>
               <p>
                 <a
@@ -4841,21 +4418,13 @@ export function Options() {
                 <input
                   type="checkbox"
                   checked={rememberSiteChoicesOnConfirm}
-                  onChange={(event) =>
-                    setRememberSiteChoicesOnConfirm(event.target.checked)
-                  }
+                  onChange={(event) => setRememberSiteChoicesOnConfirm(event.target.checked)}
                 />
-                <span>
-                  Remember always-on or always-off choices per website (optional)
-                </span>
+                <span>Remember always-on or always-off choices per website (optional)</span>
               </label>
             </div>
             <div className="v5-consent-dialog__actions">
-              <button
-                type="button"
-                className="v5-btn"
-                onClick={handleAttributeHrefConsentCancel}
-              >
+              <button type="button" className="v5-btn" onClick={handleAttributeHrefConsentCancel}>
                 Cancel
               </button>
               <button
@@ -4945,10 +4514,7 @@ export function Options() {
                 </div>
               )}
               <div className="v5-field">
-                <label
-                  className="v5-field__label"
-                  htmlFor="operator-macro-description"
-                >
+                <label className="v5-field__label" htmlFor="operator-macro-description">
                   Description
                 </label>
                 <textarea

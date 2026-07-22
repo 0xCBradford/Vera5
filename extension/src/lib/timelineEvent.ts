@@ -91,9 +91,29 @@ export type WatchlistTagTimelineEvent = TimelineEventBase &
     type: typeof TIMELINE_EVENT_TYPE.WATCHLIST_TAG;
   };
 
+export const MACRO_RUN_STATUS = {
+  SUCCESS: "success",
+  ABORTED: "aborted",
+} as const;
+
+export type MacroRunStatus =
+  (typeof MACRO_RUN_STATUS)[keyof typeof MACRO_RUN_STATUS];
+
+export const MACRO_RUN_STATUS_SET = new Set<string>(Object.values(MACRO_RUN_STATUS));
+
+export function isMacroRunStatus(value: string): value is MacroRunStatus {
+  return MACRO_RUN_STATUS_SET.has(value);
+}
+
 export type MacroRunTimelineEvent = TimelineEventBase &
   TimelineEventPayload & {
     type: typeof TIMELINE_EVENT_TYPE.MACRO_RUN;
+    /** Operator macro id when the event came from a macro runner step. */
+    macroId?: string;
+    /** Zero-based index of the macro step within the run. */
+    stepIndex?: number;
+    /** Whether the step completed or the run aborted on this step. */
+    runStatus?: MacroRunStatus;
   };
 
 export type RedetectTimelineEvent = TimelineEventBase &
@@ -116,6 +136,9 @@ export type CreateTimelineEventInput = {
   timestamp?: number;
   sourceAttributionSummary?: string;
   templateId?: ExportTemplateId;
+  macroId?: string;
+  stepIndex?: number;
+  runStatus?: MacroRunStatus;
 };
 
 function readNonEmptyTrimmedString(value: unknown): string | null {
@@ -204,17 +227,87 @@ export function normalizeTimelineEvent(value: unknown): TimelineEvent | null {
     templateId = record.templateId;
   }
 
-  const event: TimelineEvent = {
+  if (record.type !== TIMELINE_EVENT_TYPE.MACRO_RUN) {
+    return {
+      schemaVersion: TIMELINE_EVENT_SCHEMA_VERSION,
+      type: record.type,
+      sessionId,
+      iocKey,
+      timestamp,
+      sourceAttributionSummary,
+      ...(templateId !== undefined ? { templateId } : {}),
+    };
+  }
+
+  let macroId: string | undefined;
+  if (record.macroId !== undefined && record.macroId !== null) {
+    const normalizedMacroId = readNonEmptyTrimmedString(record.macroId);
+    if (!normalizedMacroId) {
+      return null;
+    }
+    macroId = normalizedMacroId;
+  }
+
+  let stepIndex: number | undefined;
+  if (record.stepIndex !== undefined && record.stepIndex !== null) {
+    if (
+      typeof record.stepIndex !== "number" ||
+      !Number.isInteger(record.stepIndex) ||
+      record.stepIndex < 0
+    ) {
+      return null;
+    }
+    stepIndex = record.stepIndex;
+  }
+
+  let runStatus: MacroRunStatus | undefined;
+  if (record.runStatus !== undefined && record.runStatus !== null) {
+    if (typeof record.runStatus !== "string" || !isMacroRunStatus(record.runStatus)) {
+      return null;
+    }
+    runStatus = record.runStatus;
+  }
+
+  return {
     schemaVersion: TIMELINE_EVENT_SCHEMA_VERSION,
-    type: record.type,
+    type: TIMELINE_EVENT_TYPE.MACRO_RUN,
     sessionId,
     iocKey,
     timestamp,
     sourceAttributionSummary,
     ...(templateId !== undefined ? { templateId } : {}),
+    ...(macroId !== undefined ? { macroId } : {}),
+    ...(stepIndex !== undefined ? { stepIndex } : {}),
+    ...(runStatus !== undefined ? { runStatus } : {}),
   };
+}
 
-  return event;
+function readCreateTimelineEventMacroRunFields(
+  input: CreateTimelineEventInput
+): Pick<MacroRunTimelineEvent, "macroId" | "stepIndex" | "runStatus"> {
+  const macroId = input.macroId?.trim() ?? "";
+  const fields: Pick<MacroRunTimelineEvent, "macroId" | "stepIndex" | "runStatus"> =
+    {};
+
+  if (macroId.length > 0) {
+    fields.macroId = macroId;
+  }
+
+  if (input.stepIndex !== undefined) {
+    if (!Number.isInteger(input.stepIndex) || input.stepIndex < 0) {
+      throw new Error("Timeline event stepIndex must be a non-negative integer.");
+    }
+    fields.stepIndex = input.stepIndex;
+  }
+
+  if (input.runStatus !== undefined) {
+    if (!isMacroRunStatus(input.runStatus)) {
+      throw new Error("Timeline event runStatus is unsupported.");
+    }
+    fields.runStatus = input.runStatus;
+  }
+
+  return fields;
 }
 
 export function createTimelineEvent(input: CreateTimelineEventInput): TimelineEvent {
@@ -224,7 +317,23 @@ export function createTimelineEvent(input: CreateTimelineEventInput): TimelineEv
     throw new Error("Timeline event sessionId is required.");
   }
 
-  const event: TimelineEvent = {
+  if (input.type === TIMELINE_EVENT_TYPE.MACRO_RUN) {
+    const macroRunFields = readCreateTimelineEventMacroRunFields(input);
+    return {
+      schemaVersion: TIMELINE_EVENT_SCHEMA_VERSION,
+      type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+      sessionId,
+      iocKey,
+      timestamp: input.timestamp ?? Date.now(),
+      sourceAttributionSummary: normalizeTimelineEventSourceAttributionSummary(
+        input.sourceAttributionSummary ?? ""
+      ),
+      ...(input.templateId !== undefined ? { templateId: input.templateId } : {}),
+      ...macroRunFields,
+    };
+  }
+
+  return {
     schemaVersion: TIMELINE_EVENT_SCHEMA_VERSION,
     type: input.type,
     sessionId,
@@ -235,26 +344,49 @@ export function createTimelineEvent(input: CreateTimelineEventInput): TimelineEv
     ),
     ...(input.templateId !== undefined ? { templateId: input.templateId } : {}),
   };
-
-  return event;
 }
 
 export function isTimelineEventRecord(value: unknown): value is TimelineEvent {
   return normalizeTimelineEvent(value) !== null;
 }
 
+function timelineEventsShareMacroRunIdentity(
+  left: TimelineEvent,
+  right: TimelineEvent
+): boolean {
+  if (
+    left.type !== TIMELINE_EVENT_TYPE.MACRO_RUN ||
+    right.type !== TIMELINE_EVENT_TYPE.MACRO_RUN
+  ) {
+    return true;
+  }
+
+  return (
+    (left.macroId ?? "") === (right.macroId ?? "") &&
+    (left.stepIndex ?? -1) === (right.stepIndex ?? -1) &&
+    (left.runStatus ?? "") === (right.runStatus ?? "")
+  );
+}
+
 export function findLatestMatchingTimelineEvent(
   events: readonly TimelineEvent[],
-  candidate: Pick<TimelineEvent, "type" | "iocKey">
+  candidate: Pick<TimelineEvent, "type" | "iocKey"> | TimelineEvent
 ): TimelineEvent | null {
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
     if (!event) {
       continue;
     }
-    if (event.type === candidate.type && event.iocKey === candidate.iocKey) {
-      return event;
+    if (event.type !== candidate.type || event.iocKey !== candidate.iocKey) {
+      continue;
     }
+    if (
+      "schemaVersion" in candidate &&
+      !timelineEventsShareMacroRunIdentity(event, candidate)
+    ) {
+      continue;
+    }
+    return event;
   }
   return null;
 }

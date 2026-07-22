@@ -108,6 +108,35 @@ describe("iocTrayNavigation", () => {
     });
   });
 
+  it("skips live enrichment when enrichmentTrigger is none", async () => {
+    const paragraph = document.createElement("p");
+    paragraph.textContent = "Contact 8.8.8.8 for details.";
+    document.body.appendChild(paragraph);
+    highlightDetectedIocs(scanTextNodesForIocs(document.body), {
+      root: document.body,
+    });
+
+    const highlight = document.querySelector<HTMLElement>("[data-vera5-anchor-id]");
+    expect(highlight).not.toBeNull();
+    const autoFetcher = vi.fn(async () => undefined);
+    setAutoEnrichmentFetcherForTests(autoFetcher);
+
+    expect(
+      handleNavigateToIocAnchorRequest({
+        anchorId: highlight!.dataset.vera5AnchorId!,
+        enrichmentTrigger: "none",
+      })
+    ).toEqual({ ok: true });
+
+    await vi.waitFor(() => {
+      expect(document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`)).not.toBeNull();
+    });
+    expect(autoFetcher).not.toHaveBeenCalled();
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "ENRICH_IOC" })
+    );
+  });
+
   it("opens the hover card for the requested IOC when navigating between highlights", async () => {
     const paragraph = document.createElement("p");
     paragraph.textContent =

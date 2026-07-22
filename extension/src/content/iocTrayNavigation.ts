@@ -9,6 +9,7 @@ export type NavigateToIocAnchorTarget = {
   anchorId: string;
   iocType?: IocType;
   value?: string;
+  enrichmentTrigger?: "manual" | "auto" | "none";
 };
 
 export function resolveHighlightForNavigation(
@@ -41,7 +42,11 @@ export function handleNavigateToIocAnchorRequest(
 
   highlight.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
 
-  openHoverCardForHighlight(highlight, { enrichmentTrigger: "auto" }, doc);
+  openHoverCardForHighlight(
+    highlight,
+    { enrichmentTrigger: resolved.enrichmentTrigger ?? "auto" },
+    doc
+  );
   return { ok: true };
 }
 
@@ -56,6 +61,7 @@ export function setupNavigateToIocAnchorListener(): void {
           anchorId: message.anchorId,
           iocType: message.iocType,
           value: message.value,
+          enrichmentTrigger: message.enrichmentTrigger,
         })
       );
     } catch (error) {

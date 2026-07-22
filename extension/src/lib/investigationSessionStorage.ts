@@ -24,6 +24,7 @@ import {
   createTimelineEvent,
   formatMacroRunTimelineSourceAttribution,
   TIMELINE_EVENT_TYPE,
+  type MacroRunStatus,
   type TimelineEvent,
 } from "./timelineEvent";
 
@@ -777,6 +778,8 @@ export async function recordActiveInvestigationSessionWatchlistTagEvent(input: {
 export async function recordActiveInvestigationSessionMacroRunEvent(input: {
   stepType: string;
   macroId?: string;
+  stepIndex?: number;
+  runStatus?: MacroRunStatus;
   iocValue?: string;
   iocType?: IocType;
   now?: number;
@@ -806,6 +809,9 @@ export async function recordActiveInvestigationSessionMacroRunEvent(input: {
       stepType,
       macroId: input.macroId,
     }),
+    macroId: input.macroId,
+    stepIndex: input.stepIndex,
+    runStatus: input.runStatus,
   });
   const withTimeline = appendInvestigationSessionTimelineEvents(session, [timelineEvent]);
   const updated = updateInvestigationSession(withTimeline, {

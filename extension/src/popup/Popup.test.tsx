@@ -36,8 +36,12 @@ import {
   POPUP_PANEL_FOCUS_STORAGE_KEY,
 } from "../lib/popupPanelFocus";
 import { STORAGE_KEY_ANALYST_NOTES } from "../lib/analystNotesStorage";
-import { Popup } from "./Popup";
+import { Popup, InvestigationReplayPanel } from "./Popup";
 import * as copyText from "../lib/copyText";
+import {
+  REPLAY_SEGMENT_ACTION,
+  createReplaySegment,
+} from "../lib/replaySegment";
 import * as storage from "../lib/storage";
 import {
   POPUP_QUIET_MODE_STATUS_LABEL,
@@ -692,6 +696,416 @@ describe("Popup IOC tray", () => {
     expect(rows[0]?.textContent).toMatch(/First seen/);
     expect(rows[1]?.textContent).toMatch(/Enriched/);
     expect(rows[2]?.textContent).toMatch(/Exported/);
+  });
+
+  it("shows investigation replay controls for the active session", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Investigation replay");
+    });
+
+    const replayList = mounted?.container.querySelector('[aria-label="Replay steps"]');
+    expect(replayList).not.toBeNull();
+    expect(replayList?.querySelectorAll('[role="button"]').length).toBe(3);
+    expect(mounted?.container.textContent).toContain("Step 1 of 3");
+    expect(
+      mounted?.container.querySelector('[aria-label="Replay step navigation"]')
+    ).not.toBeNull();
+    expect(
+      mounted?.container.querySelector('button[aria-label="Previous"]')
+    ).not.toBeNull();
+    expect(
+      mounted?.container.querySelector('button[aria-label="Next"]')
+    ).not.toBeNull();
+  });
+
+  it("steps through investigation replay with previous, next, and jump-to-step", () => {
+    const segments = [
+      createReplaySegment({
+        action: REPLAY_SEGMENT_ACTION.SCAN,
+        sessionId: "vera5-inv-replay",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_010,
+      }),
+      createReplaySegment({
+        action: REPLAY_SEGMENT_ACTION.ENRICH,
+        sessionId: "vera5-inv-replay",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_020,
+      }),
+      createReplaySegment({
+        action: REPLAY_SEGMENT_ACTION.EXPORT,
+        sessionId: "vera5-inv-replay",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_030,
+        templateId: "markdown-report",
+      }),
+    ];
+    const onActivateSegment = vi.fn();
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => {
+      root.render(
+        <InvestigationReplayPanel
+          sessionId="vera5-inv-replay"
+          sessionTitle="Replay case"
+          sessionPageUrl="https://example.com/alert"
+          segments={segments}
+          onActivateSegment={onActivateSegment}
+        />
+      );
+    });
+
+    try {
+      expect(container.textContent).toContain("Step 1 of 3");
+      const detail = container.querySelector(
+        '[aria-label="Current replay step detail"]'
+      );
+      expect(detail?.textContent).toContain("Action: Scan");
+      expect(detail?.textContent).toContain("Indicator: 192.0.2.1");
+      expect(detail?.textContent).not.toContain("Template:");
+
+      const next = container.querySelector(
+        'button[aria-label="Next"]'
+      ) as HTMLButtonElement | null;
+      const previous = container.querySelector(
+        'button[aria-label="Previous"]'
+      ) as HTMLButtonElement | null;
+      expect(next?.disabled).toBe(false);
+      expect(previous?.disabled).toBe(true);
+
+      flushSync(() => {
+        next?.click();
+      });
+      expect(container.textContent).toContain("Step 2 of 3");
+      expect(previous?.disabled).toBe(false);
+      expect(onActivateSegment).toHaveBeenCalledWith(segments[1]);
+
+      const jumpTarget = Array.from(
+        container.querySelectorAll('[aria-label="Replay steps"] [role="button"]')
+      )[2] as HTMLElement | undefined;
+      flushSync(() => {
+        jumpTarget?.click();
+      });
+      expect(container.textContent).toContain("Step 3 of 3");
+      expect(next?.disabled).toBe(true);
+      expect(onActivateSegment).toHaveBeenCalledWith(segments[2]);
+      const exportDetail = container.querySelector(
+        '[aria-label="Current replay step detail"]'
+      );
+      expect(exportDetail?.textContent).toContain("Action: Export");
+      expect(exportDetail?.textContent).toContain("Template: Markdown report");
+
+      flushSync(() => {
+        previous?.click();
+      });
+      expect(container.textContent).toContain("Step 2 of 3");
+      expect(onActivateSegment).toHaveBeenLastCalledWith(segments[1]);
+    } finally {
+      root.unmount();
+      container.remove();
+    }
+  });
+
+  it("copies a markdown replay transcript with optional session-memory appendix", async () => {
+    const segments = [
+      createReplaySegment({
+        action: REPLAY_SEGMENT_ACTION.SCAN,
+        sessionId: "vera5-inv-transcript-ui",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_600,
+      }),
+      createReplaySegment({
+        action: REPLAY_SEGMENT_ACTION.ENRICH,
+        sessionId: "vera5-inv-transcript-ui",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_650,
+      }),
+    ];
+    const memoryRecords = [
+      {
+        ioc: "192.0.2.1",
+        iocType: "ipv4" as const,
+        iocTypeLabel: "IPv4",
+        enrichmentState: "enriched" as const,
+        summary: "Cached abuse summary",
+        tags: [] as string[],
+        sources: [
+          {
+            id: "abuseipdb",
+            name: "AbuseIPDB",
+            summary: "Cached abuse summary",
+            tags: [] as string[],
+            fromCache: true,
+          },
+        ],
+        disabledSources: [] as never[],
+        riskScore: null,
+        pivots: [] as never[],
+        exportedAt: "2026-07-21T15:00:00.000Z",
+      },
+    ];
+    const resolveSessionMemoryRecords = vi.fn().mockResolvedValue(memoryRecords);
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => {
+      root.render(
+        <InvestigationReplayPanel
+          sessionId="vera5-inv-transcript-ui"
+          sessionTitle="Transcript UI case"
+          sessionPageUrl="https://example.com/transcript"
+          segments={segments}
+          resolveSessionMemoryRecords={resolveSessionMemoryRecords}
+        />
+      );
+    });
+
+    try {
+      expect(container.textContent).toContain("Export replay transcript");
+      expect(container.textContent).toContain("Include IOC & enrichment appendix");
+      const appendixToggle = container.querySelector(
+        'input[aria-label="Include IOC & enrichment appendix"]'
+      ) as HTMLInputElement | null;
+      expect(appendixToggle?.checked).toBe(true);
+
+      const copyButton = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent === "Copy transcript"
+      ) as HTMLButtonElement | undefined;
+      const downloadButton = Array.from(container.querySelectorAll("button")).find(
+        (button) => button.textContent === "Download transcript"
+      ) as HTMLButtonElement | undefined;
+      expect(copyButton).toBeTruthy();
+      expect(downloadButton).toBeTruthy();
+
+      const createObjectURL = vi
+        .spyOn(URL, "createObjectURL")
+        .mockReturnValue("blob:replay-ui");
+      const revokeObjectURL = vi
+        .spyOn(URL, "revokeObjectURL")
+        .mockImplementation(() => {});
+
+      flushSync(() => {
+        copyButton?.click();
+      });
+      await vi.waitFor(() => {
+        expect(container.textContent).toContain(
+          "Copied Markdown report replay transcript (2 steps)."
+        );
+      });
+      expect(resolveSessionMemoryRecords).toHaveBeenCalled();
+      expect(writeText).toHaveBeenCalled();
+      const copiedText = String(writeText.mock.calls.at(-1)?.[0] ?? "");
+      expect(copiedText).toContain("# Investigation replay transcript");
+      expect(copiedText).toContain("Transcript UI case");
+      expect(copiedText).toContain("https://example.com/transcript");
+      expect(copiedText).toContain("## Indicators");
+      expect(copiedText).toContain("## Enrichment details");
+      expect(copiedText).toContain("Cached abuse summary");
+
+      const templateSelect = container.querySelector(
+        'select[aria-label="Transcript template"]'
+      ) as HTMLSelectElement | null;
+      expect(templateSelect).toBeTruthy();
+      expect(
+        Array.from(templateSelect?.options ?? []).map((option) => option.value)
+      ).toEqual(["markdown-report", "obsidian-note", "analyst-update"]);
+      flushSync(() => {
+        if (!templateSelect) {
+          return;
+        }
+        templateSelect.value = "obsidian-note";
+        templateSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      writeText.mockClear();
+      flushSync(() => {
+        copyButton?.click();
+      });
+      await vi.waitFor(() => {
+        expect(writeText).toHaveBeenCalled();
+      });
+      const obsidianText = String(writeText.mock.calls.at(-1)?.[0] ?? "");
+      expect(obsidianText).toContain("artifact: investigation-replay-transcript");
+      expect(obsidianText).toContain("session: Transcript UI case");
+      expect(obsidianText).toContain("source: Vera5");
+      expect(container.textContent).toContain(
+        "Copied Obsidian note replay transcript (2 steps)."
+      );
+
+      flushSync(() => {
+        appendixToggle?.click();
+      });
+      expect(appendixToggle?.checked).toBe(false);
+      writeText.mockClear();
+      resolveSessionMemoryRecords.mockClear();
+      flushSync(() => {
+        copyButton?.click();
+      });
+      await vi.waitFor(() => {
+        expect(writeText).toHaveBeenCalled();
+      });
+      expect(resolveSessionMemoryRecords).not.toHaveBeenCalled();
+      const withoutAppendix = String(writeText.mock.calls.at(-1)?.[0] ?? "");
+      expect(withoutAppendix).not.toContain("## Indicators");
+
+      flushSync(() => {
+        downloadButton?.click();
+      });
+      await vi.waitFor(() => {
+        expect(container.textContent).toContain(
+          "Downloaded Obsidian note replay transcript (2 steps)."
+        );
+      });
+      expect(createObjectURL).toHaveBeenCalled();
+      expect(revokeObjectURL).toHaveBeenCalled();
+    } finally {
+      root.unmount();
+      container.remove();
+    }
+  });
+
+  it("shows truncated IOC and attribution in replay segment detail", () => {
+    const longIoc = `indicator.${"a".repeat(80)}.example`;
+    const segments = [
+      createReplaySegment({
+        action: REPLAY_SEGMENT_ACTION.ENRICH,
+        sessionId: "vera5-inv-replay-detail",
+        iocKey: longIoc,
+        timestamp: 1_700_000_000_010,
+        sourceAttributionSummary: "Source: OTX · cached",
+      }),
+    ];
+
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => {
+      root.render(
+        <InvestigationReplayPanel
+          sessionId="vera5-inv-replay-detail"
+          sessionTitle="Replay detail case"
+          sessionPageUrl="https://example.com/detail"
+          segments={segments}
+        />
+      );
+    });
+
+    try {
+      const detail = container.querySelector(
+        '[aria-label="Current replay step detail"]'
+      );
+      expect(detail).not.toBeNull();
+      expect(detail?.textContent).toContain("Action: Enrich");
+      expect(detail?.textContent).toContain("Attribution: Source: OTX · cached");
+      expect(detail?.textContent).toContain("…");
+      expect(detail?.textContent).not.toContain(longIoc);
+      const iocNode = detail?.querySelector("span[title]");
+      expect(iocNode?.getAttribute("title")).toBe(longIoc);
+    } finally {
+      root.unmount();
+      container.remove();
+    }
+  });
+
+  it("shows an empty state when the session has no replayable segments", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    flushSync(() => {
+      root.render(
+        <InvestigationReplayPanel
+          sessionId="vera5-inv-replay-empty"
+          sessionTitle="Empty replay case"
+          sessionPageUrl="https://example.com/empty"
+          segments={[]}
+        />
+      );
+    });
+
+    try {
+      expect(container.textContent).toContain("Investigation replay");
+      expect(container.textContent).toContain("No replayable steps yet");
+      expect(
+        container.querySelector('[aria-label="Replay step navigation"]')
+      ).toBeNull();
+      expect(container.querySelector('[aria-label="Replay steps"]')).toBeNull();
+      expect(
+        container.querySelector('[aria-label="Current replay step detail"]')
+      ).toBeNull();
+    } finally {
+      root.unmount();
+      container.remove();
+    }
+  });
+
+  it("shows investigation replay empty state for an active session with no timeline", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: createInvestigationSession({
+        id: "vera5-inv-empty-replay",
+        title: "Empty replay case",
+        pageUrl: "https://example.com/alert",
+        createdAt: 100,
+        updatedAt: 100,
+        totalIocCount: 0,
+        iocCountByType: {},
+        timelineEvents: [],
+      }),
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Investigation replay");
+    });
+    expect(mounted?.container.textContent).toContain("No replayable steps yet");
+    expect(
+      mounted?.container.querySelector('[aria-label="Replay steps"]')
+    ).toBeNull();
+  });
+
+  it("highlights the replayed IOC on the page without live enrichment", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Investigation replay");
+    });
+
+    const next = mounted?.container.querySelector(
+      'button[aria-label="Next"]'
+    ) as HTMLButtonElement | null;
+    expect(next).not.toBeNull();
+
+    flushSync(() => {
+      next?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+        7,
+        {
+          type: "NAVIGATE_TO_IOC_ANCHOR",
+          anchorId: "vera5-hl-1",
+          iocType: "ipv4",
+          value: "8.8.8.8",
+          enrichmentTrigger: "none",
+        }
+      );
+    });
+    expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(
+      expect.objectContaining({ type: "ENRICH_IOC" })
+    );
   });
 
   it("navigates to the page highlight when a timeline row is clicked", async () => {

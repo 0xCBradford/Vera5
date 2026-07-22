@@ -78,7 +78,7 @@ Icons, fonts, and HTML entrypoints do not add extra Chrome permission keys beyon
 | Detected IOC values | Processed locally for display | Sent as **indicator-only** requests to configured threat-intel APIs |
 | Normalized enrichment JSON for AI summary | Built locally from card fields | Sent only to **your** `http://127.0.0.1` LLM endpoint when summary is explicitly requested and toggle is on |
 | Full page HTML, browsing history, tickets | Not uploaded to Vera5-operated services | Not sent to Vera5 by design |
-| Investigation replay segments | Stored locally; read-only playback | No upload; markdown export is user-initiated clipboard/download only |
+| Investigation replay segments | Stored locally; read-only playback (see [Investigation replay privacy model](#investigation-replay-privacy-model)) | No upload; markdown export is user-initiated clipboard/download only |
 | Portable threat profiles and settings packs | Imported/exported as JSON without keys | No Vera5-hosted profile store |
 
 For a visual summary of IOC and data boundaries, see the **IOC and data boundary** diagram in [SECURITY.md](../SECURITY.md#ioc-leakage).
@@ -402,12 +402,27 @@ See [ai-summary.md](ai-summary.md).
 
 ## Investigation replay and local memory
 
-Investigation replay, timelines, correlation clusters, relationship edges, and notebook fragments are **local-only**:
+Investigation **replay** is a local, read-only playback of workflow steps already recorded on an investigation session. It is **not** screen recording, video capture, cloud-hosted sharing, or live re-execution of vendor enrichment.
+
+### Investigation replay privacy model
+
+| Guarantee | Behavior |
+|-----------|----------|
+| **Local-only storage** | Replay segments are projected from investigation session timeline events already kept in extension **local storage** (`chrome.storage.local`). Replay does not write a separate cloud store or sync replay payloads through `chrome.storage.sync`. |
+| **No upload endpoint** | There is no Vera5-operated replay upload, share link, or remote archive. Playback never POSTs session or segment data to Vera5 infrastructure (none exists for this feature). |
+| **Read-only playback** | Stepping previous / next / jump highlights narrative state in the popup and may scroll an on-page indicator highlight. It does **not** re-issue live vendor API calls, re-run macros against the network, or mutate enrichment cache as part of “playing” a step. |
+| **No screen or video capture** | Replay must not call screen/video capture surfaces (`getDisplayMedia`, `desktopCapture`, `tabCapture`, `captureStream`). Playback is UI narrative + optional highlight only. |
+| **Copy/share is clipboard only** | Sharing a replay transcript uses **Copy transcript**, which writes to the clipboard only after an operator click. Web Share (`navigator.share`) and automatic clipboard writes on step change are forbidden. **Download transcript** is a separate user-initiated local file save—not a cloud share. |
+| **User-initiated export only** | Markdown replay transcripts (and optional IOC/enrichment appendix) leave the extension only when you **Copy transcript** or **Download transcript**. These actions are operator-driven; they are not automatic telemetry. |
+| **Secrets** | Free-text attribution and transcript fields use the same redaction rules as session/timeline exports. API keys and raw vendor dumps are not part of the replay model. |
+
+Replay **projects** the existing session `TimelineEvent` log into ordered `ReplaySegment` records for step-through and transcripts. It does not open a second capture pipeline and does not record the browser viewport.
+
+Timelines, correlation clusters, relationship edges, and notebook fragments that share this local-memory family are likewise **local-only**:
 
 - stored in extension local storage
 - no screen or video capture APIs
 - no upload endpoint to Vera5
-- replay step-through does **not** re-issue live vendor API calls
 - export/copy actions are user-initiated
 
 Clear-all controls for correlation or relationship memory do not delete investigation sessions unless you explicitly choose combined wipe (documented in Settings).

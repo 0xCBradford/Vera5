@@ -40,6 +40,8 @@ import { POPUP_PANEL } from "../lib/popupPanelFocus";
 import { IOC_TYPE } from "../lib/iocRegex";
 import { MAX_OPERATOR_MACRO_LIVE_ENRICH_CALLS_PER_RUN } from "../lib/operatorMacroStepTypes";
 import { OPERATOR_MACRO_BULK_ENRICH_QUOTA_WARNING_MESSAGE } from "../lib/storage";
+import * as macroStepActions from "../lib/macroStepActions";
+import { MACRO_RUN_STATUS } from "../lib/timelineEvent";
 
 const getQuietMode = vi.fn(async () => false);
 const setQuietMode = vi.fn(async () => undefined);
@@ -424,7 +426,7 @@ describe("registerCoreCommandPaletteCommands", () => {
     expect(runOperatorMacroEnrichStep).toHaveBeenCalledTimes(1);
   });
 
-  it("returns aborted status from the shared runner when enrich trust gates block", async () => {
+  it("aborts before export when domain policy blocks enrich", async () => {
     const runOperatorMacroEnrichStep = vi
       .spyOn(enrichSelection, "runOperatorMacroEnrichStep")
       .mockResolvedValue({
@@ -435,12 +437,28 @@ describe("registerCoreCommandPaletteCommands", () => {
         abortMessage:
           "Threat intelligence queries are blocked for this site by domain policy.",
       });
+    const emitMacroRun = vi.spyOn(
+      macroStepActions,
+      "emitInvestigationSessionMacroRunTimelineEvent"
+    );
+    const renderSpy = vi.spyOn(exportTemplates, "renderExportTemplate");
+    const copySpy = vi.spyOn(copyText, "copyTextToClipboard");
 
     const result = await runOperatorMacro(
       createOperatorMacro({
-        id: "enrich-only",
-        name: "Enrich only",
-        steps: [{ type: "enrich", params: { scope: "selection" } }],
+        id: "blocked-enrich-then-export",
+        name: "Blocked enrich then export",
+        steps: [
+          { type: "enrich", params: { scope: "selection" } },
+          {
+            type: "exportMarkdown",
+            params: {
+              templateId: "markdown-report",
+              destination: "clipboard",
+              scope: "selection",
+            },
+          },
+        ],
         triggers: { palette: true },
       })
     );
@@ -451,6 +469,140 @@ describe("registerCoreCommandPaletteCommands", () => {
         "Threat intelligence queries are blocked for this site by domain policy.",
     });
     expect(runOperatorMacroEnrichStep).toHaveBeenCalledTimes(1);
+    expect(renderSpy).not.toHaveBeenCalled();
+    expect(copySpy).not.toHaveBeenCalled();
+    expect(emitMacroRun).toHaveBeenCalledWith({
+      stepType: "enrich",
+      macroId: "blocked-enrich-then-export",
+      stepIndex: 0,
+      runStatus: MACRO_RUN_STATUS.ABORTED,
+      iocValue: undefined,
+      iocType: undefined,
+    });
+  });
+
+  it("records success macro run segments with macro id and step index", async () => {
+    const runOperatorMacroEnrichStep = vi
+      .spyOn(enrichSelection, "runOperatorMacroEnrichStep")
+      .mockResolvedValue({
+        ok: true,
+        value: "192.0.2.1",
+        type: IOC_TYPE.IPV4,
+      });
+    const emitMacroRun = vi.spyOn(
+      macroStepActions,
+      "emitInvestigationSessionMacroRunTimelineEvent"
+    );
+    vi.spyOn(hoverCardOverlay, "getLastHoverCardPayload").mockReturnValue({
+      value: "192.0.2.1",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "ready",
+      summary: "fixture",
+    });
+    vi.spyOn(hoverCardOverlay, "buildExportRecordFromPayload").mockReturnValue({
+      ioc: "192.0.2.1",
+      iocType: IOC_TYPE.IPV4,
+      iocTypeLabel: "IPv4",
+      enrichmentState: "ready",
+      tags: [],
+      sources: [],
+      disabledSources: [],
+      riskScore: null,
+      pivots: [],
+      exportedAt: "2026-07-16T00:00:00.000Z",
+      summary: "fixture",
+    });
+    vi.spyOn(exportTemplates, "renderExportTemplate").mockReturnValue("# ok");
+    vi.spyOn(copyText, "copyTextToClipboard").mockResolvedValue(true);
+
+    const result = await runOperatorMacro(
+      createOperatorMacro({
+        id: "macro-run-record",
+        name: "Macro run record",
+        steps: [
+          { type: "enrich", params: { scope: "selection" } },
+          {
+            type: "exportMarkdown",
+            params: {
+              templateId: "markdown-report",
+              destination: "clipboard",
+              scope: "selection",
+            },
+          },
+        ],
+        triggers: { palette: true },
+      })
+    );
+
+    expect(result).toEqual({ status: "completed" });
+    expect(runOperatorMacroEnrichStep).toHaveBeenCalledTimes(1);
+    expect(emitMacroRun).toHaveBeenNthCalledWith(1, {
+      stepType: "enrich",
+      macroId: "macro-run-record",
+      stepIndex: 0,
+      runStatus: MACRO_RUN_STATUS.SUCCESS,
+      iocValue: "192.0.2.1",
+      iocType: IOC_TYPE.IPV4,
+    });
+    expect(emitMacroRun).toHaveBeenNthCalledWith(2, {
+      stepType: "exportMarkdown",
+      macroId: "macro-run-record",
+      stepIndex: 1,
+      runStatus: MACRO_RUN_STATUS.SUCCESS,
+      iocValue: "192.0.2.1",
+      iocType: IOC_TYPE.IPV4,
+    });
+  });
+
+  it("routes export steps through the shared export template builder", async () => {
+    const record = {
+      ioc: "example.com",
+      iocType: "domain",
+      iocTypeLabel: "Domain",
+      enrichmentState: "ready" as const,
+      tags: [],
+      sources: [],
+      disabledSources: [],
+      riskScore: null,
+      pivots: [],
+      exportedAt: "2026-07-16T00:00:00.000Z",
+      summary: "Known fixture domain",
+    };
+    vi.spyOn(hoverCardOverlay, "getLastHoverCardPayload").mockReturnValue({
+      value: "example.com",
+      type: "domain",
+      enrichmentState: "ready",
+      summary: "Known fixture domain",
+    });
+    vi.spyOn(hoverCardOverlay, "buildExportRecordFromPayload").mockReturnValue(record);
+    const renderSpy = vi
+      .spyOn(exportTemplates, "renderExportTemplate")
+      .mockReturnValue("# shared markdown report");
+    const copySpy = vi
+      .spyOn(copyText, "copyTextToClipboard")
+      .mockResolvedValue(true);
+
+    const result = await runOperatorMacro(
+      createOperatorMacro({
+        id: "shared-export-builder",
+        name: "Shared export builder",
+        steps: [
+          {
+            type: "exportMarkdown",
+            params: {
+              templateId: "markdown-report",
+              destination: "clipboard",
+              scope: "selection",
+            },
+          },
+        ],
+        triggers: { palette: true },
+      })
+    );
+
+    expect(result).toEqual({ status: "completed" });
+    expect(renderSpy).toHaveBeenCalledWith("markdown-report", record);
+    expect(copySpy).toHaveBeenCalledWith("# shared markdown report");
   });
 
   it("caps live enrich calls per macro run and surfaces a quota warning", async () => {

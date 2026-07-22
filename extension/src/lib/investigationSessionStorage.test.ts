@@ -603,6 +603,8 @@ describe("investigationSessionStorage", () => {
     const updated = await recordActiveInvestigationSessionMacroRunEvent({
       stepType: "openFromSelection",
       macroId: "triage-selection",
+      stepIndex: 0,
+      runStatus: "success",
       iocValue: "8.8.8.8",
       iocType: IOC_TYPE.IPV4,
       now: 200,
@@ -615,6 +617,9 @@ describe("investigationSessionStorage", () => {
         iocKey: "8.8.8.8",
         timestamp: 200,
         sourceAttributionSummary: "triage-selection: openFromSelection",
+        macroId: "triage-selection",
+        stepIndex: 0,
+        runStatus: "success",
       }),
     ]);
   });

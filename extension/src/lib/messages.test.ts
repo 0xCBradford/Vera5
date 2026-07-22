@@ -75,9 +75,27 @@ describe("Vera5 message envelopes", () => {
       iocType: "ipv4",
       value: "8.8.8.8",
     });
+    expect(
+      navigateToIocAnchorMessage("vera5-hl-1", {
+        iocType: "ipv4",
+        value: "8.8.8.8",
+        enrichmentTrigger: "none",
+      })
+    ).toEqual({
+      type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
+      anchorId: "vera5-hl-1",
+      iocType: "ipv4",
+      value: "8.8.8.8",
+      enrichmentTrigger: "none",
+    });
     expect(isNavigateToIocAnchorMessage(navigateToIocAnchorMessage("vera5-hl-1"))).toBe(
       true
     );
+    expect(
+      isNavigateToIocAnchorMessage(
+        navigateToIocAnchorMessage("vera5-hl-1", { enrichmentTrigger: "none" })
+      )
+    ).toBe(true);
     expect(isNavigateToIocAnchorMessage({ type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR, anchorId: "" })).toBe(
       false
     );
@@ -86,6 +104,13 @@ describe("Vera5 message envelopes", () => {
         type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
         anchorId: "vera5-hl-1",
         iocType: "ipv4",
+      })
+    ).toBe(false);
+    expect(
+      isNavigateToIocAnchorMessage({
+        type: MESSAGE.NAVIGATE_TO_IOC_ANCHOR,
+        anchorId: "vera5-hl-1",
+        enrichmentTrigger: "invalid",
       })
     ).toBe(false);
   });
