@@ -23,7 +23,10 @@ import type { TabPageContextRecord } from "../lib/pageContext";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import * as tabScanSummary from "../lib/tabScanSummary";
 import * as iocCoOccurrenceStorage from "../lib/iocCoOccurrenceStorage";
-import { buildPageIocCoOccurrenceIndexFromSnapshot } from "../lib/iocCoOccurrence";
+import { buildIocCoOccurrenceMemberKey, buildPageIocCoOccurrenceIndexFromSnapshot } from "../lib/iocCoOccurrence";
+import * as correlationClusterStorage from "../lib/correlationClusterStorage";
+import { createCorrelationCluster } from "../lib/correlationCluster";
+import * as investigationSessionStorage from "../lib/investigationSessionStorage";
 import { createIocCollection } from "../lib/iocCollection";
 import * as iocCollectionExport from "../lib/iocCollectionExport";
 import { MESSAGE } from "../lib/messages";
@@ -1071,41 +1074,127 @@ describe("Popup IOC tray", () => {
     ).toBeNull();
   });
 
-  it("highlights the replayed IOC on the page without live enrichment", async () => {
+  it("does not trigger outbound enrich during replay step-through", async () => {
     stubChrome({
       initialSummary: sampleSummary,
-      activeSession: sampleActiveSession,
+      activeSession: createInvestigationSession({
+        id: sampleActiveSession.id,
+        title: sampleActiveSession.title,
+        pageUrl: sampleActiveSession.pageUrl,
+        createdAt: sampleActiveSession.createdAt,
+        updatedAt: sampleActiveSession.updatedAt,
+        totalIocCount: sampleActiveSession.totalIocCount,
+        iocCountByType: sampleActiveSession.iocCountByType,
+        timelineEvents: [
+          createTimelineEvent({
+            type: TIMELINE_EVENT_TYPE.SCAN,
+            sessionId: sampleActiveSession.id,
+            iocKey: "8.8.8.8",
+            timestamp: 100,
+          }),
+          createTimelineEvent({
+            type: TIMELINE_EVENT_TYPE.ENRICH,
+            sessionId: sampleActiveSession.id,
+            iocKey: "8.8.8.8",
+            timestamp: 250,
+            sourceAttributionSummary: "Source: AbuseIPDB · live",
+          }),
+          createTimelineEvent({
+            type: TIMELINE_EVENT_TYPE.EXPORT,
+            sessionId: sampleActiveSession.id,
+            iocKey: "8.8.8.8",
+            timestamp: 400,
+            templateId: "jira-comment",
+          }),
+        ],
+      }),
     });
     mounted = renderPopup();
 
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("Investigation replay");
+      expect(mounted?.container.textContent).toContain("Step 1 of 3");
     });
+
+    const tabsSendMessage = chrome.tabs.sendMessage as ReturnType<typeof vi.fn>;
+    const runtimeSendMessage = chrome.runtime.sendMessage as ReturnType<typeof vi.fn>;
+    tabsSendMessage.mockClear();
+    runtimeSendMessage.mockClear();
 
     const next = mounted?.container.querySelector(
       'button[aria-label="Next"]'
     ) as HTMLButtonElement | null;
+    const previous = mounted?.container.querySelector(
+      'button[aria-label="Previous"]'
+    ) as HTMLButtonElement | null;
+    const jumpButtons = Array.from(
+      mounted?.container.querySelectorAll('[aria-label="Replay steps"] [role="button"]') ?? []
+    ) as HTMLElement[];
+
     expect(next).not.toBeNull();
+    expect(previous).not.toBeNull();
+    expect(next?.disabled).toBe(false);
+    expect(jumpButtons.length).toBe(3);
 
     flushSync(() => {
       next?.click();
     });
-
     await vi.waitFor(() => {
-      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
+      expect(tabsSendMessage).toHaveBeenCalledWith(
         7,
-        {
+        expect.objectContaining({
           type: "NAVIGATE_TO_IOC_ANCHOR",
-          anchorId: "vera5-hl-1",
-          iocType: "ipv4",
           value: "8.8.8.8",
           enrichmentTrigger: "none",
-        }
+        })
       );
     });
-    expect(chrome.runtime.sendMessage).not.toHaveBeenCalledWith(
+
+    flushSync(() => {
+      jumpButtons[2]?.click();
+    });
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Step 3 of 3");
+    });
+
+    flushSync(() => {
+      previous?.click();
+    });
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Step 2 of 3");
+    });
+
+    flushSync(() => {
+      jumpButtons[0]?.click();
+    });
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Step 1 of 3");
+    });
+
+    const navigateCalls = tabsSendMessage.mock.calls.filter(
+      (call) =>
+        call[1] &&
+        typeof call[1] === "object" &&
+        (call[1] as { type?: string }).type === "NAVIGATE_TO_IOC_ANCHOR"
+    );
+    expect(navigateCalls.length).toBeGreaterThanOrEqual(3);
+    for (const call of navigateCalls) {
+      expect(call[1]).toEqual(
+        expect.objectContaining({
+          type: "NAVIGATE_TO_IOC_ANCHOR",
+          enrichmentTrigger: "none",
+          value: "8.8.8.8",
+        })
+      );
+    }
+
+    expect(runtimeSendMessage).not.toHaveBeenCalledWith(
       expect.objectContaining({ type: "ENRICH_IOC" })
     );
+    for (const call of runtimeSendMessage.mock.calls) {
+      const message = call[0] as { type?: string } | undefined;
+      expect(message?.type).not.toBe("ENRICH_IOC");
+    }
   });
 
   it("navigates to the page highlight when a timeline row is clicked", async () => {
@@ -1403,6 +1492,152 @@ describe("Popup IOC tray", () => {
     expect(expander?.textContent).toContain("IP · 192.0.2.1");
     expect(expander?.textContent).toContain("CVE · CVE-2021-44228");
     expect(expander?.textContent).toContain("Same page scan");
+  });
+
+  it("shows cross-session correlation clusters for the active IOC in tray expanders", async () => {
+    const priorSession = createInvestigationSession({
+      id: "vera5-inv-prior",
+      title: "Prior alert session",
+      pageUrl: "https://example.com/alerts/prior-long-path/investigation-report.html",
+      createdAt: 50,
+      updatedAt: 200,
+    });
+    vi.spyOn(correlationClusterStorage, "buildStoredCorrelationClustersFromInvestigationMemory").mockResolvedValue([
+      createCorrelationCluster({
+        memberIocKeys: [
+          buildIocCoOccurrenceMemberKey(IOC_TYPE.IPV4, "8.8.8.8"),
+          buildIocCoOccurrenceMemberKey(IOC_TYPE.DOMAIN, "example.com"),
+        ],
+        sessionIds: [sampleActiveSession.id, priorSession.id],
+        firstSeenAt: 50,
+        lastSeenAt: 200,
+        coOccurrenceCount: 2,
+      }),
+    ]);
+    vi.spyOn(investigationSessionStorage, "listStoredInvestigationSessions").mockResolvedValue([
+      sampleActiveSession,
+      priorSession,
+    ]);
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared across sessions");
+    });
+
+    const expander = mounted!.container.querySelector(".vera5-tray-correlation-clusters");
+    expect(expander).not.toBeNull();
+    expect(expander?.getAttribute("data-vera5-correlation-layout")).toBe("list");
+    expect(expander?.textContent).toContain("1 other session · 2 indicators");
+    expect(expander?.textContent).toContain("Prior alert session");
+    expect(expander?.textContent).toContain("2 indicators in cluster");
+    expect(expander?.querySelector(".vera5-tray-correlation-clusters-drilldown")).not.toBeNull();
+    expect(expander?.querySelector("ul.vera5-tray-correlation-clusters-list")).not.toBeNull();
+    expect(expander?.querySelector(".vera5-tray-correlation-disclaimer")?.textContent).toContain(
+      "Correlation ≠ causation"
+    );
+    expect(expander?.textContent).toContain("not a detection verdict");
+    expect(expander?.querySelector("canvas")).toBeNull();
+    expect(expander?.querySelector("svg")).toBeNull();
+  });
+
+  it("shows empty state when cross-session correlation data is insufficient", async () => {
+    vi.spyOn(correlationClusterStorage, "buildStoredCorrelationClustersFromInvestigationMemory").mockResolvedValue(
+      []
+    );
+    vi.spyOn(investigationSessionStorage, "listStoredInvestigationSessions").mockResolvedValue([
+      sampleActiveSession,
+    ]);
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared across sessions");
+      expect(mounted?.container.textContent).toContain("Not enough cross-session data yet");
+    });
+
+    const expander = mounted!.container.querySelector(".vera5-tray-correlation-clusters");
+    expect(expander).not.toBeNull();
+    expect(expander?.getAttribute("data-vera5-correlation-empty")).toBe("true");
+    expect(expander?.querySelector(".vera5-tray-correlation-clusters-empty")).not.toBeNull();
+    expect(expander?.querySelector(".vera5-tray-correlation-clusters-list")).toBeNull();
+    expect(expander?.querySelector(".vera5-tray-correlation-disclaimer")?.textContent).toContain(
+      "Correlation ≠ causation"
+    );
+  });
+
+  it("links cross-session correlation to same-page co-occurrence for the current tab scan", async () => {
+    const priorSession = createInvestigationSession({
+      id: "vera5-inv-prior-link",
+      title: "Prior alert session",
+      pageUrl: "https://example.com/alerts/prior/report.html",
+      createdAt: 50,
+      updatedAt: 200,
+    });
+    vi.spyOn(correlationClusterStorage, "buildStoredCorrelationClustersFromInvestigationMemory").mockResolvedValue([
+      createCorrelationCluster({
+        memberIocKeys: [
+          buildIocCoOccurrenceMemberKey(IOC_TYPE.IPV4, "8.8.8.8"),
+          buildIocCoOccurrenceMemberKey(IOC_TYPE.DOMAIN, "example.com"),
+        ],
+        sessionIds: [sampleActiveSession.id, priorSession.id],
+        firstSeenAt: 50,
+        lastSeenAt: 200,
+        coOccurrenceCount: 2,
+      }),
+    ]);
+    vi.spyOn(investigationSessionStorage, "listStoredInvestigationSessions").mockResolvedValue([
+      sampleActiveSession,
+      priorSession,
+    ]);
+    vi.spyOn(iocCoOccurrenceStorage, "getPageIocCoOccurrenceIndexForSession").mockResolvedValue(
+      buildPageIocCoOccurrenceIndexFromSnapshot({
+        schemaVersion: 2,
+        pageUrl: sampleSummary.pageUrl,
+        scannedAt: sampleSummary.scannedAt,
+        entries: sampleSummary.entries,
+      })
+    );
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared across sessions");
+      expect(mounted?.container.textContent).toContain("Appeared alongside");
+    });
+
+    const correlation = mounted!.container.querySelector(".vera5-tray-correlation-clusters");
+    const samePage = mounted!.container.querySelector(".vera5-tray-co-occurrence");
+    expect(correlation).not.toBeNull();
+    expect(samePage).not.toBeNull();
+    expect(correlation?.querySelector(".vera5-tray-co-occurrence-item")).toBeNull();
+    expect(correlation?.textContent).toContain("See Appeared alongside for this page");
+    expect(correlation?.querySelector(".vera5-tray-correlation-disclaimer")?.textContent).toContain(
+      "Correlation ≠ causation"
+    );
+    expect(samePage?.querySelector(".vera5-tray-co-occurrence-disclaimer")?.textContent).toContain(
+      "not a detection verdict"
+    );
+
+    const link = correlation?.querySelector<HTMLButtonElement>(
+      ".vera5-tray-correlation-same-page-link"
+    );
+    expect(link).not.toBeNull();
+    expect(link?.getAttribute("aria-controls")).toBe(samePage?.id);
+    expect((samePage as HTMLDetailsElement).open).toBe(false);
+
+    link?.click();
+
+    expect((samePage as HTMLDetailsElement).open).toBe(true);
   });
 
   it("navigates to a related IOC when a tray co-occurrence entry is clicked", async () => {

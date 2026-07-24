@@ -221,11 +221,28 @@ function checkNoSensitiveProductionLogging(filePath, source) {
   }
 }
 
+/**
+ * True when `host` appears as a host-like token, not as a prefix of an identifier
+ * (for example `segment.iocKey` must not match telemetry host `segment.io`).
+ */
+function sourceReferencesTelemetryHost(source, host) {
+  let index = 0;
+  while ((index = source.indexOf(host, index)) !== -1) {
+    const after = source[index + host.length] ?? "";
+    if (/[a-z0-9_]/i.test(after)) {
+      index += host.length;
+      continue;
+    }
+    return true;
+  }
+  return false;
+}
+
 function checkDistBundlesForTelemetryHosts(distRoot) {
   for (const filePath of walkFiles(distRoot, [".js"])) {
     const source = fs.readFileSync(filePath, "utf8").toLowerCase();
     for (const host of TELEMETRY_HOST_SUBSTRINGS) {
-      if (source.includes(host)) {
+      if (sourceReferencesTelemetryHost(source, host)) {
         fail(`${filePath} references telemetry/analytics host: ${host}`);
       }
     }

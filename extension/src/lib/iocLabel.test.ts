@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   formatIocLabelDisplay,
   IOC_LABEL_IDS,
+  IOC_LABELS_EXCLUDED_FROM_CORRELATION_CLUSTER_PROMOTION,
+  isIocLabelExcludedFromCorrelationClusterPromotion,
   isIocLabelId,
   normalizeIocLabelId,
 } from "./iocLabel";
@@ -27,5 +29,21 @@ describe("iocLabel", () => {
     expect(formatIocLabelDisplay("suppress-false-positive")).toBe(
       "Suppress false positive"
     );
+  });
+
+  it("marks internal and suppress labels as excluded from correlation cluster promotion", () => {
+    expect(IOC_LABELS_EXCLUDED_FROM_CORRELATION_CLUSTER_PROMOTION).toEqual([
+      "internal",
+      "suppress-false-positive",
+    ]);
+    expect(isIocLabelExcludedFromCorrelationClusterPromotion("internal")).toBe(true);
+    expect(
+      isIocLabelExcludedFromCorrelationClusterPromotion("suppress-false-positive")
+    ).toBe(true);
+    expect(isIocLabelExcludedFromCorrelationClusterPromotion("benign")).toBe(false);
+    expect(isIocLabelExcludedFromCorrelationClusterPromotion("case-important")).toBe(
+      false
+    );
+    expect(isIocLabelExcludedFromCorrelationClusterPromotion(null)).toBe(false);
   });
 });

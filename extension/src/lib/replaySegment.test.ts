@@ -9,7 +9,11 @@ import {
 import { REDACTED_VALUE_PLACEHOLDER } from "./enrichmentRawResponse";
 import { TEST_FIXTURE_ABUSEIPDB_API_KEY } from "./fixtureSecrets";
 import { IOC_TYPE } from "./iocRegex";
-import { createTimelineEvent, TIMELINE_EVENT_TYPE } from "./timelineEvent";
+import {
+  createTimelineEvent,
+  MACRO_RUN_STATUS,
+  TIMELINE_EVENT_TYPE,
+} from "./timelineEvent";
 import * as investigationSessionStorage from "./investigationSessionStorage";
 import {
   REPLAY_FORBIDDEN_CAPTURE_APIS,
@@ -48,6 +52,8 @@ import {
   INVESTIGATION_REPLAY_SHARE_CHANNEL,
   INVESTIGATION_REPLAY_STORAGE_BACKEND,
   INVESTIGATION_REPLAY_STORAGE_KEY,
+  INVESTIGATION_REPLAY_TRANSCRIPT_HEADING,
+  INVESTIGATION_REPLAY_TRANSCRIPT_STEPS_HEADING,
   INVESTIGATION_REPLAY_TRANSCRIPT_TEMPLATE_IDS,
   INVESTIGATION_REPLAY_UPLOAD_ENDPOINT,
   isReplayForbiddenCaptureApi,
@@ -630,6 +636,78 @@ describe("replay segment ingest and stable sort", () => {
     expect(segments.map((segment) => segment.action)).toEqual(["macroRun", "watchlistTag"]);
   });
 
+  it("keeps macro run segments in chronological order among other replay actions", () => {
+    const segments = ingestReplaySegmentsFromTimelineEvents([
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+        sessionId: "vera5-inv-macro-order",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_040,
+        sourceAttributionSummary: "cti-deep-check: enrich",
+        macroId: "cti-deep-check",
+        stepIndex: 1,
+        runStatus: MACRO_RUN_STATUS.SUCCESS,
+      }),
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.SCAN,
+        sessionId: "vera5-inv-macro-order",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_010,
+      }),
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.MACRO_RUN,
+        sessionId: "vera5-inv-macro-order",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_030,
+        sourceAttributionSummary: "cti-deep-check: enrich",
+        macroId: "cti-deep-check",
+        stepIndex: 0,
+        runStatus: MACRO_RUN_STATUS.SUCCESS,
+      }),
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.ENRICH,
+        sessionId: "vera5-inv-macro-order",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_020,
+      }),
+      createTimelineEvent({
+        type: TIMELINE_EVENT_TYPE.EXPORT,
+        sessionId: "vera5-inv-macro-order",
+        iocKey: "192.0.2.1",
+        timestamp: 1_700_000_000_050,
+        templateId: "jira-comment",
+      }),
+    ]);
+
+    expect(segments.map((segment) => segment.action)).toEqual([
+      REPLAY_SEGMENT_ACTION.SCAN,
+      REPLAY_SEGMENT_ACTION.ENRICH,
+      REPLAY_SEGMENT_ACTION.MACRO_RUN,
+      REPLAY_SEGMENT_ACTION.MACRO_RUN,
+      REPLAY_SEGMENT_ACTION.EXPORT,
+    ]);
+    expect(
+      segments
+        .filter((segment) => segment.action === REPLAY_SEGMENT_ACTION.MACRO_RUN)
+        .map((segment) => ({
+          stepIndex: segment.stepIndex,
+          macroId: segment.macroId,
+          runStatus: segment.runStatus,
+        }))
+    ).toEqual([
+      {
+        stepIndex: 0,
+        macroId: "cti-deep-check",
+        runStatus: MACRO_RUN_STATUS.SUCCESS,
+      },
+      {
+        stepIndex: 1,
+        macroId: "cti-deep-check",
+        runStatus: MACRO_RUN_STATUS.SUCCESS,
+      },
+    ]);
+  });
+
   it("returns an empty list when the session has no timeline events", () => {
     expect(ingestReplaySegmentsFromInvestigationSession({})).toEqual([]);
     expect(ingestReplaySegmentsFromInvestigationSession({ timelineEvents: [] })).toEqual([]);
@@ -820,16 +898,74 @@ describe("investigation replay transcript markdown", () => {
       exportedAt: EXPORTED_AT,
     });
 
-    expect(markdown).toContain("# Investigation replay transcript");
+    expect(markdown).toContain(`# ${INVESTIGATION_REPLAY_TRANSCRIPT_HEADING}`);
     expect(markdown).toContain("- **Session:** Training handoff case");
     expect(markdown).toContain("- **Page URL:** https://example.com/alert");
     expect(markdown).toContain(`- **Exported:** ${EXPORTED_AT}`);
     expect(markdown).toContain("- **Steps:** 3");
-    expect(markdown).toContain("## Ordered steps");
+    expect(markdown).toContain(`## ${INVESTIGATION_REPLAY_TRANSCRIPT_STEPS_HEADING}`);
     expect(markdown).toContain("| Step | Time (UTC) | Action | Indicator | Details |");
     expect(markdown).toContain("| 1 | 2023-11-14T22:13:20.200Z | Scan | 192.0.2.1 |");
     expect(markdown).toContain("| 2 | 2023-11-14T22:13:20.250Z | Enrich | 192.0.2.1 | Source: AbuseIPDB · live |");
     expect(markdown).toContain("Template: Markdown report");
+  });
+
+  it("includes expected transcript headings and ordered macro run rows", () => {
+    const segments = [
+      createReplaySegment({
+        action: REPLAY_SEGMENT_ACTION.SCAN,
+        sessionId: "vera5-inv-macro-transcript",
+        iocKey: "8.8.8.8",
+        timestamp: 1_700_000_000_500,
+      }),
+      createReplaySegment({
+        action: REPLAY_SEGMENT_ACTION.MACRO_RUN,
+        sessionId: "vera5-inv-macro-transcript",
+        iocKey: "8.8.8.8",
+        timestamp: 1_700_000_000_510,
+        sourceAttributionSummary: "cti-deep-check: enrich",
+        macroId: "cti-deep-check",
+        stepIndex: 0,
+        runStatus: MACRO_RUN_STATUS.SUCCESS,
+        sourceTimelineEventType: TIMELINE_EVENT_TYPE.MACRO_RUN,
+      }),
+      createReplaySegment({
+        action: REPLAY_SEGMENT_ACTION.MACRO_RUN,
+        sessionId: "vera5-inv-macro-transcript",
+        iocKey: "8.8.8.8",
+        timestamp: 1_700_000_000_520,
+        sourceAttributionSummary: "cti-deep-check: export",
+        macroId: "cti-deep-check",
+        stepIndex: 1,
+        runStatus: MACRO_RUN_STATUS.SUCCESS,
+        sourceTimelineEventType: TIMELINE_EVENT_TYPE.MACRO_RUN,
+      }),
+    ];
+
+    const markdown = buildInvestigationReplayTranscriptMarkdown({
+      session: {
+        id: "vera5-inv-macro-transcript",
+        title: "Macro order handoff",
+        pageUrl: "https://example.com/macro-replay",
+      },
+      segments,
+      exportedAt: EXPORTED_AT,
+    });
+
+    expect(markdown).toContain(`# ${INVESTIGATION_REPLAY_TRANSCRIPT_HEADING}`);
+    expect(markdown).toContain(`## ${INVESTIGATION_REPLAY_TRANSCRIPT_STEPS_HEADING}`);
+    expect(markdown).toContain("- **Session:** Macro order handoff");
+    expect(markdown).toContain("- **Page URL:** https://example.com/macro-replay");
+    expect(markdown).toContain(`- **Exported:** ${EXPORTED_AT}`);
+    expect(markdown).toContain("- **Steps:** 3");
+    expect(markdown).toContain("| Step | Time (UTC) | Action | Indicator | Details |");
+    expect(markdown).toContain("| 1 | 2023-11-14T22:13:20.500Z | Scan | 8.8.8.8 |");
+    expect(markdown).toContain(
+      "| 2 | 2023-11-14T22:13:20.510Z | Macro run | 8.8.8.8 | cti-deep-check: enrich · Macro: cti-deep-check · Step index: 0 · Status: success |"
+    );
+    expect(markdown).toContain(
+      "| 3 | 2023-11-14T22:13:20.520Z | Macro run | 8.8.8.8 | cti-deep-check: export · Macro: cti-deep-check · Step index: 1 · Status: success |"
+    );
   });
 
   it("includes an empty-steps note when the session has no replayable segments", () => {

@@ -510,9 +510,26 @@ Every event includes:
 
 Events **never** include API keys, raw vendor JSON secrets, or full page content—only indicator keys and short attribution summaries you would already see on the hover card or export menus.
 
+### Shared event-type matrix
+
+Session **timeline**, **timeline export**, and **investigation replay** share one capture catalog. Operators and integrators can treat the table below as the crosswalk between stored event types, workspace labels, and replay projection. There is no second event stream for replay.
+
+| Stored timeline `type` | Timeline UI label | Session timeline | Timeline export | Replay `action` | Replay UI / transcript label | Investigation replay |
+|------------------------|-------------------|------------------|-----------------|-----------------|------------------------------|----------------------|
+| `scan` | First seen | Yes | Yes | `scan` | Scan | Yes — projected |
+| `enrich` | Enriched | Yes | Yes | `enrich` | Enrich | Yes — projected |
+| `export` | Exported | Yes | Yes | `export` | Export | Yes — projected (keeps `templateId` when present) |
+| `watchlistTag` | Tagged | Yes | Yes | `watchlistTag` | Tagged | Yes — projected |
+| `macroRun` | Macro run | Yes | Yes | `macroRun` | Macro run | Yes — projected (keeps `macroId`, `stepIndex`, `runStatus` when present) |
+| `redetect` | Seen again | Yes | Yes | — | — | No — timeline and export only; not projected into v1 replay segments |
+| *(none)* | — | No | No | `select` | Select | Replay model only — not a timeline capture type; workspace replay projects the session timeline and does not invent select steps |
+| *(none)* | — | No | No | `note` | Note | Replay model only — not a timeline capture type; workspace replay projects the session timeline and does not invent note steps |
+
+**Invariant:** Scan, enrich, export, label, macro, and re-detection paths write `TimelineEvent` records into the investigation session store. Timeline UI, timeline appendix export, and investigation replay **read** that same array. Replay **projects** eligible types into `ReplaySegment` records for step-through and transcripts; it does not re-capture or re-query vendors.
+
 ### Investigation replay segment mapping
 
-Investigation **replay** does not capture a second event stream. It **projects** the session `TimelineEvent` log into ordered **`ReplaySegment`** records for step-through playback and markdown transcripts. Playback is read-only: stepping a segment does not re-run live vendor enrichment or call screen/video capture APIs.
+Investigation **replay** does not capture a second event stream. It **projects** the session `TimelineEvent` log into ordered **`ReplaySegment`** records for step-through playback and markdown transcripts. Playback is read-only: stepping a segment does not re-run live vendor enrichment or call screen/video capture APIs. For which event types appear in replay versus timeline-only, see [Shared event-type matrix](#shared-event-type-matrix).
 
 From the popup **Investigation replay** panel, **Copy transcript** / **Download transcript** produce a local markdown handoff with the session title, page URL, export timestamp, and an ordered step table (action, indicator, timestamps, and short detail lines). Choose a **Transcript template**: **Markdown report** (default table layout), **Obsidian note** (YAML frontmatter with overlapping `session` / `page_url` / `exported_at` / `source` fields), or **Analyst update** (compact prose). An optional **Include IOC & enrichment appendix** toggle appends session-memory IOC content—Markdown report uses the Indicators / Enrichment details sections; Obsidian note and Analyst update reuse those same ticket-template IOC renderers (no vendor raw dumps). Transcripts do not upload data or re-query vendors.
 
@@ -521,7 +538,7 @@ From the popup **Investigation replay** panel, **Copy transcript** / **Download 
 | Timeline event field | Replay segment field | Notes |
 |----------------------|----------------------|-------|
 | `schemaVersion` | `schemaVersion` | Replay segments use their own schema version (**1**); projection does not rewrite timeline events. |
-| `type` | `action` | Mapped per the table below when the timeline type is replayable. |
+| `type` | `action` | Mapped per the [shared event-type matrix](#shared-event-type-matrix) when the timeline type is replayable. |
 | `sessionId` | `sessionId` | Same investigation session id. |
 | `iocKey` | `iocKey` | Same normalized indicator key (may be empty for session-scoped events). |
 | `timestamp` | `timestamp` | Same epoch milliseconds; segments sort by timestamp with stable tie-breakers. |
@@ -532,19 +549,6 @@ From the popup **Investigation replay** panel, **Copy transcript** / **Download 
 | `runStatus` | `runStatus` | `success` or `aborted` for the recorded macro step outcome. |
 | *(n/a)* | `id` | Deterministic replay segment id derived from session, timestamp, action, ioc key, and (for macro runs) step index / status when present. |
 | *(n/a)* | `sourceTimelineEventType` | Set to the originating timeline `type` when the segment was projected from the event log. |
-
-#### Timeline `type` → replay `action`
-
-| Timeline `type` | Replay `action` | Ingest behavior |
-|-----------------|-----------------|-----------------|
-| `scan` | `scan` | Projected |
-| `enrich` | `enrich` | Projected |
-| `export` | `export` | Projected (preserves `templateId`) |
-| `watchlistTag` | `watchlistTag` | Projected |
-| `macroRun` | `macroRun` | Projected (preserves `macroId`, `stepIndex`, `runStatus` when present) |
-| `redetect` | — | Captured on the timeline only; **not** projected into v1 replay segments |
-
-Replay also defines **`select`** and **`note`** actions for playback of indicator focus and analyst-note steps. Those actions are part of the replay model; they are **not** separate timeline capture types and do not create a parallel event pipeline.
 
 #### Single capture pipeline (invariant)
 
@@ -673,12 +677,24 @@ Vera5 separates “appeared together” intelligence into three layers. Each lay
 | Layer | Operator surface | Question it answers | Data source | In current release |
 |-------|------------------|---------------------|-------------|-------------------|
 | **Same-page adjacency** | **Appeared alongside** on the hover card and tray | Which other indicators share **this page scan**? | Tab scan snapshot on the active investigation session | Yes |
-| **Cross-session correlation** | Correlation packs and cross-session cluster lists (when available) | Which **other investigation sessions** saw a similar IOC set? | Merged IOC sets from saved investigation sessions | No |
+| **Cross-session correlation** | **Appeared across sessions** tray rows and correlation pack appendices | Which **other investigation sessions** saw a similar IOC set? | Merged IOC sets from saved investigation sessions | Yes (local clusters + pack export; performance caps apply) |
 | **Relationship memory** | **Previously appeared with** on the hover card and tray (when available) | Which **entities** (IP, domain, hash, …) co-appeared across my past work? | Rolled-up relationship edges from scan and enrich events across sessions | No |
 
 **Same-page adjacency (`Appeared alongside`)** — Shipped today. Builds pairs and groups from one scan on one page URL while your investigation session is active. Jump navigation stays on the current tab. Performance caps in the table above apply. It does not read other tabs, archived sessions, or historical investigations.
 
-**Cross-session correlation** — A separate capability, not bundled in the current extension build. When available, it clusters IOC sets that appeared together across multiple investigation sessions, shows list or adjacency views (not a force-directed graph or global threat map), exports correlation packs as markdown or JSON appendices, and can link to **Appeared alongside** for the current tab’s scan context. Correlation is advisory—shared indicators across sessions are not a detection verdict.
+**Cross-session correlation (`Appeared across sessions`)** — Local cross-session IOC-set clusters on the popup tray. Clusters IOC sets that appeared together across investigation sessions, shows list or adjacency views (not a force-directed graph or global threat map), can link to **Appeared alongside** for the current tab’s scan context, and supports correlation pack markdown/JSON appendices. In-product and pack-export copy states **Correlation ≠ causation** and that co-occurrence / cross-session clusters are advisory only—not a detection verdict.
+
+### Cross-session correlation limits (performance)
+
+Cluster promotion ranks by how many sessions share a set, then by last seen. Caps keep tray and pack exports responsive when many sessions accumulate:
+
+| Limit | Default | What it does |
+|-------|---------|--------------|
+| **Max clusters** | 64 | Keeps at most 64 ranked clusters after build/merge. Lower-ranked clusters are omitted from tray and pack views. |
+| **Max IOCs per cluster** | 64 | Skips IOC sets larger than 64 unique type+value members. Oversized overlap merges that exceed the cap are dropped. |
+| **Retention window** | 90 days | Drops persisted clusters whose **last seen** timestamp is older than the window. The window is configurable in Options (**Cross-session correlation**); the default is 90 days. |
+
+Minimum cluster size remains two indicators and two sessions (unless overlap merge is configured). Defaults apply when limits are omitted; overrides clamp to safe ranges (1–256 clusters; 2–512 members per cluster; retention 1–3650 days). Retention prune runs when local cluster storage is read so stale packs do not linger indefinitely. Options also expose the overlap-merge mode (exact sets only, Jaccard threshold, or minimum shared indicators) and a **Clear all clusters** control that removes stored clusters without deleting investigation session history.
 
 **Relationship memory** — A separate capability, not bundled in the current extension build. When available, it rolls up co-seen entity pairs (for example IP ↔ domain ↔ hash) across sessions, surfaces **Previously appeared with** on the hover card and tray, links to prior investigation sessions and analyst notebook fragments, and honors known-good deprioritization when that policy is enabled. It is deeper than cross-session IOC-set clusters: entity-level edges with retention limits and clear-all controls, not overlap of whole scan snapshots alone.
 

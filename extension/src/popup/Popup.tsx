@@ -72,6 +72,26 @@ import {
 import { getPageIocCoOccurrenceIndexForSession } from "../lib/iocCoOccurrenceStorage";
 import type { PageIocCoOccurrenceIndex } from "../lib/iocCoOccurrence";
 import {
+  buildCorrelationClusterTrayPanelView,
+  buildTrayCoOccurrenceDetailsElementId,
+  CORRELATION_CLUSTER_DISCLAIMER_TEXT,
+  CORRELATION_CLUSTER_SAME_PAGE_CO_OCCURRENCE_LINK_LABEL,
+  CORRELATION_CLUSTER_TRAY_EMPTY_STATE_TEXT,
+  CORRELATION_CLUSTER_TRAY_LABEL,
+  formatCorrelationClusterSamePageCoOccurrenceLinkAriaLabel,
+  formatCorrelationClusterTrayClusterAriaLabel,
+  formatCorrelationClusterTrayClusterLine,
+  formatCorrelationClusterTraySessionDrilldownAriaLabel,
+  formatCorrelationClusterTraySessionDrilldownLine,
+  isCorrelationClusterTrayPanelEmpty,
+  openTraySamePageCoOccurrenceDetails,
+  shouldShowCorrelationClusterSamePageCoOccurrenceLink,
+  shouldShowTrayCorrelationClusterExpander,
+  type CorrelationCluster,
+  type CorrelationClusterSessionLookup,
+} from "../lib/correlationCluster";
+import { buildStoredCorrelationClustersFromInvestigationMemory } from "../lib/correlationClusterStorage";
+import {
   getStoredAnalystNote,
   normalizeAnalystNotesRecord,
   normalizeIocNoteKey,
@@ -139,7 +159,10 @@ import {
   type InvestigationTimelineMarkdownTemplateId,
   type InvestigationTimelineExportInput,
 } from "../lib/investigationTimelineExport";
-import { recordActiveInvestigationSessionExportEvent } from "../lib/investigationSessionStorage";
+import {
+  listStoredInvestigationSessions,
+  recordActiveInvestigationSessionExportEvent,
+} from "../lib/investigationSessionStorage";
 import { getExportTemplateLabel } from "../lib/exportTemplates";
 import {
   buildTimelineEventNavigationAriaLabel,
@@ -2747,6 +2770,7 @@ function CoOccurrenceTrayDetails({
 
   return (
     <details
+      id={buildTrayCoOccurrenceDetailsElementId(entry.anchorId)}
       className="vera5-tray-co-occurrence"
       style={trayWhyDetectedDetailsStyle()}
       onClick={(event) => event.stopPropagation()}
@@ -2788,6 +2812,166 @@ function CoOccurrenceTrayDetails({
             </li>
           ))}
         </ul>
+        <p
+          className="vera5-tray-co-occurrence-disclaimer"
+          style={{
+            ...trayStatusStyle(),
+            margin: "8px 0 0",
+            fontSize: 11,
+            lineHeight: 1.4,
+          }}
+          role="note"
+        >
+          {CORRELATION_CLUSTER_DISCLAIMER_TEXT}
+        </p>
+      </div>
+    </details>
+  );
+}
+
+function CorrelationClusterTrayDetails({
+  entry,
+  clusters,
+  activeSessionId,
+  sessionsById,
+  pageIndex,
+  viewingCurrentTabScan,
+  ready,
+}: {
+  entry: TabScanSummaryEntry;
+  clusters: readonly CorrelationCluster[];
+  activeSessionId: string | null;
+  sessionsById: ReadonlyMap<string, CorrelationClusterSessionLookup>;
+  pageIndex: PageIocCoOccurrenceIndex | null;
+  viewingCurrentTabScan: boolean;
+  ready: boolean;
+}) {
+  const view = buildCorrelationClusterTrayPanelView({
+    iocType: entry.type,
+    value: entry.value,
+    clusters,
+    activeSessionId,
+    sessionsById,
+  });
+  if (!shouldShowTrayCorrelationClusterExpander(view, { ready })) {
+    return null;
+  }
+
+  const isEmpty = isCorrelationClusterTrayPanelEmpty(view);
+  const samePageCoOccurrenceView = buildHoverCardCoOccurrencePanelView({
+    iocType: entry.type,
+    value: entry.value,
+    pageIndex,
+  });
+  const showSamePageLink = shouldShowCorrelationClusterSamePageCoOccurrenceLink({
+    viewingCurrentTabScan,
+    hasSamePageCoOccurrence: shouldShowTrayCoOccurrenceExpander(samePageCoOccurrenceView),
+  });
+  const samePageDetailsId = buildTrayCoOccurrenceDetailsElementId(entry.anchorId);
+
+  return (
+    <details
+      className="vera5-tray-correlation-clusters"
+      data-vera5-correlation-layout={view.layout}
+      data-vera5-correlation-empty={isEmpty ? "true" : "false"}
+      style={trayWhyDetectedDetailsStyle()}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <summary
+        style={{
+          cursor: "pointer",
+          color: POPUP_THEME.muted,
+          fontWeight: 600,
+        }}
+      >
+        {CORRELATION_CLUSTER_TRAY_LABEL}
+      </summary>
+      <div style={{ marginTop: 4 }}>
+        {isEmpty ? (
+          <p
+            className="vera5-tray-correlation-clusters-empty"
+            style={{ ...trayStatusStyle(), margin: 0 }}
+            aria-live="polite"
+          >
+            {CORRELATION_CLUSTER_TRAY_EMPTY_STATE_TEXT}
+          </p>
+        ) : (
+          <ul
+            className="vera5-tray-correlation-clusters-list"
+            style={{ margin: 0, paddingLeft: 16, listStyle: "disc" }}
+          >
+            {view.clusters.map((row) => (
+              <li
+                key={row.clusterId}
+                className="vera5-tray-correlation-clusters-item"
+                aria-label={formatCorrelationClusterTrayClusterAriaLabel(row)}
+              >
+                <div style={{ color: POPUP_THEME.text, fontWeight: 600 }}>
+                  {formatCorrelationClusterTrayClusterLine(row)}
+                </div>
+                <ul
+                  className="vera5-tray-correlation-clusters-drilldown"
+                  style={{ margin: "4px 0 0", paddingLeft: 16, listStyle: "circle" }}
+                >
+                  {row.otherSessions.map((session) => (
+                    <li
+                      key={`${row.clusterId}-${session.sessionId}`}
+                      className="vera5-tray-correlation-clusters-drilldown-item"
+                      aria-label={formatCorrelationClusterTraySessionDrilldownAriaLabel(session)}
+                      title={session.pageUrl || undefined}
+                    >
+                      <div style={{ color: POPUP_THEME.text, fontWeight: 600 }}>
+                        {session.title}
+                      </div>
+                      <div style={{ color: POPUP_THEME.muted, fontSize: 12, lineHeight: 1.4 }}>
+                        {formatCorrelationClusterTraySessionDrilldownLine(session)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ul>
+        )}
+        {showSamePageLink ? (
+          <p style={{ margin: "8px 0 0" }}>
+            <button
+              type="button"
+              className="vera5-tray-correlation-same-page-link"
+              aria-controls={samePageDetailsId}
+              aria-label={formatCorrelationClusterSamePageCoOccurrenceLinkAriaLabel()}
+              onClick={(event) => {
+                event.stopPropagation();
+                openTraySamePageCoOccurrenceDetails(event.currentTarget);
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                color: POPUP_THEME.accent,
+                cursor: "pointer",
+                textAlign: "left",
+                fontSize: 12,
+                textDecoration: "underline",
+              }}
+            >
+              {CORRELATION_CLUSTER_SAME_PAGE_CO_OCCURRENCE_LINK_LABEL}
+            </button>
+          </p>
+        ) : null}
+        <p
+          className="vera5-tray-correlation-disclaimer"
+          style={{
+            ...trayStatusStyle(),
+            margin: "8px 0 0",
+            fontSize: 11,
+            lineHeight: 1.4,
+          }}
+          role="note"
+        >
+          {CORRELATION_CLUSTER_DISCLAIMER_TEXT}
+        </p>
       </div>
     </details>
   );
@@ -3247,6 +3431,13 @@ export function Popup() {
   >(null);
   const [trayPageCoOccurrenceIndex, setTrayPageCoOccurrenceIndex] =
     useState<PageIocCoOccurrenceIndex | null>(null);
+  const [trayCorrelationClusters, setTrayCorrelationClusters] = useState<
+    CorrelationCluster[]
+  >([]);
+  const [trayCorrelationSessions, setTrayCorrelationSessions] = useState<
+    CorrelationClusterSessionLookup[]
+  >([]);
+  const [trayCorrelationReady, setTrayCorrelationReady] = useState(false);
 
   const refreshActivePageContext = async () => {
     const [context, overrides] = await Promise.all([
@@ -3521,6 +3712,32 @@ export function Popup() {
   }, [activeSession, scanSummary?.pageUrl, scanSummary?.scannedAt]);
 
   useEffect(() => {
+    if (!scanSummary) {
+      setTrayCorrelationClusters([]);
+      setTrayCorrelationSessions([]);
+      setTrayCorrelationReady(false);
+      return;
+    }
+
+    let cancelled = false;
+    setTrayCorrelationReady(false);
+    void Promise.all([
+      buildStoredCorrelationClustersFromInvestigationMemory(),
+      listStoredInvestigationSessions(),
+    ]).then(([clusters, sessions]) => {
+      if (!cancelled) {
+        setTrayCorrelationClusters(clusters);
+        setTrayCorrelationSessions(sessions);
+        setTrayCorrelationReady(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSession?.id, scanSummary?.pageUrl, scanSummary?.scannedAt]);
+
+  useEffect(() => {
     if (!scanSummary || !trayFilterReady) {
       return;
     }
@@ -3589,6 +3806,20 @@ export function Popup() {
     }
     return titlesById;
   }, [recentSessions, activeSession]);
+
+  const trayCorrelationSessionsById = useMemo(() => {
+    const byId = new Map<string, CorrelationClusterSessionLookup>();
+    for (const session of trayCorrelationSessions) {
+      byId.set(session.id, session);
+    }
+    for (const session of recentSessions) {
+      byId.set(session.id, session);
+    }
+    if (activeSession) {
+      byId.set(activeSession.id, activeSession);
+    }
+    return byId;
+  }, [trayCorrelationSessions, recentSessions, activeSession]);
 
   const activeSessionHistoryLinkSummary = useMemo(() => {
     if (!activeSession) {
@@ -5687,6 +5918,15 @@ export function Popup() {
                           entry={entry}
                           pageIndex={trayPageCoOccurrenceIndex}
                           onNavigateToRelated={sendNavigateToIocAnchor}
+                        />
+                        <CorrelationClusterTrayDetails
+                          entry={entry}
+                          clusters={trayCorrelationClusters}
+                          activeSessionId={activeSession?.id ?? null}
+                          sessionsById={trayCorrelationSessionsById}
+                          pageIndex={trayPageCoOccurrenceIndex}
+                          viewingCurrentTabScan={scanSummary !== null}
+                          ready={trayCorrelationReady}
                         />
                       </li>
                     );

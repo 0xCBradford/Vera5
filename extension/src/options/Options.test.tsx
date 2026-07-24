@@ -2052,3 +2052,175 @@ describe("Options operator macros", () => {
     expect(container.textContent).toContain("Imported user macros");
   });
 });
+
+describe("Options cross-session correlation controls", () => {
+  let store: Record<string, unknown>;
+  let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+  beforeEach(() => {
+    store = {};
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    vi.unstubAllGlobals();
+  });
+
+  it("renders retention, overlap, and clear-all correlation controls", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("Cross-session correlation");
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="Correlation cluster retention window in days"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'select[aria-label="Correlation cluster overlap merge mode"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('button[aria-label="Clear all correlation clusters"]')
+    ).not.toBeNull();
+  });
+
+  it("persists retention window and clears stored clusters", async () => {
+    const { STORAGE_KEY_CORRELATION_CLUSTERS } = await import(
+      "../lib/correlationClusterStorage"
+    );
+    const { createCorrelationCluster, CORRELATION_CLUSTER_SCHEMA_VERSION } = await import(
+      "../lib/correlationCluster"
+    );
+    const { buildIocCoOccurrenceMemberKey } = await import("../lib/iocCoOccurrence");
+    const { IOC_TYPE } = await import("../lib/iocRegex");
+
+    const ipv4Key = buildIocCoOccurrenceMemberKey(IOC_TYPE.IPV4, "8.8.8.8");
+    const domainKey = buildIocCoOccurrenceMemberKey(IOC_TYPE.DOMAIN, "example.com");
+    const cluster = createCorrelationCluster({
+      memberIocKeys: [ipv4Key, domainKey],
+      sessionIds: ["session-a", "session-b"],
+      firstSeenAt: 1,
+      lastSeenAt: 2,
+      coOccurrenceCount: 2,
+    });
+    store[STORAGE_KEY_CORRELATION_CLUSTERS] = {
+      schemaVersion: 1,
+      updatedAt: 1,
+      clusters: [{ ...cluster, schemaVersion: CORRELATION_CLUSTER_SCHEMA_VERSION }],
+      retentionDays: 30,
+      overlapMerge: { mode: "jaccard", jaccardThreshold: 0.75, minSharedIocCount: 2 },
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const retentionInput = mounted.container.querySelector(
+      'input[aria-label="Correlation cluster retention window in days"]'
+    ) as HTMLInputElement;
+    expect(retentionInput.value).toBe("30");
+
+    const modeSelect = mounted.container.querySelector(
+      'select[aria-label="Correlation cluster overlap merge mode"]'
+    ) as HTMLSelectElement;
+    expect(modeSelect.value).toBe("jaccard");
+
+    const clearButton = mounted.container.querySelector(
+      'button[aria-label="Clear all correlation clusters"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      clearButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const afterClear = store[STORAGE_KEY_CORRELATION_CLUSTERS] as {
+      clusters: unknown[];
+      retentionDays: number;
+      overlapMerge: { jaccardThreshold?: number } | null;
+    };
+    expect(afterClear.clusters).toEqual([]);
+    expect(afterClear.retentionDays).toBe(30);
+    expect(afterClear.overlapMerge?.jaccardThreshold).toBe(0.75);
+    expect(mounted.container.textContent).toContain("Correlation clusters cleared");
+  });
+
+  it("persists Jaccard overlap mode from Options", async () => {
+    const { STORAGE_KEY_CORRELATION_CLUSTERS } = await import(
+      "../lib/correlationClusterStorage"
+    );
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const modeSelect = mounted.container.querySelector(
+      'select[aria-label="Correlation cluster overlap merge mode"]'
+    ) as HTMLSelectElement;
+
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLSelectElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(modeSelect, "jaccard");
+      modeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="Correlation cluster Jaccard overlap threshold"]'
+      )
+    ).not.toBeNull();
+
+    const stored = store[STORAGE_KEY_CORRELATION_CLUSTERS] as {
+      overlapMerge: { mode: string; jaccardThreshold: number } | null;
+    };
+    expect(stored.overlapMerge?.mode).toBe("jaccard");
+    expect(stored.overlapMerge?.jaccardThreshold).toBe(0.5);
+  });
+});

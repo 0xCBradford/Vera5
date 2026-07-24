@@ -1,5 +1,23 @@
 import { useEffect, useRef, useState } from "react";
 import { clearEnrichmentCache } from "../lib/cache";
+import {
+  DEFAULT_CORRELATION_CLUSTER_JACCARD_THRESHOLD,
+  DEFAULT_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT,
+  DEFAULT_CORRELATION_CLUSTER_RETENTION_DAYS,
+  MAX_CORRELATION_CLUSTER_JACCARD_THRESHOLD,
+  MAX_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT,
+  MAX_CORRELATION_CLUSTER_RETENTION_DAYS,
+  MIN_CORRELATION_CLUSTER_JACCARD_THRESHOLD,
+  MIN_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT,
+  MIN_CORRELATION_CLUSTER_RETENTION_DAYS,
+  type CorrelationClusterOverlapMode,
+} from "../lib/correlationCluster";
+import {
+  clearStoredCorrelationClusters,
+  getCorrelationClustersStore,
+  setCorrelationClusterOverlapMerge,
+  setCorrelationClusterRetentionDays,
+} from "../lib/correlationClusterStorage";
 import { ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE } from "../lib/enrichmentSourceOps";
 import { prefersReducedMotion } from "../lib/motionPreference";
 import {
@@ -240,8 +258,11 @@ const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "trust", label: "Trust & Consent" },
   { id: "operator-macros", label: "Operator Macros" },
   { id: "cache", label: "Enrichment Cache" },
+  { id: "correlation", label: "Cross-session correlation" },
   { id: "backup", label: "Settings Backup" },
 ];
+
+type CorrelationOverlapModeDraft = "off" | CorrelationClusterOverlapMode;
 
 const CACHE_PRESETS: { label: string; seconds: number }[] = [
   { label: "15 min", seconds: 900 },
@@ -1507,6 +1528,7 @@ export function Options() {
     trust: true,
     "operator-macros": true,
     cache: true,
+    correlation: true,
     backup: true,
     "api-keys": true,
   }));
@@ -1582,6 +1604,21 @@ export function Options() {
   const [clearCacheState, setClearCacheState] = useState<"idle" | "clearing" | "cleared" | "error">(
     "idle"
   );
+  const [correlationRetentionDays, setCorrelationRetentionDays] = useState(
+    String(DEFAULT_CORRELATION_CLUSTER_RETENTION_DAYS)
+  );
+  const [correlationOverlapMode, setCorrelationOverlapMode] =
+    useState<CorrelationOverlapModeDraft>("off");
+  const [correlationJaccardThreshold, setCorrelationJaccardThreshold] = useState(
+    String(DEFAULT_CORRELATION_CLUSTER_JACCARD_THRESHOLD)
+  );
+  const [correlationMinSharedCount, setCorrelationMinSharedCount] = useState(
+    String(DEFAULT_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT)
+  );
+  const [correlationClusterCount, setCorrelationClusterCount] = useState(0);
+  const [clearCorrelationClustersState, setClearCorrelationClustersState] = useState<
+    "idle" | "clearing" | "cleared" | "error"
+  >("idle");
   const [exportState, setExportState] = useState<"idle" | "exporting" | "exported" | "error">(
     "idle"
   );
@@ -1636,6 +1673,36 @@ export function Options() {
     void reloadOperatorMacros().catch(() => {
       setOperatorMacros([]);
     });
+  }, [settingsReloadToken]);
+
+  useEffect(() => {
+    void getCorrelationClustersStore()
+      .then((store) => {
+        setCorrelationRetentionDays(String(store.retentionDays));
+        setCorrelationClusterCount(store.clusters.length);
+        if (store.overlapMerge === null) {
+          setCorrelationOverlapMode("off");
+          setCorrelationJaccardThreshold(String(DEFAULT_CORRELATION_CLUSTER_JACCARD_THRESHOLD));
+          setCorrelationMinSharedCount(String(DEFAULT_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT));
+          return;
+        }
+        setCorrelationOverlapMode(store.overlapMerge.mode);
+        setCorrelationJaccardThreshold(
+          String(
+            store.overlapMerge.jaccardThreshold ?? DEFAULT_CORRELATION_CLUSTER_JACCARD_THRESHOLD
+          )
+        );
+        setCorrelationMinSharedCount(
+          String(
+            store.overlapMerge.minSharedIocCount ?? DEFAULT_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT
+          )
+        );
+      })
+      .catch(() => {
+        setCorrelationRetentionDays(String(DEFAULT_CORRELATION_CLUSTER_RETENTION_DAYS));
+        setCorrelationOverlapMode("off");
+        setCorrelationClusterCount(0);
+      });
   }, [settingsReloadToken]);
 
   useEffect(() => {
@@ -2492,6 +2559,99 @@ export function Options() {
       })
       .catch(() => {
         setClearCacheState("error");
+      });
+  };
+
+  const handleCorrelationRetentionBlur = (
+    event: React.FocusEvent<HTMLInputElement>
+  ) => {
+    const parsed = Number(event.currentTarget.value);
+    const normalized = Number.isFinite(parsed)
+      ? Math.min(
+          MAX_CORRELATION_CLUSTER_RETENTION_DAYS,
+          Math.max(MIN_CORRELATION_CLUSTER_RETENTION_DAYS, Math.trunc(parsed))
+        )
+      : DEFAULT_CORRELATION_CLUSTER_RETENTION_DAYS;
+    setCorrelationRetentionDays(String(normalized));
+    void setCorrelationClusterRetentionDays(normalized).then((store) => {
+      setCorrelationClusterCount(store.clusters.length);
+    });
+  };
+
+  const persistCorrelationOverlapDraft = (
+    mode: CorrelationOverlapModeDraft,
+    jaccardDraft: string,
+    minSharedDraft: string
+  ) => {
+    if (mode === "off") {
+      void setCorrelationClusterOverlapMerge(null);
+      return;
+    }
+    const jaccardParsed = Number(jaccardDraft);
+    const minSharedParsed = Number(minSharedDraft);
+    const jaccardThreshold = Number.isFinite(jaccardParsed)
+      ? Math.min(
+          MAX_CORRELATION_CLUSTER_JACCARD_THRESHOLD,
+          Math.max(MIN_CORRELATION_CLUSTER_JACCARD_THRESHOLD, jaccardParsed)
+        )
+      : DEFAULT_CORRELATION_CLUSTER_JACCARD_THRESHOLD;
+    const minSharedIocCount = Number.isFinite(minSharedParsed)
+      ? Math.min(
+          MAX_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT,
+          Math.max(MIN_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT, Math.trunc(minSharedParsed))
+        )
+      : DEFAULT_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT;
+    setCorrelationJaccardThreshold(String(jaccardThreshold));
+    setCorrelationMinSharedCount(String(minSharedIocCount));
+    void setCorrelationClusterOverlapMerge({
+      mode,
+      jaccardThreshold,
+      minSharedIocCount,
+    });
+  };
+
+  const handleCorrelationOverlapModeChange = (mode: CorrelationOverlapModeDraft) => {
+    setCorrelationOverlapMode(mode);
+    persistCorrelationOverlapDraft(
+      mode,
+      correlationJaccardThreshold,
+      correlationMinSharedCount
+    );
+  };
+
+  const handleCorrelationJaccardThresholdBlur = (
+    event: React.FocusEvent<HTMLInputElement>
+  ) => {
+    persistCorrelationOverlapDraft(
+      correlationOverlapMode,
+      event.currentTarget.value,
+      correlationMinSharedCount
+    );
+  };
+
+  const handleCorrelationMinSharedBlur = (
+    event: React.FocusEvent<HTMLInputElement>
+  ) => {
+    persistCorrelationOverlapDraft(
+      correlationOverlapMode,
+      correlationJaccardThreshold,
+      event.currentTarget.value
+    );
+  };
+
+  const handleClearCorrelationClusters = () => {
+    setClearCorrelationClustersState("clearing");
+    void clearStoredCorrelationClusters()
+      .then((ok) => {
+        if (!ok) {
+          setClearCorrelationClustersState("error");
+          return;
+        }
+        setCorrelationClusterCount(0);
+        setClearCorrelationClustersState("cleared");
+      })
+      .catch(() => {
+        setClearCorrelationClustersState("error");
       });
   };
 
@@ -4042,6 +4202,153 @@ export function Options() {
                 {clearCacheState === "error" ? (
                   <span className="v5-status v5-status--error" role="status">
                     Could not clear the cache. Try again.
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <section id="correlation" className="v5-card" aria-labelledby="correlation-heading">
+            <div className="v5-card__head">
+              <h2 id="correlation-heading" className="v5-card__title">
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections.correlation}
+                  aria-controls="correlation-body"
+                  onClick={() => toggleSection("correlation")}
+                >
+                  <span className="v5-card__toggle-text">Cross-session correlation</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
+              </h2>
+              <p className="v5-card__desc">
+                Local Appeared across sessions clusters and pack settings. Correlation ≠ causation;
+                co-occurrence is not a detection verdict. Clearing clusters does not delete
+                investigation session history.
+              </p>
+            </div>
+            <div
+              id="correlation-body"
+              className="v5-card__body"
+              hidden={collapsedSections.correlation}
+            >
+              <div className="v5-field">
+                <label className="v5-field__label" htmlFor="correlation-retention-days">
+                  Retention window (days)
+                </label>
+                <input
+                  id="correlation-retention-days"
+                  type="number"
+                  min={MIN_CORRELATION_CLUSTER_RETENTION_DAYS}
+                  max={MAX_CORRELATION_CLUSTER_RETENTION_DAYS}
+                  className="v5-input v5-input--sm"
+                  value={correlationRetentionDays}
+                  disabled={!ready}
+                  onChange={(event) => setCorrelationRetentionDays(event.target.value)}
+                  onBlur={handleCorrelationRetentionBlur}
+                  aria-label="Correlation cluster retention window in days"
+                />
+                <span className="v5-status v5-status--muted">
+                  Default {DEFAULT_CORRELATION_CLUSTER_RETENTION_DAYS} days. Clusters whose last
+                  seen timestamp is older than this window are pruned from local storage.
+                </span>
+              </div>
+              <div className="v5-field">
+                <label className="v5-field__label" htmlFor="correlation-overlap-mode">
+                  Overlap merge
+                </label>
+                <select
+                  id="correlation-overlap-mode"
+                  className="v5-input"
+                  disabled={!ready}
+                  value={correlationOverlapMode}
+                  onChange={(event) =>
+                    handleCorrelationOverlapModeChange(
+                      event.target.value as CorrelationOverlapModeDraft
+                    )
+                  }
+                  aria-label="Correlation cluster overlap merge mode"
+                >
+                  <option value="off">Exact IOC sets only (no overlap merge)</option>
+                  <option value="jaccard">Jaccard index threshold</option>
+                  <option value="minShared">Minimum shared indicators</option>
+                </select>
+                <span className="v5-status v5-status--muted">
+                  Optional merge when indicator sets partly overlap across sessions. Advisory
+                  only—not a verdict.
+                </span>
+              </div>
+              {correlationOverlapMode === "jaccard" ? (
+                <div className="v5-field">
+                  <label className="v5-field__label" htmlFor="correlation-jaccard-threshold">
+                    Jaccard threshold
+                  </label>
+                  <input
+                    id="correlation-jaccard-threshold"
+                    type="number"
+                    min={MIN_CORRELATION_CLUSTER_JACCARD_THRESHOLD}
+                    max={MAX_CORRELATION_CLUSTER_JACCARD_THRESHOLD}
+                    step={0.05}
+                    className="v5-input v5-input--sm"
+                    value={correlationJaccardThreshold}
+                    disabled={!ready}
+                    onChange={(event) => setCorrelationJaccardThreshold(event.target.value)}
+                    onBlur={handleCorrelationJaccardThresholdBlur}
+                    aria-label="Correlation cluster Jaccard overlap threshold"
+                  />
+                  <span className="v5-status v5-status--muted">
+                    Inclusive 0–1. Default {DEFAULT_CORRELATION_CLUSTER_JACCARD_THRESHOLD}.
+                  </span>
+                </div>
+              ) : null}
+              {correlationOverlapMode === "minShared" ? (
+                <div className="v5-field">
+                  <label className="v5-field__label" htmlFor="correlation-min-shared">
+                    Minimum shared indicators
+                  </label>
+                  <input
+                    id="correlation-min-shared"
+                    type="number"
+                    min={MIN_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT}
+                    max={MAX_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT}
+                    className="v5-input v5-input--sm"
+                    value={correlationMinSharedCount}
+                    disabled={!ready}
+                    onChange={(event) => setCorrelationMinSharedCount(event.target.value)}
+                    onBlur={handleCorrelationMinSharedBlur}
+                    aria-label="Correlation cluster minimum shared indicator count"
+                  />
+                  <span className="v5-status v5-status--muted">
+                    Default {DEFAULT_CORRELATION_CLUSTER_MIN_SHARED_IOC_COUNT}.
+                  </span>
+                </div>
+              ) : null}
+              <div className="v5-actions">
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--danger"
+                  disabled={!ready || clearCorrelationClustersState === "clearing"}
+                  onClick={handleClearCorrelationClusters}
+                  aria-label="Clear all correlation clusters"
+                >
+                  {clearCorrelationClustersState === "clearing"
+                    ? "Clearing…"
+                    : "Clear all clusters"}
+                </button>
+                <span className="v5-status v5-status--muted">
+                  {correlationClusterCount} stored cluster
+                  {correlationClusterCount === 1 ? "" : "s"}
+                </span>
+                {clearCorrelationClustersState === "cleared" ? (
+                  <span className="v5-status v5-status--success" role="status">
+                    <CheckIcon />
+                    Correlation clusters cleared.
+                  </span>
+                ) : null}
+                {clearCorrelationClustersState === "error" ? (
+                  <span className="v5-status v5-status--error" role="status">
+                    Could not clear correlation clusters. Try again.
                   </span>
                 ) : null}
               </div>

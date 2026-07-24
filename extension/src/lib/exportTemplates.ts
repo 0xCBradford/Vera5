@@ -1,5 +1,9 @@
 import { copyTextToClipboard } from "./copyText";
 import {
+  buildCorrelationPackMarkdownAppendix,
+  type CorrelationPackExportInput,
+} from "./correlationClusterExport";
+import {
   buildEnrichmentExportMarkdown,
   buildEnrichmentExportScoreSectionLines,
   ENRICHMENT_EXPORT_ANALYST_NOTES_HEADING,
@@ -33,6 +37,20 @@ export const EXPORT_TEMPLATE_LABEL: Record<ExportTemplateId, string> = {
 };
 
 export const TRAY_SUBSET_TEMPLATE_SEPARATOR = "\n\n---\n\n";
+
+/** Operator-facing label for optionally appending a correlation pack to template exports. */
+export const EXPORT_TEMPLATE_CORRELATION_PACK_APPENDIX_LABEL =
+  "Include correlation pack appendix";
+
+/**
+ * Optional correlation pack appendix for tray/template exports.
+ * When omitted, template output is unchanged (backward compatible).
+ */
+export type RenderTraySubsetExportTemplateOptions = {
+  /** Explicit on/off. When omitted, appendix appends if `correlationPack` has clusters. */
+  includeCorrelationPackAppendix?: boolean;
+  correlationPack?: CorrelationPackExportInput;
+};
 
 export type ExportTemplateFieldContext = {
   ioc: string;
@@ -298,23 +316,72 @@ export function renderExportTemplate(
   }
 }
 
+/**
+ * Whether a correlation pack appendix should be appended after the template body.
+ * CSV exports never take a markdown appendix block.
+ */
+export function shouldAppendCorrelationPackAppendix(
+  templateId: ExportTemplateId,
+  options?: RenderTraySubsetExportTemplateOptions
+): boolean {
+  if (templateId === "csv-row") {
+    return false;
+  }
+  if (!options?.correlationPack) {
+    return false;
+  }
+  if (options.includeCorrelationPackAppendix === false) {
+    return false;
+  }
+  if (options.includeCorrelationPackAppendix === true) {
+    return true;
+  }
+  return options.correlationPack.clusters.length > 0;
+}
+
+/**
+ * Appends the correlation pack markdown appendix after a rendered template body
+ * when opted in. Returns the body unchanged when the appendix is skipped.
+ */
+export function appendCorrelationPackAppendixBlock(
+  body: string,
+  templateId: ExportTemplateId,
+  options?: RenderTraySubsetExportTemplateOptions
+): string {
+  if (!shouldAppendCorrelationPackAppendix(templateId, options) || !options?.correlationPack) {
+    return body;
+  }
+
+  const appendix = buildCorrelationPackMarkdownAppendix(options.correlationPack).trim();
+  if (appendix.length === 0) {
+    return body;
+  }
+  const trimmedBody = body.trim();
+  if (trimmedBody.length === 0) {
+    return appendix;
+  }
+  return `${trimmedBody}${TRAY_SUBSET_TEMPLATE_SEPARATOR}${appendix}`;
+}
+
 export function renderTraySubsetExportTemplate(
   templateId: ExportTemplateId,
-  records: readonly NormalizedEnrichmentRecord[]
+  records: readonly NormalizedEnrichmentRecord[],
+  options?: RenderTraySubsetExportTemplateOptions
 ): string {
-  if (records.length === 0) {
-    return "";
+  let body = "";
+  if (records.length > 0) {
+    if (templateId === "csv-row") {
+      body = [CSV_HEADER, ...records.map((record) => renderCsvRowTemplate(record))].join(
+        "\n"
+      );
+    } else {
+      body = records
+        .map((record) => renderExportTemplate(templateId, record))
+        .join(TRAY_SUBSET_TEMPLATE_SEPARATOR);
+    }
   }
 
-  if (templateId === "csv-row") {
-    return [CSV_HEADER, ...records.map((record) => renderCsvRowTemplate(record))].join(
-      "\n"
-    );
-  }
-
-  return records
-    .map((record) => renderExportTemplate(templateId, record))
-    .join(TRAY_SUBSET_TEMPLATE_SEPARATOR);
+  return appendCorrelationPackAppendixBlock(body, templateId, options);
 }
 
 export function resolveExportTemplateMimeType(templateId: ExportTemplateId): string {
@@ -360,14 +427,17 @@ export function buildTrayTemplateExportFilename(
 export function downloadTrayTemplateExportFile(
   templateId: ExportTemplateId,
   records: readonly NormalizedEnrichmentRecord[],
-  doc: Document = document
+  doc: Document = document,
+  options?: RenderTraySubsetExportTemplateOptions
 ): void {
-  if (records.length === 0) {
+  const exportedAt =
+    records[0]?.exportedAt ??
+    options?.correlationPack?.exportedAt ??
+    new Date().toISOString();
+  const content = renderTraySubsetExportTemplate(templateId, records, options);
+  if (content.length === 0) {
     return;
   }
-
-  const exportedAt = records[0]?.exportedAt ?? new Date().toISOString();
-  const content = renderTraySubsetExportTemplate(templateId, records);
   const blob = new Blob([content], {
     type: resolveExportTemplateMimeType(templateId),
   });
@@ -376,7 +446,7 @@ export function downloadTrayTemplateExportFile(
   anchor.href = url;
   anchor.download = buildTrayTemplateExportFilename(
     templateId,
-    records.length,
+    Math.max(records.length, 1),
     exportedAt
   );
   doc.body.appendChild(anchor);
@@ -387,10 +457,12 @@ export function downloadTrayTemplateExportFile(
 
 export async function copyTrayTemplateExportToClipboard(
   templateId: ExportTemplateId,
-  records: readonly NormalizedEnrichmentRecord[]
+  records: readonly NormalizedEnrichmentRecord[],
+  options?: RenderTraySubsetExportTemplateOptions
 ): Promise<boolean> {
-  if (records.length === 0) {
+  const content = renderTraySubsetExportTemplate(templateId, records, options);
+  if (content.length === 0) {
     return false;
   }
-  return copyTextToClipboard(renderTraySubsetExportTemplate(templateId, records));
+  return copyTextToClipboard(content);
 }
