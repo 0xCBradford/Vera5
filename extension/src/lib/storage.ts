@@ -58,6 +58,7 @@ export const STORAGE_KEY_SCHEMA_VERSION = "settingsSchemaVersion";
 export const STORAGE_KEY_AUTO_SCAN_ENABLED = "autoScanEnabled";
 export const STORAGE_KEY_MANUAL_ONLY_MODE = "manualOnlyMode";
 export const STORAGE_KEY_INCLUDE_PRIVATE_IPV4 = "includePrivateIpv4";
+export const STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN = "hideSuppressedFromScan";
 export const STORAGE_KEY_LOCAL_BACKEND_ENABLED = "localBackendEnabled";
 export const STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED = "localLlmSummaryEnabled";
 export const STORAGE_KEY_QUIET_MODE = "quietMode";
@@ -111,6 +112,7 @@ export const STORAGE_KEYS = {
   AUTO_SCAN_ENABLED: STORAGE_KEY_AUTO_SCAN_ENABLED,
   MANUAL_ONLY_MODE: STORAGE_KEY_MANUAL_ONLY_MODE,
   INCLUDE_PRIVATE_IPV4: STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
+  HIDE_SUPPRESSED_FROM_SCAN: STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN,
   LOCAL_BACKEND_ENABLED: STORAGE_KEY_LOCAL_BACKEND_ENABLED,
   LOCAL_LLM_SUMMARY_ENABLED: STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
   QUIET_MODE: STORAGE_KEY_QUIET_MODE,
@@ -179,6 +181,7 @@ export type Vera5Settings = {
   autoScanEnabled: boolean;
   manualOnlyMode: boolean;
   includePrivateIpv4: boolean;
+  hideSuppressedFromScan: boolean;
   localBackendEnabled: boolean;
   localLlmSummaryEnabled: boolean;
   quietMode: boolean;
@@ -217,6 +220,7 @@ export type Vera5StorageRaw = {
   [STORAGE_KEY_AUTO_SCAN_ENABLED]?: unknown;
   [STORAGE_KEY_MANUAL_ONLY_MODE]?: unknown;
   [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]?: unknown;
+  [STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN]?: unknown;
   [STORAGE_KEY_LOCAL_BACKEND_ENABLED]?: unknown;
   [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]?: unknown;
   [STORAGE_KEY_QUIET_MODE]?: unknown;
@@ -254,6 +258,7 @@ export const VERA5_SETTINGS_STORAGE_KEYS: readonly string[] = [
   STORAGE_KEY_AUTO_SCAN_ENABLED,
   STORAGE_KEY_MANUAL_ONLY_MODE,
   STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
+  STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN,
   STORAGE_KEY_LOCAL_BACKEND_ENABLED,
   STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED,
   STORAGE_KEY_QUIET_MODE,
@@ -393,6 +398,7 @@ export function createDefaultVera5Settings(): Vera5Settings {
     autoScanEnabled: false,
     manualOnlyMode: true,
     includePrivateIpv4: false,
+    hideSuppressedFromScan: false,
     localBackendEnabled: false,
     localLlmSummaryEnabled: false,
     quietMode: false,
@@ -617,6 +623,10 @@ export function normalizeVera5Settings(raw: Vera5StorageRaw): Vera5Settings {
       raw[STORAGE_KEY_INCLUDE_PRIVATE_IPV4],
       defaults.includePrivateIpv4
     ),
+    hideSuppressedFromScan: readStoredBoolean(
+      raw[STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN],
+      defaults.hideSuppressedFromScan
+    ),
     localBackendEnabled: readStoredBoolean(
       raw[STORAGE_KEY_LOCAL_BACKEND_ENABLED],
       defaults.localBackendEnabled
@@ -840,6 +850,7 @@ export function vera5SettingsToStoragePayload(
     [STORAGE_KEY_AUTO_SCAN_ENABLED]: settings.autoScanEnabled,
     [STORAGE_KEY_MANUAL_ONLY_MODE]: settings.manualOnlyMode,
     [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: settings.includePrivateIpv4,
+    [STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN]: settings.hideSuppressedFromScan,
     [STORAGE_KEY_LOCAL_BACKEND_ENABLED]: settings.localBackendEnabled,
     [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: settings.localLlmSummaryEnabled,
     [STORAGE_KEY_QUIET_MODE]: settings.quietMode,
@@ -1042,6 +1053,17 @@ export async function getIncludePrivateIpv4(): Promise<boolean> {
 export async function setIncludePrivateIpv4(enabled: boolean): Promise<void> {
   await chrome.storage.local.set({
     [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: enabled,
+  });
+}
+
+export async function getHideSuppressedFromScan(): Promise<boolean> {
+  const settings = await getVera5Settings();
+  return settings.hideSuppressedFromScan;
+}
+
+export async function setHideSuppressedFromScan(enabled: boolean): Promise<void> {
+  await chrome.storage.local.set({
+    [STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN]: enabled,
   });
 }
 

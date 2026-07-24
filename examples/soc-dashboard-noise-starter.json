@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "1970-01-01T00:00:00.000Z",
+  "rules": [
+    {
+      "schemaVersion": 1,
+      "id": "nr-starter-soc-cidr-10",
+      "patternType": "cidr",
+      "pattern": "10.0.0.0/8",
+      "sourceAction": "internal",
+      "createdAt": 0,
+      "hitCount": 0
+    },
+    {
+      "schemaVersion": 1,
+      "id": "nr-starter-soc-cidr-17216",
+      "patternType": "cidr",
+      "pattern": "172.16.0.0/12",
+      "sourceAction": "internal",
+      "createdAt": 0,
+      "hitCount": 0
+    },
+    {
+      "schemaVersion": 1,
+      "id": "nr-starter-soc-cidr-192168",
+      "patternType": "cidr",
+      "pattern": "192.168.0.0/16",
+      "sourceAction": "internal",
+      "createdAt": 0,
+      "hitCount": 0
+    },
+    {
+      "schemaVersion": 1,
+      "id": "nr-starter-soc-dns-1001",
+      "patternType": "exact",
+      "pattern": "1.0.0.1",
+      "sourceAction": "benign",
+      "createdAt": 0,
+      "hitCount": 0
+    },
+    {
+      "schemaVersion": 1,
+      "id": "nr-starter-soc-dns-1111",
+      "patternType": "exact",
+      "pattern": "1.1.1.1",
+      "sourceAction": "benign",
+      "createdAt": 0,
+      "hitCount": 0
+    },
+    {
+      "schemaVersion": 1,
+      "id": "nr-starter-soc-dns-8844",
+      "patternType": "exact",
+      "pattern": "8.8.4.4",
+      "sourceAction": "benign",
+      "createdAt": 0,
+      "hitCount": 0
+    },
+    {
+      "schemaVersion": 1,
+      "id": "nr-starter-soc-dns-8888",
+      "patternType": "exact",
+      "pattern": "8.8.8.8",
+      "sourceAction": "benign",
+      "createdAt": 0,
+      "hitCount": 0
+    },
+    {
+      "schemaVersion": 1,
+      "id": "nr-starter-soc-dns-9999",
+      "patternType": "exact",
+      "pattern": "9.9.9.9",
+      "sourceAction": "benign",
+      "createdAt": 0,
+      "hitCount": 0
+    },
+    {
+      "schemaVersion": 1,
+      "id": "nr-starter-soc-suffix-local",
+      "patternType": "domain-suffix",
+      "pattern": ".local",
+      "sourceAction": "internal",
+      "createdAt": 0,
+      "hitCount": 0
+    }
+  ]
+}

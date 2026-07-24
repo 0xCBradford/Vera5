@@ -35,6 +35,7 @@ For triage flow context, see [analyst-workflows.md](analyst-workflows.md). For d
 | [`sample-splunk-export.html`](../examples/sample-splunk-export.html) | Saved Splunk search export | Dark table with 32 result rows, raw JSON event panel | Detection on repeated IOCs in table cells; performance on heavier DOM text volume |
 | [`sample-security-onion-alert.html`](../examples/sample-security-onion-alert.html) | Security Onion alert detail | Field grid, Zeek conn.log excerpt, Suricata summary | Detection in monospace log blocks and labeled indicator fields |
 | [`sample-extended-ioc-alert.html`](../examples/sample-extended-ioc-alert.html) | CTI bulletin with extended indicator types | Ticket-style article plus indicator table | Email, ASN, CIDR, file path, onion, and MVP types with decoys (not a SOC dashboard fixture) |
+| [`soc-dashboard-noise-starter.json`](../examples/soc-dashboard-noise-starter.json) | Optional noise pattern list | Export-schema JSON (public DNS + RFC1918 + `.local`) | Optional import only—never auto-applied; Options **Import SOC dashboard starter** or file import under **Noise rules** |
 
 ---
 

@@ -54,6 +54,7 @@ import {
 } from "../lib/tabScanSummary";
 import {
   buildWhyDetectedView,
+  buildWhyStillVisibleTooltip,
   HOVER_CARD_ANALYST_NOTES_LABEL,
   HOVER_CARD_ANALYST_NOTES_PLACEHOLDER,
   HOVER_CARD_REFANGED_VALUE_LABEL,
@@ -91,6 +92,16 @@ import {
   type CorrelationClusterSessionLookup,
 } from "../lib/correlationCluster";
 import { buildStoredCorrelationClustersFromInvestigationMemory } from "../lib/correlationClusterStorage";
+import {
+  formatNoiseRulesTraySuppressedSummary,
+  NOISE_RULES_TRAY_SUPPRESSED_SECTION_HINT,
+  partitionTrayEntriesByNoiseRules,
+  type NoiseRule,
+} from "../lib/noiseRule";
+import {
+  listStoredNoiseRules,
+  STORAGE_KEY_NOISE_RULES,
+} from "../lib/noiseRuleStorage";
 import {
   getStoredAnalystNote,
   normalizeAnalystNotesRecord,
@@ -3438,6 +3449,7 @@ export function Popup() {
     CorrelationClusterSessionLookup[]
   >([]);
   const [trayCorrelationReady, setTrayCorrelationReady] = useState(false);
+  const [noiseRules, setNoiseRules] = useState<NoiseRule[]>([]);
 
   const refreshActivePageContext = async () => {
     const [context, overrides] = await Promise.all([
@@ -3520,6 +3532,13 @@ export function Popup() {
     void refreshSourceOps().finally(() => {
       setSourceOpsReady(true);
     });
+    void listStoredNoiseRules()
+      .then((rules) => {
+        setNoiseRules(rules);
+      })
+      .catch(() => {
+        setNoiseRules([]);
+      });
     void readPopupPanelFocus().then((panel) => {
       if (panel === POPUP_PANEL.INVESTIGATION_HISTORY) {
         setHistoryCollapsed(false);
@@ -3550,6 +3569,15 @@ export function Popup() {
       }
       if (changes[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]) {
         void refreshActivePageContext();
+      }
+      if (changes[STORAGE_KEY_NOISE_RULES]) {
+        void listStoredNoiseRules()
+          .then((rules) => {
+            setNoiseRules(rules);
+          })
+          .catch(() => {
+            setNoiseRules([]);
+          });
       }
     };
 
@@ -3762,6 +3790,20 @@ export function Popup() {
     }
     return filterTabScanSummaryEntries(scanSummary.entries, typeFilter);
   }, [scanSummary, typeFilter]);
+
+  const trayNoisePartition = useMemo(
+    () => partitionTrayEntriesByNoiseRules(filteredEntries, noiseRules),
+    [filteredEntries, noiseRules]
+  );
+  const activeTrayEntries = trayNoisePartition.active;
+  const suppressedTrayEntries = trayNoisePartition.suppressed;
+  const whyStillVisibleTooltip = useMemo(
+    () =>
+      buildWhyStillVisibleTooltip(
+        suppressedTrayEntries.map(({ entry }) => entry)
+      ),
+    [suppressedTrayEntries]
+  );
 
   const sessionIocCountText = useMemo(
     () => buildInvestigationSessionIocCountText(activeSession?.totalIocCount ?? 0),
@@ -4445,6 +4487,135 @@ export function Popup() {
   const scanSelectionDisabled =
     !ready || !enabled || scanState === "scanning" || !textSelectionAvailable;
   const enrichSelectionDisabled = !ready || !enabled || !selectionEnrichAvailable;
+
+  const renderTrayEntryRow = (
+    entry: TabScanSummaryEntry,
+    options?: { noiseSuppressed?: boolean }
+  ) => {
+    const enrichmentStatus = trayEnrichmentStatuses[entry.anchorId];
+    const provenance = resolveTrayEntryMatchProvenance(entry);
+    const noiseSuppressed = options?.noiseSuppressed === true;
+
+    return (
+      <li
+        key={entry.anchorId}
+        role="button"
+        tabIndex={0}
+        data-vera5-tray-entry="true"
+        data-vera5-type={entry.type}
+        data-vera5-value={entry.value}
+        data-vera5-anchor-id={entry.anchorId}
+        data-vera5-rule-id={provenance?.ruleId}
+        data-vera5-source-text-hint={provenance?.sourceTextHint}
+        data-vera5-noise-suppressed={noiseSuppressed ? "true" : undefined}
+        aria-label={buildTrayRowNavigationAriaLabel(entry.value, enrichmentStatus)}
+        onClick={() => handleTrayRowActivate(entry)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") {
+            return;
+          }
+          event.preventDefault();
+          handleTrayRowActivate(entry);
+        }}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+          padding: "6px 8px",
+          borderRadius: 6,
+          border: "1px solid transparent",
+          backgroundColor: POPUP_THEME.trayRowBg,
+          fontSize: 12,
+          lineHeight: 1.4,
+          cursor: "pointer",
+          opacity: noiseSuppressed ? 0.85 : 1,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 8,
+          }}
+        >
+          <span
+            aria-hidden="true"
+            style={{
+              flexShrink: 0,
+              padding: "1px 6px",
+              borderRadius: 4,
+              backgroundColor: POPUP_THEME.buttonBg,
+              color: POPUP_THEME.muted,
+              fontSize: 10,
+              fontWeight: 700,
+            }}
+          >
+            {IOC_TYPE_TRAY_LABEL[entry.type]}
+          </span>
+          <span
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 8,
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            <TrayIndicatorValue entry={entry} />
+            {enrichmentStatus ? (
+              <span
+                aria-hidden="true"
+                style={trayEnrichmentHintStyle(enrichmentStatus.badgeText)}
+              >
+                {formatTrayRowEnrichmentHint(enrichmentStatus)}
+              </span>
+            ) : null}
+          </span>
+        </div>
+        <SaveToCollectionTrayPanel
+          entry={entry}
+          open={saveToCollectionAnchorId === entry.anchorId}
+          feedback={
+            saveToCollectionAnchorId === entry.anchorId ? saveToCollectionFeedback : null
+          }
+          onFeedback={setSaveToCollectionFeedback}
+          onToggle={() => {
+            setSaveToCollectionFeedback(null);
+            setSaveToCollectionAnchorId((current) =>
+              current === entry.anchorId ? null : entry.anchorId
+            );
+          }}
+        />
+        <RunMacroTrayPanel
+          entry={entry}
+          open={runMacroTrayAnchorId === entry.anchorId}
+          feedback={runMacroTrayAnchorId === entry.anchorId ? runMacroTrayFeedback : null}
+          onFeedback={setRunMacroTrayFeedback}
+          onToggle={() => {
+            setRunMacroTrayFeedback(null);
+            setRunMacroTrayAnchorId((current) =>
+              current === entry.anchorId ? null : entry.anchorId
+            );
+          }}
+        />
+        <WhyDetectedTrayDetails entry={entry} />
+        <CoOccurrenceTrayDetails
+          entry={entry}
+          pageIndex={trayPageCoOccurrenceIndex}
+          onNavigateToRelated={sendNavigateToIocAnchor}
+        />
+        <CorrelationClusterTrayDetails
+          entry={entry}
+          clusters={trayCorrelationClusters}
+          activeSessionId={activeSession?.id ?? null}
+          sessionsById={trayCorrelationSessionsById}
+          pageIndex={trayPageCoOccurrenceIndex}
+          viewingCurrentTabScan={scanSummary !== null}
+          ready={trayCorrelationReady}
+        />
+      </li>
+    );
+  };
 
   return (
     <main
@@ -5793,145 +5964,80 @@ export function Popup() {
                 />
               ) : null}
               {filteredEntries.length > 0 ? (
-                <ul
-                  style={{
-                    listStyle: "none",
-                    margin: 0,
-                    padding: 0,
-                    maxHeight: 220,
-                    overflowY: "auto",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 6,
-                  }}
-                >
-                  {filteredEntries.map((entry) => {
-                    const enrichmentStatus = trayEnrichmentStatuses[entry.anchorId];
-                    const provenance = resolveTrayEntryMatchProvenance(entry);
-
-                    return (
-                      <li
-                        key={entry.anchorId}
-                        role="button"
-                        tabIndex={0}
-                        data-vera5-tray-entry="true"
-                        data-vera5-type={entry.type}
-                        data-vera5-value={entry.value}
-                        data-vera5-anchor-id={entry.anchorId}
-                        data-vera5-rule-id={provenance?.ruleId}
-                        data-vera5-source-text-hint={provenance?.sourceTextHint}
-                        aria-label={buildTrayRowNavigationAriaLabel(entry.value, enrichmentStatus)}
-                        onClick={() => handleTrayRowActivate(entry)}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter" && event.key !== " ") {
-                            return;
-                          }
-                          event.preventDefault();
-                          handleTrayRowActivate(entry);
-                        }}
+                <>
+                  {activeTrayEntries.length > 0 ? (
+                    <ul
+                      style={{
+                        listStyle: "none",
+                        margin: 0,
+                        padding: 0,
+                        maxHeight: 220,
+                        overflowY: "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      {activeTrayEntries.map((entry) => renderTrayEntryRow(entry))}
+                    </ul>
+                  ) : (
+                    <p style={trayStatusStyle()}>
+                      All matching indicators are listed under Suppressed.
+                    </p>
+                  )}
+                  {suppressedTrayEntries.length > 0 ? (
+                    <details
+                      data-vera5-tray-suppressed-section="true"
+                      style={{
+                        marginTop: activeTrayEntries.length > 0 ? 8 : 0,
+                        borderRadius: 6,
+                        border: `1px solid ${POPUP_THEME.border}`,
+                        padding: "6px 8px",
+                        backgroundColor: POPUP_THEME.trayRowBg,
+                      }}
+                    >
+                      <summary
+                        data-vera5-why-still-visible-tooltip="true"
+                        title={whyStillVisibleTooltip}
                         style={{
+                          cursor: "pointer",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: POPUP_THEME.muted,
+                          listStylePosition: "outside",
+                        }}
+                      >
+                        {formatNoiseRulesTraySuppressedSummary(suppressedTrayEntries.length)}
+                      </summary>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          margin: "6px 0 8px",
+                          color: POPUP_THEME.muted,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {NOISE_RULES_TRAY_SUPPRESSED_SECTION_HINT}
+                      </p>
+                      <ul
+                        style={{
+                          listStyle: "none",
+                          margin: 0,
+                          padding: 0,
+                          maxHeight: 160,
+                          overflowY: "auto",
                           display: "flex",
                           flexDirection: "column",
                           gap: 6,
-                          padding: "6px 8px",
-                          borderRadius: 6,
-                          border: "1px solid transparent",
-                          backgroundColor: POPUP_THEME.trayRowBg,
-                          fontSize: 12,
-                          lineHeight: 1.4,
-                          cursor: "pointer",
                         }}
                       >
-                        <div
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            gap: 8,
-                          }}
-                        >
-                          <span
-                            aria-hidden="true"
-                            style={{
-                              flexShrink: 0,
-                              padding: "1px 6px",
-                              borderRadius: 4,
-                              backgroundColor: POPUP_THEME.buttonBg,
-                              color: POPUP_THEME.muted,
-                              fontSize: 10,
-                              fontWeight: 700,
-                            }}
-                          >
-                            {IOC_TYPE_TRAY_LABEL[entry.type]}
-                          </span>
-                          <span
-                            style={{
-                              display: "flex",
-                              alignItems: "flex-start",
-                              gap: 8,
-                              flex: 1,
-                              minWidth: 0,
-                            }}
-                          >
-                            <TrayIndicatorValue entry={entry} />
-                            {enrichmentStatus ? (
-                              <span
-                                aria-hidden="true"
-                                style={trayEnrichmentHintStyle(enrichmentStatus.badgeText)}
-                              >
-                                {formatTrayRowEnrichmentHint(enrichmentStatus)}
-                              </span>
-                            ) : null}
-                          </span>
-                        </div>
-                        <SaveToCollectionTrayPanel
-                          entry={entry}
-                          open={saveToCollectionAnchorId === entry.anchorId}
-                          feedback={
-                            saveToCollectionAnchorId === entry.anchorId
-                              ? saveToCollectionFeedback
-                              : null
-                          }
-                          onFeedback={setSaveToCollectionFeedback}
-                          onToggle={() => {
-                            setSaveToCollectionFeedback(null);
-                            setSaveToCollectionAnchorId((current) =>
-                              current === entry.anchorId ? null : entry.anchorId
-                            );
-                          }}
-                        />
-                        <RunMacroTrayPanel
-                          entry={entry}
-                          open={runMacroTrayAnchorId === entry.anchorId}
-                          feedback={
-                            runMacroTrayAnchorId === entry.anchorId ? runMacroTrayFeedback : null
-                          }
-                          onFeedback={setRunMacroTrayFeedback}
-                          onToggle={() => {
-                            setRunMacroTrayFeedback(null);
-                            setRunMacroTrayAnchorId((current) =>
-                              current === entry.anchorId ? null : entry.anchorId
-                            );
-                          }}
-                        />
-                        <WhyDetectedTrayDetails entry={entry} />
-                        <CoOccurrenceTrayDetails
-                          entry={entry}
-                          pageIndex={trayPageCoOccurrenceIndex}
-                          onNavigateToRelated={sendNavigateToIocAnchor}
-                        />
-                        <CorrelationClusterTrayDetails
-                          entry={entry}
-                          clusters={trayCorrelationClusters}
-                          activeSessionId={activeSession?.id ?? null}
-                          sessionsById={trayCorrelationSessionsById}
-                          pageIndex={trayPageCoOccurrenceIndex}
-                          viewingCurrentTabScan={scanSummary !== null}
-                          ready={trayCorrelationReady}
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
+                        {suppressedTrayEntries.map(({ entry }) =>
+                          renderTrayEntryRow(entry, { noiseSuppressed: true })
+                        )}
+                      </ul>
+                    </details>
+                  ) : null}
+                </>
               ) : (
                 <p style={trayStatusStyle()}>No indicators match this filter.</p>
               )}

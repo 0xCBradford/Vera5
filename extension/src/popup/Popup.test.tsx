@@ -1400,6 +1400,73 @@ describe("Popup IOC tray", () => {
     );
   });
 
+  it("moves noise-rule matches into a collapsed Suppressed tray section", async () => {
+    const { STORAGE_KEY_NOISE_RULES, NOISE_RULES_STORE_SCHEMA_VERSION } = await import(
+      "../lib/noiseRuleStorage"
+    );
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+
+    const rule = createNoiseRule({
+      id: "nr-tray-suppress",
+      patternType: "exact",
+      pattern: "192.0.2.1",
+      sourceAction: "suppress",
+      createdAt: 1,
+      hitCount: 0,
+    });
+
+    stubChrome({
+      initialSummary: sampleSummary,
+      localStore: {
+        [STORAGE_KEY_NOISE_RULES]: {
+          schemaVersion: NOISE_RULES_STORE_SCHEMA_VERSION,
+          updatedAt: 1,
+          rules: [{ ...rule, schemaVersion: NOISE_RULE_SCHEMA_VERSION }],
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Suppressed (1)");
+    });
+
+    const suppressedSection = mounted!.container.querySelector(
+      "[data-vera5-tray-suppressed-section='true']"
+    ) as HTMLDetailsElement | null;
+    expect(suppressedSection).not.toBeNull();
+    expect(suppressedSection?.open).toBe(false);
+    expect(mounted!.container.textContent).toContain(
+      "Matching local noise rules. Still detected on the page—collapsed for triage."
+    );
+
+    const activeRows = Array.from(
+      mounted!.container.querySelectorAll<HTMLElement>(
+        "[data-vera5-tray-entry='true']:not([data-vera5-noise-suppressed='true'])"
+      )
+    );
+    const suppressedRows = Array.from(
+      mounted!.container.querySelectorAll<HTMLElement>(
+        "[data-vera5-tray-entry='true'][data-vera5-noise-suppressed='true']"
+      )
+    );
+    expect(activeRows.map((row) => row.dataset.vera5Value)).toEqual([
+      "8.8.8.8",
+      "CVE-2021-44228",
+    ]);
+    expect(suppressedRows.map((row) => row.dataset.vera5Value)).toEqual(["192.0.2.1"]);
+    expect(suppressedSection?.contains(suppressedRows[0]!)).toBe(true);
+
+    const whyStillVisible = suppressedSection?.querySelector(
+      "[data-vera5-why-still-visible-tooltip='true']"
+    ) as HTMLElement | null;
+    expect(whyStillVisible).not.toBeNull();
+    expect(whyStillVisible?.getAttribute("title")).toContain("Why still visible?");
+    expect(whyStillVisible?.getAttribute("title")).toContain("192.0.2.1");
+    expect(whyStillVisible?.getAttribute("title")).toContain("Type: IPv4 address");
+    expect(whyStillVisible?.getAttribute("title")).toContain("Source context: 192.0.2.1");
+  });
+
   it("shows active page context badge in the IOC tray header", async () => {
     stubChrome({
       initialSummary: sampleSummary,

@@ -7,6 +7,10 @@ import {
   setSessionIocLabel,
 } from "./iocLabelSession";
 import { STORAGE_KEY_IOC_LABELS } from "./iocLabelStorage";
+import {
+  clearLearnedNoiseRules,
+  listLearnedNoiseRules,
+} from "./noiseRule";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
   vi.stubGlobal("chrome", {
@@ -45,6 +49,7 @@ function stubChromeStorage(store: Record<string, unknown>): void {
 describe("iocLabelSession", () => {
   afterEach(() => {
     clearSessionIocLabels();
+    clearLearnedNoiseRules();
     vi.unstubAllGlobals();
   });
 
@@ -72,6 +77,45 @@ describe("iocLabelSession", () => {
   it("falls back to payload labels when no session label exists", () => {
     expect(resolveHoverCardIocLabel("8.8.8.8", "internal")).toBe("internal");
   });
+
+  it("creates a noise rule only when learnNoiseRule is opted in", async () => {
+    const store: Record<string, unknown> = {};
+    stubChromeStorage(store);
+
+    expect(
+      setSessionIocLabel("8.8.8.8", "suppress-false-positive")
+    ).toBeNull();
+    expect(listLearnedNoiseRules()).toEqual([]);
+
+    expect(
+      setSessionIocLabel("8.8.8.8", "case-important", { learnNoiseRule: true })
+    ).toBeNull();
+    expect(listLearnedNoiseRules()).toEqual([]);
+
+    const learned = setSessionIocLabel("8.8.8.8", "suppress-false-positive", {
+      learnNoiseRule: true,
+    });
+    expect(learned).toMatchObject({
+      patternType: "exact",
+      pattern: "8.8.8.8",
+      sourceAction: "suppress",
+      hitCount: 0,
+    });
+    expect(listLearnedNoiseRules()).toEqual([learned]);
+
+    await vi.waitFor(() => {
+      expect(store.noiseRules).toMatchObject({
+        schemaVersion: 1,
+        rules: [expect.objectContaining({ pattern: "8.8.8.8", sourceAction: "suppress" })],
+      });
+    });
+
+    const again = setSessionIocLabel("8.8.8.8", "suppress-false-positive", {
+      learnNoiseRule: true,
+    });
+    expect(again).toEqual(learned);
+    expect(listLearnedNoiseRules()).toHaveLength(1);
+  });
 });
 
 describe("iocLabelSession persistence", () => {
@@ -80,10 +124,12 @@ describe("iocLabelSession persistence", () => {
   beforeEach(() => {
     store = {};
     stubChromeStorage(store);
+    clearLearnedNoiseRules();
   });
 
   afterEach(() => {
     clearSessionIocLabels();
+    clearLearnedNoiseRules();
     vi.unstubAllGlobals();
   });
 

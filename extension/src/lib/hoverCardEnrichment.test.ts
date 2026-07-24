@@ -36,11 +36,15 @@ import {
   shouldShowRiskScore,
   shouldShowRiskScoreSection,
   buildWhyDetectedView,
+  buildWhyStillVisibleTooltip,
   confirmOpenLiveUrl,
   openLiveUrlInNewTab,
   resolveIndicatorCopyActions,
   resolveIndicatorValuePresentation,
   shouldOfferLiveUrlOpen,
+  WHY_STILL_VISIBLE_TOOLTIP_HEADING,
+  WHY_STILL_VISIBLE_TOOLTIP_MAX_ENTRIES,
+  WHY_STILL_VISIBLE_TOOLTIP_MISSING_PROVENANCE,
 } from "./hoverCardEnrichment";
 import { IOC_RULE_ID, IOC_TYPE } from "./iocRegex";
 
@@ -1504,6 +1508,46 @@ describe("why detected view model", () => {
         "href on <a> element: https://attribute-only.example.com/path",
       ignoredOverlaps: [],
     });
+  });
+});
+
+describe("why still visible tooltip", () => {
+  it("reuses Why detected provenance fields for collapsed suppressed rows", () => {
+    const tooltip = buildWhyStillVisibleTooltip([
+      {
+        value: "192.0.2.1",
+        type: IOC_TYPE.IPV4,
+        ruleId: IOC_RULE_ID.IPV4,
+        sourceTextHint: "Contact 192.0.2.1 for details.",
+      },
+    ]);
+
+    expect(tooltip).toContain(WHY_STILL_VISIBLE_TOOLTIP_HEADING);
+    expect(tooltip).toContain("192.0.2.1");
+    expect(tooltip).toContain("Type: IPv4 address");
+    expect(tooltip).toContain(
+      "Reason: Matched an IPv4 address in visible text, including bracket-dot defanged forms."
+    );
+    expect(tooltip).toContain(
+      "Source context: Contact 192.0.2.1 for details."
+    );
+  });
+
+  it("caps long lists and notes missing provenance", () => {
+    const entries = Array.from(
+      { length: WHY_STILL_VISIBLE_TOOLTIP_MAX_ENTRIES + 2 },
+      (_, index) => ({
+        value: `10.0.0.${index}`,
+        type: IOC_TYPE.IPV4 as const,
+        ruleId: index === 0 ? undefined : IOC_RULE_ID.IPV4,
+        sourceTextHint: index === 0 ? undefined : `hint ${index}`,
+      })
+    );
+
+    const tooltip = buildWhyStillVisibleTooltip(entries);
+    expect(tooltip).toContain(WHY_STILL_VISIBLE_TOOLTIP_MISSING_PROVENANCE);
+    expect(tooltip).toContain("And 2 more. Expand for full list.");
+    expect(tooltip).not.toContain("10.0.0.3");
   });
 });
 

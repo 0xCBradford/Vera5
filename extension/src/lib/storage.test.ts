@@ -24,6 +24,7 @@ import {
   getExtensionEnabled,
   getHighlightEnabled,
   getIncludePrivateIpv4,
+  getHideSuppressedFromScan,
   getLocalBackendEnabled,
   getLocalLlmSummaryEnabled,
   getQuietMode,
@@ -44,6 +45,7 @@ import {
   setEnrichmentSourceEnabled,
   setEnrichmentCacheTtlSeconds,
   setIncludePrivateIpv4,
+  setHideSuppressedFromScan,
   setLocalBackendEnabled,
   setLocalLlmSummaryEnabled,
   setQuietMode,
@@ -314,6 +316,11 @@ describe("enrichment source enabled storage", () => {
   it("persists includePrivateIpv4", async () => {
     await setIncludePrivateIpv4(true);
     await expect(getIncludePrivateIpv4()).resolves.toBe(true);
+  });
+
+  it("persists hideSuppressedFromScan", async () => {
+    await setHideSuppressedFromScan(true);
+    await expect(getHideSuppressedFromScan()).resolves.toBe(true);
   });
 
   it("persists global enrichment cache TTL", async () => {
@@ -786,6 +793,7 @@ describe("migrate-safe defaults", () => {
     expect(defaults.autoScanEnabled).toBe(false);
     expect(defaults.manualOnlyMode).toBe(true);
     expect(defaults.includePrivateIpv4).toBe(false);
+    expect(defaults.hideSuppressedFromScan).toBe(false);
     expect(defaults.localBackendEnabled).toBe(false);
     expect(defaults.localLlmSummaryEnabled).toBe(false);
     expect(defaults.quietMode).toBe(false);

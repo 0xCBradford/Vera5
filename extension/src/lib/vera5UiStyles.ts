@@ -79,6 +79,43 @@ export function buildVera5UiStylesCss(): string {
   text-transform: uppercase;
   color: var(--vera5-muted-label);
 }
+.vera5-hover-card-noise-rule-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--vera5-muted-label);
+  background: color-mix(in srgb, var(--vera5-muted-label) 16%, transparent);
+}
+.vera5-hover-card-noise-rule-match {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--vera5-border) 80%, transparent);
+  background: color-mix(in srgb, var(--vera5-surface-raised, var(--vera5-page)) 88%, transparent);
+}
+.vera5-hover-card-noise-rule-summary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--vera5-text);
+  word-break: break-word;
+}
+.vera5-hover-card-noise-rule-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--vera5-muted-label);
+}
 .vera5-hover-card-value {
   margin: 0 0 8px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;

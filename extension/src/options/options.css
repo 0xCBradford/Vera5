@@ -1180,6 +1180,11 @@ body {
   background: color-mix(in srgb, var(--v5-accent) 8%, var(--v5-surface-sunken));
 }
 
+.v5-domain-list__item--noise-rule-focus {
+  border-color: var(--v5-accent);
+  background: color-mix(in srgb, var(--v5-accent) 10%, var(--v5-surface-sunken));
+}
+
 .v5-domain-mode {
   display: flex;
   flex-direction: column;

@@ -93,6 +93,82 @@ describe("HoverCard", () => {
     expect(mounted.container.textContent).toContain("Ignored overlaps: none");
   });
 
+  it("shows deprioritized badge and opens Options for the matched noise rule", async () => {
+    const { STORAGE_KEY_NOISE_RULES, NOISE_RULES_STORE_SCHEMA_VERSION } = await import(
+      "../lib/noiseRuleStorage"
+    );
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+    const tabsCreate = vi.fn(() => Promise.resolve({ id: 1 }));
+    const rule = createNoiseRule({
+      id: "nr-hover-react",
+      patternType: "exact",
+      pattern: "8.8.8.8",
+      sourceAction: "benign",
+      createdAt: 1,
+      hitCount: 2,
+    });
+    const localStore: Record<string, unknown> = {
+      [STORAGE_KEY_NOISE_RULES]: {
+        schemaVersion: NOISE_RULES_STORE_SCHEMA_VERSION,
+        updatedAt: 1,
+        rules: [{ ...rule, schemaVersion: NOISE_RULE_SCHEMA_VERSION }],
+      },
+    };
+    vi.stubGlobal("chrome", {
+      runtime: {
+        getURL: (path: string) => `chrome-extension://test/${path}`,
+      },
+      tabs: {
+        create: tabsCreate,
+      },
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in localStore) {
+                result[key] = localStore[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: () => Promise.resolve(),
+          remove: () => Promise.resolve(),
+        },
+      },
+    });
+
+    mounted = renderHoverCard({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(
+          "[data-vera5-noise-deprioritized-badge='true']"
+        )?.textContent
+      ).toBe("Deprioritized");
+    });
+
+    expect(mounted.container.textContent).toContain("Benign · Exact match · 8.8.8.8");
+    const link = mounted.container.querySelector<HTMLButtonElement>(
+      "[data-vera5-noise-rule-link='true']"
+    );
+    expect(link?.textContent).toBe("View matched noise rule");
+    link?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(tabsCreate).toHaveBeenCalledWith({
+      url: "chrome-extension://test/options.html#noise-rules/nr-hover-react",
+    });
+
+    vi.unstubAllGlobals();
+  });
+
   it("renders Why detected panel with Phase 2 email provenance", () => {
     mounted = renderHoverCard({
       value: "analyst@corp.example.com",

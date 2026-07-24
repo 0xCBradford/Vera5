@@ -814,6 +814,73 @@ export function buildWhyDetectedView(
   };
 }
 
+/** Native tooltip on the collapsed tray Suppressed summary. */
+export const WHY_STILL_VISIBLE_TOOLTIP_HEADING = "Why still visible?";
+export const WHY_STILL_VISIBLE_TOOLTIP_INTRO =
+  "Collapsed for triage only. Detection still matched these indicators:";
+export const WHY_STILL_VISIBLE_TOOLTIP_MISSING_PROVENANCE =
+  "Still matched by detection (provenance unavailable).";
+export const WHY_STILL_VISIBLE_TOOLTIP_MAX_ENTRIES = 3;
+
+function formatWhyDetectedTooltipBlock(
+  value: string,
+  view: WhyDetectedView
+): string {
+  const lines = [
+    value,
+    `Type: ${view.typeLabel}`,
+    `Reason: ${view.reason}`,
+    `Source context: ${view.sourceTextHint}`,
+  ];
+  if (view.ignoredOverlaps.length > 0) {
+    lines.push(
+      `Ignored overlaps: ${view.ignoredOverlaps
+        .map((overlap) => `${overlap.typeLabel} ${overlap.value}`)
+        .join("; ")}`
+    );
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Builds the collapsed Suppressed-section tooltip from the same detection
+ * provenance view model as **Why detected?**.
+ */
+export function buildWhyStillVisibleTooltip(
+  entries: ReadonlyArray<
+    { value: string; type: IocType } & Partial<IocMatchProvenance>
+  >
+): string {
+  if (entries.length === 0) {
+    return `${WHY_STILL_VISIBLE_TOOLTIP_HEADING}\n${WHY_STILL_VISIBLE_TOOLTIP_INTRO}`;
+  }
+
+  const shown = entries.slice(0, WHY_STILL_VISIBLE_TOOLTIP_MAX_ENTRIES);
+  const blocks = shown.map((entry) => {
+    const view = buildWhyDetectedView({
+      type: entry.type,
+      ruleId: entry.ruleId,
+      sourceTextHint: entry.sourceTextHint,
+      ignoredOverlaps: entry.ignoredOverlaps,
+    });
+    if (!view) {
+      return `${entry.value}\n${WHY_STILL_VISIBLE_TOOLTIP_MISSING_PROVENANCE}`;
+    }
+    return formatWhyDetectedTooltipBlock(entry.value, view);
+  });
+
+  const remainder = entries.length - shown.length;
+  if (remainder > 0) {
+    blocks.push(`And ${remainder} more. Expand for full list.`);
+  }
+
+  return [
+    WHY_STILL_VISIBLE_TOOLTIP_HEADING,
+    WHY_STILL_VISIBLE_TOOLTIP_INTRO,
+    ...blocks,
+  ].join("\n\n");
+}
+
 export const HOVER_CARD_ON_PAGE_VALUE_LABEL = "On page:";
 export const HOVER_CARD_REFANGED_VALUE_LABEL = "Refanged:";
 export const HOVER_CARD_COPY_INDICATOR_LABEL = "Copy Indicator";

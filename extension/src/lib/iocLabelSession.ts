@@ -10,6 +10,11 @@ import {
   isExtensionContextInvalidated,
   rethrowUnlessStaleExtensionError,
 } from "./extensionContext";
+import {
+  createNoiseRuleFromWatchlistLabel,
+  type NoiseRule,
+} from "./noiseRule";
+import { persistLearnedNoiseRule } from "./noiseRuleStorage";
 
 const sessionIocLabels = new Map<string, IocLabelId>();
 
@@ -44,7 +49,20 @@ export function getSessionIocLabel(value: string): IocLabelId | null {
   return sessionIocLabels.get(normalizeIocKey(value)) ?? null;
 }
 
-export function setSessionIocLabel(value: string, label: IocLabelId | null): void {
+export type SetSessionIocLabelOptions = {
+  /** Explicit per-action opt-in to learn a local noise rule from this label. */
+  learnNoiseRule?: boolean;
+};
+
+/**
+ * Applies a watchlist label and, when `learnNoiseRule` is true for
+ * suppress/internal/benign, creates and remembers a local exact-match noise rule.
+ */
+export function setSessionIocLabel(
+  value: string,
+  label: IocLabelId | null,
+  options?: SetSessionIocLabelOptions
+): NoiseRule | null {
   const normalizedLabel = label ? normalizeIocLabelId(label) : null;
   setCachedIocLabel(value, normalizedLabel);
   if (normalizedLabel) {
@@ -53,10 +71,19 @@ export function setSessionIocLabel(value: string, label: IocLabelId | null): voi
       label: normalizedLabel,
     }).catch(rethrowUnlessStaleExtensionError);
   }
-  if (!canPersistIocLabels()) {
-    return;
+  if (canPersistIocLabels()) {
+    void setStoredIocLabel(value, normalizedLabel).catch(rethrowUnlessStaleExtensionError);
   }
-  void setStoredIocLabel(value, normalizedLabel).catch(rethrowUnlessStaleExtensionError);
+
+  const learned = createNoiseRuleFromWatchlistLabel({
+    iocValue: value,
+    label: normalizedLabel,
+    learnNoiseRule: options?.learnNoiseRule === true,
+  });
+  if (!learned) {
+    return null;
+  }
+  return persistLearnedNoiseRule(learned);
 }
 
 export function applyStoredIocLabel(value: string, label: IocLabelId | null): void {

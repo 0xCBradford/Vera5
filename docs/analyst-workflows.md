@@ -670,6 +670,21 @@ When the skip threshold applies, Vera5 does not run pair or group math at all fo
 
 Limits persist in extension local storage under the co-occurrence settings key. Defaults apply on fresh install; partial limit overrides merge with defaults for unspecified fields.
 
+### Same-page adjacency vs cross-session correlation (scope split)
+
+Vera5 keeps two shipped “appeared together” surfaces separate so operators do not confuse **this page scan** with **other investigation sessions**:
+
+| | **Appeared alongside** (same-page) | **Appeared across sessions** (cross-session) |
+|--|-----------------------------------|----------------------------------------------|
+| **Question** | Which other indicators share **this page scan**? | Which **other investigation sessions** saw a similar IOC set? |
+| **Data** | Tab scan snapshot on the active investigation session | Merged IOC sets from saved investigation sessions (local cluster storage) |
+| **Surfaces** | Hover card + tray expander | Tray expander only (list/adjacency—no graph canvas) |
+| **Navigation** | Jump to highlights on the **current tab** | Drill-down to other session title / truncated URL / date; optional link into **Appeared alongside** when viewing the current tab scan |
+| **Settings** | No Options controls for same-page caps today (defaults apply) | **Cross-session correlation**: retention, overlap merge, **Clear all clusters** |
+| **Does not** | Read other tabs, other sessions, or historical investigations | Duplicate the same-page panel; act as a global threat graph; imply causation or a detection verdict |
+
+Use **Appeared alongside** for in-page pivot adjacency. Use **Appeared across sessions** when you need local “these sets showed up together across cases” context. The tray can show both expanders on one row; they stay sibling panels (cross-session may link into same-page for current-tab context without merging the lists).
+
 ### Same-page adjacency, cross-session correlation, and relationship memory
 
 Vera5 separates “appeared together” intelligence into three layers. Each layer stays **local-only** on your browser profile: no Vera5-hosted graph, no cross-user intelligence, and no machine-learned entity resolution.
@@ -677,26 +692,26 @@ Vera5 separates “appeared together” intelligence into three layers. Each lay
 | Layer | Operator surface | Question it answers | Data source | In current release |
 |-------|------------------|---------------------|-------------|-------------------|
 | **Same-page adjacency** | **Appeared alongside** on the hover card and tray | Which other indicators share **this page scan**? | Tab scan snapshot on the active investigation session | Yes |
-| **Cross-session correlation** | **Appeared across sessions** tray rows and correlation pack appendices | Which **other investigation sessions** saw a similar IOC set? | Merged IOC sets from saved investigation sessions | Yes (local clusters + pack export; performance caps apply) |
+| **Cross-session correlation** | **Appeared across sessions** tray rows; correlation pack appendix **builders** (library) | Which **other investigation sessions** saw a similar IOC set? | Merged IOC sets from saved investigation sessions | Yes (local clusters + Options; performance caps apply; pack export UI not exposed) |
 | **Relationship memory** | **Previously appeared with** on the hover card and tray (when available) | Which **entities** (IP, domain, hash, …) co-appeared across my past work? | Rolled-up relationship edges from scan and enrich events across sessions | No |
 
 **Same-page adjacency (`Appeared alongside`)** — Shipped today. Builds pairs and groups from one scan on one page URL while your investigation session is active. Jump navigation stays on the current tab. Performance caps in the table above apply. It does not read other tabs, archived sessions, or historical investigations.
 
-**Cross-session correlation (`Appeared across sessions`)** — Local cross-session IOC-set clusters on the popup tray. Clusters IOC sets that appeared together across investigation sessions, shows list or adjacency views (not a force-directed graph or global threat map), can link to **Appeared alongside** for the current tab’s scan context, and supports correlation pack markdown/JSON appendices. In-product and pack-export copy states **Correlation ≠ causation** and that co-occurrence / cross-session clusters are advisory only—not a detection verdict.
+**Cross-session correlation (`Appeared across sessions`)** — Shipped today as local IOC-set clusters on the popup tray. Clusters sets that appeared together across investigation sessions; list/adjacency only (not a force-directed graph or global threat map). Links to **Appeared alongside** for current-tab scan context without duplicating that panel. In-product copy states **Correlation ≠ causation** and that co-occurrence / cross-session clusters are advisory only—not a detection verdict. Markdown/JSON correlation pack appendix builders (cluster summary, member IOC table, session refs, same disclaimer; secrets redacted) exist as a library contract—there is no workspace or overlay **Export correlation pack** control today.
 
 ### Cross-session correlation limits (performance)
 
-Cluster promotion ranks by how many sessions share a set, then by last seen. Caps keep tray and pack exports responsive when many sessions accumulate:
+Cluster promotion ranks by how many sessions share a set, then by last seen. Caps keep the tray and pack builders responsive when many sessions accumulate:
 
 | Limit | Default | What it does |
 |-------|---------|--------------|
-| **Max clusters** | 64 | Keeps at most 64 ranked clusters after build/merge. Lower-ranked clusters are omitted from tray and pack views. |
+| **Max clusters** | 64 | Keeps at most 64 ranked clusters after build/merge. Lower-ranked clusters are omitted from tray and pack builder input. |
 | **Max IOCs per cluster** | 64 | Skips IOC sets larger than 64 unique type+value members. Oversized overlap merges that exceed the cap are dropped. |
 | **Retention window** | 90 days | Drops persisted clusters whose **last seen** timestamp is older than the window. The window is configurable in Options (**Cross-session correlation**); the default is 90 days. |
 
-Minimum cluster size remains two indicators and two sessions (unless overlap merge is configured). Defaults apply when limits are omitted; overrides clamp to safe ranges (1–256 clusters; 2–512 members per cluster; retention 1–3650 days). Retention prune runs when local cluster storage is read so stale packs do not linger indefinitely. Options also expose the overlap-merge mode (exact sets only, Jaccard threshold, or minimum shared indicators) and a **Clear all clusters** control that removes stored clusters without deleting investigation session history.
+Minimum cluster size remains two indicators and two sessions (unless overlap merge is configured). Defaults apply when limits are omitted; overrides clamp to safe ranges (1–256 clusters; 2–512 members per cluster; retention 1–3650 days). Retention prune runs when local cluster storage is read so stale clusters do not linger indefinitely. Options also expose the overlap-merge mode (exact sets only, Jaccard threshold, or minimum shared indicators) and a **Clear all clusters** control that removes stored clusters without deleting investigation session history.
 
-**Relationship memory** — A separate capability, not bundled in the current extension build. When available, it rolls up co-seen entity pairs (for example IP ↔ domain ↔ hash) across sessions, surfaces **Previously appeared with** on the hover card and tray, links to prior investigation sessions and analyst notebook fragments, and honors known-good deprioritization when that policy is enabled. It is deeper than cross-session IOC-set clusters: entity-level edges with retention limits and clear-all controls, not overlap of whole scan snapshots alone.
+**Relationship memory** — Not in the current extension build. When shipped, it would roll up co-seen entity pairs across sessions (deeper than whole-scan IOC-set overlap). It is out of scope for same-page adjacency and for cross-session cluster packs.
 
 **Shared out-of-scope boundaries (all three layers):**
 
@@ -704,7 +719,7 @@ Minimum cluster size remains two indicators and two sessions (unless overlap mer
 - ML-inferred relationships or automated campaign attribution from co-occurrence alone
 - Cross-user or shared-team relationship intelligence
 
-**What to use today for cross-session handoff:** **Investigation history**, **Investigation session timeline**, **Session export**, **IOC collections**, and **Promote session to collection…**—see [Session vs IOC collection](#session-vs-ioc-collection). Those paths do not replace future correlation packs or relationship memory; they give durable lists and exports without cross-session IOC-set clustering.
+**What to use today for durable cross-session handoff (lists and exports):** **Investigation history**, **Investigation session timeline**, **Session export**, **IOC collections**, and **Promote session to collection…**—see [Session vs IOC collection](#session-vs-ioc-collection). Those paths complement **Appeared across sessions** (local cluster visibility in the tray); they do not replace it, and they do not require a correlation pack download control.
 
 ## IOC collections (persistent indicator groupings)
 
@@ -1061,6 +1076,15 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | MDR alert revisit after restart | Popup **Recent sessions** → **Reopen**; confirm rollups match the alert page you scan again. |
 | Dense page missing related IOCs in **Appeared alongside** | Page exceeded co-occurrence member or pair caps, or skip threshold | Use tray filters to focus on a subset; rescan; expect partial lists when hundreds of unique indicators share one page scan. Pages above the skip threshold keep a prior index or show no co-occurrence panel. |
 | Sensitive / classified work | Manual-only on; enable only approved sources; do not export settings with keys unless policy allows. |
+
+## Optional SOC dashboard noise starter
+
+Vera5 does **not** auto-learn or auto-apply noise rules. A conservative starter list for common SOC dashboard noise (public DNS resolvers and private RFC1918 ranges, plus `.local`) ships as inspectable JSON:
+
+- Repository file: [`examples/soc-dashboard-noise-starter.json`](../examples/soc-dashboard-noise-starter.json)
+- Options: **Noise rules → Import SOC dashboard starter** (optional, add-only; skips duplicates)
+
+Review the patterns after import. Matching indicators move under the tray **Suppressed** section; they stay in detection unless you enable **Hide suppressed indicators from scan**. Export your current rules for team handoff with **Export rules JSON** (never includes API keys).
 
 ## Settings packs and threat profiles
 

@@ -12,6 +12,16 @@ import {
 } from "../lib/iocLabelSession";
 import { IOC_LABEL_IDS, formatIocLabelDisplay, type IocLabelId } from "../lib/iocLabel";
 import {
+  buildNoiseRuleHoverMatchView,
+  buildNoiseRulesOptionsHash,
+  confirmLearnNoiseRule,
+  findMatchingNoiseRule,
+  shouldOfferNoiseRuleLearnForLabel,
+  type NoiseRuleHoverMatchView,
+} from "../lib/noiseRule";
+import { listStoredNoiseRules } from "../lib/noiseRuleStorage";
+import { safeOpenOptionsPageWithHash } from "../lib/extensionContext";
+import {
   getActiveInvestigationSession,
   toggleActiveInvestigationSessionIocPin,
 } from "../lib/investigationSessionStorage";
@@ -322,6 +332,9 @@ export function HoverCard({
     iocLabel ?? getSessionIocLabel(value)
   );
   const [pinned, setPinned] = useState(false);
+  const [noiseRuleMatch, setNoiseRuleMatch] = useState<NoiseRuleHoverMatchView | null>(
+    null
+  );
   const pivotLinks = getPivotLinks(type, value);
   const view = resolveHoverCardDisplayView({
     enrichmentState,
@@ -369,6 +382,27 @@ export function HoverCard({
     });
   }, [value]);
 
+  useEffect(() => {
+    let cancelled = false;
+    setNoiseRuleMatch(null);
+    void listStoredNoiseRules()
+      .then((rules) => {
+        if (cancelled) {
+          return;
+        }
+        const matched = findMatchingNoiseRule(rules, value);
+        setNoiseRuleMatch(matched ? buildNoiseRuleHoverMatchView(matched) : null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setNoiseRuleMatch(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+
   const handleCopy = (copyValue: string) => {
     void copyTextToClipboard(copyValue).then((success) => {
       if (!success) {
@@ -398,8 +432,10 @@ export function HoverCard({
       nextValue === HOVER_CARD_IOC_LABEL_NONE_VALUE
         ? null
         : (nextValue as IocLabelId);
+    const learnNoiseRule =
+      shouldOfferNoiseRuleLearnForLabel(nextLabel) && confirmLearnNoiseRule(window);
     setLabel(nextLabel);
-    setSessionIocLabel(value, nextLabel);
+    setSessionIocLabel(value, nextLabel, { learnNoiseRule });
   };
 
   const handlePinToggle = () => {
@@ -421,6 +457,14 @@ export function HoverCard({
     >
       <div className="vera5-hover-card-header">
         <span className="vera5-hover-card-type">{typeLabel}</span>
+        {noiseRuleMatch ? (
+          <span
+            className="vera5-hover-card-noise-rule-badge"
+            data-vera5-noise-deprioritized-badge="true"
+          >
+            {noiseRuleMatch.badgeLabel}
+          </span>
+        ) : null}
         <button
           type="button"
           className={
@@ -455,6 +499,28 @@ export function HoverCard({
           );
         })}
       </div>
+      {noiseRuleMatch ? (
+        <section
+          className="vera5-hover-card-noise-rule-match"
+          aria-label="Matched noise rule"
+          data-vera5-noise-rule-id={noiseRuleMatch.ruleId}
+          style={{ marginBottom: 8 }}
+        >
+          <p className="vera5-hover-card-noise-rule-summary">{noiseRuleMatch.ruleSummary}</p>
+          <p className="vera5-hover-card-noise-rule-hint">{noiseRuleMatch.hint}</p>
+          <button
+            type="button"
+            className="vera5-hover-card-action"
+            data-vera5-noise-rule-link="true"
+            aria-label={noiseRuleMatch.viewRuleAriaLabel}
+            onClick={() => {
+              safeOpenOptionsPageWithHash(buildNoiseRulesOptionsHash(noiseRuleMatch.ruleId));
+            }}
+          >
+            {noiseRuleMatch.viewRuleLabel}
+          </button>
+        </section>
+      ) : null}
       {valuePresentation.showRefangedPair ? (
         <>
           <p className="vera5-hover-card-value-on-page">

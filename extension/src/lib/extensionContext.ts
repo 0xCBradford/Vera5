@@ -264,6 +264,26 @@ export function safeOpenOptionsPage(): void {
   void safeRuntimeSendMessage(openOptionsPageMessage());
 }
 
+/** Opens Options with an optional hash deep-link (falls back to plain Options). */
+export function safeOpenOptionsPageWithHash(hash: string): void {
+  if (!isExtensionContextValid()) {
+    return;
+  }
+
+  const normalizedHash = hash.startsWith("#") ? hash : `#${hash}`;
+  try {
+    if (typeof chrome.runtime.getURL === "function" && chrome.tabs?.create) {
+      const url = chrome.runtime.getURL(`options.html${normalizedHash}`);
+      void chrome.tabs.create({ url });
+      return;
+    }
+  } catch (error) {
+    rethrowUnlessStaleExtensionError(error);
+  }
+
+  safeOpenOptionsPage();
+}
+
 export function runWithExtensionContext(fn: () => void): void {
   if (isExtensionContextInvalidated()) {
     return;

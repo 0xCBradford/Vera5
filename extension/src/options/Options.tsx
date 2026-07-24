@@ -18,6 +18,37 @@ import {
   setCorrelationClusterOverlapMerge,
   setCorrelationClusterRetentionDays,
 } from "../lib/correlationClusterStorage";
+import {
+  buildNoiseRuleDetailView,
+  HIDE_SUPPRESSED_FROM_SCAN_DEFAULT,
+  HIDE_SUPPRESSED_FROM_SCAN_OPTIONS_HINT,
+  HIDE_SUPPRESSED_FROM_SCAN_OPTIONS_LABEL,
+  NOISE_RULES_OPTIONS_CLEAR_LABEL,
+  NOISE_RULES_OPTIONS_EMPTY_TEXT,
+  NOISE_RULES_OPTIONS_EXPORT_HINT,
+  NOISE_RULES_OPTIONS_EXPORT_LABEL,
+  NOISE_RULES_OPTIONS_IMPORT_HINT,
+  NOISE_RULES_OPTIONS_IMPORT_LABEL,
+  NOISE_RULES_OPTIONS_IMPORT_STARTER_HINT,
+  NOISE_RULES_OPTIONS_IMPORT_STARTER_LABEL,
+  NOISE_RULES_OPTIONS_SECTION_DESC,
+  NOISE_RULES_OPTIONS_SECTION_ID,
+  NOISE_RULES_OPTIONS_SECTION_TITLE,
+  parseNoiseRulesOptionsHash,
+  SOC_DASHBOARD_NOISE_STARTER_EXAMPLES_PATH,
+  type NoiseRule,
+} from "../lib/noiseRule";
+import {
+  clearStoredNoiseRules,
+  detectNoiseRulesImportFormat,
+  downloadNoiseRulesExportJson,
+  exportStoredNoiseRulesJson,
+  formatNoiseRulesImportStatus,
+  importNoiseRulesFromText,
+  importSocDashboardNoiseStarterRules,
+  listStoredNoiseRules,
+  NoiseRulesImportError,
+} from "../lib/noiseRuleStorage";
 import { ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE } from "../lib/enrichmentSourceOps";
 import { prefersReducedMotion } from "../lib/motionPreference";
 import {
@@ -115,6 +146,7 @@ import {
   getEnrichmentSourceCacheTtlSeconds,
   getEnrichmentSourceEnabled,
   getIncludePrivateIpv4,
+  getHideSuppressedFromScan,
   getInstallQuickStartCompleted,
   getVera5Settings,
   getLocalBackendEnabled,
@@ -150,6 +182,7 @@ import {
   setEnrichmentSourceCacheTtlSeconds,
   setEnrichmentSourceEnabled,
   setIncludePrivateIpv4,
+  setHideSuppressedFromScan,
   setLocalBackendEnabled,
   setLocalLlmSummaryEnabled,
   setInternalAssetCidrRanges,
@@ -259,6 +292,7 @@ const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "operator-macros", label: "Operator Macros" },
   { id: "cache", label: "Enrichment Cache" },
   { id: "correlation", label: "Cross-session correlation" },
+  { id: "noise-rules", label: "Noise rules" },
   { id: "backup", label: "Settings Backup" },
 ];
 
@@ -1515,6 +1549,7 @@ function createEmptyApiKeyFieldStates(): Record<ApiKeySlot, ApiKeyFieldState> {
 export function Options() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const settingsPackImportInputRef = useRef<HTMLInputElement>(null);
+  const noiseRulesImportInputRef = useRef<HTMLInputElement>(null);
   const operatorMacroPackImportInputRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
   const [activeSection, setActiveSection] = useState("overview");
@@ -1529,6 +1564,7 @@ export function Options() {
     "operator-macros": true,
     cache: true,
     correlation: true,
+    "noise-rules": true,
     backup: true,
     "api-keys": true,
   }));
@@ -1542,6 +1578,9 @@ export function Options() {
     createDefaultIocTypeEnabledState()
   );
   const [includePrivateIpv4, setIncludePrivateIpv4State] = useState(false);
+  const [hideSuppressedFromScan, setHideSuppressedFromScanState] = useState(
+    HIDE_SUPPRESSED_FROM_SCAN_DEFAULT
+  );
   const [localBackendEnabled, setLocalBackendEnabledState] = useState(false);
   const [localLlmSummaryEnabled, setLocalLlmSummaryEnabledState] = useState(false);
   const [attributeHrefExtractionEnabled, setAttributeHrefExtractionEnabledState] = useState(false);
@@ -1619,6 +1658,20 @@ export function Options() {
   const [clearCorrelationClustersState, setClearCorrelationClustersState] = useState<
     "idle" | "clearing" | "cleared" | "error"
   >("idle");
+  const [noiseRules, setNoiseRules] = useState<NoiseRule[]>([]);
+  const [noiseRulesExportState, setNoiseRulesExportState] = useState<
+    "idle" | "exporting" | "exported" | "error"
+  >("idle");
+  const [noiseRulesImportState, setNoiseRulesImportState] = useState<
+    "idle" | "importing" | "imported" | "error"
+  >("idle");
+  const [noiseRulesImportStatus, setNoiseRulesImportStatus] = useState<string | null>(
+    null
+  );
+  const [clearNoiseRulesState, setClearNoiseRulesState] = useState<
+    "idle" | "clearing" | "cleared" | "error"
+  >("idle");
+  const [focusedNoiseRuleId, setFocusedNoiseRuleId] = useState<string | null>(null);
   const [exportState, setExportState] = useState<"idle" | "exporting" | "exported" | "error">(
     "idle"
   );
@@ -1706,6 +1759,45 @@ export function Options() {
   }, [settingsReloadToken]);
 
   useEffect(() => {
+    void listStoredNoiseRules()
+      .then((rules) => {
+        setNoiseRules(rules);
+      })
+      .catch(() => {
+        setNoiseRules([]);
+      });
+  }, [settingsReloadToken]);
+
+  useEffect(() => {
+    if (!ready || typeof window === "undefined") {
+      return;
+    }
+    const parsed = parseNoiseRulesOptionsHash(window.location.hash);
+    if (!parsed) {
+      return;
+    }
+    setActiveSection(NOISE_RULES_OPTIONS_SECTION_ID);
+    setCollapsedSections((prev) => ({ ...prev, [NOISE_RULES_OPTIONS_SECTION_ID]: false }));
+    setFocusedNoiseRuleId(parsed.ruleId);
+    scrollToSection(NOISE_RULES_OPTIONS_SECTION_ID);
+  }, [ready]);
+
+  useEffect(() => {
+    if (!ready || !focusedNoiseRuleId || typeof document === "undefined") {
+      return;
+    }
+    const target = document.querySelector(
+      `[data-noise-rule-id="${CSS.escape(focusedNoiseRuleId)}"]`
+    );
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const behavior: ScrollBehavior =
+      typeof window !== "undefined" && prefersReducedMotion(window) ? "auto" : "smooth";
+    target.scrollIntoView({ behavior, block: "nearest" });
+  }, [ready, focusedNoiseRuleId, noiseRules]);
+
+  useEffect(() => {
     setReady(false);
     void Promise.all([
       getAutoScanEnabled(),
@@ -1714,6 +1806,7 @@ export function Options() {
       getEnrichmentSourceEnabled(),
       getIocTypeEnabled(),
       getIncludePrivateIpv4(),
+      getHideSuppressedFromScan(),
       getLocalBackendEnabled(),
       getLocalLlmSummaryEnabled(),
       getAttributeHrefExtractionEnabled(),
@@ -1762,6 +1855,7 @@ export function Options() {
           sourceEnabledValue,
           iocTypeEnabledValue,
           includePrivateIpv4Value,
+          hideSuppressedFromScanValue,
           localBackendEnabledValue,
           localLlmSummaryEnabledValue,
           attributeHrefExtractionEnabledValue,
@@ -1792,6 +1886,7 @@ export function Options() {
           setEnrichmentSourceEnabledState(sourceEnabledValue);
           setIocTypeEnabledState(iocTypeEnabledValue);
           setIncludePrivateIpv4State(includePrivateIpv4Value);
+          setHideSuppressedFromScanState(hideSuppressedFromScanValue);
           setLocalBackendEnabledState(localBackendEnabledValue);
           setLocalLlmSummaryEnabledState(localLlmSummaryEnabledValue);
           setAttributeHrefExtractionEnabledState(attributeHrefExtractionEnabledValue);
@@ -1925,6 +2020,11 @@ export function Options() {
   const handleIncludePrivateIpv4Toggle = (checked: boolean) => {
     setIncludePrivateIpv4State(checked);
     void setIncludePrivateIpv4(checked);
+  };
+
+  const handleHideSuppressedFromScanToggle = (checked: boolean) => {
+    setHideSuppressedFromScanState(checked);
+    void setHideSuppressedFromScan(checked);
   };
 
   const handleLocalBackendToggle = (checked: boolean) => {
@@ -2652,6 +2752,99 @@ export function Options() {
       })
       .catch(() => {
         setClearCorrelationClustersState("error");
+      });
+  };
+
+  const handleExportNoiseRules = () => {
+    setNoiseRulesExportState("exporting");
+    void exportStoredNoiseRulesJson()
+      .then((json) => {
+        downloadNoiseRulesExportJson(json);
+        setNoiseRulesExportState("exported");
+      })
+      .catch(() => {
+        setNoiseRulesExportState("error");
+      });
+  };
+
+  const handleNoiseRulesImportClick = () => {
+    noiseRulesImportInputRef.current?.click();
+  };
+
+  const handleNoiseRulesImportFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    setNoiseRulesImportState("importing");
+    setNoiseRulesImportStatus(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = typeof reader.result === "string" ? reader.result : "";
+      const format = detectNoiseRulesImportFormat(
+        `${file.name};${file.type}`,
+        raw
+      );
+      void importNoiseRulesFromText(raw, format)
+        .then((result) => {
+          setNoiseRulesImportStatus(formatNoiseRulesImportStatus(result));
+          setNoiseRulesImportState("imported");
+          return listStoredNoiseRules();
+        })
+        .then((rules) => {
+          setNoiseRules(rules);
+        })
+        .catch((error) => {
+          setNoiseRulesImportState("error");
+          setNoiseRulesImportStatus(
+            error instanceof NoiseRulesImportError
+              ? error.message
+              : "Could not import noise rules. Check the file schema and try again."
+          );
+        });
+    };
+    reader.onerror = () => {
+      setNoiseRulesImportState("error");
+      setNoiseRulesImportStatus("Could not read the selected file.");
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportSocDashboardNoiseStarter = () => {
+    setNoiseRulesImportState("importing");
+    setNoiseRulesImportStatus(null);
+    void importSocDashboardNoiseStarterRules()
+      .then((result) => {
+        setNoiseRulesImportStatus(formatNoiseRulesImportStatus(result));
+        setNoiseRulesImportState("imported");
+        return listStoredNoiseRules();
+      })
+      .then((rules) => {
+        setNoiseRules(rules);
+      })
+      .catch((error) => {
+        setNoiseRulesImportState("error");
+        setNoiseRulesImportStatus(
+          error instanceof NoiseRulesImportError
+            ? error.message
+            : "Could not import the SOC dashboard starter list. Try again."
+        );
+      });
+  };
+
+  const handleClearNoiseRules = () => {
+    setClearNoiseRulesState("clearing");
+    void clearStoredNoiseRules()
+      .then(() => {
+        setNoiseRules([]);
+        setClearNoiseRulesState("cleared");
+      })
+      .catch(() => {
+        setClearNoiseRulesState("error");
       });
   };
 
@@ -4352,6 +4545,179 @@ export function Options() {
                   </span>
                 ) : null}
               </div>
+            </div>
+          </section>
+
+          <section id="noise-rules" className="v5-card" aria-labelledby="noise-rules-heading">
+            <div className="v5-card__head">
+              <h2 id="noise-rules-heading" className="v5-card__title">
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections["noise-rules"]}
+                  aria-controls="noise-rules-body"
+                  onClick={() => toggleSection("noise-rules")}
+                >
+                  <span className="v5-card__toggle-text">{NOISE_RULES_OPTIONS_SECTION_TITLE}</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
+              </h2>
+              <p className="v5-card__desc">{NOISE_RULES_OPTIONS_SECTION_DESC}</p>
+            </div>
+            <div
+              id="noise-rules-body"
+              className="v5-card__body"
+              hidden={collapsedSections["noise-rules"]}
+            >
+              <ToggleRow
+                label={HIDE_SUPPRESSED_FROM_SCAN_OPTIONS_LABEL}
+                hint={HIDE_SUPPRESSED_FROM_SCAN_OPTIONS_HINT}
+                ariaLabel={HIDE_SUPPRESSED_FROM_SCAN_OPTIONS_LABEL}
+                checked={hideSuppressedFromScan}
+                disabled={!ready}
+                onChange={handleHideSuppressedFromScanToggle}
+              />
+              {noiseRules.length === 0 ? (
+                <p className="v5-status v5-status--muted" role="status">
+                  {NOISE_RULES_OPTIONS_EMPTY_TEXT}
+                </p>
+              ) : (
+                <ul className="v5-domain-list" aria-label="Stored noise rules">
+                  {noiseRules.map((rule) => {
+                    const detail = buildNoiseRuleDetailView(rule);
+                    const focused = focusedNoiseRuleId === rule.id;
+                    return (
+                      <li
+                        key={rule.id}
+                        className={`v5-domain-list__item${
+                          focused ? " v5-domain-list__item--noise-rule-focus" : ""
+                        }`}
+                        data-noise-rule-id={rule.id}
+                      >
+                        <div className="v5-row__text">
+                          <span className="v5-row__label">{detail.summary}</span>
+                          <span className="v5-row__hint">Action: {detail.sourceActionLabel}</span>
+                          <span className="v5-row__hint">
+                            Pattern type: {detail.patternTypeLabel}
+                          </span>
+                          <span className="v5-row__hint">Pattern: {detail.pattern}</span>
+                          <span className="v5-row__hint">Hits: {detail.hitCountLabel}</span>
+                          <span className="v5-row__hint">Created: {detail.createdAtLabel}</span>
+                          <span className="v5-row__hint">Id: {detail.id}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <div className="v5-actions">
+                <input
+                  ref={noiseRulesImportInputRef}
+                  type="file"
+                  accept=".json,.csv,application/json,text/csv,text/plain"
+                  hidden
+                  aria-label="Import noise rules JSON or CSV file"
+                  onChange={handleNoiseRulesImportFileChange}
+                />
+                <button
+                  type="button"
+                  className="v5-btn"
+                  disabled={!ready || noiseRulesExportState === "exporting"}
+                  onClick={handleExportNoiseRules}
+                  aria-label={NOISE_RULES_OPTIONS_EXPORT_LABEL}
+                  title={NOISE_RULES_OPTIONS_EXPORT_HINT}
+                >
+                  {noiseRulesExportState === "exporting"
+                    ? "Exporting…"
+                    : NOISE_RULES_OPTIONS_EXPORT_LABEL}
+                </button>
+                <button
+                  type="button"
+                  className="v5-btn"
+                  disabled={!ready || noiseRulesImportState === "importing"}
+                  onClick={handleNoiseRulesImportClick}
+                  aria-label={NOISE_RULES_OPTIONS_IMPORT_LABEL}
+                  title={NOISE_RULES_OPTIONS_IMPORT_HINT}
+                >
+                  {noiseRulesImportState === "importing"
+                    ? "Importing…"
+                    : NOISE_RULES_OPTIONS_IMPORT_LABEL}
+                </button>
+                <button
+                  type="button"
+                  className="v5-btn"
+                  disabled={!ready || noiseRulesImportState === "importing"}
+                  onClick={handleImportSocDashboardNoiseStarter}
+                  aria-label={NOISE_RULES_OPTIONS_IMPORT_STARTER_LABEL}
+                  title={NOISE_RULES_OPTIONS_IMPORT_STARTER_HINT}
+                >
+                  {noiseRulesImportState === "importing"
+                    ? "Importing…"
+                    : NOISE_RULES_OPTIONS_IMPORT_STARTER_LABEL}
+                </button>
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--danger"
+                  disabled={
+                    !ready ||
+                    clearNoiseRulesState === "clearing" ||
+                    noiseRules.length === 0
+                  }
+                  onClick={handleClearNoiseRules}
+                  aria-label={NOISE_RULES_OPTIONS_CLEAR_LABEL}
+                >
+                  {clearNoiseRulesState === "clearing"
+                    ? "Clearing…"
+                    : NOISE_RULES_OPTIONS_CLEAR_LABEL}
+                </button>
+                <span className="v5-status v5-status--muted">
+                  {noiseRules.length} stored rule{noiseRules.length === 1 ? "" : "s"}
+                </span>
+                {noiseRulesExportState === "exported" ? (
+                  <span className="v5-status v5-status--success" role="status">
+                    <CheckIcon />
+                    Noise rules exported.
+                  </span>
+                ) : null}
+                {noiseRulesExportState === "error" ? (
+                  <span className="v5-status v5-status--error" role="status">
+                    Could not export noise rules. Try again.
+                  </span>
+                ) : null}
+                {noiseRulesImportState === "imported" && noiseRulesImportStatus ? (
+                  <span className="v5-status v5-status--success" role="status">
+                    <CheckIcon />
+                    {noiseRulesImportStatus}
+                  </span>
+                ) : null}
+                {noiseRulesImportState === "error" ? (
+                  <span className="v5-status v5-status--error" role="status">
+                    {noiseRulesImportStatus ??
+                      "Could not import noise rules. Check the file schema and try again."}
+                  </span>
+                ) : null}
+                {clearNoiseRulesState === "cleared" ? (
+                  <span className="v5-status v5-status--success" role="status">
+                    <CheckIcon />
+                    Noise rules cleared.
+                  </span>
+                ) : null}
+                {clearNoiseRulesState === "error" ? (
+                  <span className="v5-status v5-status--error" role="status">
+                    Could not clear noise rules. Try again.
+                  </span>
+                ) : null}
+              </div>
+              <p className="v5-row__hint" style={{ marginTop: 8 }}>
+                {NOISE_RULES_OPTIONS_EXPORT_HINT}
+              </p>
+              <p className="v5-row__hint" style={{ marginTop: 8 }}>
+                {NOISE_RULES_OPTIONS_IMPORT_HINT}
+              </p>
+              <p className="v5-row__hint" style={{ marginTop: 8 }}>
+                {NOISE_RULES_OPTIONS_IMPORT_STARTER_HINT} File copy:{" "}
+                <code>{SOC_DASHBOARD_NOISE_STARTER_EXAMPLES_PATH}</code>.
+              </p>
             </div>
           </section>
 

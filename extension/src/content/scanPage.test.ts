@@ -126,6 +126,50 @@ describe("handleScanPageRequest", () => {
     );
   });
 
+  it("still finds noise-rule matches unless hide suppressed from scan is enabled", async () => {
+    const noiseRuleStorage = await import("../lib/noiseRuleStorage");
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+
+    const rule = createNoiseRule({
+      id: "nr-scan-page",
+      patternType: "exact",
+      pattern: "8.8.8.8",
+      sourceAction: "suppress",
+      createdAt: 1,
+      hitCount: 0,
+    });
+    store[noiseRuleStorage.STORAGE_KEY_NOISE_RULES] = {
+      schemaVersion: noiseRuleStorage.NOISE_RULES_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      rules: [{ ...rule, schemaVersion: NOISE_RULE_SCHEMA_VERSION }],
+    };
+
+    const root = mountPage("<p>Contact 8.8.8.8 and example.com today.</p>");
+    const defaultResponse = await handleScanPageRequest(root);
+    expect(defaultResponse).toEqual(
+      expect.objectContaining({
+        ok: true,
+        payload: expect.objectContaining({ count: 2 }),
+      })
+    );
+    await expect(noiseRuleStorage.listStoredNoiseRules()).resolves.toHaveLength(1);
+    await expect(noiseRuleStorage.getHideSuppressedFromScanForContent()).resolves.toBe(false);
+
+    store[noiseRuleStorage.CONTENT_STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN] = true;
+    await expect(noiseRuleStorage.getHideSuppressedFromScanForContent()).resolves.toBe(true);
+
+    sendMessage.mockClear();
+    const filteredRoot = mountPage("<p>Contact 8.8.8.8 and example.com today.</p>");
+    const filteredResponse = await handleScanPageRequest(filteredRoot);
+    expect((filteredResponse as { payload?: { count?: number } }).payload?.count).toBe(1);
+    const snapshotMessage = sendMessage.mock.calls
+      .map((call) => call[0])
+      .find((message) => message?.type === MESSAGE.TAB_SCAN_SNAPSHOT);
+    expect(snapshotMessage?.snapshot.entries.map((entry: { value: string }) => entry.value)).toEqual([
+      "example.com",
+    ]);
+  });
+
   it("persists scan snapshot entries with highlight anchor linkage", async () => {
     store[CONTENT_STORAGE_KEY_HIGHLIGHT_ENABLED] = true;
     const root = mountPage("<p>Contact 8.8.8.8 today.</p>");

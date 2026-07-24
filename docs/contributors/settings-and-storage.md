@@ -21,6 +21,7 @@ Vera5 persists analyst configuration in **`chrome.storage.local`** via `extensio
 | Analyst workflow presets | SOC, CTI, and DFIR presets in Options **Trust & consent** apply default toggles (manual-only, auto-scan, pre-query notices, private IPv4, workspace source display, live enrichment sources), `defaultExportTemplateId`, and `pivotEmphasisProviders` via `applyAnalystModePreset()` in `storage.ts`. Definitions in `analystModePresets.ts`; content sync in `analystModeStorage.ts`; pivot ordering in `pivots.ts`. |
 | Per-IOC-type flags | Options checkboxes; defaults all MVP and Phase 2 types on; scan omits disabled types |
 | `includePrivateIpv4` | Options checkbox; private-space IPv4 omitted in detector when off (default) |
+| `hideSuppressedFromScan` | Options **Noise rules** toggle; default **off** so detection still finds noise-rule matches; when on, matching indicators are omitted from page/selection scans |
 | Enrichment cache TTL | Global seconds field on Options; optional per-source overrides |
 | Analyst notes | Per-IOC notes in overlay card; stored under `analystNotes` in `chrome.storage.local` via `extension/src/lib/analystNotesStorage.ts` |
 | Tab scan snapshots | Last scan per browser tab (IOC type, value, highlight anchor id, page URL, timestamp) in `chrome.storage.session` via `extension/src/lib/tabScanSnapshotStorage.ts`; cleared when the tab closes |
@@ -28,6 +29,7 @@ Vera5 persists analyst configuration in **`chrome.storage.local`** via `extensio
 | Page context site overrides | Per-hostname page-type overrides in `pageContextSiteModeOverrides` (`chrome.storage.local`); Options **Trust & Consent → Treat this site as …** add/remove entries via `setPageContextSiteModeOverrides()`, **Reset to auto-detect**, and **Clear all overrides**; popup tray header shows override vs auto-detected state with inline reset |
 | Tab scan summaries | Stable consumer view (`TabScanSummary`: total count, per-type counts, entries) fetched via `GET_TAB_SCAN_SUMMARY` in `extension/src/lib/tabScanSummaryClient.ts` |
 | Correlation clusters | Cross-session IOC-set clusters in `chrome.storage.local` under `correlationClusters` via `extension/src/lib/correlationClusterStorage.ts` (store `schemaVersion`, `updatedAt`, `clusters[]`, `retentionDays`, `overlapMerge`); `migrateCorrelationClustersStore()` upgrades unversioned legacy envelopes and is applied on read; retention prune drops clusters older than the configured day window (default 90) on read; Options **Cross-session correlation** edits retention days, overlap-merge mode/threshold, and clear-all (preserves retention/overlap preferences) |
+| Noise rules | Inspectable local suppress/internal/benign pattern rules in `chrome.storage.local` under `noiseRules` via `extension/src/lib/noiseRuleStorage.ts` (store `schemaVersion`, `updatedAt`, `rules[]`, max 256); learned from explicit watchlist label opt-in; Options **Noise rules** shows human-readable action/pattern type/pattern/hits/created/id (no hidden weight vectors), **Export rules JSON** for team handoff (`schemaVersion` + `exportedAt` + `rules`, allowlisted fields only, never API keys), **Import rules JSON/CSV** with schema validation and duplicate detection (add-only; skips in-file and existing id/pattern matches), optional **Import SOC dashboard starter** (`examples/soc-dashboard-noise-starter.json`; never auto-applied), clear-all, and **Hide suppressed indicators from scan** (`hideSuppressedFromScan`, default **off**); popup tray moves matching IOC rows into a default-collapsed **Suppressed** section; hover card shows **Deprioritized** badge and deep-links to the matched rule in Options |
 
 Never commit storage dumps or API keys to git.
 
@@ -62,6 +64,7 @@ Defaults are **on** for every type. Upgrading from schema version 2 merges missi
 |--------|---------|
 | `extension/src/lib/settingsExport.ts` | Full settings snapshot; API keys optional on export |
 | `extension/src/lib/connectorProfileExport.ts` | Connector profile without keys: IOC types, rate-limit metadata, privacy warning text |
+| `extension/src/lib/noiseRuleStorage.ts` | Noise rules JSON export for team handoff (allowlisted fields; never API keys); JSON/CSV import with schema validation and duplicate detection (add-only); optional SOC dashboard starter serialize/import |
 
 ### Settings export (`settingsExport.ts`)
 

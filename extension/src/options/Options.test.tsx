@@ -2224,3 +2224,276 @@ describe("Options cross-session correlation controls", () => {
     expect(stored.overlapMerge?.jaccardThreshold).toBe(0.5);
   });
 });
+
+describe("Options noise rules controls", () => {
+  let store: Record<string, unknown>;
+  let mounted: { container: HTMLDivElement; root: Root } | null = null;
+
+  beforeEach(() => {
+    store = {};
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+    });
+  });
+
+  afterEach(() => {
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    vi.unstubAllGlobals();
+  });
+
+  it("renders human-readable noise rules without hidden weight vectors", async () => {
+    const { STORAGE_KEY_NOISE_RULES } = await import("../lib/noiseRuleStorage");
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+
+    const rule = createNoiseRule({
+      id: "nr-options-ui",
+      patternType: "exact",
+      pattern: "noise.example",
+      sourceAction: "suppress",
+      createdAt: 1_700_000_000_000,
+      hitCount: 3,
+    });
+    store[STORAGE_KEY_NOISE_RULES] = {
+      schemaVersion: 1,
+      updatedAt: 1,
+      rules: [{ ...rule, schemaVersion: NOISE_RULE_SCHEMA_VERSION }],
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("Noise rules");
+    expect(mounted.container.textContent).toContain("no hidden weight vectors");
+    expect(mounted.container.textContent).toContain("Suppress false positive");
+    expect(mounted.container.textContent).toContain("Exact match");
+    expect(mounted.container.textContent).toContain("Pattern: noise.example");
+    expect(mounted.container.textContent).toContain("Hits: 3");
+    expect(mounted.container.textContent).toContain("Id: nr-options-ui");
+    expect(mounted.container.textContent).toContain("no hidden weight vectors");
+    expect(mounted.container.textContent).not.toMatch(/\bWeight:\b/);
+    expect(
+      mounted.container.querySelector('button[aria-label="Export rules JSON"]')
+    ).not.toBeNull();
+    expect(mounted.container.textContent).toContain("team handoff");
+    expect(mounted.container.textContent).toContain("never API keys");
+    expect(
+      mounted.container.querySelector('button[aria-label="Import rules JSON/CSV"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'button[aria-label="Import SOC dashboard starter"]'
+      )
+    ).not.toBeNull();
+    expect(mounted.container.textContent).toContain("Optional");
+    expect(mounted.container.textContent).toContain(
+      "examples/soc-dashboard-noise-starter.json"
+    );
+    expect(
+      mounted.container.querySelector('button[aria-label="Clear all noise rules"]')
+    ).not.toBeNull();
+  });
+
+  it("imports the SOC dashboard starter list from Options on demand", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const starterButton = mounted.container.querySelector(
+      'button[aria-label="Import SOC dashboard starter"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      starterButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toMatch(/Imported \d+/);
+      expect(mounted!.container.textContent).toContain("8.8.8.8");
+      expect(mounted!.container.textContent).toContain("10.0.0.0/8");
+    });
+  });
+
+  it("exports noise rules JSON for team handoff without API keys", async () => {
+    const { STORAGE_KEY_NOISE_RULES } = await import("../lib/noiseRuleStorage");
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+
+    const rule = createNoiseRule({
+      id: "nr-export-ui",
+      patternType: "exact",
+      pattern: "handoff.example",
+      sourceAction: "suppress",
+      createdAt: 1_700_000_000_000,
+      hitCount: 1,
+    });
+    store[STORAGE_KEY_NOISE_RULES] = {
+      schemaVersion: 1,
+      updatedAt: 1,
+      rules: [{ ...rule, schemaVersion: NOISE_RULE_SCHEMA_VERSION }],
+    };
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: "should-not-appear-in-noise-export",
+    };
+
+    const createObjectURL = vi.fn(() => "blob:noise-rules");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL,
+    });
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const exportButton = mounted.container.querySelector(
+      'button[aria-label="Export rules JSON"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      exportButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(createObjectURL).toHaveBeenCalled();
+    const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+    const text = await blob.text();
+    expect(text).toContain("handoff.example");
+    expect(text).not.toContain("should-not-appear-in-noise-export");
+    expect(text).not.toMatch(/apiKey|api_key|abuseipdb/i);
+    expect(mounted.container.textContent).toContain("Noise rules exported");
+    expect(clickSpy).toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
+  it("imports noise rules JSON from Options with duplicate skip feedback", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const input = mounted.container.querySelector(
+      'input[aria-label="Import noise rules JSON or CSV file"]'
+    ) as HTMLInputElement;
+    expect(input).not.toBeNull();
+
+    const file = new File(
+      [
+        JSON.stringify({
+          schemaVersion: 1,
+          rules: [
+            {
+              patternType: "exact",
+              pattern: "import.example",
+              sourceAction: "suppress",
+            },
+            {
+              patternType: "exact",
+              pattern: "import.example",
+              sourceAction: "suppress",
+            },
+          ],
+        }),
+      ],
+      "vera5-noise-rules.json",
+      { type: "application/json" }
+    );
+
+    await act(async () => {
+      Object.defineProperty(input, "files", {
+        configurable: true,
+        value: [file],
+      });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("Imported 1");
+      expect(mounted!.container.textContent).toContain("1 duplicate");
+      expect(mounted!.container.textContent).toContain("Pattern: import.example");
+    });
+  });
+
+  it("clears stored noise rules from Options", async () => {
+    const { STORAGE_KEY_NOISE_RULES } = await import("../lib/noiseRuleStorage");
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+
+    const rule = createNoiseRule({
+      id: "nr-clear-ui",
+      patternType: "exact",
+      pattern: "clear.me",
+      sourceAction: "benign",
+      createdAt: 1_700_000_000_000,
+      hitCount: 0,
+    });
+    store[STORAGE_KEY_NOISE_RULES] = {
+      schemaVersion: 1,
+      updatedAt: 1,
+      rules: [{ ...rule, schemaVersion: NOISE_RULE_SCHEMA_VERSION }],
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const clearButton = mounted.container.querySelector(
+      'button[aria-label="Clear all noise rules"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      clearButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(store[STORAGE_KEY_NOISE_RULES]).toBeUndefined();
+    expect(mounted.container.textContent).toContain("Noise rules cleared");
+    expect(mounted.container.textContent).toContain("No noise rules yet");
+  });
+});

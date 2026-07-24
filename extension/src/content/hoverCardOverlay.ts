@@ -7,6 +7,14 @@ import {
   resolveHoverCardIocLabel,
   setSessionIocLabel,
 } from "../lib/iocLabelSession";
+import {
+  buildNoiseRuleHoverMatchView,
+  buildNoiseRulesOptionsHash,
+  confirmLearnNoiseRule,
+  findMatchingNoiseRule,
+  shouldOfferNoiseRuleLearnForLabel,
+} from "../lib/noiseRule";
+import { listStoredNoiseRules } from "../lib/noiseRuleStorage";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildNormalizedEnrichmentRecord,
@@ -52,7 +60,7 @@ import {
   type IocTypeFilter,
   type TabScanSummary,
 } from "../lib/tabScanSummary";
-import { safeOpenOptionsPage } from "../lib/extensionContext";
+import { safeOpenOptionsPage, safeOpenOptionsPageWithHash } from "../lib/extensionContext";
 import {
   buildSourceStatusBadgeClassName,
   buildSourceMetadataChipClassName,
@@ -330,6 +338,10 @@ export const HOVER_CARD_CO_OCCURRENCE_FEEDBACK_CLASS =
   "vera5-hover-card-co-occurrence-feedback";
 export const HOVER_CARD_IOC_PIN_BUTTON_CLASS = "vera5-hover-card-ioc-pin";
 export const HOVER_CARD_IOC_PIN_BUTTON_PINNED_CLASS = "vera5-hover-card-ioc-pin--pinned";
+export const HOVER_CARD_NOISE_RULE_MATCH_CLASS = "vera5-hover-card-noise-rule-match";
+export const HOVER_CARD_NOISE_RULE_BADGE_CLASS = "vera5-hover-card-noise-rule-badge";
+export const HOVER_CARD_NOISE_RULE_SUMMARY_CLASS = "vera5-hover-card-noise-rule-summary";
+export const HOVER_CARD_NOISE_RULE_HINT_CLASS = "vera5-hover-card-noise-rule-hint";
 export const HOVER_CARD_EXPORT_SECTION_CLASS = "vera5-hover-card-export";
 export const HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS = "vera5-hover-card-local-llm-summary";
 export const HOVER_CARD_LOCAL_LLM_SUMMARY_STATUS_CLASS =
@@ -790,6 +802,69 @@ function createMissingKeyAction(doc: Document): HTMLElement {
     safeOpenOptionsPage();
   });
   return button;
+}
+
+function createNoiseRuleDeprioritizedSection(
+  iocValue: string,
+  doc: Document,
+  options?: { insertBadgeAfter?: HTMLElement }
+): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_NOISE_RULE_MATCH_CLASS;
+  section.hidden = true;
+  section.setAttribute("aria-label", "Matched noise rule");
+
+  void listStoredNoiseRules()
+    .then((rules) => {
+      const matched = findMatchingNoiseRule(rules, iocValue);
+      if (!matched || !section.isConnected) {
+        return;
+      }
+      const view = buildNoiseRuleHoverMatchView(matched);
+      section.hidden = false;
+      section.dataset.vera5NoiseRuleId = view.ruleId;
+
+      if (options?.insertBadgeAfter?.isConnected) {
+        const headerBadge = doc.createElement("span");
+        headerBadge.className = HOVER_CARD_NOISE_RULE_BADGE_CLASS;
+        headerBadge.textContent = view.badgeLabel;
+        headerBadge.setAttribute("data-vera5-noise-deprioritized-badge", "true");
+        options.insertBadgeAfter.insertAdjacentElement("afterend", headerBadge);
+      } else {
+        const badge = doc.createElement("span");
+        badge.className = HOVER_CARD_NOISE_RULE_BADGE_CLASS;
+        badge.textContent = view.badgeLabel;
+        badge.setAttribute("data-vera5-noise-deprioritized-badge", "true");
+        section.appendChild(badge);
+      }
+
+      const summary = doc.createElement("p");
+      summary.className = HOVER_CARD_NOISE_RULE_SUMMARY_CLASS;
+      summary.textContent = view.ruleSummary;
+      section.appendChild(summary);
+
+      const hint = doc.createElement("p");
+      hint.className = HOVER_CARD_NOISE_RULE_HINT_CLASS;
+      hint.textContent = view.hint;
+      section.appendChild(hint);
+
+      const link = doc.createElement("button");
+      link.type = "button";
+      link.className = HOVER_CARD_ACTION_CLASS;
+      link.textContent = view.viewRuleLabel;
+      link.setAttribute("aria-label", view.viewRuleAriaLabel);
+      link.setAttribute("data-vera5-noise-rule-link", "true");
+      link.addEventListener("click", (event) => {
+        event.stopPropagation();
+        safeOpenOptionsPageWithHash(buildNoiseRulesOptionsHash(view.ruleId));
+      });
+      section.appendChild(link);
+    })
+    .catch(() => {
+      /* keep section hidden when rules cannot load */
+    });
+
+  return section;
 }
 
 function createSingleSourceLastUpdated(
@@ -1771,7 +1846,10 @@ function createIocLabelSection(
       select.value === HOVER_CARD_IOC_LABEL_NONE_VALUE
         ? null
         : (select.value as IocLabelId);
-    setSessionIocLabel(value, nextLabel);
+    const learnNoiseRule =
+      shouldOfferNoiseRuleLearnForLabel(nextLabel) &&
+      confirmLearnNoiseRule(doc.defaultView ?? window);
+    setSessionIocLabel(value, nextLabel, { learnNoiseRule });
   });
   select.addEventListener("mousedown", (event) => {
     event.stopPropagation();
@@ -2589,6 +2667,12 @@ export function buildHoverCardPanel(
   }
   headerRow.appendChild(headerActions);
   panel.appendChild(headerRow);
+
+  const noiseRuleMatchSection = createNoiseRuleDeprioritizedSection(payload.value, doc, {
+    insertBadgeAfter: typeRow,
+  });
+  noiseRuleMatchSection.style.marginBottom = "8px";
+  panel.appendChild(noiseRuleMatchSection);
 
   panel.appendChild(createIndicatorValueSection(payload, doc));
 

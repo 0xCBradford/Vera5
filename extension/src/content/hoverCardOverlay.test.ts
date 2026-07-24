@@ -558,6 +558,88 @@ describe("match provenance exposure", () => {
     );
   });
 
+  it("shows deprioritized badge and linked matched noise rule", async () => {
+    const { STORAGE_KEY_NOISE_RULES, NOISE_RULES_STORE_SCHEMA_VERSION } = await import(
+      "../lib/noiseRuleStorage"
+    );
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+    const tabsCreate = vi.fn(() => Promise.resolve({ id: 1 }));
+    const localStore: Record<string, unknown> = {};
+    const rule = createNoiseRule({
+      id: "nr-hover-overlay",
+      patternType: "exact",
+      pattern: "noise.example",
+      sourceAction: "suppress",
+      createdAt: 1,
+      hitCount: 0,
+    });
+    localStore[STORAGE_KEY_NOISE_RULES] = {
+      schemaVersion: NOISE_RULES_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      rules: [{ ...rule, schemaVersion: NOISE_RULE_SCHEMA_VERSION }],
+    };
+
+    vi.stubGlobal("chrome", {
+      runtime: {
+        getURL: (path: string) => `chrome-extension://test/${path}`,
+      },
+      tabs: {
+        create: tabsCreate,
+      },
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in localStore) {
+                result[key] = localStore[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(localStore, items);
+            return Promise.resolve();
+          },
+          remove: () => Promise.resolve(),
+        },
+      },
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "noise.example",
+      type: IOC_TYPE.DOMAIN,
+    });
+    document.body.appendChild(panel);
+
+    await vi.waitFor(() => {
+      expect(
+        panel.querySelector("[data-vera5-noise-deprioritized-badge='true']")?.textContent
+      ).toBe("Deprioritized");
+    });
+
+    const matchSection = panel.querySelector(".vera5-hover-card-noise-rule-match");
+    expect(matchSection?.getAttribute("aria-label")).toBe("Matched noise rule");
+    expect(matchSection?.textContent).toContain("Suppress false positive");
+    expect(matchSection?.textContent).toContain("View matched noise rule");
+
+    const link = panel.querySelector<HTMLButtonElement>(
+      "[data-vera5-noise-rule-link='true']"
+    );
+    expect(link).not.toBeNull();
+    link?.click();
+    expect(tabsCreate).toHaveBeenCalledWith({
+      url: "chrome-extension://test/options.html#noise-rules/nr-hover-overlay",
+    });
+
+    vi.unstubAllGlobals();
+  });
+
   it("renders on-page and refanged values when displayValue differs", () => {
     const panel = buildHoverCardPanel({
       value: "https://example.com/evil",

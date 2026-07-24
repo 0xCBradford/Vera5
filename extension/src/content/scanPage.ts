@@ -33,6 +33,11 @@ import {
 } from "./highlightStorage";
 import { getIncludePrivateIpv4ForContent } from "./includePrivateIpv4Storage";
 import { getIocTypeEnabledForContent } from "./iocTypeEnabledStorage";
+import { filterScanMatchesByNoiseRules } from "../lib/noiseRule";
+import {
+  getHideSuppressedFromScanForContent,
+  listStoredNoiseRules,
+} from "../lib/noiseRuleStorage";
 import { CONTENT_MESSAGE } from "./constants";
 import { logIocDetectionCount, logIocScanProfile } from "./devLog";
 import {
@@ -99,6 +104,17 @@ export async function resolveIocDetectorScanOptions(): Promise<IocDetectorScanOp
     getIocTypeEnabledForContent(),
   ]);
   return { ioc: { includePrivateIpv4, enabledTypes } };
+}
+
+async function applyHideSuppressedFromScanFilter<T extends { value: string }>(
+  matches: readonly T[]
+): Promise<T[]> {
+  const hideSuppressedFromScan = await getHideSuppressedFromScanForContent();
+  if (!hideSuppressedFromScan) {
+    return [...matches];
+  }
+  const rules = await listStoredNoiseRules();
+  return filterScanMatchesByNoiseRules(matches, rules, true);
 }
 
 function buildScanSnapshotEntries(
@@ -271,10 +287,12 @@ async function runMergedPageScan(
     attributeCapReached = attributeResult.profile.capReached;
   }
 
-  const snapshotMatches = mergeVisibleTextAndAttributeIocMatches(
-    textResult.matches,
-    attributeMatches,
-    maxIocs
+  const snapshotMatches = await applyHideSuppressedFromScanFilter(
+    mergeVisibleTextAndAttributeIocMatches(
+      textResult.matches,
+      attributeMatches,
+      maxIocs
+    )
   );
   const highlightMatches = pageIocScanMatchesToHighlightInput(snapshotMatches);
   const profile: IocScanProfile = {
@@ -321,11 +339,23 @@ export async function handleScanSelectionRequest(
     root,
     scanOptions
   );
+  const filteredMatches = await applyHideSuppressedFromScanFilter(matches);
   let highlightRoot: Node = range.commonAncestorContainer;
   if (highlightRoot.nodeType === Node.TEXT_NODE) {
     highlightRoot = highlightRoot.parentNode ?? root;
   }
-  return finalizeScanResponse(matches, highlightRoot, profile, matches);
+  return finalizeScanResponse(
+    filteredMatches,
+    highlightRoot,
+    {
+      ...profile,
+      iocCount: filteredMatches.length,
+      iocCapReached:
+        filteredMatches.length >= resolveMaxIocsPerScan(scanOptions) ||
+        profile.iocCapReached,
+    },
+    filteredMatches
+  );
 }
 
 export function setupScanPageListener(): void {

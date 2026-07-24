@@ -468,7 +468,8 @@ Profiles cannot bypass pre-query disclosure, domain deny, quiet mode, or interna
 Noise reduction and known-good intelligence use **inspectable local rules** only:
 
 - created from explicit analyst actions (suppress, internal, benign labels)
-- stored and exported as human-readable JSON
+- stored and exported as human-readable JSON for team handoff (allowlisted pattern/action fields only; never API keys or enrichment secrets)
+- optional SOC dashboard starter list (`examples/soc-dashboard-noise-starter.json` or Options **Import SOC dashboard starter**)—never auto-applied
 - no telemetry, cloud training, or opaque ML weight vectors
 - importable pattern lists for team handoff without secrets
 
