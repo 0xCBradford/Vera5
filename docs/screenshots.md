@@ -40,7 +40,7 @@ Public-facing images for README, store listings, and onboarding. Each asset belo
 | 11 | `options-trust-consent.svg` | Settings — trust | **Trust & consent**: pre-query toggle, domain policy mode, allow/deny lists or preset control, internal asset lists, analyst workflow preset selector. |
 | 12 | `bulk-enrich-selection.svg` | Bulk enrich | Workspace tray with multiple row checkboxes selected, **Enrich selected (N)** and quota confirmation or **Enriching X of N…** progress visible. |
 
-Optional follow-ups (not required for MVP placeholder set): context menu **Enrich with Vera5**, **Appeared alongside** on overlay and tray, **Session export** download menu, **Investigation replay** step-through and **Copy transcript**, **Promote session to collection…**, **Settings Backup** export/import with settings pack controls, dark-mode variants of captures 1–2.
+Optional follow-ups (not required for MVP placeholder set): context menu **Enrich with Vera5**, **Appeared alongside** on overlay and tray, tray **Suppressed** section after a noise-rule match (or Options **Noise rules** list with import/export controls), **Session export** download menu, **Investigation replay** step-through and **Copy transcript**, **Promote session to collection…**, **Settings Backup** export/import with settings pack controls, dark-mode variants of captures 1–2.
 
 ## Gallery (placeholders)
 

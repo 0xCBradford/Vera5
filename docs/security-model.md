@@ -469,11 +469,36 @@ Noise reduction and known-good intelligence use **inspectable local rules** only
 
 - created from explicit analyst actions (suppress, internal, benign labels)
 - stored and exported as human-readable JSON for team handoff (allowlisted pattern/action fields only; never API keys or enrichment secrets)
-- optional SOC dashboard starter list (`examples/soc-dashboard-noise-starter.json` or Options **Import SOC dashboard starter**)—never auto-applied
+- optional SOC dashboard starter list (`examples/soc-dashboard-noise-starter.json` or Options **Import SOC dashboard starter**)—never auto-applied; import review supports add-only or replace-all with confirmation
 - no telemetry, cloud training, or opaque ML weight vectors
 - importable pattern lists for team handoff without secrets
 
 Known-good labels are informational; optional skip-enrich policy does not bypass domain deny or quiet mode.
+
+### Privacy: no telemetry, no cloud learning, local-only rules
+
+Noise rules are a **local personalization** feature. They do not phone home and do not train models.
+
+| Guarantee | Behavior |
+|-----------|----------|
+| **No telemetry** | Creating, matching, importing, exporting, enabling/disabling, editing, deleting, or undoing a noise rule does not send rule contents, page HTML, browsing history, or usage metrics to Vera5-operated infrastructure. There is no Vera5 telemetry sink for noise-rule events. |
+| **No cloud learning** | Rules are never uploaded for remote model training, shared fleet learning, or Vera5-cloud “personalization.” There is no opaque ML weight vector, remote ranking service, or automatic suppress model. Matching is deterministic pattern evaluation on the local profile. |
+| **Local-only rules** | Learned and imported rules persist in `chrome.storage.local` on the analyst’s browser profile (`noiseRules`, plus a single-step last-learn undo slot). Team handoff is **operator-initiated** JSON/CSV export/import of allowlisted pattern and action fields—never API keys or enrichment secrets. Optional starter lists ship as inspectable repository JSON and apply only after explicit Options import. |
+
+Learning requires an **explicit** watchlist opt-in (Benign, Internal, or Suppress false positive) with confirmation. Vera5 does not auto-create suppress rules from scan traffic or enrichment responses.
+
+### Noise rules vs domain policy (precedence)
+
+Noise rules and **domain policy** (Settings → **Trust & consent**) apply at different layers. They do not compete as equal overrides.
+
+| Control | Scope | Effect |
+|---------|-------|--------|
+| **Domain policy** | Page **hostname** | Gates **auto-scan** and **live enrichment**. When the domain enrich gate is on (default), denylisted hosts (or hosts outside the allowlist in deny-by-default mode) block vendor calls **before** pre-query disclosure. |
+| **Noise rules** | **Indicator values** (exact, regex, domain-suffix, or CIDR patterns) | Deprioritize matching IOCs in the tray (**Suppressed**) and overlay (**Deprioritized**). Optionally omit matches from detection when **Hide suppressed indicators from scan** is on (default **off**). |
+
+**Domain deny wins.** A noise rule never authorizes live enrichment—or auto-scan—on a host blocked by domain policy. Clearing a noise rule, disabling a rule, or leaving **Hide suppressed indicators from scan** off does not reopen vendor calls on a denied hostname. Noise rules affect local triage display (and optional scan omission); they are not an outbound trust gate and cannot weaken denylist or allowlist-mode restrictions.
+
+Stacked with other gates: even on an allowed host, quiet mode, internal asset lists, manual-only enrichment, and pre-query disclosure still apply as documented in [Trust gates (stacked)](#trust-gates-stacked). Domain policy remains the page-hostname enrich boundary; noise rules sit downstream for display and optional detection filtering only.
 
 ## Permission changes
 

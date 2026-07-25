@@ -2304,6 +2304,16 @@ describe("Options noise rules controls", () => {
     expect(mounted.container.textContent).toContain("Id: nr-options-ui");
     expect(mounted.container.textContent).toContain("no hidden weight vectors");
     expect(mounted.container.textContent).not.toMatch(/\bWeight:\b/);
+    expect(mounted.container.textContent).toContain("Status: Enabled");
+    expect(
+      mounted.container.querySelector('input[aria-label="Search noise rules"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('button[aria-label="Edit: noise.example"]')
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('button[aria-label="Delete: noise.example"]')
+    ).not.toBeNull();
     expect(
       mounted.container.querySelector('button[aria-label="Export rules JSON"]')
     ).not.toBeNull();
@@ -2324,6 +2334,291 @@ describe("Options noise rules controls", () => {
     expect(
       mounted.container.querySelector('button[aria-label="Clear all noise rules"]')
     ).not.toBeNull();
+    expect(
+      mounted.container.querySelector(
+        'button[aria-label="Preview noise rule matches on sample alert without mutating a live page"]'
+      )
+    ).not.toBeNull();
+    expect(mounted.container.textContent).toContain("examples/sample-alert.html");
+    expect(
+      mounted.container.querySelector(
+        'button[aria-label="Undo last learned noise rule"]'
+      )
+    ).not.toBeNull();
+  });
+
+  it("previews sample-alert matches offline without mutating a live page", async () => {
+    const { STORAGE_KEY_NOISE_RULES } = await import("../lib/noiseRuleStorage");
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+
+    const rule = createNoiseRule({
+      id: "nr-preview-ui",
+      patternType: "exact",
+      pattern: "8.8.8.8",
+      sourceAction: "benign",
+      createdAt: 1_700_000_000_000,
+      hitCount: 0,
+    });
+    store[STORAGE_KEY_NOISE_RULES] = {
+      schemaVersion: 1,
+      updatedAt: 1,
+      rules: [{ ...rule, schemaVersion: NOISE_RULE_SCHEMA_VERSION }],
+    };
+
+    const bodyMarker = document.createElement("div");
+    bodyMarker.id = "live-page-marker";
+    bodyMarker.textContent = "untouched-live-page";
+    document.body.appendChild(bodyMarker);
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const previewButton = mounted.container.querySelector(
+      'button[aria-label="Preview noise rule matches on sample alert without mutating a live page"]'
+    ) as HTMLButtonElement | null;
+    expect(previewButton).not.toBeNull();
+
+    await act(async () => {
+      previewButton!.click();
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain(
+      "1 of 11 sample-alert indicators would be suppressed"
+    );
+    expect(mounted.container.textContent).toContain("8.8.8.8");
+    expect(mounted.container.textContent).toContain("examples/sample-alert.html");
+    expect(mounted.container.textContent).toContain(
+      "Does not open, scan, or change any live page"
+    );
+    expect(
+      mounted.container.querySelector(
+        '[aria-label="Sample alert indicators matching noise rules"]'
+      )
+    ).not.toBeNull();
+    expect(document.getElementById("live-page-marker")?.textContent).toBe(
+      "untouched-live-page"
+    );
+    expect(document.body.contains(bodyMarker)).toBe(true);
+
+    const clearPreview = mounted.container.querySelector(
+      'button[aria-label="Clear preview"]'
+    ) as HTMLButtonElement | null;
+    expect(clearPreview).not.toBeNull();
+    await act(async () => {
+      clearPreview!.click();
+      await Promise.resolve();
+    });
+    expect(
+      mounted.container.querySelector(
+        '[aria-label="Sample alert indicators matching noise rules"]'
+      )
+    ).toBeNull();
+    expect(document.getElementById("live-page-marker")?.textContent).toBe(
+      "untouched-live-page"
+    );
+    bodyMarker.remove();
+  });
+
+  it("undoes the last learned noise rule in a single step from Options", async () => {
+    const {
+      STORAGE_KEY_NOISE_RULES,
+      STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO,
+    } = await import("../lib/noiseRuleStorage");
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+
+    const keep = createNoiseRule({
+      id: "nr-keep-undo",
+      patternType: "exact",
+      pattern: "keep.example",
+      sourceAction: "internal",
+      createdAt: 1_700_000_000_000,
+      hitCount: 0,
+    });
+    const learned = createNoiseRule({
+      id: "nr-last-learned",
+      patternType: "exact",
+      pattern: "learned.example",
+      sourceAction: "suppress",
+      createdAt: 1_700_000_000_001,
+      hitCount: 0,
+    });
+    store[STORAGE_KEY_NOISE_RULES] = {
+      schemaVersion: 1,
+      updatedAt: 1,
+      rules: [
+        { ...keep, schemaVersion: NOISE_RULE_SCHEMA_VERSION },
+        { ...learned, schemaVersion: NOISE_RULE_SCHEMA_VERSION },
+      ],
+    };
+    store[STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO] = {
+      ...learned,
+      schemaVersion: NOISE_RULE_SCHEMA_VERSION,
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const undoButton = mounted.container.querySelector(
+      'button[aria-label="Undo last learned noise rule"]'
+    ) as HTMLButtonElement;
+    expect(undoButton).not.toBeNull();
+    expect(undoButton.disabled).toBe(false);
+
+    await act(async () => {
+      undoButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain(
+      "Undid learned rule for learned.example."
+    );
+    expect(mounted.container.textContent).not.toContain("Pattern: learned.example");
+    expect(mounted.container.textContent).toContain("Pattern: keep.example");
+    expect(store[STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO]).toBeUndefined();
+    expect(
+      (store[STORAGE_KEY_NOISE_RULES] as { rules: Array<{ id: string }> }).rules.map(
+        (rule) => rule.id
+      )
+    ).toEqual(["nr-keep-undo"]);
+    expect(undoButton.disabled).toBe(true);
+  });
+
+  it("searches, edits, disables, and deletes a noise rule in Options", async () => {
+    const { STORAGE_KEY_NOISE_RULES } = await import("../lib/noiseRuleStorage");
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+
+    const keep = createNoiseRule({
+      id: "nr-keep",
+      patternType: "exact",
+      pattern: "keep.example",
+      sourceAction: "internal",
+      createdAt: 1_700_000_000_000,
+      hitCount: 0,
+    });
+    const editMe = createNoiseRule({
+      id: "nr-edit",
+      patternType: "exact",
+      pattern: "edit.example",
+      sourceAction: "suppress",
+      createdAt: 1_700_000_000_001,
+      hitCount: 1,
+    });
+    store[STORAGE_KEY_NOISE_RULES] = {
+      schemaVersion: 1,
+      updatedAt: 1,
+      rules: [
+        { ...keep, schemaVersion: NOISE_RULE_SCHEMA_VERSION },
+        { ...editMe, schemaVersion: NOISE_RULE_SCHEMA_VERSION },
+      ],
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const search = mounted.container.querySelector(
+      'input[aria-label="Search noise rules"]'
+    ) as HTMLInputElement;
+    await act(async () => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      nativeInputValueSetter?.call(search, "edit.example");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("edit.example");
+      expect(mounted!.container.textContent).not.toContain("Pattern: keep.example");
+    });
+
+    const editButton = mounted!.container.querySelector(
+      'button[aria-label="Edit: edit.example"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      editButton.click();
+      await Promise.resolve();
+    });
+
+    const patternInput = mounted!.container.querySelector(
+      'input[aria-label="Edit pattern for nr-edit"]'
+    ) as HTMLInputElement;
+    await act(async () => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      nativeInputValueSetter?.call(patternInput, "edited.example");
+      patternInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    const saveButton = mounted!.container.querySelector(
+      'button[aria-label="Save rule: nr-edit"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      saveButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("Noise rule saved");
+    });
+
+    await act(async () => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      nativeInputValueSetter?.call(search, "");
+      search.dispatchEvent(new Event("input", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("edited.example");
+      expect(mounted!.container.textContent).toContain("keep.example");
+    });
+
+    const enableToggle = mounted!.container.querySelector(
+      'input[aria-label="Enabled: edited.example"]'
+    ) as HTMLInputElement;
+    await act(async () => {
+      enableToggle.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("Status: Disabled");
+    });
+
+    vi.stubGlobal("confirm", () => true);
+    const deleteButton = mounted!.container.querySelector(
+      'button[aria-label="Delete: edited.example"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      deleteButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).not.toContain("edited.example");
+      expect(mounted!.container.textContent).toContain("keep.example");
+      expect(mounted!.container.textContent).toContain("Noise rule deleted");
+    });
   });
 
   it("imports the SOC dashboard starter list from Options on demand", async () => {
@@ -2338,6 +2633,21 @@ describe("Options noise rules controls", () => {
     ) as HTMLButtonElement;
     await act(async () => {
       starterButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("Review noise rules import");
+      expect(mounted!.container.textContent).toContain("Add only");
+    });
+
+    const applyButton = mounted!.container.querySelector(
+      'button[aria-label="Apply import"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      applyButton.click();
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -2453,9 +2763,124 @@ describe("Options noise rules controls", () => {
     });
 
     await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("Review noise rules import");
+      expect(mounted!.container.textContent).toContain("Duplicates skipped");
+    });
+
+    const applyButton = mounted!.container.querySelector(
+      'button[aria-label="Apply import"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      applyButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
       expect(mounted!.container.textContent).toContain("Imported 1");
       expect(mounted!.container.textContent).toContain("1 duplicate");
       expect(mounted!.container.textContent).toContain("Pattern: import.example");
+    });
+  });
+
+  it("requires confirmation before replace-all noise rules import", async () => {
+    const { STORAGE_KEY_NOISE_RULES } = await import("../lib/noiseRuleStorage");
+    const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
+
+    const rule = createNoiseRule({
+      id: "nr-replace-ui",
+      patternType: "exact",
+      pattern: "old.example",
+      sourceAction: "suppress",
+      createdAt: 1_700_000_000_000,
+      hitCount: 0,
+    });
+    store[STORAGE_KEY_NOISE_RULES] = {
+      schemaVersion: 1,
+      updatedAt: 1,
+      rules: [{ ...rule, schemaVersion: NOISE_RULE_SCHEMA_VERSION }],
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const input = mounted.container.querySelector(
+      'input[aria-label="Import noise rules JSON or CSV file"]'
+    ) as HTMLInputElement;
+    const file = new File(
+      [
+        JSON.stringify({
+          schemaVersion: 1,
+          rules: [
+            {
+              patternType: "exact",
+              pattern: "fresh.example",
+              sourceAction: "benign",
+            },
+          ],
+        }),
+      ],
+      "replace-noise.json",
+      { type: "application/json" }
+    );
+
+    await act(async () => {
+      Object.defineProperty(input, "files", {
+        configurable: true,
+        value: [file],
+      });
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("Review noise rules import");
+    });
+
+    const replaceRadio = mounted!.container.querySelector(
+      'input[aria-label="Replace all stored rules"]'
+    ) as HTMLInputElement;
+    await act(async () => {
+      replaceRadio.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("Will remove stored");
+    });
+
+    const applyButton = mounted!.container.querySelector(
+      'button[aria-label="Apply import"]'
+    ) as HTMLButtonElement;
+    expect(applyButton.disabled).toBe(true);
+
+    const confirm = mounted!.container.querySelector(
+      'input[aria-label="I understand this removes all currently stored noise rules and replaces them with this import."]'
+    ) as HTMLInputElement;
+    await act(async () => {
+      confirm.click();
+      await Promise.resolve();
+    });
+    expect(applyButton.disabled).toBe(false);
+
+    await act(async () => {
+      applyButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("Replaced 1");
+      expect(mounted!.container.textContent).toContain("fresh.example");
+      expect(mounted!.container.textContent).not.toContain("Pattern: old.example");
     });
   });
 

@@ -70,6 +70,8 @@ export type NoiseRule = {
   sourceAction: NoiseRuleSourceAction;
   createdAt: number;
   hitCount: number;
+  /** When false, the rule is stored but ignored for tray/scan matching. */
+  enabled: boolean;
 };
 
 export type CreateNoiseRuleInput = {
@@ -79,6 +81,7 @@ export type CreateNoiseRuleInput = {
   sourceAction: NoiseRuleSourceAction;
   createdAt?: number | null;
   hitCount?: number | null;
+  enabled?: boolean | null;
 };
 
 const NOISE_RULE_PATTERN_TYPE_SET = new Set<string>(NOISE_RULE_PATTERN_TYPES);
@@ -202,6 +205,11 @@ export function createNoiseRule(input: CreateNoiseRuleInput): NoiseRule {
       sourceAction: input.sourceAction,
     });
 
+  const enabled =
+    input.enabled === undefined || input.enabled === null
+      ? true
+      : Boolean(input.enabled);
+
   return {
     schemaVersion: NOISE_RULE_SCHEMA_VERSION,
     id,
@@ -210,6 +218,7 @@ export function createNoiseRule(input: CreateNoiseRuleInput): NoiseRule {
     sourceAction: input.sourceAction,
     createdAt,
     hitCount,
+    enabled,
   };
 }
 
@@ -238,6 +247,9 @@ export function normalizeNoiseRule(value: unknown): NoiseRule | null {
     return null;
   }
 
+  const enabled =
+    record.enabled === undefined ? true : Boolean(record.enabled);
+
   return {
     schemaVersion: NOISE_RULE_SCHEMA_VERSION,
     id,
@@ -246,6 +258,7 @@ export function normalizeNoiseRule(value: unknown): NoiseRule | null {
     sourceAction: record.sourceAction,
     createdAt,
     hitCount,
+    enabled,
   };
 }
 
@@ -288,6 +301,8 @@ export type NoiseRuleDetailView = {
   hitCountLabel: string;
   createdAtLabel: string;
   id: string;
+  enabled: boolean;
+  enabledLabel: string;
 };
 
 /** Structured human-readable fields for Options (no hidden weight vectors). */
@@ -300,6 +315,8 @@ export function buildNoiseRuleDetailView(rule: NoiseRule): NoiseRuleDetailView {
     hitCountLabel: String(rule.hitCount),
     createdAtLabel: new Date(rule.createdAt).toISOString(),
     id: rule.id,
+    enabled: rule.enabled,
+    enabledLabel: rule.enabled ? "Enabled" : "Disabled",
   };
 }
 
@@ -313,12 +330,81 @@ export const NOISE_RULES_OPTIONS_EXPORT_HINT =
   "Downloads current noise rules as JSON for team handoff. Pattern and action fields only—never API keys or enrichment secrets.";
 export const NOISE_RULES_OPTIONS_IMPORT_LABEL = "Import rules JSON/CSV";
 export const NOISE_RULES_OPTIONS_IMPORT_HINT =
-  "Import a noise pattern list as JSON (export document or rules array) or CSV with patternType, pattern, and sourceAction columns. Invalid rows are rejected; duplicates by id or pattern+action are skipped.";
+  "Import a noise pattern list as JSON (export document or rules array) or CSV with patternType, pattern, and sourceAction columns. Choose add-only (skip duplicates) or replace-all (requires confirmation). Invalid rows are rejected.";
 export const NOISE_RULES_OPTIONS_IMPORT_STARTER_LABEL =
   "Import SOC dashboard starter";
 export const NOISE_RULES_OPTIONS_IMPORT_STARTER_HINT =
-  "Optional. Adds a small inspectable starter list for common public DNS and private-network noise on SOC dashboards. Nothing is applied until you import; review patterns after import. Never includes API keys.";
+  "Optional. Adds a small inspectable starter list for common public DNS and private-network noise on SOC dashboards. Choose merge mode in the import review dialog; nothing is applied until you confirm. Never includes API keys.";
 export const NOISE_RULES_OPTIONS_CLEAR_LABEL = "Clear all noise rules";
+export const NOISE_RULES_OPTIONS_SEARCH_LABEL = "Search noise rules";
+export const NOISE_RULES_OPTIONS_SEARCH_PLACEHOLDER =
+  "Filter by pattern, action, type, or id";
+export const NOISE_RULES_OPTIONS_EDIT_LABEL = "Edit";
+export const NOISE_RULES_OPTIONS_SAVE_LABEL = "Save rule";
+export const NOISE_RULES_OPTIONS_CANCEL_EDIT_LABEL = "Cancel";
+export const NOISE_RULES_OPTIONS_DELETE_LABEL = "Delete";
+export const NOISE_RULES_OPTIONS_ENABLE_LABEL = "Enabled";
+export const NOISE_RULES_OPTIONS_NO_SEARCH_MATCHES =
+  "No noise rules match this search.";
+export const NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_LABEL = "Undo last learned rule";
+export const NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_HINT =
+  "Removes only the most recent noise rule created from a watchlist opt-in on this profile. Single step—not a full history. Import and manual edits are not undone here.";
+export const NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_ARIA_LABEL =
+  "Undo last learned noise rule";
+export const NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_EMPTY =
+  "No learned rule available to undo.";
+export const NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_DONE = (pattern: string): string =>
+  `Undid learned rule for ${pattern}.`;
+export const NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_SUMMARY = (
+  matchedCount: number,
+  indicatorCount: number
+): string =>
+  `${matchedCount} of ${indicatorCount} sample-alert indicators would be suppressed`;
+
+export const NOISE_RULES_IMPORT_MERGE_MODE = {
+  ADD_ONLY: "add-only",
+  REPLACE_ALL: "replace-all",
+} as const;
+
+export type NoiseRulesImportMergeMode =
+  (typeof NOISE_RULES_IMPORT_MERGE_MODE)[keyof typeof NOISE_RULES_IMPORT_MERGE_MODE];
+
+export const NOISE_RULES_IMPORT_MERGE_MODE_LABEL: Record<
+  NoiseRulesImportMergeMode,
+  string
+> = {
+  [NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY]: "Add only (skip duplicates)",
+  [NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL]: "Replace all stored rules",
+};
+
+export const NOISE_RULES_IMPORT_REVIEW_TITLE = "Review noise rules import";
+export const NOISE_RULES_IMPORT_REPLACE_CONFIRM_LABEL =
+  "I understand this removes all currently stored noise rules and replaces them with this import.";
+export const NOISE_RULES_IMPORT_REPLACE_CONFIRM_MESSAGE =
+  "Replace all stored noise rules with this import? Current local rules will be removed.";
+export const NOISE_RULES_IMPORT_APPLY_LABEL = "Apply import";
+export const NOISE_RULES_IMPORT_CANCEL_LABEL = "Cancel";
+
+export function isNoiseRulesImportMergeMode(
+  value: unknown
+): value is NoiseRulesImportMergeMode {
+  return (
+    value === NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY ||
+    value === NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL
+  );
+}
+
+export function confirmNoiseRulesReplaceAllImport(
+  options: { confirm?: (message: string) => boolean } = {}
+): boolean {
+  const confirmFn =
+    options.confirm ??
+    ((message: string) =>
+      typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm(message)
+        : false);
+  return confirmFn(NOISE_RULES_IMPORT_REPLACE_CONFIRM_MESSAGE);
+}
 
 /** Stable createdAt for the shipped SOC dashboard starter list. */
 export const SOC_DASHBOARD_NOISE_STARTER_CREATED_AT = 0;
@@ -499,17 +585,43 @@ export function noiseRuleMatchesValue(rule: NoiseRule, value: string): boolean {
   }
 }
 
-/** First matching rule in list order (stable createdAt order from storage). */
+/** First matching enabled rule in list order (stable createdAt order from storage). */
 export function findMatchingNoiseRule(
   rules: readonly NoiseRule[],
   value: string
 ): NoiseRule | null {
   for (const rule of rules) {
+    if (!rule.enabled) {
+      continue;
+    }
     if (noiseRuleMatchesValue(rule, value)) {
       return rule;
     }
   }
   return null;
+}
+
+export function filterNoiseRulesBySearch(
+  rules: readonly NoiseRule[],
+  query: string
+): NoiseRule[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) {
+    return [...rules];
+  }
+  return rules.filter((rule) => {
+    const haystack = [
+      rule.id,
+      rule.pattern,
+      rule.patternType,
+      rule.sourceAction,
+      formatNoiseRuleSummary(rule),
+      rule.enabled ? "enabled" : "disabled",
+    ]
+      .join(" ")
+      .toLowerCase();
+    return haystack.includes(normalizedQuery);
+  });
 }
 
 export type NoiseRuleTrayPartition<T extends { value: string }> = {
@@ -566,6 +678,76 @@ export function filterScanMatchesByNoiseRules<T extends { value: string }>(
     return [...matches];
   }
   return matches.filter((match) => findMatchingNoiseRule(rules, match.value) === null);
+}
+
+/**
+ * Offline Options preview corpus for `examples/sample-alert.html`.
+ * Values mirror the fixed detected set used by scan/tray fixtures—no live page
+ * open, highlight, or DOM mutation is required or performed.
+ */
+export const NOISE_RULE_SAMPLE_ALERT_FIXTURE_PATH = "examples/sample-alert.html";
+
+export const NOISE_RULE_SAMPLE_ALERT_PREVIEW_IOC_VALUES = [
+  "192.0.2.1",
+  "8.8.8.8",
+  "malware.testcategory.com",
+  "https://example.com/login",
+  "d41d8cd98f00b204e9800998ecf8427e",
+  "098f6bcd4621d373cade4e832627b4f6",
+  "aaf4c61ddcc5e8a2dabede0f3b482cd9aea835a8",
+  "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "CVE-2021-44228",
+  "CVE-2017-0144",
+  "analyst@example.com",
+] as const;
+
+export const NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_LABEL =
+  "Preview matches on sample alert";
+export const NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_HINT =
+  "Runs an offline match preview against the fixed indicator set from examples/sample-alert.html. Does not open, scan, or change any live page.";
+export const NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_ARIA_LABEL =
+  "Preview noise rule matches on sample alert without mutating a live page";
+export const NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_CLEAR_LABEL = "Clear preview";
+export const NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_EMPTY_MATCHES =
+  "No sample-alert indicators match the current enabled noise rules.";
+
+export type NoiseRuleSampleAlertMatchPreviewRow = {
+  value: string;
+  matchedRule: NoiseRule;
+  ruleSummary: string;
+};
+
+export type NoiseRuleSampleAlertMatchPreview = {
+  fixturePath: typeof NOISE_RULE_SAMPLE_ALERT_FIXTURE_PATH;
+  indicatorCount: number;
+  activeValues: string[];
+  matched: NoiseRuleSampleAlertMatchPreviewRow[];
+  /** Always false: preview is local/offline and must not touch a live page. */
+  mutatesLivePage: false;
+};
+
+/**
+ * Partitions the sample-alert indicator corpus against enabled noise rules.
+ * Pure and offline—callers must not open tabs or mutate page DOM for this preview.
+ */
+export function buildNoiseRuleSampleAlertMatchPreview(
+  rules: readonly NoiseRule[]
+): NoiseRuleSampleAlertMatchPreview {
+  const entries = NOISE_RULE_SAMPLE_ALERT_PREVIEW_IOC_VALUES.map((value) => ({
+    value,
+  }));
+  const partitioned = partitionTrayEntriesByNoiseRules(entries, rules);
+  return {
+    fixturePath: NOISE_RULE_SAMPLE_ALERT_FIXTURE_PATH,
+    indicatorCount: NOISE_RULE_SAMPLE_ALERT_PREVIEW_IOC_VALUES.length,
+    activeValues: partitioned.active.map((entry) => entry.value),
+    matched: partitioned.suppressed.map(({ entry, matchedRule }) => ({
+      value: entry.value,
+      matchedRule,
+      ruleSummary: formatNoiseRuleSummary(matchedRule),
+    })),
+    mutatesLivePage: false,
+  };
 }
 
 export const NOISE_RULES_OPTIONS_SECTION_ID = "noise-rules";
@@ -684,13 +866,28 @@ export function confirmLearnNoiseRule(
 /** Session-local buffer of learned rules (also mirrored to chrome.storage.local). */
 const learnedNoiseRulesById = new Map<NoiseRuleId, NoiseRule>();
 
-export function rememberLearnedNoiseRule(rule: NoiseRule): NoiseRule {
-  const existing = learnedNoiseRulesById.get(rule.id);
-  if (existing) {
-    return existing;
+/** Single-step undo slot for the last watchlist-learned rule (mirrored to storage). */
+let lastLearnedNoiseRuleUndo: NoiseRule | null = null;
+
+export function rememberLearnedNoiseRule(
+  rule: NoiseRule,
+  options: { overwrite?: boolean } = {}
+): NoiseRule {
+  if (!options.overwrite) {
+    const existing = learnedNoiseRulesById.get(rule.id);
+    if (existing) {
+      return existing;
+    }
   }
   learnedNoiseRulesById.set(rule.id, rule);
   return rule;
+}
+
+export function forgetLearnedNoiseRule(ruleId: string): void {
+  learnedNoiseRulesById.delete(ruleId);
+  if (lastLearnedNoiseRuleUndo?.id === ruleId) {
+    lastLearnedNoiseRuleUndo = null;
+  }
 }
 
 export function listLearnedNoiseRules(): NoiseRule[] {
@@ -701,5 +898,29 @@ export function listLearnedNoiseRules(): NoiseRule[] {
 
 export function clearLearnedNoiseRules(): void {
   learnedNoiseRulesById.clear();
+  lastLearnedNoiseRuleUndo = null;
+}
+
+/** Records the rule that a single-step undo would remove (overwrites prior undo). */
+export function recordLastLearnedNoiseRuleUndo(rule: NoiseRule): void {
+  lastLearnedNoiseRuleUndo = rule;
+}
+
+export function peekLastLearnedNoiseRuleUndo(): NoiseRule | null {
+  return lastLearnedNoiseRuleUndo;
+}
+
+export function clearLastLearnedNoiseRuleUndo(): void {
+  lastLearnedNoiseRuleUndo = null;
+}
+
+/**
+ * Returns and clears the in-memory undo slot (single-step).
+ * Callers that also persist undo must clear storage separately.
+ */
+export function consumeLastLearnedNoiseRuleUndo(): NoiseRule | null {
+  const rule = lastLearnedNoiseRuleUndo;
+  lastLearnedNoiseRuleUndo = null;
+  return rule;
 }
 

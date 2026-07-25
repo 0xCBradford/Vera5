@@ -116,6 +116,59 @@ describe("iocLabelSession", () => {
     expect(again).toEqual(learned);
     expect(listLearnedNoiseRules()).toHaveLength(1);
   });
+
+  it("does not make network calls while learning a noise rule", async () => {
+    const store: Record<string, unknown> = {};
+    stubChromeStorage(store);
+
+    const fetchMock = vi.fn(() => {
+      throw new Error("unexpected fetch during noise rule learning");
+    });
+    const sendBeaconMock = vi.fn(() => true);
+    const xhrOpen = vi.fn();
+    const xhrSend = vi.fn();
+    class FakeXHR {
+      open = xhrOpen;
+      send = xhrSend;
+      setRequestHeader = vi.fn();
+      abort = vi.fn();
+      readyState = 0;
+      status = 0;
+      responseText = "";
+    }
+
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("XMLHttpRequest", FakeXHR as unknown as typeof XMLHttpRequest);
+    Object.defineProperty(navigator, "sendBeacon", {
+      configurable: true,
+      value: sendBeaconMock,
+    });
+
+    const learned = setSessionIocLabel("1.1.1.1", "benign", {
+      learnNoiseRule: true,
+    });
+    expect(learned).toMatchObject({
+      patternType: "exact",
+      pattern: "1.1.1.1",
+      sourceAction: "benign",
+    });
+
+    await vi.waitFor(() => {
+      expect(store.noiseRules).toMatchObject({
+        schemaVersion: 1,
+        rules: [expect.objectContaining({ pattern: "1.1.1.1", sourceAction: "benign" })],
+      });
+    });
+
+    // Allow any queued microtasks from async storage writes to settle.
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendBeaconMock).not.toHaveBeenCalled();
+    expect(xhrOpen).not.toHaveBeenCalled();
+    expect(xhrSend).not.toHaveBeenCalled();
+  });
 });
 
 describe("iocLabelSession persistence", () => {

@@ -8,6 +8,7 @@ import {
   buildNoiseRuleDetailView,
   buildNoiseRuleId,
   buildNoiseRuleHoverMatchView,
+  buildNoiseRuleSampleAlertMatchPreview,
   buildNoiseRulesOptionsHash,
   buildSocDashboardNoiseStarterRules,
   clearLearnedNoiseRules,
@@ -15,9 +16,11 @@ import {
   createNoiseRule,
   createNoiseRuleFromWatchlistLabel,
   findMatchingNoiseRule,
+  forgetLearnedNoiseRule,
   formatNoiseRuleSummary,
   formatNoiseRulesTraySuppressedSummary,
   filterScanMatchesByNoiseRules,
+  filterNoiseRulesBySearch,
   HIDE_SUPPRESSED_FROM_SCAN_DEFAULT,
   isNoiseRulePatternType,
   isNoiseRuleSourceAction,
@@ -25,9 +28,14 @@ import {
   noiseRuleMatchesValue,
   noiseRuleSourceActionFromIocLabel,
   normalizeNoiseRule,
+  NOISE_RULE_SAMPLE_ALERT_FIXTURE_PATH,
+  NOISE_RULE_SAMPLE_ALERT_PREVIEW_IOC_VALUES,
   partitionTrayEntriesByNoiseRules,
   parseNoiseRulesOptionsHash,
   rememberLearnedNoiseRule,
+  recordLastLearnedNoiseRuleUndo,
+  peekLastLearnedNoiseRuleUndo,
+  consumeLastLearnedNoiseRuleUndo,
   shouldOfferNoiseRuleLearnForLabel,
   SOC_DASHBOARD_NOISE_STARTER_SPECS,
 } from "./noiseRule";
@@ -81,6 +89,7 @@ describe("noiseRule schema", () => {
       sourceAction: "suppress",
       createdAt: 1_700_000_000_000,
       hitCount: 3,
+      enabled: true,
     });
   });
 
@@ -181,6 +190,8 @@ describe("noiseRule schema", () => {
       pattern: "10.0.0.0/8",
       hitCountLabel: "2",
       createdAtLabel: new Date(1_700_000_000_000).toISOString(),
+      enabled: true,
+      enabledLabel: "Enabled",
       id: "nr-detail",
     });
     expect(JSON.stringify(detail)).not.toMatch(/weight/i);
@@ -343,14 +354,268 @@ describe("noiseRule schema", () => {
     const rules = buildSocDashboardNoiseStarterRules();
     expect(rules.length).toBe(SOC_DASHBOARD_NOISE_STARTER_SPECS.length);
     expect(rules.every((rule) => rule.id.startsWith("nr-starter-soc-"))).toBe(true);
+    expect(rules.every((rule) => rule.enabled)).toBe(true);
     expect(rules.some((rule) => rule.pattern === "8.8.8.8")).toBe(true);
     expect(rules.some((rule) => rule.pattern === "10.0.0.0/8")).toBe(true);
     expect(listLearnedNoiseRules()).toEqual([]);
+  });
+
+  it("searches rules and skips disabled matches", () => {
+    const enabled = createNoiseRule({
+      id: "nr-on",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "noise.example",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+      createdAt: 1,
+    });
+    const disabled = createNoiseRule({
+      id: "nr-off",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "noise.example",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.BENIGN,
+      createdAt: 2,
+      enabled: false,
+    });
+    expect(filterNoiseRulesBySearch([enabled, disabled], "benign")).toEqual([disabled]);
+    expect(findMatchingNoiseRule([disabled, enabled], "noise.example")?.id).toBe("nr-on");
+    expect(findMatchingNoiseRule([disabled], "noise.example")).toBeNull();
   });
 
   it("confirmLearnNoiseRule delegates to window.confirm", () => {
     const confirm = vi.fn(() => true);
     expect(confirmLearnNoiseRule({ confirm })).toBe(true);
     expect(confirm).toHaveBeenCalledWith(NOISE_RULE_LEARN_CONFIRM_MESSAGE);
+  });
+
+  it("previews sample-alert matches offline without mutating a live page", () => {
+    expect(NOISE_RULE_SAMPLE_ALERT_FIXTURE_PATH).toBe("examples/sample-alert.html");
+    expect(NOISE_RULE_SAMPLE_ALERT_PREVIEW_IOC_VALUES).toContain("8.8.8.8");
+    expect(NOISE_RULE_SAMPLE_ALERT_PREVIEW_IOC_VALUES).toContain("192.0.2.1");
+
+    const empty = buildNoiseRuleSampleAlertMatchPreview([]);
+    expect(empty.mutatesLivePage).toBe(false);
+    expect(empty.fixturePath).toBe(NOISE_RULE_SAMPLE_ALERT_FIXTURE_PATH);
+    expect(empty.indicatorCount).toBe(NOISE_RULE_SAMPLE_ALERT_PREVIEW_IOC_VALUES.length);
+    expect(empty.matched).toEqual([]);
+    expect(empty.activeValues).toEqual([...NOISE_RULE_SAMPLE_ALERT_PREVIEW_IOC_VALUES]);
+
+    const suppressPublicDns = createNoiseRule({
+      id: "nr-preview-8888",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "8.8.8.8",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.BENIGN,
+      createdAt: 1,
+    });
+    const disabled = createNoiseRule({
+      id: "nr-preview-disabled",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "192.0.2.1",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+      createdAt: 2,
+      enabled: false,
+    });
+    const preview = buildNoiseRuleSampleAlertMatchPreview([suppressPublicDns, disabled]);
+    expect(preview.mutatesLivePage).toBe(false);
+    expect(preview.matched.map((row) => row.value)).toEqual(["8.8.8.8"]);
+    expect(preview.matched[0]?.matchedRule.id).toBe("nr-preview-8888");
+    expect(preview.activeValues).toContain("192.0.2.1");
+    expect(preview.activeValues).not.toContain("8.8.8.8");
+
+    const starterPreview = buildNoiseRuleSampleAlertMatchPreview(
+      buildSocDashboardNoiseStarterRules()
+    );
+    expect(starterPreview.mutatesLivePage).toBe(false);
+    expect(starterPreview.matched.some((row) => row.value === "8.8.8.8")).toBe(true);
+  });
+
+  it("tracks a single-step undo slot for the last learned rule", () => {
+    const first = createNoiseRule({
+      id: "nr-undo-a",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "8.8.8.8",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+      createdAt: 1,
+    });
+    const second = createNoiseRule({
+      id: "nr-undo-b",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "1.1.1.1",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.BENIGN,
+      createdAt: 2,
+    });
+    recordLastLearnedNoiseRuleUndo(first);
+    expect(peekLastLearnedNoiseRuleUndo()?.id).toBe("nr-undo-a");
+    recordLastLearnedNoiseRuleUndo(second);
+    expect(peekLastLearnedNoiseRuleUndo()?.id).toBe("nr-undo-b");
+    expect(consumeLastLearnedNoiseRuleUndo()?.id).toBe("nr-undo-b");
+    expect(peekLastLearnedNoiseRuleUndo()).toBeNull();
+    forgetLearnedNoiseRule("nr-undo-a");
+    recordLastLearnedNoiseRuleUndo(first);
+    forgetLearnedNoiseRule("nr-undo-a");
+    expect(peekLastLearnedNoiseRuleUndo()).toBeNull();
+  });
+});
+
+describe("noise rule unit coverage: watchlist create, pattern match, collapse", () => {
+  afterEach(() => {
+    clearLearnedNoiseRules();
+  });
+
+  it("creates exact rules from benign, internal, and suppress watchlist actions", () => {
+    const benign = createNoiseRuleFromWatchlistLabel({
+      iocValue: "1.1.1.1",
+      label: "benign",
+      learnNoiseRule: true,
+      createdAt: 10,
+    });
+    expect(benign).toMatchObject({
+      patternType: "exact",
+      pattern: "1.1.1.1",
+      sourceAction: "benign",
+      hitCount: 0,
+      enabled: true,
+      createdAt: 10,
+    });
+
+    const internal = createNoiseRuleFromWatchlistLabel({
+      iocValue: "intranet.corp.example",
+      label: "internal",
+      learnNoiseRule: true,
+      createdAt: 11,
+    });
+    expect(internal).toMatchObject({
+      patternType: "exact",
+      pattern: "intranet.corp.example",
+      sourceAction: "internal",
+      hitCount: 0,
+      enabled: true,
+    });
+
+    const suppress = createNoiseRuleFromWatchlistLabel({
+      iocValue: "noise.example",
+      label: "suppress-false-positive",
+      learnNoiseRule: true,
+      createdAt: 12,
+    });
+    expect(suppress).toMatchObject({
+      patternType: "exact",
+      pattern: "noise.example",
+      sourceAction: "suppress",
+    });
+
+    expect(
+      createNoiseRuleFromWatchlistLabel({
+        iocValue: "noise.example",
+        label: "case-important",
+        learnNoiseRule: true,
+      })
+    ).toBeNull();
+    expect(
+      createNoiseRuleFromWatchlistLabel({
+        iocValue: "   ",
+        label: "benign",
+        learnNoiseRule: true,
+      })
+    ).toBeNull();
+  });
+
+  it("matches candidate IOC values across supported pattern types", () => {
+    const rules = [
+      createNoiseRule({
+        id: "nr-match-exact",
+        patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+        pattern: "8.8.8.8",
+        sourceAction: NOISE_RULE_SOURCE_ACTION.BENIGN,
+        createdAt: 1,
+      }),
+      createNoiseRule({
+        id: "nr-match-suffix",
+        patternType: NOISE_RULE_PATTERN_TYPE.DOMAIN_SUFFIX,
+        pattern: ".noise.test",
+        sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+        createdAt: 2,
+      }),
+      createNoiseRule({
+        id: "nr-match-cidr",
+        patternType: NOISE_RULE_PATTERN_TYPE.CIDR,
+        pattern: "192.168.0.0/16",
+        sourceAction: NOISE_RULE_SOURCE_ACTION.INTERNAL,
+        createdAt: 3,
+      }),
+      createNoiseRule({
+        id: "nr-match-regex",
+        patternType: NOISE_RULE_PATTERN_TYPE.REGEX,
+        pattern: "^cdn[0-9]+\\.example\\.com$",
+        sourceAction: NOISE_RULE_SOURCE_ACTION.BENIGN,
+        createdAt: 4,
+      }),
+    ];
+
+    expect(noiseRuleMatchesValue(rules[0]!, "8.8.8.8")).toBe(true);
+    expect(noiseRuleMatchesValue(rules[1]!, "foo.noise.test")).toBe(true);
+    expect(noiseRuleMatchesValue(rules[2]!, "192.168.10.5")).toBe(true);
+    expect(noiseRuleMatchesValue(rules[3]!, "cdn7.example.com")).toBe(true);
+    expect(noiseRuleMatchesValue(rules[0]!, "9.9.9.9")).toBe(false);
+
+    expect(findMatchingNoiseRule(rules, "8.8.8.8")?.id).toBe("nr-match-exact");
+    expect(findMatchingNoiseRule(rules, "bar.noise.test")?.id).toBe("nr-match-suffix");
+    expect(findMatchingNoiseRule(rules, "192.168.1.1")?.id).toBe("nr-match-cidr");
+    expect(findMatchingNoiseRule(rules, "cdn99.example.com")?.id).toBe("nr-match-regex");
+    expect(findMatchingNoiseRule(rules, "unrelated.example")).toBeNull();
+  });
+
+  it("collapses matching tray rows into suppressed while preserving order", () => {
+    const rules = [
+      createNoiseRule({
+        id: "nr-collapse-a",
+        patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+        pattern: "noise.a",
+        sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+        createdAt: 1,
+      }),
+      createNoiseRule({
+        id: "nr-collapse-b",
+        patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+        pattern: "noise.b",
+        sourceAction: NOISE_RULE_SOURCE_ACTION.INTERNAL,
+        createdAt: 2,
+      }),
+      createNoiseRule({
+        id: "nr-collapse-off",
+        patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+        pattern: "noise.c",
+        sourceAction: NOISE_RULE_SOURCE_ACTION.BENIGN,
+        createdAt: 3,
+        enabled: false,
+      }),
+    ];
+    const entries = [
+      { value: "active.one", order: 1 },
+      { value: "noise.a", order: 2 },
+      { value: "active.two", order: 3 },
+      { value: "noise.b", order: 4 },
+      { value: "noise.c", order: 5 },
+    ];
+
+    expect(partitionTrayEntriesByNoiseRules(entries, [])).toEqual({
+      active: entries,
+      suppressed: [],
+    });
+
+    const partitioned = partitionTrayEntriesByNoiseRules(entries, rules);
+    expect(partitioned.active.map((entry) => entry.value)).toEqual([
+      "active.one",
+      "active.two",
+      "noise.c",
+    ]);
+    expect(
+      partitioned.suppressed.map(({ entry, matchedRule }) => [entry.value, matchedRule.id])
+    ).toEqual([
+      ["noise.a", "nr-collapse-a"],
+      ["noise.b", "nr-collapse-b"],
+    ]);
+    expect(formatNoiseRulesTraySuppressedSummary(partitioned.suppressed.length)).toBe(
+      "Suppressed (2)"
+    );
   });
 });

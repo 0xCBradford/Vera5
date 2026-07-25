@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { clearEnrichmentCache } from "../lib/cache";
 import {
   DEFAULT_CORRELATION_CLUSTER_JACCARD_THRESHOLD,
@@ -20,34 +20,77 @@ import {
 } from "../lib/correlationClusterStorage";
 import {
   buildNoiseRuleDetailView,
+  filterNoiseRulesBySearch,
   HIDE_SUPPRESSED_FROM_SCAN_DEFAULT,
   HIDE_SUPPRESSED_FROM_SCAN_OPTIONS_HINT,
   HIDE_SUPPRESSED_FROM_SCAN_OPTIONS_LABEL,
+  NOISE_RULE_PATTERN_TYPE_DISPLAY,
+  NOISE_RULE_PATTERN_TYPES,
+  NOISE_RULE_SOURCE_ACTION_DISPLAY,
+  NOISE_RULE_SOURCE_ACTIONS,
+  NOISE_RULES_OPTIONS_CANCEL_EDIT_LABEL,
   NOISE_RULES_OPTIONS_CLEAR_LABEL,
+  NOISE_RULES_OPTIONS_DELETE_LABEL,
+  NOISE_RULES_OPTIONS_EDIT_LABEL,
   NOISE_RULES_OPTIONS_EMPTY_TEXT,
+  NOISE_RULES_OPTIONS_ENABLE_LABEL,
   NOISE_RULES_OPTIONS_EXPORT_HINT,
   NOISE_RULES_OPTIONS_EXPORT_LABEL,
   NOISE_RULES_OPTIONS_IMPORT_HINT,
   NOISE_RULES_OPTIONS_IMPORT_LABEL,
   NOISE_RULES_OPTIONS_IMPORT_STARTER_HINT,
   NOISE_RULES_OPTIONS_IMPORT_STARTER_LABEL,
+  NOISE_RULES_IMPORT_APPLY_LABEL,
+  NOISE_RULES_IMPORT_CANCEL_LABEL,
+  NOISE_RULES_IMPORT_MERGE_MODE,
+  NOISE_RULES_IMPORT_MERGE_MODE_LABEL,
+  NOISE_RULES_IMPORT_REPLACE_CONFIRM_LABEL,
+  NOISE_RULES_IMPORT_REVIEW_TITLE,
+  NOISE_RULES_OPTIONS_NO_SEARCH_MATCHES,
+  NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_ARIA_LABEL,
+  NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_CLEAR_LABEL,
+  NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_EMPTY_MATCHES,
+  NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_HINT,
+  NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_LABEL,
+  NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_SUMMARY,
+  NOISE_RULES_OPTIONS_SAVE_LABEL,
+  NOISE_RULES_OPTIONS_SEARCH_LABEL,
+  NOISE_RULES_OPTIONS_SEARCH_PLACEHOLDER,
   NOISE_RULES_OPTIONS_SECTION_DESC,
   NOISE_RULES_OPTIONS_SECTION_ID,
   NOISE_RULES_OPTIONS_SECTION_TITLE,
+  NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_ARIA_LABEL,
+  NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_DONE,
+  NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_EMPTY,
+  NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_HINT,
+  NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_LABEL,
+  buildNoiseRuleSampleAlertMatchPreview,
   parseNoiseRulesOptionsHash,
   SOC_DASHBOARD_NOISE_STARTER_EXAMPLES_PATH,
   type NoiseRule,
+  type NoiseRulePatternType,
+  type NoiseRuleSampleAlertMatchPreview,
+  type NoiseRuleSourceAction,
+  type NoiseRulesImportMergeMode,
 } from "../lib/noiseRule";
 import {
+  buildNoiseRulesImportPreview,
   clearStoredNoiseRules,
+  deleteStoredNoiseRule,
   detectNoiseRulesImportFormat,
   downloadNoiseRulesExportJson,
   exportStoredNoiseRulesJson,
   formatNoiseRulesImportStatus,
+  getStoredLastLearnedNoiseRuleUndo,
   importNoiseRulesFromText,
-  importSocDashboardNoiseStarterRules,
   listStoredNoiseRules,
   NoiseRulesImportError,
+  serializeSocDashboardNoiseStarterExportJson,
+  setStoredNoiseRuleEnabled,
+  undoLastLearnedNoiseRule,
+  updateStoredNoiseRule,
+  type NoiseRulesImportFormat,
+  type NoiseRulesImportPreview,
 } from "../lib/noiseRuleStorage";
 import { ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE } from "../lib/enrichmentSourceOps";
 import { prefersReducedMotion } from "../lib/motionPreference";
@@ -1668,10 +1711,34 @@ export function Options() {
   const [noiseRulesImportStatus, setNoiseRulesImportStatus] = useState<string | null>(
     null
   );
+  const [noiseRulesImportDraft, setNoiseRulesImportDraft] = useState<{
+    raw: string;
+    format: NoiseRulesImportFormat;
+  } | null>(null);
+  const [noiseRulesImportMergeMode, setNoiseRulesImportMergeMode] =
+    useState<NoiseRulesImportMergeMode>(NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY);
+  const [noiseRulesImportPreview, setNoiseRulesImportPreview] =
+    useState<NoiseRulesImportPreview | null>(null);
+  const [noiseRulesReplaceConfirmed, setNoiseRulesReplaceConfirmed] = useState(false);
   const [clearNoiseRulesState, setClearNoiseRulesState] = useState<
     "idle" | "clearing" | "cleared" | "error"
   >("idle");
   const [focusedNoiseRuleId, setFocusedNoiseRuleId] = useState<string | null>(null);
+  const [noiseRulesSearchQuery, setNoiseRulesSearchQuery] = useState("");
+  const [editingNoiseRuleId, setEditingNoiseRuleId] = useState<string | null>(null);
+  const [noiseRuleEditDraft, setNoiseRuleEditDraft] = useState<{
+    patternType: NoiseRulePatternType;
+    pattern: string;
+    sourceAction: NoiseRuleSourceAction;
+  } | null>(null);
+  const [noiseRuleManageStatus, setNoiseRuleManageStatus] = useState<string | null>(
+    null
+  );
+  const [noiseRuleSampleAlertPreview, setNoiseRuleSampleAlertPreview] =
+    useState<NoiseRuleSampleAlertMatchPreview | null>(null);
+  const [lastLearnedNoiseRuleUndo, setLastLearnedNoiseRuleUndo] = useState<NoiseRule | null>(
+    null
+  );
   const [exportState, setExportState] = useState<"idle" | "exporting" | "exported" | "error">(
     "idle"
   );
@@ -1759,12 +1826,14 @@ export function Options() {
   }, [settingsReloadToken]);
 
   useEffect(() => {
-    void listStoredNoiseRules()
-      .then((rules) => {
+    void Promise.all([listStoredNoiseRules(), getStoredLastLearnedNoiseRuleUndo()])
+      .then(([rules, undoRule]) => {
         setNoiseRules(rules);
+        setLastLearnedNoiseRuleUndo(undoRule);
       })
       .catch(() => {
         setNoiseRules([]);
+        setLastLearnedNoiseRuleUndo(null);
       });
   }, [settingsReloadToken]);
 
@@ -2771,54 +2840,110 @@ export function Options() {
     noiseRulesImportInputRef.current?.click();
   };
 
-  const handleNoiseRulesImportFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>
+  const openNoiseRulesImportReview = (
+    raw: string,
+    format: NoiseRulesImportFormat
   ) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) {
-      return;
-    }
-
-    setNoiseRulesImportState("importing");
+    setNoiseRulesImportState("idle");
     setNoiseRulesImportStatus(null);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const raw = typeof reader.result === "string" ? reader.result : "";
-      const format = detectNoiseRulesImportFormat(
-        `${file.name};${file.type}`,
-        raw
-      );
-      void importNoiseRulesFromText(raw, format)
-        .then((result) => {
-          setNoiseRulesImportStatus(formatNoiseRulesImportStatus(result));
-          setNoiseRulesImportState("imported");
-          return listStoredNoiseRules();
-        })
-        .then((rules) => {
-          setNoiseRules(rules);
-        })
-        .catch((error) => {
+    setNoiseRulesReplaceConfirmed(false);
+    setNoiseRulesImportMergeMode(NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY);
+    void listStoredNoiseRules()
+      .then((existing) => {
+        try {
+          const preview = buildNoiseRulesImportPreview(
+            raw,
+            format,
+            existing,
+            NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY
+          );
+          setNoiseRulesImportDraft({ raw, format });
+          setNoiseRulesImportPreview(preview);
+        } catch (error) {
+          setNoiseRulesImportDraft(null);
+          setNoiseRulesImportPreview(null);
           setNoiseRulesImportState("error");
           setNoiseRulesImportStatus(
             error instanceof NoiseRulesImportError
               ? error.message
-              : "Could not import noise rules. Check the file schema and try again."
+              : "Could not prepare noise rules import. Check the file schema and try again."
           );
-        });
-    };
-    reader.onerror = () => {
-      setNoiseRulesImportState("error");
-      setNoiseRulesImportStatus("Could not read the selected file.");
-    };
-    reader.readAsText(file);
+        }
+      })
+      .catch((error) => {
+        setNoiseRulesImportDraft(null);
+        setNoiseRulesImportPreview(null);
+        setNoiseRulesImportState("error");
+        setNoiseRulesImportStatus(
+          error instanceof NoiseRulesImportError
+            ? error.message
+            : "Could not prepare noise rules import. Check the file schema and try again."
+        );
+      });
   };
 
-  const handleImportSocDashboardNoiseStarter = () => {
+  const handleNoiseRulesImportMergeModeChange = (
+    mergeMode: NoiseRulesImportMergeMode
+  ) => {
+    if (!noiseRulesImportDraft) {
+      return;
+    }
+    setNoiseRulesImportMergeMode(mergeMode);
+    setNoiseRulesReplaceConfirmed(false);
+    void listStoredNoiseRules()
+      .then((existing) => {
+        setNoiseRulesImportPreview(
+          buildNoiseRulesImportPreview(
+            noiseRulesImportDraft.raw,
+            noiseRulesImportDraft.format,
+            existing,
+            mergeMode
+          )
+        );
+      })
+      .catch(() => {
+        setNoiseRulesImportState("error");
+        setNoiseRulesImportStatus("Could not refresh the import preview.");
+      });
+  };
+
+  const clearNoiseRulesImportReview = () => {
+    setNoiseRulesImportDraft(null);
+    setNoiseRulesImportPreview(null);
+    setNoiseRulesReplaceConfirmed(false);
+    setNoiseRulesImportMergeMode(NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY);
+  };
+
+  const handleNoiseRulesImportCancel = () => {
+    clearNoiseRulesImportReview();
+    setNoiseRulesImportState("idle");
+  };
+
+  const handleNoiseRulesImportConfirm = () => {
+    if (!noiseRulesImportDraft || !noiseRulesImportPreview) {
+      return;
+    }
+    if (
+      noiseRulesImportMergeMode === NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL &&
+      !noiseRulesReplaceConfirmed
+    ) {
+      return;
+    }
+
     setNoiseRulesImportState("importing");
-    setNoiseRulesImportStatus(null);
-    void importSocDashboardNoiseStarterRules()
+    void importNoiseRulesFromText(
+      noiseRulesImportDraft.raw,
+      noiseRulesImportDraft.format,
+      noiseRulesImportMergeMode,
+      {
+        confirmReplace: () =>
+          noiseRulesImportMergeMode === NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY
+            ? true
+            : noiseRulesReplaceConfirmed,
+      }
+    )
       .then((result) => {
+        clearNoiseRulesImportReview();
         setNoiseRulesImportStatus(formatNoiseRulesImportStatus(result));
         setNoiseRulesImportState("imported");
         return listStoredNoiseRules();
@@ -2831,9 +2956,59 @@ export function Options() {
         setNoiseRulesImportStatus(
           error instanceof NoiseRulesImportError
             ? error.message
-            : "Could not import the SOC dashboard starter list. Try again."
+            : "Could not import noise rules. Check the file schema and try again."
         );
       });
+  };
+
+  const handleNoiseRulesImportFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const raw = typeof reader.result === "string" ? reader.result : "";
+      const format = detectNoiseRulesImportFormat(
+        `${file.name};${file.type}`,
+        raw
+      );
+      try {
+        openNoiseRulesImportReview(raw, format);
+      } catch (error) {
+        setNoiseRulesImportState("error");
+        setNoiseRulesImportStatus(
+          error instanceof NoiseRulesImportError
+            ? error.message
+            : "Could not import noise rules. Check the file schema and try again."
+        );
+      }
+    };
+    reader.onerror = () => {
+      setNoiseRulesImportState("error");
+      setNoiseRulesImportStatus("Could not read the selected file.");
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportSocDashboardNoiseStarter = () => {
+    try {
+      openNoiseRulesImportReview(
+        serializeSocDashboardNoiseStarterExportJson(),
+        "json"
+      );
+    } catch (error) {
+      setNoiseRulesImportState("error");
+      setNoiseRulesImportStatus(
+        error instanceof NoiseRulesImportError
+          ? error.message
+          : "Could not import the SOC dashboard starter list. Try again."
+      );
+    }
   };
 
   const handleClearNoiseRules = () => {
@@ -2841,10 +3016,158 @@ export function Options() {
     void clearStoredNoiseRules()
       .then(() => {
         setNoiseRules([]);
+        setLastLearnedNoiseRuleUndo(null);
+        setEditingNoiseRuleId(null);
+        setNoiseRuleEditDraft(null);
         setClearNoiseRulesState("cleared");
       })
       .catch(() => {
         setClearNoiseRulesState("error");
+      });
+  };
+
+  const filteredNoiseRules = useMemo(
+    () => filterNoiseRulesBySearch(noiseRules, noiseRulesSearchQuery),
+    [noiseRules, noiseRulesSearchQuery]
+  );
+
+  const beginEditNoiseRule = (rule: NoiseRule) => {
+    setEditingNoiseRuleId(rule.id);
+    setNoiseRuleEditDraft({
+      patternType: rule.patternType,
+      pattern: rule.pattern,
+      sourceAction: rule.sourceAction,
+    });
+    setNoiseRuleManageStatus(null);
+  };
+
+  const cancelEditNoiseRule = () => {
+    setEditingNoiseRuleId(null);
+    setNoiseRuleEditDraft(null);
+  };
+
+  const handleSaveNoiseRuleEdit = () => {
+    if (!editingNoiseRuleId || !noiseRuleEditDraft) {
+      return;
+    }
+    const existing = noiseRules.find((rule) => rule.id === editingNoiseRuleId);
+    if (!existing) {
+      return;
+    }
+    const pattern = noiseRuleEditDraft.pattern.trim();
+    if (!pattern) {
+      setNoiseRuleManageStatus("Pattern cannot be empty.");
+      return;
+    }
+    void updateStoredNoiseRule({
+      ...existing,
+      patternType: noiseRuleEditDraft.patternType,
+      pattern,
+      sourceAction: noiseRuleEditDraft.sourceAction,
+    })
+      .then((saved) => {
+        setNoiseRules((current) =>
+          current
+            .map((rule) => (rule.id === saved.id ? saved : rule))
+            .sort((left, right) =>
+              left.createdAt !== right.createdAt
+                ? left.createdAt - right.createdAt
+                : left.id < right.id
+                  ? -1
+                  : left.id > right.id
+                    ? 1
+                    : 0
+            )
+        );
+        cancelEditNoiseRule();
+        setNoiseRuleManageStatus("Noise rule saved.");
+      })
+      .catch(() => {
+        setNoiseRuleManageStatus("Could not save noise rule.");
+      });
+  };
+
+  const handleToggleNoiseRuleEnabled = (rule: NoiseRule, enabled: boolean) => {
+    void setStoredNoiseRuleEnabled(rule.id, enabled)
+      .then((saved) => {
+        if (!saved) {
+          setNoiseRuleManageStatus("Could not update noise rule.");
+          return;
+        }
+        setNoiseRules((current) =>
+          current.map((entry) => (entry.id === saved.id ? saved : entry))
+        );
+        setNoiseRuleManageStatus(
+          enabled ? "Noise rule enabled." : "Noise rule disabled."
+        );
+      })
+      .catch(() => {
+        setNoiseRuleManageStatus("Could not update noise rule.");
+      });
+  };
+
+  const handleDeleteNoiseRule = (rule: NoiseRule) => {
+    const confirmed =
+      typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm(`Delete noise rule ${rule.pattern}?`)
+        : true;
+    if (!confirmed) {
+      return;
+    }
+    void deleteStoredNoiseRule(rule.id)
+      .then((ok) => {
+        if (!ok) {
+          setNoiseRuleManageStatus("Could not delete noise rule.");
+          return;
+        }
+        setNoiseRules((current) => current.filter((entry) => entry.id !== rule.id));
+        if (editingNoiseRuleId === rule.id) {
+          cancelEditNoiseRule();
+        }
+        if (lastLearnedNoiseRuleUndo?.id === rule.id) {
+          setLastLearnedNoiseRuleUndo(null);
+        }
+        setNoiseRuleManageStatus("Noise rule deleted.");
+      })
+      .catch(() => {
+        setNoiseRuleManageStatus("Could not delete noise rule.");
+      });
+  };
+
+  const handlePreviewNoiseRulesOnSampleAlert = () => {
+    const preview = buildNoiseRuleSampleAlertMatchPreview(noiseRules);
+    setNoiseRuleSampleAlertPreview(preview);
+    setNoiseRuleManageStatus(
+      NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_SUMMARY(
+        preview.matched.length,
+        preview.indicatorCount
+      )
+    );
+  };
+
+  const handleClearNoiseRuleSampleAlertPreview = () => {
+    setNoiseRuleSampleAlertPreview(null);
+    setNoiseRuleManageStatus(null);
+  };
+
+  const handleUndoLastLearnedNoiseRule = () => {
+    if (!lastLearnedNoiseRuleUndo) {
+      setNoiseRuleManageStatus(NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_EMPTY);
+      return;
+    }
+    void undoLastLearnedNoiseRule()
+      .then((undone) => {
+        if (!undone) {
+          setLastLearnedNoiseRuleUndo(null);
+          setNoiseRuleManageStatus(NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_EMPTY);
+          return;
+        }
+        setNoiseRules((current) => current.filter((entry) => entry.id !== undone.id));
+        setLastLearnedNoiseRuleUndo(null);
+        setNoiseRuleManageStatus(NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_DONE(undone.pattern));
+      })
+      .catch(() => {
+        setNoiseRuleManageStatus("Could not undo last learned rule.");
       });
   };
 
@@ -4582,34 +4905,237 @@ export function Options() {
                   {NOISE_RULES_OPTIONS_EMPTY_TEXT}
                 </p>
               ) : (
-                <ul className="v5-domain-list" aria-label="Stored noise rules">
-                  {noiseRules.map((rule) => {
-                    const detail = buildNoiseRuleDetailView(rule);
-                    const focused = focusedNoiseRuleId === rule.id;
-                    return (
-                      <li
-                        key={rule.id}
-                        className={`v5-domain-list__item${
-                          focused ? " v5-domain-list__item--noise-rule-focus" : ""
-                        }`}
-                        data-noise-rule-id={rule.id}
-                      >
-                        <div className="v5-row__text">
-                          <span className="v5-row__label">{detail.summary}</span>
-                          <span className="v5-row__hint">Action: {detail.sourceActionLabel}</span>
-                          <span className="v5-row__hint">
-                            Pattern type: {detail.patternTypeLabel}
-                          </span>
-                          <span className="v5-row__hint">Pattern: {detail.pattern}</span>
-                          <span className="v5-row__hint">Hits: {detail.hitCountLabel}</span>
-                          <span className="v5-row__hint">Created: {detail.createdAtLabel}</span>
-                          <span className="v5-row__hint">Id: {detail.id}</span>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <>
+                  <div className="v5-field">
+                    <label className="v5-field__label" htmlFor="noise-rules-search">
+                      {NOISE_RULES_OPTIONS_SEARCH_LABEL}
+                    </label>
+                    <input
+                      id="noise-rules-search"
+                      type="search"
+                      className="v5-input"
+                      value={noiseRulesSearchQuery}
+                      disabled={!ready}
+                      placeholder={NOISE_RULES_OPTIONS_SEARCH_PLACEHOLDER}
+                      onChange={(event) => setNoiseRulesSearchQuery(event.target.value)}
+                      aria-label={NOISE_RULES_OPTIONS_SEARCH_LABEL}
+                    />
+                  </div>
+                  {filteredNoiseRules.length === 0 ? (
+                    <p className="v5-status v5-status--muted" role="status">
+                      {NOISE_RULES_OPTIONS_NO_SEARCH_MATCHES}
+                    </p>
+                  ) : (
+                    <ul className="v5-domain-list" aria-label="Stored noise rules">
+                      {filteredNoiseRules.map((rule) => {
+                        const detail = buildNoiseRuleDetailView(rule);
+                        const focused = focusedNoiseRuleId === rule.id;
+                        const editing = editingNoiseRuleId === rule.id;
+                        return (
+                          <li
+                            key={rule.id}
+                            className={`v5-domain-list__item${
+                              focused ? " v5-domain-list__item--noise-rule-focus" : ""
+                            }`}
+                            data-noise-rule-id={rule.id}
+                          >
+                            <div className="v5-row__text" style={{ flex: 1 }}>
+                              <span className="v5-row__label">{detail.summary}</span>
+                              <span className="v5-row__hint">
+                                Status: {detail.enabledLabel}
+                              </span>
+                              <span className="v5-row__hint">
+                                Action: {detail.sourceActionLabel}
+                              </span>
+                              <span className="v5-row__hint">
+                                Pattern type: {detail.patternTypeLabel}
+                              </span>
+                              <span className="v5-row__hint">Pattern: {detail.pattern}</span>
+                              <span className="v5-row__hint">Hits: {detail.hitCountLabel}</span>
+                              <span className="v5-row__hint">
+                                Created: {detail.createdAtLabel}
+                              </span>
+                              <span className="v5-row__hint">Id: {detail.id}</span>
+                              {editing && noiseRuleEditDraft ? (
+                                <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                                  <label className="v5-field__label">
+                                    Pattern type
+                                    <select
+                                      className="v5-input"
+                                      value={noiseRuleEditDraft.patternType}
+                                      disabled={!ready}
+                                      aria-label={`Edit pattern type for ${rule.id}`}
+                                      onChange={(event) =>
+                                        setNoiseRuleEditDraft((current) =>
+                                          current
+                                            ? {
+                                                ...current,
+                                                patternType: event.target
+                                                  .value as NoiseRulePatternType,
+                                              }
+                                            : current
+                                        )
+                                      }
+                                    >
+                                      {NOISE_RULE_PATTERN_TYPES.map((patternType) => (
+                                        <option key={patternType} value={patternType}>
+                                          {NOISE_RULE_PATTERN_TYPE_DISPLAY[patternType]}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="v5-field__label">
+                                    Pattern
+                                    <input
+                                      className="v5-input"
+                                      value={noiseRuleEditDraft.pattern}
+                                      disabled={!ready}
+                                      aria-label={`Edit pattern for ${rule.id}`}
+                                      onChange={(event) =>
+                                        setNoiseRuleEditDraft((current) =>
+                                          current
+                                            ? {
+                                                ...current,
+                                                pattern: event.target.value,
+                                              }
+                                            : current
+                                        )
+                                      }
+                                    />
+                                  </label>
+                                  <label className="v5-field__label">
+                                    Action
+                                    <select
+                                      className="v5-input"
+                                      value={noiseRuleEditDraft.sourceAction}
+                                      disabled={!ready}
+                                      aria-label={`Edit action for ${rule.id}`}
+                                      onChange={(event) =>
+                                        setNoiseRuleEditDraft((current) =>
+                                          current
+                                            ? {
+                                                ...current,
+                                                sourceAction: event.target
+                                                  .value as NoiseRuleSourceAction,
+                                              }
+                                            : current
+                                        )
+                                      }
+                                    >
+                                      {NOISE_RULE_SOURCE_ACTIONS.map((sourceAction) => (
+                                        <option key={sourceAction} value={sourceAction}>
+                                          {NOISE_RULE_SOURCE_ACTION_DISPLAY[sourceAction]}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                </div>
+                              ) : null}
+                              <div className="v5-actions" style={{ marginTop: 8 }}>
+                                <label className="v5-row" style={{ borderBottom: "none" }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={rule.enabled}
+                                    disabled={!ready}
+                                    aria-label={`${NOISE_RULES_OPTIONS_ENABLE_LABEL}: ${rule.pattern}`}
+                                    onChange={(event) =>
+                                      handleToggleNoiseRuleEnabled(
+                                        rule,
+                                        event.currentTarget.checked
+                                      )
+                                    }
+                                  />
+                                  <span className="v5-row__hint">
+                                    {NOISE_RULES_OPTIONS_ENABLE_LABEL}
+                                  </span>
+                                </label>
+                                {editing ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="v5-btn"
+                                      disabled={!ready}
+                                      onClick={handleSaveNoiseRuleEdit}
+                                      aria-label={`${NOISE_RULES_OPTIONS_SAVE_LABEL}: ${rule.id}`}
+                                    >
+                                      {NOISE_RULES_OPTIONS_SAVE_LABEL}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="v5-btn"
+                                      disabled={!ready}
+                                      onClick={cancelEditNoiseRule}
+                                      aria-label={`${NOISE_RULES_OPTIONS_CANCEL_EDIT_LABEL}: ${rule.id}`}
+                                    >
+                                      {NOISE_RULES_OPTIONS_CANCEL_EDIT_LABEL}
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="v5-btn"
+                                    disabled={!ready}
+                                    onClick={() => beginEditNoiseRule(rule)}
+                                    aria-label={`${NOISE_RULES_OPTIONS_EDIT_LABEL}: ${rule.pattern}`}
+                                  >
+                                    {NOISE_RULES_OPTIONS_EDIT_LABEL}
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  className="v5-btn v5-btn--danger"
+                                  disabled={!ready}
+                                  onClick={() => handleDeleteNoiseRule(rule)}
+                                  aria-label={`${NOISE_RULES_OPTIONS_DELETE_LABEL}: ${rule.pattern}`}
+                                >
+                                  {NOISE_RULES_OPTIONS_DELETE_LABEL}
+                                </button>
+                              </div>
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </>
               )}
+              {noiseRuleManageStatus ? (
+                <p className="v5-status v5-status--muted" role="status">
+                  {noiseRuleManageStatus}
+                </p>
+              ) : null}
+              {noiseRuleSampleAlertPreview ? (
+                <div
+                  className="v5-field"
+                  style={{ marginTop: 8 }}
+                  aria-label="Sample alert noise rule match preview"
+                >
+                  <p className="v5-row__hint">
+                    Offline preview for <code>{noiseRuleSampleAlertPreview.fixturePath}</code>.
+                    Does not open, scan, or change any live page.
+                  </p>
+                  {noiseRuleSampleAlertPreview.matched.length === 0 ? (
+                    <p className="v5-status v5-status--muted" role="status">
+                      {NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_EMPTY_MATCHES}
+                    </p>
+                  ) : (
+                    <ul
+                      className="v5-domain-list"
+                      aria-label="Sample alert indicators matching noise rules"
+                    >
+                      {noiseRuleSampleAlertPreview.matched.map((row) => (
+                        <li key={`${row.matchedRule.id}:${row.value}`} className="v5-domain-list__item">
+                          <div className="v5-row__text" style={{ flex: 1 }}>
+                            <span className="v5-row__label">{row.value}</span>
+                            <span className="v5-row__hint">{row.ruleSummary}</span>
+                            <span className="v5-row__hint">Rule id: {row.matchedRule.id}</span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
               <div className="v5-actions">
                 <input
                   ref={noiseRulesImportInputRef}
@@ -4619,6 +5145,41 @@ export function Options() {
                   aria-label="Import noise rules JSON or CSV file"
                   onChange={handleNoiseRulesImportFileChange}
                 />
+                <button
+                  type="button"
+                  className="v5-btn"
+                  disabled={!ready}
+                  onClick={handlePreviewNoiseRulesOnSampleAlert}
+                  aria-label={NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_ARIA_LABEL}
+                  title={NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_HINT}
+                >
+                  {NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_LABEL}
+                </button>
+                {noiseRuleSampleAlertPreview ? (
+                  <button
+                    type="button"
+                    className="v5-btn"
+                    disabled={!ready}
+                    onClick={handleClearNoiseRuleSampleAlertPreview}
+                    aria-label={NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_CLEAR_LABEL}
+                  >
+                    {NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_CLEAR_LABEL}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="v5-btn"
+                  disabled={!ready || !lastLearnedNoiseRuleUndo}
+                  onClick={handleUndoLastLearnedNoiseRule}
+                  aria-label={NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_ARIA_LABEL}
+                  title={
+                    lastLearnedNoiseRuleUndo
+                      ? `${NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_HINT} Last: ${lastLearnedNoiseRuleUndo.pattern}`
+                      : NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_EMPTY
+                  }
+                >
+                  {NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_LABEL}
+                </button>
                 <button
                   type="button"
                   className="v5-btn"
@@ -4708,6 +5269,12 @@ export function Options() {
                   </span>
                 ) : null}
               </div>
+              <p className="v5-row__hint" style={{ marginTop: 8 }}>
+                {NOISE_RULES_OPTIONS_PREVIEW_SAMPLE_ALERT_HINT}
+              </p>
+              <p className="v5-row__hint" style={{ marginTop: 8 }}>
+                {NOISE_RULES_OPTIONS_UNDO_LAST_LEARNED_HINT}
+              </p>
               <p className="v5-row__hint" style={{ marginTop: 8 }}>
                 {NOISE_RULES_OPTIONS_EXPORT_HINT}
               </p>
@@ -4972,6 +5539,138 @@ export function Options() {
                 aria-label="Apply macro pack import"
               >
                 {operatorMacroPackImportState === "importing" ? "Applying…" : "Apply pack"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {noiseRulesImportPreview && noiseRulesImportDraft ? (
+        <div
+          className="v5-consent-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              handleNoiseRulesImportCancel();
+            }
+          }}
+        >
+          <div
+            className="v5-consent-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="noise-rules-import-title"
+            aria-describedby="noise-rules-import-body"
+          >
+            <h2 id="noise-rules-import-title" className="v5-consent-dialog__title">
+              {NOISE_RULES_IMPORT_REVIEW_TITLE}
+            </h2>
+            <div id="noise-rules-import-body" className="v5-consent-dialog__body">
+              <p>
+                Choose how to merge this import with your local noise rules. API keys are never
+                included.
+              </p>
+              <fieldset style={{ border: "none", margin: 0, padding: 0 }}>
+                <legend className="v5-row__label">Merge mode</legend>
+                {(
+                  Object.keys(NOISE_RULES_IMPORT_MERGE_MODE) as Array<
+                    keyof typeof NOISE_RULES_IMPORT_MERGE_MODE
+                  >
+                ).map((key) => {
+                  const mode = NOISE_RULES_IMPORT_MERGE_MODE[key];
+                  return (
+                    <label
+                      key={mode}
+                      className="v5-row"
+                      style={{ borderBottom: "none", paddingTop: 4, paddingBottom: 4 }}
+                    >
+                      <input
+                        type="radio"
+                        name="noise-rules-import-merge-mode"
+                        value={mode}
+                        checked={noiseRulesImportMergeMode === mode}
+                        disabled={noiseRulesImportState === "importing"}
+                        onChange={() => handleNoiseRulesImportMergeModeChange(mode)}
+                        aria-label={NOISE_RULES_IMPORT_MERGE_MODE_LABEL[mode]}
+                      />
+                      <span className="v5-row__text">
+                        <span className="v5-row__label">
+                          {NOISE_RULES_IMPORT_MERGE_MODE_LABEL[mode]}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </fieldset>
+              <ul className="v5-settings-pack-diff">
+                <li className="v5-settings-pack-diff__item">
+                  <span className="v5-settings-pack-diff__label">Will import</span>
+                  <span className="v5-settings-pack-diff__values">
+                    {noiseRulesImportPreview.wouldImportCount}
+                  </span>
+                </li>
+                <li className="v5-settings-pack-diff__item">
+                  <span className="v5-settings-pack-diff__label">Duplicates skipped</span>
+                  <span className="v5-settings-pack-diff__values">
+                    {noiseRulesImportPreview.analysis.duplicates.length}
+                  </span>
+                </li>
+                <li className="v5-settings-pack-diff__item">
+                  <span className="v5-settings-pack-diff__label">Invalid rows</span>
+                  <span className="v5-settings-pack-diff__values">
+                    {noiseRulesImportPreview.analysis.invalid.length}
+                  </span>
+                </li>
+                {noiseRulesImportPreview.wouldRemoveExistingCount > 0 ? (
+                  <li className="v5-settings-pack-diff__item">
+                    <span className="v5-settings-pack-diff__label">Will remove stored</span>
+                    <span className="v5-settings-pack-diff__values">
+                      {noiseRulesImportPreview.wouldRemoveExistingCount}
+                    </span>
+                  </li>
+                ) : null}
+              </ul>
+              {noiseRulesImportMergeMode === NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL ? (
+                <label className="v5-row" style={{ borderBottom: "none", paddingTop: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={noiseRulesReplaceConfirmed}
+                    disabled={noiseRulesImportState === "importing"}
+                    onChange={(event) =>
+                      setNoiseRulesReplaceConfirmed(event.currentTarget.checked)
+                    }
+                    aria-label={NOISE_RULES_IMPORT_REPLACE_CONFIRM_LABEL}
+                  />
+                  <span className="v5-row__text">
+                    <span className="v5-row__hint">{NOISE_RULES_IMPORT_REPLACE_CONFIRM_LABEL}</span>
+                  </span>
+                </label>
+              ) : null}
+            </div>
+            <div className="v5-consent-dialog__actions">
+              <button
+                type="button"
+                className="v5-btn"
+                disabled={noiseRulesImportState === "importing"}
+                onClick={handleNoiseRulesImportCancel}
+              >
+                {NOISE_RULES_IMPORT_CANCEL_LABEL}
+              </button>
+              <button
+                type="button"
+                className="v5-btn v5-btn--primary"
+                disabled={
+                  noiseRulesImportState === "importing" ||
+                  (noiseRulesImportMergeMode ===
+                    NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL &&
+                    !noiseRulesReplaceConfirmed)
+                }
+                onClick={handleNoiseRulesImportConfirm}
+                aria-label={NOISE_RULES_IMPORT_APPLY_LABEL}
+              >
+                {noiseRulesImportState === "importing"
+                  ? "Applying…"
+                  : NOISE_RULES_IMPORT_APPLY_LABEL}
               </button>
             </div>
           </div>

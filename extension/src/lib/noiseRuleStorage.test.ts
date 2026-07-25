@@ -5,13 +5,18 @@ import {
   listLearnedNoiseRules,
   NOISE_RULE_PATTERN_TYPE,
   NOISE_RULE_SOURCE_ACTION,
+  NOISE_RULES_IMPORT_MERGE_MODE,
+  peekLastLearnedNoiseRuleUndo,
 } from "./noiseRule";
 import {
   STORAGE_KEY_NOISE_RULES,
+  STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO,
   clearStoredNoiseRules,
+  deleteStoredNoiseRule,
   exportStoredNoiseRulesJson,
   formatNoiseRulesImportStatus,
   getNoiseRulesStore,
+  getStoredLastLearnedNoiseRuleUndo,
   hydrateLearnedNoiseRulesFromStorage,
   importNoiseRulesFromText,
   importSocDashboardNoiseStarterRules,
@@ -21,8 +26,12 @@ import {
   parseAndAnalyzeNoiseRulesImport,
   parseNoiseRulesImportCsv,
   parseNoiseRulesImportJson,
+  persistLearnedNoiseRule,
   serializeNoiseRulesExportJson,
   serializeSocDashboardNoiseStarterExportJson,
+  setStoredNoiseRuleEnabled,
+  undoLastLearnedNoiseRule,
+  updateStoredNoiseRule,
   upsertStoredNoiseRule,
   validateNoiseRulesExportDocument,
 } from "./noiseRuleStorage";
@@ -177,6 +186,31 @@ describe("noiseRuleStorage", () => {
     expect(await getNoiseRulesStore()).toMatchObject({ rules: [] });
     expect(store[STORAGE_KEY_NOISE_RULES]).toBeUndefined();
     expect(listLearnedNoiseRules()).toEqual([]);
+  });
+
+  it("updates, disables, and deletes stored noise rules", async () => {
+    const rule = createNoiseRule({
+      id: "nr-manage",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "manage.me",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+      createdAt: 5,
+    });
+    await upsertStoredNoiseRule(rule);
+
+    const edited = await updateStoredNoiseRule({
+      ...rule,
+      pattern: "managed.example",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.BENIGN,
+    });
+    expect(edited.pattern).toBe("managed.example");
+    expect((await listStoredNoiseRules())[0]?.pattern).toBe("managed.example");
+
+    const disabled = await setStoredNoiseRuleEnabled(rule.id, false);
+    expect(disabled?.enabled).toBe(false);
+
+    expect(await deleteStoredNoiseRule(rule.id)).toBe(true);
+    expect(await listStoredNoiseRules()).toEqual([]);
   });
 });
 
@@ -354,6 +388,61 @@ describe("noise rules import", () => {
     expect(await listStoredNoiseRules()).toHaveLength(2);
   });
 
+  it("replace-all requires confirmation and replaces stored rules", async () => {
+    await upsertStoredNoiseRule(
+      createNoiseRule({
+        id: "nr-keep-me",
+        patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+        pattern: "old.example",
+        sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+        createdAt: 1,
+      })
+    );
+
+    await expect(
+      importNoiseRulesFromText(
+        JSON.stringify({
+          schemaVersion: 1,
+          rules: [
+            {
+              patternType: "exact",
+              pattern: "new.example",
+              sourceAction: "benign",
+            },
+          ],
+        }),
+        "json",
+        NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL,
+        { confirmReplace: () => false }
+      )
+    ).rejects.toThrow(/cancelled/);
+    expect(await listStoredNoiseRules()).toHaveLength(1);
+    expect((await listStoredNoiseRules())[0]?.pattern).toBe("old.example");
+
+    const replaced = await importNoiseRulesFromText(
+      JSON.stringify({
+        schemaVersion: 1,
+        rules: [
+          {
+            patternType: "exact",
+            pattern: "new.example",
+            sourceAction: "benign",
+          },
+        ],
+      }),
+      "json",
+      NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL,
+      { confirmReplace: () => true }
+    );
+    expect(replaced.mergeMode).toBe(NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL);
+    expect(replaced.replacedExistingCount).toBe(1);
+    expect(replaced.importedCount).toBe(1);
+    expect(formatNoiseRulesImportStatus(replaced)).toContain("Replaced 1");
+    const listed = await listStoredNoiseRules();
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.pattern).toBe("new.example");
+  });
+
   it("matches examples SOC starter JSON and imports only when requested", async () => {
     const { readFileSync } = await import("node:fs");
     const { resolve } = await import("node:path");
@@ -375,5 +464,276 @@ describe("noise rules import", () => {
     const second = await importSocDashboardNoiseStarterRules();
     expect(second.importedCount).toBe(0);
     expect(second.duplicates.length).toBe(result.importedCount);
+  });
+
+  it("undoes only the last watchlist-learned rule in a single step", async () => {
+    const first = createNoiseRule({
+      id: "nr-undo-first",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "8.8.8.8",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.BENIGN,
+      createdAt: 1,
+    });
+    const second = createNoiseRule({
+      id: "nr-undo-second",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "1.1.1.1",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+      createdAt: 2,
+    });
+
+    persistLearnedNoiseRule(first);
+    await vi.waitFor(() => {
+      expect(store[STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO]).toMatchObject({
+        id: "nr-undo-first",
+        pattern: "8.8.8.8",
+      });
+    });
+    expect(peekLastLearnedNoiseRuleUndo()?.id).toBe("nr-undo-first");
+
+    persistLearnedNoiseRule(second);
+    await vi.waitFor(() => {
+      expect(store[STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO]).toMatchObject({
+        id: "nr-undo-second",
+      });
+    });
+
+    // Re-learning an existing id does not move the undo slot.
+    persistLearnedNoiseRule({ ...second, hitCount: 9 });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(await getStoredLastLearnedNoiseRuleUndo()).toMatchObject({
+      id: "nr-undo-second",
+    });
+
+    const undone = await undoLastLearnedNoiseRule();
+    expect(undone).toMatchObject({ id: "nr-undo-second", pattern: "1.1.1.1" });
+    expect(await listStoredNoiseRules().then((rules) => rules.map((r) => r.id))).toEqual([
+      "nr-undo-first",
+    ]);
+    expect(await getStoredLastLearnedNoiseRuleUndo()).toBeNull();
+    expect(store[STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO]).toBeUndefined();
+
+    expect(await undoLastLearnedNoiseRule()).toBeNull();
+    expect(await listStoredNoiseRules()).toHaveLength(1);
+  });
+
+  it("does not make network calls when persisting a learned noise rule", async () => {
+    const fetchMock = vi.fn(() => {
+      throw new Error("unexpected fetch during noise rule persist");
+    });
+    const sendBeaconMock = vi.fn(() => true);
+    const xhrOpen = vi.fn();
+    const xhrSend = vi.fn();
+    class FakeXHR {
+      open = xhrOpen;
+      send = xhrSend;
+      setRequestHeader = vi.fn();
+      abort = vi.fn();
+    }
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("XMLHttpRequest", FakeXHR as unknown as typeof XMLHttpRequest);
+    Object.defineProperty(navigator, "sendBeacon", {
+      configurable: true,
+      value: sendBeaconMock,
+    });
+
+    const rule = createNoiseRule({
+      id: "nr-no-network",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "noise.example",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+      createdAt: 1,
+    });
+    persistLearnedNoiseRule(rule);
+
+    await vi.waitFor(() => {
+      expect(store[STORAGE_KEY_NOISE_RULES]).toMatchObject({
+        rules: [expect.objectContaining({ id: "nr-no-network" })],
+      });
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendBeaconMock).not.toHaveBeenCalled();
+    expect(xhrOpen).not.toHaveBeenCalled();
+    expect(xhrSend).not.toHaveBeenCalled();
+  });
+});
+
+describe("noise rules import round-trip and invalid patterns", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+    clearLearnedNoiseRules();
+  });
+
+  afterEach(async () => {
+    await clearStoredNoiseRules();
+    clearLearnedNoiseRules();
+    vi.unstubAllGlobals();
+  });
+
+  it("round-trips stored rules through JSON export and import", async () => {
+    const exact = createNoiseRule({
+      id: "nr-rt-exact",
+      patternType: NOISE_RULE_PATTERN_TYPE.EXACT,
+      pattern: "8.8.8.8",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.BENIGN,
+      createdAt: 1_700_000_000_000,
+      hitCount: 2,
+      enabled: true,
+    });
+    const suffix = createNoiseRule({
+      id: "nr-rt-suffix",
+      patternType: NOISE_RULE_PATTERN_TYPE.DOMAIN_SUFFIX,
+      pattern: ".corp.example",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.INTERNAL,
+      createdAt: 1_700_000_000_001,
+      hitCount: 0,
+      enabled: false,
+    });
+    const cidr = createNoiseRule({
+      id: "nr-rt-cidr",
+      patternType: NOISE_RULE_PATTERN_TYPE.CIDR,
+      pattern: "10.0.0.0/8",
+      sourceAction: NOISE_RULE_SOURCE_ACTION.SUPPRESS,
+      createdAt: 1_700_000_000_002,
+      hitCount: 1,
+      enabled: true,
+    });
+
+    await upsertStoredNoiseRule(exact);
+    await upsertStoredNoiseRule(suffix);
+    await upsertStoredNoiseRule(cidr);
+
+    const exported = await exportStoredNoiseRulesJson("2026-07-24T12:00:00.000Z");
+    expect(exported).not.toMatch(/apiKey|api_key|token|secret|password/i);
+
+    await clearStoredNoiseRules();
+    expect(await listStoredNoiseRules()).toEqual([]);
+
+    const result = await importNoiseRulesFromText(
+      exported,
+      "json",
+      NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY
+    );
+    expect(result.importedCount).toBe(3);
+    expect(result.invalid).toEqual([]);
+    expect(result.duplicates).toEqual([]);
+
+    const restored = await listStoredNoiseRules();
+    expect(restored).toHaveLength(3);
+    expect(restored.map((rule) => rule.id).sort()).toEqual([
+      "nr-rt-cidr",
+      "nr-rt-exact",
+      "nr-rt-suffix",
+    ]);
+    expect(restored.find((rule) => rule.id === "nr-rt-exact")).toMatchObject({
+      patternType: "exact",
+      pattern: "8.8.8.8",
+      sourceAction: "benign",
+      hitCount: 2,
+      enabled: true,
+    });
+    expect(restored.find((rule) => rule.id === "nr-rt-suffix")).toMatchObject({
+      patternType: "domain-suffix",
+      pattern: ".corp.example",
+      sourceAction: "internal",
+      enabled: false,
+    });
+    expect(restored.find((rule) => rule.id === "nr-rt-cidr")).toMatchObject({
+      patternType: "cidr",
+      pattern: "10.0.0.0/8",
+      sourceAction: "suppress",
+    });
+
+    const secondPass = await importNoiseRulesFromText(
+      exported,
+      "json",
+      NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY
+    );
+    expect(secondPass.importedCount).toBe(0);
+    expect(secondPass.duplicates.length).toBe(3);
+    expect(await listStoredNoiseRules()).toHaveLength(3);
+  });
+
+  it("rejects invalid patterns on import and stores only valid rows", async () => {
+    const jsonPayload = JSON.stringify({
+      schemaVersion: 1,
+      exportedAt: "2026-07-24T00:00:00.000Z",
+      rules: [
+        {
+          patternType: "exact",
+          pattern: "valid.example",
+          sourceAction: "suppress",
+        },
+        {
+          patternType: "glob",
+          pattern: "*.bad",
+          sourceAction: "suppress",
+        },
+        {
+          patternType: "exact",
+          pattern: "   ",
+          sourceAction: "benign",
+        },
+        {
+          patternType: "regex",
+          pattern: "",
+          sourceAction: "internal",
+        },
+        {
+          patternType: "cidr",
+          pattern: "10.0.0.0/8",
+          sourceAction: "not-a-source",
+        },
+      ],
+    });
+
+    const jsonResult = await importNoiseRulesFromText(jsonPayload, "json");
+    expect(jsonResult.importedCount).toBe(1);
+    expect(jsonResult.invalid.length).toBeGreaterThanOrEqual(3);
+    expect(
+      jsonResult.invalid.some((row) => /invalid patternType/i.test(row.message))
+    ).toBe(true);
+    expect(
+      jsonResult.invalid.some((row) => /non-empty pattern/i.test(row.message))
+    ).toBe(true);
+    expect(await listStoredNoiseRules()).toEqual([
+      expect.objectContaining({
+        patternType: "exact",
+        pattern: "valid.example",
+        sourceAction: "suppress",
+      }),
+    ]);
+
+    await clearStoredNoiseRules();
+
+    const csv = [
+      "patternType,pattern,sourceAction",
+      "exact,ok.example,benign",
+      "glob,*.nope,suppress",
+      "exact,,internal",
+      "cidr,10.0.0.0/8,bogus",
+    ].join("\n");
+    const csvResult = await importNoiseRulesFromText(csv, "csv");
+    expect(csvResult.importedCount).toBe(1);
+    expect(csvResult.invalid.length).toBeGreaterThanOrEqual(2);
+    expect(
+      csvResult.invalid.some((row) => /invalid patternType/i.test(row.message))
+    ).toBe(true);
+    expect(
+      csvResult.invalid.some((row) => /non-empty pattern/i.test(row.message))
+    ).toBe(true);
+    expect(await listStoredNoiseRules()).toEqual([
+      expect.objectContaining({
+        pattern: "ok.example",
+        sourceAction: "benign",
+      }),
+    ]);
   });
 });

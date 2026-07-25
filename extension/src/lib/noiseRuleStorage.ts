@@ -6,25 +6,39 @@ import {
   safeStorageLocalSet,
 } from "./extensionContext";
 import {
+  clearLastLearnedNoiseRuleUndo,
   clearLearnedNoiseRules,
   createNoiseRule,
   buildSocDashboardNoiseStarterRules,
+  confirmNoiseRulesReplaceAllImport,
+  forgetLearnedNoiseRule,
   HIDE_SUPPRESSED_FROM_SCAN_DEFAULT,
   isNoiseRulePatternType,
   isNoiseRuleSourceAction,
+  isNoiseRulesImportMergeMode,
   normalizeNoiseRule,
   NOISE_RULE_SCHEMA_VERSION,
+  NOISE_RULES_IMPORT_MERGE_MODE,
+  peekLastLearnedNoiseRuleUndo,
+  recordLastLearnedNoiseRuleUndo,
   rememberLearnedNoiseRule,
   SOC_DASHBOARD_NOISE_STARTER_EXPORT_AT,
   type NoiseRule,
   type NoiseRulePatternType,
   type NoiseRuleSourceAction,
+  type NoiseRulesImportMergeMode,
 } from "./noiseRule";
 
 /** Store envelope version for persisted noise rules. */
 export const NOISE_RULES_STORE_SCHEMA_VERSION = 1;
 
 export const STORAGE_KEY_NOISE_RULES = "noiseRules";
+
+/**
+ * Single-step undo target for the last watchlist-learned noise rule.
+ * Overwritten on each new learn; cleared on undo / clear-all / delete of that rule.
+ */
+export const STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO = "noiseRuleLastLearnUndo";
 
 /** Mirrors `STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN` in storage.ts (avoid circular import). */
 export const CONTENT_STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN = "hideSuppressedFromScan";
@@ -191,12 +205,83 @@ export async function upsertStoredNoiseRule(rule: NoiseRule): Promise<NoiseRule>
   return toStore;
 }
 
+/**
+ * Replaces an existing rule by id (or inserts). Used for Options edit/enable.
+ */
+export async function updateStoredNoiseRule(rule: NoiseRule): Promise<NoiseRule> {
+  const normalized = normalizeNoiseRule(rule);
+  if (!normalized) {
+    throw new Error("Cannot persist an invalid noise rule.");
+  }
+
+  const remembered = rememberLearnedNoiseRule(normalized, { overwrite: true });
+
+  if (!canUseNoiseRuleStorage()) {
+    return remembered;
+  }
+
+  const store = await getNoiseRulesStore();
+  const nextRules = store.rules.filter((entry) => entry.id !== remembered.id);
+  nextRules.push(remembered);
+  nextRules.sort(compareNoiseRules);
+  const trimmed =
+    nextRules.length > MAX_STORED_NOISE_RULES
+      ? nextRules.slice(0, MAX_STORED_NOISE_RULES)
+      : nextRules;
+
+  await writeNoiseRulesStore({
+    schemaVersion: NOISE_RULES_STORE_SCHEMA_VERSION,
+    updatedAt: Date.now(),
+    rules: trimmed,
+  });
+
+  return remembered;
+}
+
+export async function setStoredNoiseRuleEnabled(
+  ruleId: string,
+  enabled: boolean
+): Promise<NoiseRule | null> {
+  const store = await getNoiseRulesStore();
+  const existing = store.rules.find((entry) => entry.id === ruleId);
+  if (!existing) {
+    return null;
+  }
+  return updateStoredNoiseRule({ ...existing, enabled });
+}
+
+export async function deleteStoredNoiseRule(ruleId: string): Promise<boolean> {
+  forgetLearnedNoiseRule(ruleId);
+
+  if (!canUseNoiseRuleStorage()) {
+    await clearStoredLastLearnedNoiseRuleUndoIfRule(ruleId);
+    return true;
+  }
+
+  const store = await getNoiseRulesStore();
+  const nextRules = store.rules.filter((entry) => entry.id !== ruleId);
+  if (nextRules.length === store.rules.length) {
+    await clearStoredLastLearnedNoiseRuleUndoIfRule(ruleId);
+    return false;
+  }
+
+  await writeNoiseRulesStore({
+    schemaVersion: NOISE_RULES_STORE_SCHEMA_VERSION,
+    updatedAt: Date.now(),
+    rules: nextRules,
+  });
+  await clearStoredLastLearnedNoiseRuleUndoIfRule(ruleId);
+  return true;
+}
+
 export async function clearStoredNoiseRules(): Promise<void> {
   clearLearnedNoiseRules();
+  clearLastLearnedNoiseRuleUndo();
   if (!canUseNoiseRuleStorage()) {
     return;
   }
   await safeStorageLocalRemove(STORAGE_KEY_NOISE_RULES);
+  await safeStorageLocalRemove(STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO);
 }
 
 /** Primes the session learn buffer from durable local storage. */
@@ -252,6 +337,7 @@ const NOISE_RULES_EXPORT_RULE_KEYS = new Set([
   "sourceAction",
   "createdAt",
   "hitCount",
+  "enabled",
 ]);
 
 /**
@@ -322,11 +408,16 @@ export function serializeSocDashboardNoiseStarterExportJson(
   );
 }
 
-/** Optional add-only import of the shipped SOC dashboard starter list. */
-export async function importSocDashboardNoiseStarterRules(): Promise<NoiseRulesImportApplyResult> {
+/** Optional import of the shipped SOC dashboard starter list (default add-only). */
+export async function importSocDashboardNoiseStarterRules(
+  mergeMode: NoiseRulesImportMergeMode = NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY,
+  options: { confirmReplace?: (message: string) => boolean } = {}
+): Promise<NoiseRulesImportApplyResult> {
   return importNoiseRulesFromText(
     serializeSocDashboardNoiseStarterExportJson(),
-    "json"
+    "json",
+    mergeMode,
+    options
   );
 }
 
@@ -384,6 +475,17 @@ export type NoiseRulesImportAnalysis = {
 export type NoiseRulesImportApplyResult = NoiseRulesImportAnalysis & {
   importedCount: number;
   skippedCapacity: number;
+  mergeMode: NoiseRulesImportMergeMode;
+  replacedExistingCount: number;
+};
+
+export type NoiseRulesImportPreview = {
+  mergeMode: NoiseRulesImportMergeMode;
+  existingCount: number;
+  analysis: NoiseRulesImportAnalysis;
+  wouldImportCount: number;
+  skippedCapacity: number;
+  wouldRemoveExistingCount: number;
 };
 
 export function noiseRuleImportFingerprint(
@@ -478,6 +580,8 @@ function coerceNoiseRuleFromImportRecord(
           typeof record.createdAt === "number" ? record.createdAt : undefined,
         hitCount:
           typeof record.hitCount === "number" ? record.hitCount : undefined,
+        enabled:
+          typeof record.enabled === "boolean" ? record.enabled : undefined,
       }),
     };
   } catch (error) {
@@ -620,6 +724,7 @@ export function parseNoiseRulesImportCsv(raw: string): {
   const idIndex = columnIndex("id");
   const createdAtIndex = columnIndex("createdat");
   const hitCountIndex = columnIndex("hitcount");
+  const enabledIndex = columnIndex("enabled");
   const candidates: unknown[] = [];
   const invalid: NoiseRulesImportInvalidRow[] = [];
 
@@ -682,6 +787,20 @@ export function parseNoiseRulesImportCsv(raw: string): {
         continue;
       }
       record.hitCount = hitCount;
+    }
+    if (enabledIndex >= 0 && cells[enabledIndex]) {
+      const rawEnabled = cells[enabledIndex]!.trim().toLowerCase();
+      if (rawEnabled === "true" || rawEnabled === "1") {
+        record.enabled = true;
+      } else if (rawEnabled === "false" || rawEnabled === "0") {
+        record.enabled = false;
+      } else {
+        invalid.push({
+          index: lineIndex,
+          message: `Row ${lineIndex + 1} has an invalid enabled value.`,
+        });
+        continue;
+      }
     }
     candidates.push(record);
   }
@@ -752,39 +871,150 @@ export function parseAndAnalyzeNoiseRulesImport(
 }
 
 /**
- * Add-only import: validates schema, skips duplicates, appends accepted rules
- * up to the store capacity.
+ * Imports noise rules with merge mode:
+ * - add-only: skip duplicates, append accepted rules
+ * - replace-all: clear stored rules, then write accepted import rules (requires confirmation)
  */
 export async function importNoiseRulesFromText(
   raw: string,
-  format: NoiseRulesImportFormat
+  format: NoiseRulesImportFormat,
+  mergeMode: NoiseRulesImportMergeMode = NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY,
+  options: { confirmReplace?: (message: string) => boolean } = {}
 ): Promise<NoiseRulesImportApplyResult> {
-  const existing = await listStoredNoiseRules();
-  const analysis = parseAndAnalyzeNoiseRulesImport(raw, format, existing);
-  const capacity = Math.max(0, MAX_STORED_NOISE_RULES - existing.length);
-  const toImport = analysis.accepted.slice(0, capacity);
-  const skippedCapacity = analysis.accepted.length - toImport.length;
+  if (!isNoiseRulesImportMergeMode(mergeMode)) {
+    throw new NoiseRulesImportError("Unsupported noise rules import merge mode.");
+  }
 
-  for (const rule of toImport) {
+  const existing = await listStoredNoiseRules();
+  const preview = buildNoiseRulesImportPreview(raw, format, existing, mergeMode);
+  const acceptedToWrite = preview.analysis.accepted.slice(0, preview.wouldImportCount);
+
+  if (mergeMode === NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL) {
+    const confirmed = confirmNoiseRulesReplaceAllImport({
+      confirm: options.confirmReplace,
+    });
+    if (!confirmed) {
+      throw new NoiseRulesImportError(
+        "Noise rules replace-all import was cancelled."
+      );
+    }
+    await replaceStoredNoiseRules(acceptedToWrite);
+    return {
+      ...preview.analysis,
+      importedCount: acceptedToWrite.length,
+      skippedCapacity: preview.skippedCapacity,
+      mergeMode,
+      replacedExistingCount: existing.length,
+    };
+  }
+
+  for (const rule of acceptedToWrite) {
     await upsertStoredNoiseRule(rule);
   }
 
   return {
-    ...analysis,
-    importedCount: toImport.length,
+    ...preview.analysis,
+    importedCount: acceptedToWrite.length,
+    skippedCapacity: preview.skippedCapacity,
+    mergeMode,
+    replacedExistingCount: 0,
+  };
+}
+
+export async function replaceStoredNoiseRules(
+  rules: readonly NoiseRule[]
+): Promise<NoiseRule[]> {
+  const normalized: NoiseRule[] = [];
+  const seenIds = new Set<string>();
+  for (const rule of rules) {
+    const entry = normalizeNoiseRule(rule);
+    if (!entry || seenIds.has(entry.id)) {
+      continue;
+    }
+    seenIds.add(entry.id);
+    normalized.push(entry);
+  }
+  normalized.sort(compareNoiseRules);
+  const trimmed =
+    normalized.length > MAX_STORED_NOISE_RULES
+      ? normalized.slice(0, MAX_STORED_NOISE_RULES)
+      : normalized;
+
+  clearLearnedNoiseRules();
+  for (const rule of trimmed) {
+    rememberLearnedNoiseRule(rule);
+  }
+
+  if (!canUseNoiseRuleStorage()) {
+    return trimmed;
+  }
+
+  await writeNoiseRulesStore({
+    schemaVersion: NOISE_RULES_STORE_SCHEMA_VERSION,
+    updatedAt: Date.now(),
+    rules: trimmed,
+  });
+  return trimmed;
+}
+
+export function buildNoiseRulesImportPreview(
+  raw: string,
+  format: NoiseRulesImportFormat,
+  existing: readonly NoiseRule[],
+  mergeMode: NoiseRulesImportMergeMode = NOISE_RULES_IMPORT_MERGE_MODE.ADD_ONLY
+): NoiseRulesImportPreview {
+  if (!isNoiseRulesImportMergeMode(mergeMode)) {
+    throw new NoiseRulesImportError("Unsupported noise rules import merge mode.");
+  }
+
+  const compareAgainst =
+    mergeMode === NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL ? [] : existing;
+  const analysis = parseAndAnalyzeNoiseRulesImport(raw, format, compareAgainst);
+  const capacity =
+    mergeMode === NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL
+      ? MAX_STORED_NOISE_RULES
+      : Math.max(0, MAX_STORED_NOISE_RULES - existing.length);
+  const wouldImportCount = Math.min(analysis.accepted.length, capacity);
+  const skippedCapacity = analysis.accepted.length - wouldImportCount;
+
+  return {
+    mergeMode,
+    existingCount: existing.length,
+    analysis,
+    wouldImportCount,
     skippedCapacity,
+    wouldRemoveExistingCount:
+      mergeMode === NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL
+        ? existing.length
+        : 0,
   };
 }
 
 export function formatNoiseRulesImportStatus(
   result: NoiseRulesImportApplyResult
 ): string {
-  const parts = [`Imported ${result.importedCount}`];
+  const parts =
+    result.mergeMode === NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL
+      ? [
+          `Replaced ${result.replacedExistingCount} stored rule${
+            result.replacedExistingCount === 1 ? "" : "s"
+          }`,
+          `imported ${result.importedCount}`,
+        ]
+      : [`Imported ${result.importedCount}`];
   if (result.duplicates.length > 0) {
-    parts.push(`${result.duplicates.length} duplicate${result.duplicates.length === 1 ? "" : "s"} skipped`);
+    parts.push(
+      `${result.duplicates.length} duplicate${
+        result.duplicates.length === 1 ? "" : "s"
+      } skipped`
+    );
   }
   if (result.invalid.length > 0) {
-    parts.push(`${result.invalid.length} invalid row${result.invalid.length === 1 ? "" : "s"} rejected`);
+    parts.push(
+      `${result.invalid.length} invalid row${
+        result.invalid.length === 1 ? "" : "s"
+      } rejected`
+    );
   }
   if (result.skippedCapacity > 0) {
     parts.push(`${result.skippedCapacity} skipped (capacity)`);
@@ -794,8 +1024,84 @@ export function formatNoiseRulesImportStatus(
 
 export function persistLearnedNoiseRule(rule: NoiseRule): NoiseRule {
   const remembered = rememberLearnedNoiseRule(rule);
-  void upsertStoredNoiseRule(remembered).catch(rethrowUnlessStaleExtensionError);
+  void persistLearnedNoiseRuleWithUndo(remembered).catch(
+    rethrowUnlessStaleExtensionError
+  );
   return remembered;
+}
+
+/**
+ * Inserts the learned rule when new and records it as the single-step undo target.
+ * Re-learning an existing id does not change the undo slot.
+ */
+async function persistLearnedNoiseRuleWithUndo(rule: NoiseRule): Promise<void> {
+  const store = await getNoiseRulesStore();
+  const existed = store.rules.some((entry) => entry.id === rule.id);
+  await upsertStoredNoiseRule(rule);
+  if (!existed) {
+    await setStoredLastLearnedNoiseRuleUndo(rule);
+  }
+}
+
+export async function getStoredLastLearnedNoiseRuleUndo(): Promise<NoiseRule | null> {
+  const memory = peekLastLearnedNoiseRuleUndo();
+  if (!canUseNoiseRuleStorage()) {
+    return memory;
+  }
+  const result = await safeStorageLocalGet(STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO);
+  const normalized = normalizeNoiseRule(result[STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO]);
+  if (normalized) {
+    recordLastLearnedNoiseRuleUndo(normalized);
+    return normalized;
+  }
+  return memory;
+}
+
+export async function setStoredLastLearnedNoiseRuleUndo(
+  rule: NoiseRule
+): Promise<void> {
+  const normalized = normalizeNoiseRule(rule);
+  if (!normalized) {
+    return;
+  }
+  recordLastLearnedNoiseRuleUndo(normalized);
+  if (!canUseNoiseRuleStorage()) {
+    return;
+  }
+  await safeStorageLocalSet({
+    [STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO]: normalized,
+  });
+}
+
+export async function clearStoredLastLearnedNoiseRuleUndo(): Promise<void> {
+  clearLastLearnedNoiseRuleUndo();
+  if (!canUseNoiseRuleStorage()) {
+    return;
+  }
+  await safeStorageLocalRemove(STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO);
+}
+
+async function clearStoredLastLearnedNoiseRuleUndoIfRule(
+  ruleId: string
+): Promise<void> {
+  const current = await getStoredLastLearnedNoiseRuleUndo();
+  if (current?.id === ruleId) {
+    await clearStoredLastLearnedNoiseRuleUndo();
+  }
+}
+
+/**
+ * Single-step undo: deletes only the last watchlist-learned noise rule, then
+ * clears the undo slot. Returns null when there is nothing to undo.
+ */
+export async function undoLastLearnedNoiseRule(): Promise<NoiseRule | null> {
+  const target = await getStoredLastLearnedNoiseRuleUndo();
+  if (!target) {
+    return null;
+  }
+  await deleteStoredNoiseRule(target.id);
+  await clearStoredLastLearnedNoiseRuleUndo();
+  return target;
 }
 
 /**

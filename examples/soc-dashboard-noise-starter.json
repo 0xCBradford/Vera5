@@ -9,7 +9,8 @@
       "pattern": "10.0.0.0/8",
       "sourceAction": "internal",
       "createdAt": 0,
-      "hitCount": 0
+      "hitCount": 0,
+      "enabled": true
     },
     {
       "schemaVersion": 1,
@@ -18,7 +19,8 @@
       "pattern": "172.16.0.0/12",
       "sourceAction": "internal",
       "createdAt": 0,
-      "hitCount": 0
+      "hitCount": 0,
+      "enabled": true
     },
     {
       "schemaVersion": 1,
@@ -27,7 +29,8 @@
       "pattern": "192.168.0.0/16",
       "sourceAction": "internal",
       "createdAt": 0,
-      "hitCount": 0
+      "hitCount": 0,
+      "enabled": true
     },
     {
       "schemaVersion": 1,
@@ -36,7 +39,8 @@
       "pattern": "1.0.0.1",
       "sourceAction": "benign",
       "createdAt": 0,
-      "hitCount": 0
+      "hitCount": 0,
+      "enabled": true
     },
     {
       "schemaVersion": 1,
@@ -45,7 +49,8 @@
       "pattern": "1.1.1.1",
       "sourceAction": "benign",
       "createdAt": 0,
-      "hitCount": 0
+      "hitCount": 0,
+      "enabled": true
     },
     {
       "schemaVersion": 1,
@@ -54,7 +59,8 @@
       "pattern": "8.8.4.4",
       "sourceAction": "benign",
       "createdAt": 0,
-      "hitCount": 0
+      "hitCount": 0,
+      "enabled": true
     },
     {
       "schemaVersion": 1,
@@ -63,7 +69,8 @@
       "pattern": "8.8.8.8",
       "sourceAction": "benign",
       "createdAt": 0,
-      "hitCount": 0
+      "hitCount": 0,
+      "enabled": true
     },
     {
       "schemaVersion": 1,
@@ -72,7 +79,8 @@
       "pattern": "9.9.9.9",
       "sourceAction": "benign",
       "createdAt": 0,
-      "hitCount": 0
+      "hitCount": 0,
+      "enabled": true
     },
     {
       "schemaVersion": 1,
@@ -81,7 +89,8 @@
       "pattern": ".local",
       "sourceAction": "internal",
       "createdAt": 0,
-      "hitCount": 0
+      "hitCount": 0,
+      "enabled": true
     }
   ]
 }

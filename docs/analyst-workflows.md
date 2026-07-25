@@ -413,7 +413,7 @@ flowchart TD
 4. **Read rollups** in the popup: total indicators and lines such as **8 domains · 4 IPs · 2 emails · 2 hashes · 9 URLs**. Use **Detected indicators** filters to focus on URLs, domains, or email addresses first.
 5. **Open the workspace sidebar** (**Open sidebar**) if you want a persistent on-page list while scrolling a long thread.
 6. **Enrich** high-value IOCs (landing domains, redirect URLs, sender-related IPs, attachment hashes) using **›** on highlights or the hover card.
-7. **Label** indicators on the hover card (**Benign**, **Internal**, **Suppress false positive**, **Case important**) to record triage decisions locally.
+7. **Label** indicators on the hover card (**Benign**, **Internal**, **Suppress false positive**, **Case important**) to record triage decisions locally. For Benign / Internal / Suppress false positive, confirm the learn dialog when offered if you want a lasting local **noise rule** (see [Noise rule lifecycle](#noise-rule-lifecycle)).
 8. **Pin** priority IOCs with the **Pin** control on the hover card; pinned rows rise to the top of the workspace sidebar list.
 9. **Export the session** (**Copy Markdown**, **Copy JSON**, **Download CSV**, and so on) for case notes, handoff, or ticket paste. Exports redact API keys and raw vendor secrets; they include session summary, indicator rows, enrichment snippets, and source attribution.
 
@@ -1070,6 +1070,7 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | Conflicting risk signals | Read **How this score was computed**; follow pivots for diverging sources; do not treat the headline band as consensus when **Sources disagree** is shown. |
 | Community vs authoritative chips on one IOC | Read each live row first; use chips for feed-type context only—they do not pick a winner or change the score. See [Interpreting connector confidence metadata](#interpreting-connector-confidence-metadata). |
 | Quiet mode triage | Turn quiet mode on; scan and label locally; read **Cached** enrichment; use **Recommended next pivots** for vendor research; disable quiet mode only when live enrich is approved. |
+| Recurring SOC dashboard noise (public DNS, RFC1918, `.local`) | Import the optional SOC starter or learn a rule from **Suppress false positive** / **Benign** / **Internal** with opt-in confirm; review tray **Suppressed**; leave **Hide suppressed indicators from scan** off unless you want matches omitted from detection. See [Noise rule lifecycle](#noise-rule-lifecycle). |
 | Single live source only | Expect **Unknown risk** and an empty reasoning note until a second source returns parseable OK data. |
 | Phishing case handoff | Name session, enrich key IOCs, label/pin priorities, **Export session** Markdown or JSON; verify denylist if webmail blocked enrich. |
 | Campaign or hunt corpus across sessions | **Save to collection…** or **Add filtered to collection…** as you triage; **Export CSV** from **IOC collections** for ticket paste; collections survive **New session**. |
@@ -1077,14 +1078,66 @@ When disagreement is absent, sources still may differ slightly; Vera5 only surfa
 | Dense page missing related IOCs in **Appeared alongside** | Page exceeded co-occurrence member or pair caps, or skip threshold | Use tray filters to focus on a subset; rescan; expect partial lists when hundreds of unique indicators share one page scan. Pages above the skip threshold keep a prior index or show no co-occurrence panel. |
 | Sensitive / classified work | Manual-only on; enable only approved sources; do not export settings with keys unless policy allows. |
 
-## Optional SOC dashboard noise starter
+## Noise rule lifecycle
 
-Vera5 does **not** auto-learn or auto-apply noise rules. A conservative starter list for common SOC dashboard noise (public DNS resolvers and private RFC1918 ranges, plus `.local`) ships as inspectable JSON:
+Noise rules are **inspectable local patterns** that deprioritize recurring false positives and internal noise in the tray and overlay. They are not a detection verdict, not opaque ML ranking, and not a cloud personalization service. Vera5 never auto-creates rules from scan traffic or enrichment responses.
 
-- Repository file: [`examples/soc-dashboard-noise-starter.json`](../examples/soc-dashboard-noise-starter.json)
-- Options: **Noise rules → Import SOC dashboard starter** (optional, add-only; skips duplicates)
+### Create (explicit learn)
 
-Review the patterns after import. Matching indicators move under the tray **Suppressed** section; they stay in detection unless you enable **Hide suppressed indicators from scan**. Export your current rules for team handoff with **Export rules JSON** (never includes API keys).
+1. Open a highlighted indicator on the overlay with an investigation session available for labels.
+2. Set **Label** to **Benign**, **Internal**, or **Suppress false positive** (**Case important** does not seed a noise rule).
+3. When prompted—*Also create a local noise rule for this indicator?…*—choose **OK** to learn, or cancel to keep the session label only.
+4. Learned rules are **exact-match** patterns for that indicator value, stored in `chrome.storage.local` on this browser profile with a human-readable source action (benign / internal / suppress).
+
+Rules remain listed under **Settings → Noise rules** (pattern type, pattern, action, hit count, enabled state, id)—no hidden weight vectors.
+
+### Match and display
+
+When an active (enabled) rule matches an indicator on the current scan:
+
+| Surface | What you see |
+|---------|----------------|
+| **Detected indicators** tray | Matching rows move under a collapsed **Suppressed** section (still listed for triage). |
+| **On-page overlay** | **Deprioritized** badge, matched-rule summary, and a control to open that rule in Settings. |
+
+Edits, enable/disable, and imports update the open tray via local storage listeners—you do not need to reload the page or the extension.
+
+### Manage in Settings
+
+Under **Noise rules** on the options page you can:
+
+- **Search**, **enable/disable**, **edit** (pattern type and pattern), and **delete** rules
+- **Preview matches on sample alert** — offline match against the fixed `examples/sample-alert.html` indicator set (does not open or change a live page)
+- **Undo last learned rule** — single-step reverse of the most recent watchlist learn only (not a full history; imports and manual edits are not undone here)
+- **Clear all noise rules** when you want an empty local list (does not clear investigation sessions, labels on past cards, or cross-session correlation clusters)
+
+### Import, export, and SOC starter
+
+| Action | Where | Notes |
+|--------|-------|--------|
+| **Export rules JSON** | **Noise rules** | Team handoff of allowlisted pattern/action fields only—**never** API keys or enrichment secrets. |
+| **Import rules JSON/CSV** | **Noise rules** | Schema validation and duplicate detection; review dialog chooses **add-only** (skip duplicates) or **replace-all** (confirmation required). |
+| **Import SOC dashboard starter** | **Noise rules** | Optional conservative list (public DNS resolvers, private RFC1918 ranges, `.local`). Repository copy: [`examples/soc-dashboard-noise-starter.json`](../examples/soc-dashboard-noise-starter.json). **Never auto-applied**—import only after you review merge mode. |
+
+### Optional SOC dashboard noise starter
+
+Vera5 does **not** auto-learn or auto-apply noise rules. Use **Import SOC dashboard starter** (or import [`examples/soc-dashboard-noise-starter.json`](../examples/soc-dashboard-noise-starter.json) via **Import rules JSON/CSV**) when you want a reviewable baseline for common dashboard noise. After import, matching indicators move under tray **Suppressed**; they stay in detection unless **Hide suppressed indicators from scan** is on. Export with **Export rules JSON** (never includes API keys). Full create/match/manage flow: [Noise rule lifecycle](#noise-rule-lifecycle).
+
+### Scan visibility
+
+**Hide suppressed indicators from scan** is **off by default**. When off, page scans still find rule-matching indicators (they appear under **Suppressed**). Turn the toggle on only when you want matching values omitted from scans and highlights.
+
+### Domain policy and other trust gates
+
+Noise rules affect **indicator display** (and optional scan omission). They do **not** authorize live enrichment or auto-scan on a host blocked by **Trust & consent** domain policy. Domain deny wins—clearing or disabling a noise rule does not reopen vendor calls on a denied hostname. Quiet mode, internal asset lists, manual-only enrichment, and pre-query disclosure still apply on allowed hosts. Detail: [Noise rules vs domain policy (precedence)](security-model.md#noise-rules-vs-domain-policy-precedence).
+
+### Cross-session clusters
+
+Indicators labeled **Internal** or **Suppress false positive** are excluded from **Appeared across sessions** cluster promotion. Learning or importing noise rules deprioritizes tray/overlay display; it does **not** delete stored correlation clusters. Use **Settings → Cross-session correlation → Clear all clusters** only when you intentionally want to reset local cluster history (session history remains).
+
+### Privacy
+
+Creating, matching, importing, exporting, editing, enabling/disabling, deleting, or undoing a noise rule stays on the local profile—no Vera5 telemetry sink, no cloud training, and no upload of rule contents or page HTML. See [Local noise rules](security-model.md#local-noise-rules-and-known-good-lists).
 
 ## Settings packs and threat profiles
 
@@ -1121,11 +1174,14 @@ Import threat profile files through threat profile import, not the settings pack
 | **Unknown risk** with one Live source | Only one parseable OK signal | Enable a second source or accept advisory unknown until another source succeeds. |
 | **Sources disagree** on a high-profile IOC | Material band or numeric spread between sources | Compare reasoning lines and vendor pivots; do not rely on the headline band alone. |
 | Highlights missing | Extension off, highlight off, or scan not run | Enable extension and highlighting; scan the page. |
+| Expected IOC under **Suppressed** only | Active noise rule match | Expected—open **Noise rules** to edit/disable, or turn off **Hide suppressed indicators from scan** if the row is missing from the scan entirely. |
+| Learned a label but no new noise rule | Learn dialog declined, or label was **Case important** | Re-apply Benign / Internal / Suppress false positive and confirm the learn prompt, or add a rule manually under **Noise rules**. |
+| Domain still blocks enrich after clearing a noise rule | Domain policy deny on the page hostname | Expected—noise rules never override denylist / allowlist-mode host gates. |
 
 ## Related documentation
 
 - [api-integrations.md](api-integrations.md) — per-source limits, 429 headers, monitoring links, and [connector confidence metadata definitions](api-integrations.md#connector-confidence-metadata-hover-card)
 - [local-mode.md](local-mode.md) — what stays on your machine vs what reaches vendors
-- [security-model.md](security-model.md) — permissions and host access
+- [security-model.md](security-model.md) — permissions, host access, and [local noise rules](security-model.md#local-noise-rules-and-known-good-lists)
 - [architecture.md](architecture.md) — supported indicator types and connector scope
 - [export-artifacts.md](export-artifacts.md) — per-indicator markdown and JSON export contract
