@@ -1139,9 +1139,24 @@ Indicators labeled **Internal** or **Suppress false positive** are excluded from
 
 Creating, matching, importing, exporting, editing, enabling/disabling, deleting, or undoing a noise rule stays on the local profile—no Vera5 telemetry sink, no cloud training, and no upload of rule contents or page HTML. See [Local noise rules](security-model.md#local-noise-rules-and-known-good-lists).
 
+## Known-good lists
+
+Maintain a local **known-good** list of inspectable CDN ranges, common SaaS domains, and similar curated patterns. Matches are meant as visible **Known benign** or **Known internal** labels—not a silent “safe” verdict, cloud goodware score, or automatic malware negative. Lists stay in extension local storage only; there is no Vera5-hosted known-good feed.
+
+### Optional CDN and SaaS starter
+
+Vera5 ships a conservative starter of **major CDN CIDRs** and **common SaaS domains**. It is **never auto-applied**. Import on demand when you want a reviewable baseline:
+
+| Action | Notes |
+|--------|--------|
+| Repository copy | [`examples/known-good-cdn-saas-starter.json`](../examples/known-good-cdn-saas-starter.json) — allowlisted entry fields only; **never** API keys. |
+| Import | Use known-good JSON import (add-only skips duplicates; replace-all needs confirmation). Prefer add-only until you review the list. |
+
+The starter is representative, not exhaustive: vendor CDN ranges and SaaS hostnames change over time. Edit or delete entries after import to match your environment. Entries remain informational labels; they do not override composite risk or bypass domain deny / quiet mode.
+
 ## Settings packs and threat profiles
 
-Use **settings packs** to share connector toggles, cache TTL, domain policy, and analyst mode between browser profiles or teammates—without sharing API keys. Use **threat profiles** (when available) for fuller workflow bundles: pivot recipes, export templates, quiet-mode defaults, and optional noise-list references.
+Use **settings packs** to share connector toggles, cache TTL, domain policy, and analyst mode between browser profiles or teammates—without sharing API keys. Use **threat profiles** for fuller portable workflow bundles: enabled connectors, pivot recipe emphasis, default export template, analyst mode, and quiet-mode default. Profiles never carry API keys. This matches the bring-your-own keys / bring-your-own API posture in [SECURITY.md](../SECURITY.md#portable-threat-profiles-and-settings-packs): keys stay on your local profile; packs and profiles do not supply credentials.
 
 ### Settings pack handoff
 
@@ -1150,15 +1165,115 @@ Use **settings packs** to share connector toggles, cache TTL, domain policy, and
 3. On the target profile, choose **Import settings pack**, review the diff, and confirm **Apply pack**.
 4. Re-enter API keys locally on the target profile; packs never include credentials.
 
-### Precedence when both exist
+### Built-in threat profiles
 
-| If both define… | Which value applies |
-|-----------------|---------------------|
-| Connector toggles, analyst mode, export template, pivots | Active **threat profile** |
-| Cache TTL, domain allow/deny lists | **Settings pack** (until you change them or a profile adds those fields) |
-| API keys | **Local profile only**—never from pack or profile JSON |
+Vera5 ships three built-in threat profiles in the extension. Apply them from **Settings → Settings Backup** with **Apply … profile**, review the diff, choose **Apply as new active profile** or **Merge into current settings**, then confirm. The **Active threat profile** indicator and **Last imported** timestamp update after a successful apply. API keys on the local profile stay unchanged.
 
-Import threat profile files through threat profile import, not the settings pack importer. See [security-model.md](security-model.md) for the full merge table.
+| Profile id | Name | Intended use |
+|------------|------|--------------|
+| `malware-research` | **Malware Research** | Investigate domains, URLs, and file hashes from blogs, sandbox reports, or infrastructure research. Domain-forward pivots, CTI **markdown-report** export, and a broader enrich-friendly connector set. |
+| `soc-triage` | **SOC Triage** | Work alert dashboards and ticket queues with conservative defaults. SOC analyst mode, Splunk-oriented **csv-row** export, abuse-first pivots, AbuseIPDB + OTX connectors, manual enrich on, and auto-scan off. |
+| `cti-research` | **CTI Hunting** | Hunt across community intel and CTI platforms. CTI analyst mode, community-intel pivot emphasis (aligned with CTI platform page-context layout), **markdown-report** export, and tray-first workspace layout (disabled sources remain visible in the tray). |
+
+#### Malware Research (`malware-research`)
+
+**When to use:** You are researching malware infrastructure or campaign IOCs and want domain/URL-forward pivots plus a Markdown report template without starting from a blank settings profile.
+
+**What it emphasizes:** VirusTotal and URLScan.io ahead of IP-abuse lists; OTX, MalwareBazaar, ThreatFox, URLhaus, AbuseIPDB, and RDAP among enabled connectors; CTI analyst mode with quiet mode off.
+
+**Typical fixture practice:** [examples/sample-blog.html](../examples/sample-blog.html) or a sandbox-style page after you apply the profile and save any vendor keys you need locally.
+
+#### SOC Triage (`soc-triage`)
+
+**When to use:** You are triaging dense alert tables or SIEM-style exports and want ticket-friendly, low-noise defaults that do not auto-scan or enable every connector.
+
+**What it emphasizes:** SOC analyst mode; **csv-row** export for tabular / Splunk-oriented handoff; AbuseIPDB-first pivots; only AbuseIPDB and OTX enabled by default; auto-scan remains off and manual enrich remains on when the SOC preset applies.
+
+**Typical fixture practice:** [examples/sample-splunk-export.html](../examples/sample-splunk-export.html) or [examples/sample-security-onion-alert.html](../examples/sample-security-onion-alert.html)—see [soc-validation-fixtures.md](soc-validation-fixtures.md).
+
+#### CTI Hunting (`cti-research`)
+
+**When to use:** You are hunting on CTI platforms, pulse feeds, or research workspaces and want community-intel pivots plus a tray that still shows disabled sources for awareness.
+
+**What it emphasizes:** OTX-first pivot ordering aligned with CTI platform page-context layout; **markdown-report** export; connectors oriented to community intel and malware intel (OTX, VirusTotal, Pulsedive, ThreatFox, URLScan.io, MalwareBazaar, AbuseIPDB, URLhaus); tray-first layout via **Show disabled sources in workspace**.
+
+**Typical fixture practice:** CTI-style pages or [examples/sample-blog.html](../examples/sample-blog.html) after apply; combine with the **CTI Deep Check** playbook when you want enrich + export + pivots in one pass (see [Built-in playbooks](#built-in-playbooks)).
+
+### Install a third-party threat profile
+
+Community or teammate profile files are ordinary JSON you install **locally**. Vera5 does not host a profile store, auto-update feed, or remote install URL. Treat a third-party profile like any other config handoff: verify who produced it, read the file, then import through Options.
+
+#### 1. Verify the source
+
+1. Prefer profiles from people or channels you already trust (team repo, signed internal package, known maintainer).
+2. Confirm how you received the file (direct handoff vs unsolicited download). If the provenance is unclear, do not import.
+3. Prefer a copy you can keep offline for review—do not paste unknown JSON into the browser from a random web form.
+
+#### 2. Review the JSON before import
+
+Open the file in a text editor and check:
+
+| Check | What to look for |
+|-------|------------------|
+| Shape | Looks like a **threat profile** (`threatProfileSchemaVersion` and workflow fields such as `enabledConnectors`, `analystMode`, `defaultExportTemplateId`, `quietModeDefault`)—not a full settings backup with secrets. |
+| Secrets | No `apiKey`, `apiKeys`, `token`, `password`, `credential`, or similar fields. Vera5 **rejects** secret-like keys on import; do not “fix” a profile to smuggle credentials. |
+| Scope | Connectors, analyst mode, export template, pivots, and quiet mode match what you expect. Profiles can change those preferences; they **never** supply your vendor API keys. |
+| Domain / disclosure | Profiles cannot bypass domain deny, pre-query disclosure, quiet mode, or internal asset gates. If a file claims otherwise, discard it. |
+
+Use **Import settings pack** only for settings packs. Profile-shaped JSON belongs under **Import threat profile**; the pack importer rejects threat profiles.
+
+#### 3. Import in Settings
+
+1. Open **Settings → Settings Backup → Import threat profile**.
+2. Choose the reviewed `.json` file.
+3. In the review dialog, read the diff (connectors, analyst mode, export template, pivots, quiet mode, and related changes).
+4. Choose **Merge into current settings** (overlay fields present in the file) or **Apply as new active profile** (reset overlapping workflow fields to defaults, then apply the profile). Pack-only settings such as cache TTL and domain policy stay unless you change them separately.
+5. Confirm **Apply profile**. API keys on this browser profile stay unchanged; enter or keep keys under Settings as usual.
+6. Confirm **Active threat profile** and **Last imported** on the Settings Backup card, then spot-check analyst mode, export template, and connector toggles.
+
+**Export for teammates:** **Export threat profile** writes a secret-free snapshot of the current workflow preferences (`vera5-threat-profile.json`) you can hand off through your approved channel—the same verify → review → import loop applies on the receiving side.
+
+#### Trust expectations (checksums and signatures)
+
+Vera5 does **not** operate a hosted profile marketplace, catalog, or auto-update feed. There is no Vera5-signed community feed and no in-extension “trust score” for third-party profile files. Integrity and authenticity are **optional checks you perform outside the extension** before import.
+
+| Expectation | What Vera5 does | What you may do |
+|-------------|-----------------|-----------------|
+| No hosted store | Local file import only; no download from a Vera5 server | Obtain profiles through your own approved channel (team repo, internal package, maintainer you trust) |
+| Integrity (optional) | Does not compute or require a checksum at import | If the publisher publishes a digest (for example SHA-256), verify the file against that digest with your local tools before import |
+| Authenticity (optional) | Does not verify OpenPGP/CMS signatures at import | If the publisher signs the file (or a release archive that contains it), verify the signature with keys you already trust before import |
+| After checks pass | Schema validation still rejects secret-like fields; you still review the JSON and the Options diff | Import only after source, digest/signature (if used), and content review are acceptable |
+
+Failing or skipping an optional checksum/signature check does not unlock bypass of domain deny, pre-query disclosure, quiet mode, or internal asset gates. A matching digest only confirms the file matches what the publisher advertised—it does not prove the profile is safe for your environment. Prefer signed internal packages when your organization already uses them for config handoff.
+
+See [security-model.md](security-model.md#portable-profiles-settings-packs-and-third-party-json) for the portable-profile trust summary.
+
+### Threat profile vs settings pack precedence
+
+Threat profiles are richer workflow bundles. Settings packs are narrower handoff files (connector toggles, cache TTL, domain policy, analyst mode). When both have been applied on the same browser profile, overlapping fields follow the table below. Manual edits in **Settings** after the last import win until you import again.
+
+| Preference area | Settings pack | Threat profile | Winner when both apply |
+|-----------------|---------------|----------------|------------------------|
+| Connector enablement | Yes | Yes | Active **threat profile** |
+| Analyst mode preset and related toggles | Yes | Yes | Active **threat profile** |
+| Default export template | Yes | Yes | Active **threat profile** |
+| Pivot emphasis / recipe set | Yes | Yes | Active **threat profile** |
+| Quiet mode default | No | Yes | Active **threat profile** |
+| Global and per-source cache TTL | Yes | No | **Settings pack** (or manual) |
+| Domain policy mode, lists, enrich gate | Yes | No | **Settings pack** (or manual) |
+| Stored API keys | Never | Never | **Local profile only** |
+
+**Merge order**
+
+1. **API keys** stay on the local profile unless you explicitly include them in a full **Settings Backup** export/import.
+2. **Import settings pack** applies pack fields after the diff preview and your confirmation.
+3. **Import or apply a threat profile** supersedes overlapping workflow fields from the last pack apply. Pack-only fields (cache TTL, domain policy) remain until you change them in Settings or import another pack.
+4. **Manual Settings** changes after the last pack or profile import override those imported values until the next import.
+5. Use **Import threat profile** for profile JSON and **Import settings pack** for pack JSON—the pack importer rejects threat-profile-shaped files.
+
+An optional noise-list reference may appear in threat profile JSON as a reserved field; it does **not** create or replace **Noise rules** in Settings. Profiles cannot bypass pre-query disclosure, domain deny, quiet mode, or internal asset gates.
+
+Full control table and trust expectations: [security-model.md — Portable profiles, settings packs, and third-party JSON](security-model.md#portable-profiles-settings-packs-and-third-party-json).
 
 ## Troubleshooting
 

@@ -429,14 +429,15 @@ Clear-all controls for correlation or relationship memory do not delete investig
 
 ## Portable profiles, settings packs, and third-party JSON
 
-Threat profiles and settings packs import connector toggles, TTL, domain policy, analyst mode, export templates, and optional noise-list references—**never API keys or tokens**.
+Threat profiles and settings packs import connector toggles, TTL, domain policy, analyst mode, export templates, and optional noise-list references—**never API keys or tokens**. This matches the repository [SECURITY.md](../SECURITY.md#portable-threat-profiles-and-settings-packs) BYOK/BYOA posture: you supply vendor keys locally; portable JSON never carries them.
 
 | Control | Behavior |
 |---------|----------|
 | Schema validation | Rejects files containing `apiKey`, `token`, or similar secret fields |
 | Pre-import warning | UI explains profiles change modes and connectors—not stored keys |
 | Merge preview | Diff before apply for settings packs and profiles |
-| Trust | Verify source before import; Vera5 does not host a profile marketplace |
+| Trust | Verify source before import; Vera5 does **not** host a profile marketplace or auto-update feed |
+| Optional integrity / authenticity | Checksums (for example SHA-256) and signatures (for example OpenPGP) are **user-performed** outside the extension when a publisher provides them; Vera5 does not require or verify them at import |
 
 ### Threat profile vs settings pack precedence
 

@@ -19,6 +19,7 @@ Vera5 persists analyst configuration in **`chrome.storage.local`** via `extensio
 | Domain policy presets | Shipped **Sensitive sites denylist** preset merges banking, health-portal, and HR SaaS patterns beyond the default webmail denylist. Options **Trust & consent** applies presets via `applyDomainPolicyPresetToLists()`. Storage schema version 2 backfills webmail defaults when upgrading from an empty denylist. |
 | Internal asset lists | Optional indicator-level blocks for internal domains, IPv4 CIDR ranges, and labeled vendor/SaaS hostname patterns (`internalAssetDomains`, `internalAssetCidrRanges`, `internalAssetVendorLabels`). Default gate on (`internalAssetEnrichGateEnabled`); empty lists impose no block. Gate in `enrichmentBackgroundFetch.ts` via `isOutboundEnrichmentAllowedForIndicator()` in `internalAssetPolicyStorage.ts`; matcher in `internalAssetPolicy.ts`. Options **Trust & consent** editors. |
 | Analyst workflow presets | SOC, CTI, and DFIR presets in Options **Trust & consent** apply default toggles (manual-only, auto-scan, pre-query notices, private IPv4, workspace source display, live enrichment sources), `defaultExportTemplateId`, and `pivotEmphasisProviders` via `applyAnalystModePreset()` in `storage.ts`. Definitions in `analystModePresets.ts`; content sync in `analystModeStorage.ts`; pivot ordering in `pivots.ts`. |
+| Active threat profile | Imported profile id/name and last-import timestamp in `activeThreatProfile` (`settingsPack.ts`); Options **Settings Backup** indicator; updated on threat profile import |
 | Per-IOC-type flags | Options checkboxes; defaults all MVP and Phase 2 types on; scan omits disabled types |
 | `includePrivateIpv4` | Options checkbox; private-space IPv4 omitted in detector when off (default) |
 | `hideSuppressedFromScan` | Options **Noise rules** toggle; default **off** so detection still finds noise-rule matches; when on, matching indicators are omitted from page/selection scans |
@@ -30,6 +31,7 @@ Vera5 persists analyst configuration in **`chrome.storage.local`** via `extensio
 | Tab scan summaries | Stable consumer view (`TabScanSummary`: total count, per-type counts, entries) fetched via `GET_TAB_SCAN_SUMMARY` in `extension/src/lib/tabScanSummaryClient.ts` |
 | Correlation clusters | Cross-session IOC-set clusters in `chrome.storage.local` under `correlationClusters` via `extension/src/lib/correlationClusterStorage.ts` (store `schemaVersion`, `updatedAt`, `clusters[]`, `retentionDays`, `overlapMerge`); `migrateCorrelationClustersStore()` upgrades unversioned legacy envelopes and is applied on read; retention prune drops clusters older than the configured day window (default 90) on read; Options **Cross-session correlation** edits retention days, overlap-merge mode/threshold, and clear-all (preserves retention/overlap preferences) |
 | Noise rules | Inspectable local suppress/internal/benign pattern rules in `chrome.storage.local` under `noiseRules` via `extension/src/lib/noiseRuleStorage.ts` (store `schemaVersion`, `updatedAt`, `rules[]`, max 256); learned from explicit watchlist label opt-in; last watchlist learn recorded under `noiseRuleLastLearnUndo` for single-step Options **Undo last learned rule**; Options **Noise rules** lists rules with search, enable/disable, edit, and delete; **Preview matches on sample alert** runs an offline match against the fixed `examples/sample-alert.html` indicator set without opening or changing any live page; human-readable action/pattern type/pattern/hits/created/id (no hidden weight vectors), **Export rules JSON** for team handoff (`schemaVersion` + `exportedAt` + `rules`, allowlisted fields only including `enabled`, never API keys), **Import rules JSON/CSV** with schema validation, duplicate detection, and merge modes (**add-only** skip duplicates vs **replace-all** with confirmation), optional **Import SOC dashboard starter** (`examples/soc-dashboard-noise-starter.json`; never auto-applied), clear-all, and **Hide suppressed indicators from scan** (`hideSuppressedFromScan`, default **off**); popup tray moves matching **enabled** noise-rule IOC rows into a default-collapsed **Suppressed** section; hover card shows **Deprioritized** badge and deep-links to the matched rule in Options |
+| Known-good list | Curated inspectable known-good entries in `chrome.storage.local` under `knownGoodList` via `extension/src/lib/knownGoodStorage.ts` (store `schemaVersion`, `updatedAt`, `entries[]`, max 512); entry fields id/category/matchType/pattern/labelText; JSON export (`schemaVersion` + `exportedAt` + `entries`, allowlisted fields only, never API keys); JSON import with schema validation, secret rejection, duplicate detection, and merge modes (**add-only** vs **replace-all** with confirmation); optional CDN/SaaS starter (`examples/known-good-cdn-saas-starter.json`; never auto-applied); Options UI and matching land in follow-on work |
 
 Never commit storage dumps or API keys to git.
 
@@ -65,6 +67,7 @@ Defaults are **on** for every type. Upgrading from schema version 2 merges missi
 | `extension/src/lib/settingsExport.ts` | Full settings snapshot; API keys optional on export |
 | `extension/src/lib/connectorProfileExport.ts` | Connector profile without keys: IOC types, rate-limit metadata, privacy warning text |
 | `extension/src/lib/noiseRuleStorage.ts` | Noise rules JSON export for team handoff (allowlisted fields; never API keys); JSON/CSV import with schema validation, duplicate detection, and merge modes (add-only vs replace-all with confirmation); optional SOC dashboard starter serialize/import |
+| `extension/src/lib/knownGoodStorage.ts` | Known-good list JSON export for team handoff (allowlisted fields; never API keys); JSON import with schema validation, secret rejection, duplicate detection, and merge modes (add-only vs replace-all with confirmation); optional CDN/SaaS starter serialize/import |
 
 ### Settings export (`settingsExport.ts`)
 
@@ -88,6 +91,66 @@ Defaults are **on** for every type. Upgrading from schema version 2 merges missi
 ### Threat profile vs settings pack precedence
 
 Threat profiles (portable workflow bundles) supersede **overlapping** settings pack fields when both are in play. Settings packs remain authoritative for **cache TTL** and **domain policy** unless a profile later defines those areas.
+
+Versioned profile schema (`ThreatProfile` / `ThreatProfileDocument` in `settingsPack.ts`, `threatProfileSchemaVersion: 1`):
+
+| Field | Role |
+|-------|------|
+| `id` | Stable profile identifier |
+| `name` | Display name (legacy `label` normalizes into `name`) |
+| `description` | Human-readable summary |
+| `enabledConnectors[]` | Connector registry ids to enable (no API keys) |
+| `pivotRecipeSetId` | Pivot recipe set reference |
+| `defaultExportTemplateId` | Default case-export template id |
+| `analystMode` | Analyst workflow preset id (`soc` / `cti` / `dfir`) |
+| `quietModeDefault` | Quiet mode on/off when the profile applies |
+| `noiseListRef` | Optional local noise-rule list / starter reference |
+
+Built-in profile ids (constants in `settingsPack.ts`, not Chrome manifest metadata): `soc-triage`, `cti-research`, `malware-research` via `BUILT_IN_THREAT_PROFILE_IDS` / `isBuiltInThreatProfileId()`.
+
+**Shipped built-ins** (`listShippedBuiltInThreatProfiles` / `getBuiltInThreatProfileById`):
+
+| Id | Name | Highlights |
+|----|------|------------|
+| `malware-research` | Malware Research | Domain-forward pivots (`BUILT_IN_MALWARE_RESEARCH_DOMAIN_FORWARD_PIVOTS`), CTI `markdown-report` export template, enrich-friendly connector set (OTX, VirusTotal, URLScan, MalwareBazaar, ThreatFox, URLhaus, AbuseIPDB, RDAP), CTI analyst mode, quiet mode off |
+| `soc-triage` | SOC Triage | SOC analyst mode, Splunk-oriented `csv-row` export template, abuse-first pivots (`soc-triage` recipe), conservative connectors (AbuseIPDB + OTX), quiet mode off; applying the SOC preset keeps auto-scan off and manual enrich on |
+| `cti-research` | CTI Hunting | CTI analyst mode, `markdown-report` export, pivot emphasis from CTI platform page-context layout (`BUILT_IN_CTI_HUNTING_PIVOT_EMPHASIS` / `getPageContextPivotRecipeOrder(cti_platform)`), tray-first workspace via `showDisabledSourcesInWorkspace` from the CTI preset |
+
+Options **Settings Backup** lists **Apply … profile** for each shipped built-in, opening the threat-profile import review dialog (default apply-as-new-active). No API keys are included.
+
+**Export** (`buildThreatProfileDocumentFromSettings` / `exportThreatProfileJson` / `downloadThreatProfileExport`):
+
+- File name default: `vera5-threat-profile.json`; schema field `threatProfileSchemaVersion: 1`.
+- Builds the active profile snapshot (`id: active`) from current settings: enabled connectors, analyst mode (or `custom`), pivot recipe set, default export template, quiet mode, and optional confidence metadata overrides.
+- Never includes API keys; export runs `validateThreatProfileExport()` (secret-key walk + complete-profile check).
+- Options **Export threat profile** downloads the JSON file.
+
+**Import** (`parseThreatProfileDocument` / `importThreatProfileJson`):
+
+- Validates `threatProfileSchemaVersion` and profile shape; rejects settings-pack JSON.
+- Rejects documents whose keys look like `apiKey` / `apiKeys`, `token`, `secret`, `password`, or `credential` (nested keys included).
+- Merge modes (`THREAT_PROFILE_IMPORT_MERGE_MODE`):
+  - **merge-into-current** — overlay only fields present in the profile onto current settings.
+  - **apply-as-new-active** — reset overlapping workflow fields to defaults (connectors, analyst mode, export template, pivot emphasis, quiet mode, related analyst toggles, confidence overrides), preserve API keys and pack-only settings (cache TTL, domain policy), then apply the profile.
+- Diff preview via `buildThreatProfileImportPreview` / `buildThreatProfileImportDiff`; Options shows a review dialog with mode radios before apply.
+- **Never** overwrites stored API keys.
+- Active profile indicator + last-import timestamp persist under `activeThreatProfile` (`getActiveThreatProfileState` / `recordThreatProfileImport`); Options **Settings Backup** shows them. No API keys in this metadata.
+
+Parse/normalize (`normalizeThreatProfileDocument` / `parseThreatProfileDocument`) calls the same secret-key walk as settings packs and **rejects** documents whose keys look like `apiKey` / `apiKeys`, `token`, `secret`, `password`, or `credential` (nested keys included). Profiles never carry raw vendor credentials.
+
+**Field → storage mapping** (`mapThreatProfileToConnectorProfilePreferences`, `mapThreatProfileToAnalystModeStorage`, `mergeImportedThreatProfile`):
+
+| Threat profile field | Connector profile shape | Analyst / Vera5 settings |
+|----------------------|-------------------------|---------------------------|
+| `enabledConnectors[]` | `preferences.enrichmentSourceEnabled` (listed ids on; other registry ids off) | `enrichmentSourceEnabled` |
+| `analystMode` | *(none)* | Applies matching analyst preset (`analystModePresetId`, preset export template, pivot emphasis, quiet/manual toggles from preset), then profile overlays win |
+| `defaultExportTemplateId` | *(none)* | `defaultExportTemplateId` |
+| `pivotRecipeSetId` | *(none)* | Resolves aliases (`soc-triage`→`soc`, `cti-hunt`/`cti-research`→`cti`, …) to preset `pivotEmphasis` → `pivotEmphasisProviders`; `malware-research` applies domain-forward pivots instead of the CTI preset order |
+| `quietModeDefault` | *(none)* | `quietMode` |
+| `noiseListRef` | *(none)* | Reserved optional noise-list import slot — **not** written to settings storage |
+| confidence overrides (optional) | `preferences.connectorConfidenceMetadataOverrides` | `connectorConfidenceMetadataOverrides` |
+
+API keys are never read from or written by this mapping.
 
 | Overlapping (profile wins) | Pack-only (pack wins) |
 |----------------------------|------------------------|

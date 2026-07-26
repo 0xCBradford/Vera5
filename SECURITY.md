@@ -70,7 +70,7 @@ Runtime component layout: [docs/local-mode.md](docs/local-mode.md). Enrichment m
 |--------|---------------------|-------------|
 | **Live enrichment** (when a connector is enabled and you trigger or allow fetch) | The **indicator value** and request fields required by that vendor’s API (for example IP, hash, or domain in URL or JSON body). | Directly to the third-party API you configured, using your API key. |
 | **Static pivot links** | The indicator value embedded in the vendor URL you click (for example a VirusTotal or AbuseIPDB lookup URL). | The vendor site, via normal browser navigation in a new tab. Vera5 does not proxy pivot traffic. |
-| **Settings export** | Preferences you export as JSON. API keys are **omitted unless you explicitly choose to include them**. | A file you save locally; Vera5 does not receive the export. |
+| **Settings export** | Preferences you export as JSON. API keys are **omitted unless you explicitly choose to include them**. Settings packs and threat profiles **never** include API keys. | A file you save locally; Vera5 does not receive the export. |
 
 ### Controls that reduce unintended leakage
 
@@ -155,6 +155,20 @@ All Vera5-controlled persistence uses the browser’s **local extension storage*
 ### Settings backup files
 
 Export produces a JSON file on your machine. By default it contains preferences and toggles **without** API keys. Import merges preferences and preserves existing keys unless the file explicitly included keys and you imported that file.
+
+### Portable threat profiles and settings packs
+
+Portable **threat profiles** and **settings packs** are local JSON handoffs for workflow preferences (connector toggles, analyst mode, export templates, quiet-mode defaults, and related options). They support bring-your-own keys / bring-your-own API (BYOK/BYOA):
+
+| Expectation | Behavior |
+|-------------|----------|
+| API keys | **Never** included in threat profile or settings pack export or import. Keys stay in your local extension profile (or optional self-hosted `backend/.env` you control). |
+| Secret-like fields | Import **rejects** files that contain `apiKey`, `token`, or similar credential fields. |
+| What can change | Applying a pack or profile may change connectors, templates, and modes—not stored API keys. |
+| Hosted store | Vera5 does **not** host a profile marketplace or auto-update feed; install is local file import only. |
+| Live enrichment | Still uses **your** vendor keys and **your** enabled sources after import. Profiles do not supply shared maintainer keys or bypass pre-query disclosure, domain deny, quiet mode, or internal asset gates. |
+
+Full merge precedence and trust expectations: [docs/security-model.md — Portable profiles, settings packs, and third-party JSON](docs/security-model.md#portable-profiles-settings-packs-and-third-party-json). Analyst install workflow: [docs/analyst-workflows.md — Settings packs and threat profiles](docs/analyst-workflows.md#settings-packs-and-threat-profiles).
 
 ### What is not retained by Vera5
 
@@ -360,7 +374,8 @@ We aim to acknowledge reports in a reasonable timeframe and coordinate fixes bef
 
 ## Related documents
 
-- [docs/security-model.md](docs/security-model.md) — manifest permissions, host access, domain policy, internal asset lists, and sensitive-domain guidance
+- [docs/security-model.md](docs/security-model.md) — manifest permissions, host access, domain policy, internal asset lists, portable profiles/settings packs, and sensitive-domain guidance
+- [docs/analyst-workflows.md](docs/analyst-workflows.md) — settings packs, threat profile install, and analyst playbooks
 - [docs/local-mode.md](docs/local-mode.md) — extension-only versus optional localhost enrichment backend
 - [docs/ai-summary.md](docs/ai-summary.md) — optional local AI summary input contract, localhost-only posture, and disclaimers
 - [docs/architecture.md](docs/architecture.md) — IOC types, connector order, data boundaries

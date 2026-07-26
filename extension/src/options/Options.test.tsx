@@ -24,6 +24,7 @@ import {
   STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID,
   STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS,
   STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
+  STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
 } from "../lib/storage";
 import { PAGE_CONTEXT_TYPE } from "../lib/pageContext";
 import { IOC_TYPE_SETTINGS_ORDER } from "../lib/storage";
@@ -1092,6 +1093,398 @@ describe("Options API key inputs", () => {
     expect(mounted.container.textContent).toContain("Settings pack exported.");
 
     clickSpy.mockRestore();
+  });
+
+  it("exports threat profile JSON without API keys from options", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    };
+
+    const createObjectURL = vi.fn(() => "blob:threat-profile");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL,
+    });
+
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const exportButton = mounted.container.querySelector(
+      'button[aria-label="Export threat profile JSON"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      exportButton.click();
+      await Promise.resolve();
+    });
+
+    expect(createObjectURL).toHaveBeenCalled();
+    const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+    const exportedJson = await blob.text();
+    const parsed = JSON.parse(exportedJson) as Record<string, unknown>;
+
+    expect(parsed.threatProfileSchemaVersion).toBe(1);
+    expect(parsed.id).toBe("active");
+    expect(exportedJson).not.toContain(TEST_FIXTURE_STORED_API_KEY);
+    expect(parsed.apiKeys).toBeUndefined();
+    expect(mounted.container.textContent).toContain("Threat profile exported.");
+
+    clickSpy.mockRestore();
+  });
+
+  it("imports a valid threat profile and rejects files with key-like fields", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    };
+    store[STORAGE_KEY_QUIET_MODE] = false;
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector(
+        'button[aria-label="Import threat profile JSON"]'
+      )
+    ).not.toBeNull();
+
+    const fileInput = mounted.container.querySelector(
+      'input[aria-label="Import threat profile JSON file"]'
+    ) as HTMLInputElement;
+
+    const validProfile = JSON.stringify({
+      threatProfileSchemaVersion: 1,
+      quietModeDefault: true,
+    });
+    const validFile = new File([validProfile], "vera5-threat-profile.json", {
+      type: "application/json",
+    });
+
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", {
+        configurable: true,
+        value: [validFile],
+      });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+
+    expect(mounted.container.textContent).toContain("Review threat profile import");
+    expect(mounted.container.textContent).toContain(
+      "Warning: This profile can change enabled connectors, export templates, and analyst modes"
+    );
+    expect(mounted.container.textContent).toContain(
+      "It does not import or change your API keys."
+    );
+    expect(mounted.container.textContent).toContain("Merge into current settings");
+    expect(mounted.container.textContent).toContain("Apply as new active profile");
+    expect(mounted.container.textContent).toContain("Quiet mode");
+    expect(mounted.container.textContent).toContain("Disabled → Enabled");
+
+    const applyButton = mounted.container.querySelector(
+      'button[aria-label="Apply threat profile import"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      applyButton.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(store[STORAGE_KEY_QUIET_MODE]).toBe(true);
+    });
+
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    });
+    expect(mounted.container.textContent).toContain("Threat profile imported.");
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("Active threat profile:");
+      expect(mounted!.container.textContent).toContain("Last imported:");
+      expect(mounted!.container.textContent).not.toContain(
+        "Active threat profile: No imported profile"
+      );
+    });
+
+    const secretProfile = JSON.stringify({
+      threatProfileSchemaVersion: 1,
+      quietModeDefault: false,
+      apiKey: "leaked-key",
+    });
+    const secretFile = new File([secretProfile], "bad-profile.json", {
+      type: "application/json",
+    });
+
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", {
+        configurable: true,
+        value: [secretFile],
+      });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain(
+        "Could not import threat profile. Check the file and try again."
+      );
+    });
+
+    expect(store[STORAGE_KEY_QUIET_MODE]).toBe(true);
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    });
+  });
+
+  it("shows empty active threat profile indicator before import", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain(
+        "Active threat profile: No imported profile"
+      );
+      expect(mounted!.container.textContent).toContain("Last imported: Never");
+    });
+  });
+
+  it("offers Apply Malware Research built-in profile and opens the review dialog", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const applyButton = mounted.container.querySelector(
+      'button[aria-label="Apply Malware Research built-in threat profile"]'
+    ) as HTMLButtonElement;
+    expect(applyButton).not.toBeNull();
+
+    await act(async () => {
+      applyButton.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+
+    expect(mounted.container.textContent).toContain("Review threat profile import");
+    expect(mounted.container.textContent).toContain("Apply as new active profile");
+    expect(
+      (
+        mounted.container.querySelector(
+          'input[aria-label="Apply as new active profile"]'
+        ) as HTMLInputElement
+      ).checked
+    ).toBe(true);
+  });
+
+  it("offers Apply SOC Triage built-in profile and opens the review dialog", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const applyButton = mounted.container.querySelector(
+      'button[aria-label="Apply SOC Triage built-in threat profile"]'
+    ) as HTMLButtonElement;
+    expect(applyButton).not.toBeNull();
+
+    await act(async () => {
+      applyButton.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+
+    expect(mounted.container.textContent).toContain("Review threat profile import");
+    expect(
+      (
+        mounted.container.querySelector(
+          'input[aria-label="Apply as new active profile"]'
+        ) as HTMLInputElement
+      ).checked
+    ).toBe(true);
+  });
+
+  it("offers Apply CTI Hunting built-in profile and opens the review dialog", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const applyButton = mounted.container.querySelector(
+      'button[aria-label="Apply CTI Hunting built-in threat profile"]'
+    ) as HTMLButtonElement;
+    expect(applyButton).not.toBeNull();
+
+    await act(async () => {
+      applyButton.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+
+    expect(mounted.container.textContent).toContain("Review threat profile import");
+    expect(
+      (
+        mounted.container.querySelector(
+          'input[aria-label="Apply as new active profile"]'
+        ) as HTMLInputElement
+      ).checked
+    ).toBe(true);
+  });
+
+  it("applies threat profile as new active from the review dialog", async () => {
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    };
+    store[STORAGE_KEY_QUIET_MODE] = true;
+    store[STORAGE_KEY_ANALYST_MODE_PRESET_ID] = "cti";
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED] = {
+      ...createDefaultVera5Settings().enrichmentSourceEnabled,
+      abuseipdb: true,
+      otx: true,
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const fileInput = mounted.container.querySelector(
+      'input[aria-label="Import threat profile JSON file"]'
+    ) as HTMLInputElement;
+
+    const profileJson = JSON.stringify({
+      threatProfileSchemaVersion: 1,
+      quietModeDefault: false,
+      enabledConnectors: ["otx"],
+    });
+    const file = new File([profileJson], "profile.json", {
+      type: "application/json",
+    });
+
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", {
+        configurable: true,
+        value: [file],
+      });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+
+    const applyAsNewRadio = mounted.container.querySelector(
+      'input[aria-label="Apply as new active profile"]'
+    ) as HTMLInputElement;
+
+    await act(async () => {
+      applyAsNewRadio.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.textContent).toContain("AbuseIPDB enabled");
+    });
+
+    const applyButton = mounted.container.querySelector(
+      'button[aria-label="Apply threat profile import"]'
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      applyButton.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(store[STORAGE_KEY_QUIET_MODE]).toBe(false);
+    });
+
+    expect(store[STORAGE_KEY_API_KEYS]).toEqual({
+      abuseipdb: TEST_FIXTURE_STORED_API_KEY,
+    });
+    const enabled = store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED] as Record<
+      string,
+      boolean
+    >;
+    expect(enabled.otx).toBe(true);
+    expect(enabled.abuseipdb).toBe(false);
+    expect(mounted.container.textContent).toContain("Threat profile imported.");
+  });
+
+  it("does not enable connectors when threat profile import is canceled", async () => {
+    const beforeEnabled = {
+      ...createDefaultVera5Settings().enrichmentSourceEnabled,
+      abuseipdb: false,
+      otx: false,
+    };
+    store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED] = beforeEnabled;
+    store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES] = true;
+    store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED] = false;
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const fileInput = mounted.container.querySelector(
+      'input[aria-label="Import threat profile JSON file"]'
+    ) as HTMLInputElement;
+
+    const profileJson = JSON.stringify({
+      threatProfileSchemaVersion: 1,
+      enabledConnectors: ["abuseipdb", "otx"],
+      quietModeDefault: true,
+    });
+    const file = new File([profileJson], "profile.json", {
+      type: "application/json",
+    });
+
+    await act(async () => {
+      Object.defineProperty(fileInput, "files", {
+        configurable: true,
+        value: [file],
+      });
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.querySelector('[role="dialog"]')).not.toBeNull();
+    });
+
+    expect(mounted.container.textContent).toContain(
+      "Warning: This profile can change enabled connectors"
+    );
+
+    const cancelButton = Array.from(
+      mounted.container.querySelectorAll(".v5-consent-dialog__actions .v5-btn")
+    ).find((button) => button.textContent === "Cancel") as HTMLButtonElement;
+
+    await act(async () => {
+      cancelButton.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted!.container.querySelector('[role="dialog"]')).toBeNull();
+    });
+
+    expect(store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]).toEqual(beforeEnabled);
+    expect(store[STORAGE_KEY_SHOW_PRE_QUERY_NOTICES]).toBe(true);
+    expect(store[STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED]).toBe(false);
   });
 
   it("renders settings pack import control", async () => {

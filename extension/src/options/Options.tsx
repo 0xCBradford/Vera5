@@ -101,11 +101,27 @@ import {
 } from "../lib/settingsExport";
 import {
   buildSettingsPackImportPreview,
+  buildThreatProfileImportPreview,
+  createEmptyActiveThreatProfileState,
   downloadSettingsPackExport,
+  downloadThreatProfileExport,
   exportSettingsPackJson,
+  exportThreatProfileJson,
+  formatActiveThreatProfileIndicator,
+  formatThreatProfileLastImportedAt,
+  getActiveThreatProfileState,
+  getBuiltInThreatProfileById,
   importSettingsPackJson,
+  importThreatProfileJson,
+  listShippedBuiltInThreatProfiles,
+  serializeBuiltInThreatProfile,
   SETTINGS_PACK_THREAT_PROFILE_PRECEDENCE_NOTE,
+  THREAT_PROFILE_IMPORT_MERGE_MODE,
+  THREAT_PROFILE_IMPORT_MERGE_MODE_LABEL,
+  type ActiveThreatProfileState,
   type SettingsPackImportPreview,
+  type ThreatProfileImportMergeMode,
+  type ThreatProfileImportPreview,
 } from "../lib/settingsPack";
 import type { OperatorMacro, OperatorMacroStep, OperatorMacroTriggers } from "../lib/operatorMacro";
 import {
@@ -1592,6 +1608,7 @@ function createEmptyApiKeyFieldStates(): Record<ApiKeySlot, ApiKeyFieldState> {
 export function Options() {
   const importInputRef = useRef<HTMLInputElement>(null);
   const settingsPackImportInputRef = useRef<HTMLInputElement>(null);
+  const threatProfileImportInputRef = useRef<HTMLInputElement>(null);
   const noiseRulesImportInputRef = useRef<HTMLInputElement>(null);
   const operatorMacroPackImportInputRef = useRef<HTMLInputElement>(null);
   const [ready, setReady] = useState(false);
@@ -1745,6 +1762,23 @@ export function Options() {
   const [settingsPackExportState, setSettingsPackExportState] = useState<
     "idle" | "exporting" | "exported" | "error"
   >("idle");
+  const [threatProfileExportState, setThreatProfileExportState] = useState<
+    "idle" | "exporting" | "exported" | "error"
+  >("idle");
+  const [threatProfileImportState, setThreatProfileImportState] = useState<
+    "idle" | "importing" | "imported" | "error"
+  >("idle");
+  const [threatProfileImportPreview, setThreatProfileImportPreview] =
+    useState<ThreatProfileImportPreview | null>(null);
+  const [threatProfileImportRawJson, setThreatProfileImportRawJson] = useState<
+    string | null
+  >(null);
+  const [threatProfileImportMergeMode, setThreatProfileImportMergeMode] =
+    useState<ThreatProfileImportMergeMode>(
+      THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT
+    );
+  const [activeThreatProfileState, setActiveThreatProfileState] =
+    useState<ActiveThreatProfileState>(createEmptyActiveThreatProfileState);
   const [settingsPackImportPreview, setSettingsPackImportPreview] =
     useState<SettingsPackImportPreview | null>(null);
   const [settingsPackImportRawJson, setSettingsPackImportRawJson] = useState<string | null>(null);
@@ -1834,6 +1868,16 @@ export function Options() {
       .catch(() => {
         setNoiseRules([]);
         setLastLearnedNoiseRuleUndo(null);
+      });
+  }, [settingsReloadToken]);
+
+  useEffect(() => {
+    void getActiveThreatProfileState()
+      .then((state) => {
+        setActiveThreatProfileState(state);
+      })
+      .catch(() => {
+        setActiveThreatProfileState(createEmptyActiveThreatProfileState());
       });
   }, [settingsReloadToken]);
 
@@ -3193,6 +3237,144 @@ export function Options() {
       .catch(() => {
         setSettingsPackExportState("error");
       });
+  };
+
+  const handleExportThreatProfile = () => {
+    setThreatProfileExportState("exporting");
+    void exportThreatProfileJson()
+      .then((json) => {
+        downloadThreatProfileExport(json);
+        setThreatProfileExportState("exported");
+      })
+      .catch(() => {
+        setThreatProfileExportState("error");
+      });
+  };
+
+  const handleThreatProfileImportClick = () => {
+    threatProfileImportInputRef.current?.click();
+  };
+
+  const handleApplyBuiltInThreatProfile = (profileId: string) => {
+    const profile = getBuiltInThreatProfileById(profileId);
+    if (!profile) {
+      setThreatProfileImportState("error");
+      return;
+    }
+
+    const rawJson = serializeBuiltInThreatProfile(profile);
+    setThreatProfileImportState("idle");
+    void getVera5Settings()
+      .then((current) => {
+        const preview = buildThreatProfileImportPreview(
+          current,
+          rawJson,
+          THREAT_PROFILE_IMPORT_MERGE_MODE.APPLY_AS_NEW_ACTIVE
+        );
+        setThreatProfileImportMergeMode(
+          THREAT_PROFILE_IMPORT_MERGE_MODE.APPLY_AS_NEW_ACTIVE
+        );
+        setThreatProfileImportPreview(preview);
+        setThreatProfileImportRawJson(rawJson);
+      })
+      .catch(() => {
+        clearThreatProfileImportPreview();
+        setThreatProfileImportState("error");
+      });
+  };
+
+  const clearThreatProfileImportPreview = () => {
+    setThreatProfileImportPreview(null);
+    setThreatProfileImportRawJson(null);
+    setThreatProfileImportMergeMode(
+      THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT
+    );
+  };
+
+  const handleThreatProfileImportCancel = () => {
+    clearThreatProfileImportPreview();
+    setThreatProfileImportState("idle");
+  };
+
+  const handleThreatProfileImportMergeModeChange = (
+    mergeMode: ThreatProfileImportMergeMode
+  ) => {
+    if (!threatProfileImportRawJson || !threatProfileImportPreview) {
+      setThreatProfileImportMergeMode(mergeMode);
+      return;
+    }
+    setThreatProfileImportMergeMode(mergeMode);
+    void getVera5Settings()
+      .then((current) => {
+        const preview = buildThreatProfileImportPreview(
+          current,
+          threatProfileImportRawJson,
+          mergeMode
+        );
+        setThreatProfileImportPreview(preview);
+      })
+      .catch(() => {
+        clearThreatProfileImportPreview();
+        setThreatProfileImportState("error");
+      });
+  };
+
+  const handleThreatProfileImportConfirm = () => {
+    if (!threatProfileImportRawJson) {
+      return;
+    }
+
+    setThreatProfileImportState("importing");
+    void importThreatProfileJson(
+      threatProfileImportRawJson,
+      threatProfileImportMergeMode
+    )
+      .then(() => {
+        clearThreatProfileImportPreview();
+        setThreatProfileImportState("imported");
+        setSettingsReloadToken((current) => current + 1);
+      })
+      .catch(() => {
+        setThreatProfileImportState("error");
+      });
+  };
+
+  const handleThreatProfileImportFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+
+    setThreatProfileImportState("idle");
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rawJson = typeof reader.result === "string" ? reader.result : "";
+      void getVera5Settings()
+        .then((current) => {
+          const preview = buildThreatProfileImportPreview(
+            current,
+            rawJson,
+            THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT
+          );
+          setThreatProfileImportMergeMode(
+            THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT
+          );
+          setThreatProfileImportPreview(preview);
+          setThreatProfileImportRawJson(rawJson);
+        })
+        .catch(() => {
+          clearThreatProfileImportPreview();
+          setThreatProfileImportState("error");
+        });
+    };
+    reader.onerror = () => {
+      clearThreatProfileImportPreview();
+      setThreatProfileImportState("error");
+    };
+    reader.readAsText(file);
   };
 
   const handleSettingsPackImportClick = () => {
@@ -5305,11 +5487,44 @@ export function Options() {
               <p className="v5-card__desc">
                 Export your preferences as JSON to move them between profiles or keep a backup.
                 Export a settings pack to share connector toggles, cache TTL, domain policy, and
-                analyst mode without API keys. API keys are excluded from settings packs and from
-                full settings exports unless you choose to include them.
+                analyst mode without API keys. Export an active threat profile for portable
+                workflow preferences (connectors, analyst mode, export template, quiet mode)
+                without API keys. API keys are excluded from settings packs, threat profiles, and
+                from full settings exports unless you choose to include them.
               </p>
             </div>
             <div id="backup-body" className="v5-card__body" hidden={collapsedSections.backup}>
+              <div
+                className="v5-row"
+                role="status"
+                aria-label="Active threat profile status"
+              >
+                <span className="v5-row__text">
+                  Active threat profile:{" "}
+                  {formatActiveThreatProfileIndicator(activeThreatProfileState)}
+                </span>
+                <span className="v5-row__hint">
+                  Last imported:{" "}
+                  {formatThreatProfileLastImportedAt(activeThreatProfileState)}
+                </span>
+              </div>
+              {listShippedBuiltInThreatProfiles().length > 0 ? (
+                <div className="v5-actions">
+                  {listShippedBuiltInThreatProfiles().map((profile) => (
+                    <button
+                      key={profile.id}
+                      type="button"
+                      className="v5-btn"
+                      disabled={!ready || threatProfileImportState === "importing"}
+                      onClick={() => handleApplyBuiltInThreatProfile(profile.id)}
+                      aria-label={`Apply ${profile.name} built-in threat profile`}
+                      title={profile.description}
+                    >
+                      Apply {profile.name} profile
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <ToggleRow
                 label="Include API keys in export"
                 hint="Off by default. Only enable when exporting to a trusted location."
@@ -5336,6 +5551,28 @@ export function Options() {
                   aria-label="Export settings pack JSON"
                 >
                   {settingsPackExportState === "exporting" ? "Exporting…" : "Export settings pack"}
+                </button>
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--primary"
+                  disabled={!ready || threatProfileExportState === "exporting"}
+                  onClick={handleExportThreatProfile}
+                  aria-label="Export threat profile JSON"
+                >
+                  {threatProfileExportState === "exporting"
+                    ? "Exporting…"
+                    : "Export threat profile"}
+                </button>
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--primary"
+                  disabled={!ready || threatProfileImportState === "importing"}
+                  onClick={handleThreatProfileImportClick}
+                  aria-label="Import threat profile JSON"
+                >
+                  {threatProfileImportState === "importing"
+                    ? "Importing…"
+                    : "Import threat profile"}
                 </button>
                 <button
                   type="button"
@@ -5374,6 +5611,16 @@ export function Options() {
                   style={{ display: "none" }}
                   onChange={handleSettingsPackImportFileChange}
                 />
+                <input
+                  ref={threatProfileImportInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  aria-label="Import threat profile JSON file"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  style={{ display: "none" }}
+                  onChange={handleThreatProfileImportFileChange}
+                />
               </div>
               {exportState === "exported" ? (
                 <span className="v5-status v5-status--success" role="status">
@@ -5387,6 +5634,12 @@ export function Options() {
                   Settings pack exported.
                 </span>
               ) : null}
+              {threatProfileExportState === "exported" ? (
+                <span className="v5-status v5-status--success" role="status">
+                  <CheckIcon />
+                  Threat profile exported.
+                </span>
+              ) : null}
               {exportState === "error" ? (
                 <span className="v5-status v5-status--error" role="status">
                   Could not export settings. Try again.
@@ -5395,6 +5648,11 @@ export function Options() {
               {settingsPackExportState === "error" ? (
                 <span className="v5-status v5-status--error" role="status">
                   Could not export settings pack. Try again.
+                </span>
+              ) : null}
+              {threatProfileExportState === "error" ? (
+                <span className="v5-status v5-status--error" role="status">
+                  Could not export threat profile. Try again.
                 </span>
               ) : null}
               {settingsPackImportState === "imported" ? (
@@ -5406,6 +5664,17 @@ export function Options() {
               {settingsPackImportState === "error" ? (
                 <span className="v5-status v5-status--error" role="status">
                   Could not import settings pack. Check the file and try again.
+                </span>
+              ) : null}
+              {threatProfileImportState === "imported" ? (
+                <span className="v5-status v5-status--success" role="status">
+                  <CheckIcon />
+                  Threat profile imported.
+                </span>
+              ) : null}
+              {threatProfileImportState === "error" ? (
+                <span className="v5-status v5-status--error" role="status">
+                  Could not import threat profile. Check the file and try again.
                 </span>
               ) : null}
               {importState === "imported" ? (
@@ -5735,6 +6004,102 @@ export function Options() {
                 aria-label="Apply settings pack import"
               >
                 {settingsPackImportState === "importing" ? "Applying…" : "Apply pack"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {threatProfileImportPreview ? (
+        <div
+          className="v5-consent-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              handleThreatProfileImportCancel();
+            }
+          }}
+        >
+          <div
+            className="v5-consent-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="threat-profile-import-title"
+            aria-describedby="threat-profile-import-body"
+          >
+            <h2 id="threat-profile-import-title" className="v5-consent-dialog__title">
+              Review threat profile import
+            </h2>
+            <div id="threat-profile-import-body" className="v5-consent-dialog__body">
+              <p role="note">
+                Warning: This profile can change enabled connectors, export templates, and analyst
+                modes (including pivots and quiet-mode defaults). It does not import or change your
+                API keys.
+              </p>
+              <p>
+                Choose how to apply this profile. Merge updates only fields present in the file.
+                Apply as new active resets overlapping workflow preferences to defaults, then applies
+                the profile. API keys stay unchanged.
+              </p>
+              <p>{SETTINGS_PACK_THREAT_PROFILE_PRECEDENCE_NOTE}</p>
+              <div className="v5-actions" role="radiogroup" aria-label="Threat profile import mode">
+                {(
+                  Object.keys(THREAT_PROFILE_IMPORT_MERGE_MODE) as Array<
+                    keyof typeof THREAT_PROFILE_IMPORT_MERGE_MODE
+                  >
+                ).map((key) => {
+                  const mode = THREAT_PROFILE_IMPORT_MERGE_MODE[key];
+                  return (
+                    <label key={mode} className="v5-row">
+                      <input
+                        type="radio"
+                        name="threat-profile-import-merge-mode"
+                        checked={threatProfileImportMergeMode === mode}
+                        disabled={threatProfileImportState === "importing"}
+                        onChange={() => handleThreatProfileImportMergeModeChange(mode)}
+                        aria-label={THREAT_PROFILE_IMPORT_MERGE_MODE_LABEL[mode]}
+                      />
+                      <span className="v5-row__text">
+                        <span className="v5-row__hint">
+                          {THREAT_PROFILE_IMPORT_MERGE_MODE_LABEL[mode]}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+              {threatProfileImportPreview.changes.length === 0 ? (
+                <p>This profile matches your current settings for the selected mode.</p>
+              ) : (
+                <ul className="v5-settings-pack-diff">
+                  {threatProfileImportPreview.changes.map((change) => (
+                    <li key={change.field} className="v5-settings-pack-diff__item">
+                      <span className="v5-settings-pack-diff__label">{change.label}</span>
+                      <span className="v5-settings-pack-diff__values">
+                        {change.currentValue} → {change.incomingValue}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="v5-consent-dialog__actions">
+              <button
+                type="button"
+                className="v5-btn"
+                disabled={threatProfileImportState === "importing"}
+                onClick={handleThreatProfileImportCancel}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="v5-btn v5-btn--primary"
+                disabled={threatProfileImportState === "importing"}
+                onClick={handleThreatProfileImportConfirm}
+                aria-label="Apply threat profile import"
+              >
+                {threatProfileImportState === "importing" ? "Applying…" : "Apply profile"}
               </button>
             </div>
           </div>

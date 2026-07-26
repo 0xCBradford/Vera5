@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "1970-01-01T00:00:00.000Z",
+  "entries": [
+    {
+      "id": "kg-starter-cdn-cloudflare-104-16",
+      "category": "cdn",
+      "matchType": "cidr",
+      "pattern": "104.16.0.0/13",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-cdn-cloudfront-13-224",
+      "category": "cdn",
+      "matchType": "cidr",
+      "pattern": "13.224.0.0/14",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-cdn-cloudfront-13-32",
+      "category": "cdn",
+      "matchType": "cidr",
+      "pattern": "13.32.0.0/15",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-cdn-fastly-151-101",
+      "category": "cdn",
+      "matchType": "cidr",
+      "pattern": "151.101.0.0/16",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-cdn-cloudflare-172-64",
+      "category": "cdn",
+      "matchType": "cidr",
+      "pattern": "172.64.0.0/13",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-cdn-akamai-23-32",
+      "category": "cdn",
+      "matchType": "cidr",
+      "pattern": "23.32.0.0/11",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-accounts-google",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "accounts.google.com",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-api-github",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "api.github.com",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-box",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "box.com",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-github",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "github.com",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-login-microsoftonline",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "login.microsoftonline.com",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-login-okta",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "login.okta.com",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-mail-google",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "mail.google.com",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-outlook-office",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "outlook.office.com",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-salesforce",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "salesforce.com",
+      "labelText": "Known benign"
+    },
+    {
+      "id": "kg-starter-saas-slack",
+      "category": "saas",
+      "matchType": "domain",
+      "pattern": "slack.com",
+      "labelText": "Known benign"
+    }
+  ]
+}
