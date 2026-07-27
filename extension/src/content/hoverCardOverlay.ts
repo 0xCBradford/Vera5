@@ -128,6 +128,35 @@ import {
   handleCoOccurrenceListItemKeyDown,
   loadHoverCardCoOccurrencePanelView,
 } from "../lib/hoverCardCoOccurrence";
+import {
+  HOVER_CARD_NOTEBOOK_LABEL,
+  HOVER_CARD_NOTEBOOK_SECTION_ARIA_LABEL,
+  NOTEBOOK_FRAGMENT_ADD_FORM_ARIA_LABEL,
+  NOTEBOOK_FRAGMENT_ADD_LABEL,
+  NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL,
+  NOTEBOOK_FRAGMENT_BODY_PLACEHOLDER,
+  NOTEBOOK_FRAGMENT_CANCEL_LABEL,
+  NOTEBOOK_FRAGMENT_DELETE_CONFIRM_TEXT,
+  NOTEBOOK_FRAGMENT_DELETE_LABEL,
+  NOTEBOOK_FRAGMENT_DELETED_FEEDBACK,
+  NOTEBOOK_FRAGMENT_EDIT_FORM_ARIA_LABEL,
+  NOTEBOOK_FRAGMENT_EDIT_LABEL,
+  NOTEBOOK_FRAGMENT_SAVE_LABEL,
+  NOTEBOOK_FRAGMENT_SAVED_FEEDBACK,
+  NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL,
+  NOTEBOOK_HOVER_TABS,
+  addNotebookFragmentForScope,
+  canAuthorNotebookFragmentsForScope,
+  defaultNotebookFragmentType,
+  deleteNotebookFragment,
+  editNotebookFragment,
+  formatNotebookTabLabel,
+  listNotebookFragmentTypeOptions,
+  loadHoverCardNotebookPanelView,
+  type HoverCardNotebookFragmentRow,
+  type HoverCardNotebookPanelView,
+  type NotebookHoverTab,
+} from "../lib/hoverCardNotebook";
 import { resolveTrayNavigationFeedback } from "../lib/workspaceTrayState";
 import { handleNavigateToIocAnchorRequest } from "./iocTrayNavigation";
 import { getPivotRecipes } from "../lib/pivots";
@@ -345,6 +374,32 @@ export const HOVER_CARD_CO_OCCURRENCE_ITEM_BUTTON_CLASS =
   "vera5-hover-card-co-occurrence-item-button";
 export const HOVER_CARD_CO_OCCURRENCE_FEEDBACK_CLASS =
   "vera5-hover-card-co-occurrence-feedback";
+export const HOVER_CARD_NOTEBOOK_CLASS = "vera5-hover-card-notebook";
+export const HOVER_CARD_NOTEBOOK_LABEL_CLASS = "vera5-hover-card-notebook-label";
+export const HOVER_CARD_NOTEBOOK_TABS_CLASS = "vera5-hover-card-notebook-tabs";
+export const HOVER_CARD_NOTEBOOK_TAB_CLASS = "vera5-hover-card-notebook-tab";
+export const HOVER_CARD_NOTEBOOK_TAB_ACTIVE_CLASS =
+  "vera5-hover-card-notebook-tab--active";
+export const HOVER_CARD_NOTEBOOK_LIST_CLASS = "vera5-hover-card-notebook-list";
+export const HOVER_CARD_NOTEBOOK_ITEM_CLASS = "vera5-hover-card-notebook-item";
+export const HOVER_CARD_NOTEBOOK_ITEM_TYPE_CLASS =
+  "vera5-hover-card-notebook-item-type";
+export const HOVER_CARD_NOTEBOOK_ITEM_BADGE_CLASS =
+  "vera5-hover-card-notebook-item-badge";
+export const HOVER_CARD_NOTEBOOK_ITEM_BODY_CLASS =
+  "vera5-hover-card-notebook-item-body";
+export const HOVER_CARD_NOTEBOOK_EMPTY_CLASS = "vera5-hover-card-notebook-empty";
+export const HOVER_CARD_NOTEBOOK_FORM_CLASS = "vera5-hover-card-notebook-form";
+export const HOVER_CARD_NOTEBOOK_ACTIONS_CLASS =
+  "vera5-hover-card-notebook-actions";
+export const HOVER_CARD_NOTEBOOK_FEEDBACK_CLASS =
+  "vera5-hover-card-notebook-feedback";
+export const HOVER_CARD_NOTEBOOK_ACTION_BUTTON_CLASS =
+  "vera5-hover-card-notebook-action";
+export const HOVER_CARD_NOTEBOOK_TEXTAREA_CLASS =
+  "vera5-hover-card-notebook-textarea";
+export const HOVER_CARD_NOTEBOOK_SELECT_CLASS =
+  "vera5-hover-card-notebook-select";
 export const HOVER_CARD_IOC_PIN_BUTTON_CLASS = "vera5-hover-card-ioc-pin";
 export const HOVER_CARD_IOC_PIN_BUTTON_PINNED_CLASS = "vera5-hover-card-ioc-pin--pinned";
 export const HOVER_CARD_NOISE_RULE_MATCH_CLASS = "vera5-hover-card-noise-rule-match";
@@ -2468,6 +2523,442 @@ function createSaveToCollectionSection(
   return section;
 }
 
+function renderNotebookFragmentList(
+  list: HTMLElement,
+  empty: HTMLElement,
+  view: HoverCardNotebookPanelView,
+  doc: Document,
+  options: {
+    editingFragmentId: string | null;
+    onEdit: (row: HoverCardNotebookFragmentRow) => void;
+    onDelete: (row: HoverCardNotebookFragmentRow) => void;
+    onSaveEdit: (
+      row: HoverCardNotebookFragmentRow,
+      type: string,
+      body: string
+    ) => void;
+    onCancelEdit: () => void;
+  }
+): void {
+  list.replaceChildren();
+  if (view.fragments.length === 0) {
+    empty.textContent = view.emptyText;
+    empty.hidden = false;
+    list.hidden = true;
+    return;
+  }
+
+  empty.hidden = true;
+  empty.textContent = "";
+  list.hidden = false;
+
+  for (const row of view.fragments) {
+    const item = doc.createElement("li");
+    item.className = HOVER_CARD_NOTEBOOK_ITEM_CLASS;
+    item.dataset.vera5NotebookFragmentId = row.fragmentId;
+    item.dataset.vera5NotebookFragmentType = row.type;
+
+    if (options.editingFragmentId === row.fragmentId) {
+      const editForm = doc.createElement("div");
+      editForm.className = HOVER_CARD_NOTEBOOK_FORM_CLASS;
+      editForm.setAttribute("role", "group");
+      editForm.setAttribute("aria-label", NOTEBOOK_FRAGMENT_EDIT_FORM_ARIA_LABEL);
+
+      const typeLabel = doc.createElement("label");
+      typeLabel.textContent = NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL;
+      const typeSelect = doc.createElement("select");
+      typeSelect.className = HOVER_CARD_NOTEBOOK_SELECT_CLASS;
+      typeSelect.setAttribute("aria-label", NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL);
+      for (const option of listNotebookFragmentTypeOptions()) {
+        const opt = doc.createElement("option");
+        opt.value = option.value;
+        opt.textContent = option.label;
+        if (option.value === row.type) {
+          opt.selected = true;
+        }
+        typeSelect.appendChild(opt);
+      }
+      typeLabel.appendChild(typeSelect);
+      editForm.appendChild(typeLabel);
+
+      const bodyLabel = doc.createElement("label");
+      bodyLabel.textContent = NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL;
+      const bodyInput = doc.createElement("textarea");
+      bodyInput.className = HOVER_CARD_NOTEBOOK_TEXTAREA_CLASS;
+      bodyInput.rows = 3;
+      bodyInput.value = row.fullBody;
+      bodyInput.setAttribute("aria-label", NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL);
+      bodyLabel.appendChild(bodyInput);
+      editForm.appendChild(bodyLabel);
+
+      const actions = doc.createElement("div");
+      actions.className = HOVER_CARD_NOTEBOOK_ACTIONS_CLASS;
+      const saveBtn = doc.createElement("button");
+      saveBtn.type = "button";
+      saveBtn.className = HOVER_CARD_NOTEBOOK_ACTION_BUTTON_CLASS;
+      saveBtn.textContent = NOTEBOOK_FRAGMENT_SAVE_LABEL;
+      saveBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        options.onSaveEdit(row, typeSelect.value, bodyInput.value);
+      });
+      const cancelBtn = doc.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = HOVER_CARD_NOTEBOOK_ACTION_BUTTON_CLASS;
+      cancelBtn.textContent = NOTEBOOK_FRAGMENT_CANCEL_LABEL;
+      cancelBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        event.preventDefault();
+        options.onCancelEdit();
+      });
+      actions.appendChild(saveBtn);
+      actions.appendChild(cancelBtn);
+      editForm.appendChild(actions);
+
+      for (const control of [typeSelect, bodyInput, saveBtn, cancelBtn]) {
+        control.addEventListener("mousedown", (event) => {
+          event.stopPropagation();
+        });
+      }
+
+      item.appendChild(editForm);
+      list.appendChild(item);
+      continue;
+    }
+
+    const meta = doc.createElement("div");
+    meta.className = HOVER_CARD_NOTEBOOK_ITEM_TYPE_CLASS;
+    meta.textContent = row.typeLabel;
+    item.appendChild(meta);
+
+    if (row.showStatusBadge && row.statusBadgeLabel) {
+      const badge = doc.createElement("span");
+      badge.className = HOVER_CARD_NOTEBOOK_ITEM_BADGE_CLASS;
+      badge.textContent = row.statusBadgeLabel;
+      item.appendChild(badge);
+    }
+
+    const body = doc.createElement("p");
+    body.className = HOVER_CARD_NOTEBOOK_ITEM_BODY_CLASS;
+    body.textContent = row.bodyPreview;
+    if (row.bodyPreview !== row.fullBody) {
+      body.title = row.fullBody;
+    }
+    item.appendChild(body);
+
+    const actions = doc.createElement("div");
+    actions.className = HOVER_CARD_NOTEBOOK_ACTIONS_CLASS;
+    const editBtn = doc.createElement("button");
+    editBtn.type = "button";
+    editBtn.className = HOVER_CARD_NOTEBOOK_ACTION_BUTTON_CLASS;
+    editBtn.textContent = NOTEBOOK_FRAGMENT_EDIT_LABEL;
+    editBtn.setAttribute(
+      "aria-label",
+      `${NOTEBOOK_FRAGMENT_EDIT_LABEL} ${row.typeLabel}`
+    );
+    editBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      options.onEdit(row);
+    });
+    const deleteBtn = doc.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = HOVER_CARD_NOTEBOOK_ACTION_BUTTON_CLASS;
+    deleteBtn.textContent = NOTEBOOK_FRAGMENT_DELETE_LABEL;
+    deleteBtn.setAttribute(
+      "aria-label",
+      `${NOTEBOOK_FRAGMENT_DELETE_LABEL} ${row.typeLabel}`
+    );
+    deleteBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      options.onDelete(row);
+    });
+    for (const control of [editBtn, deleteBtn]) {
+      control.addEventListener("mousedown", (event) => {
+        event.stopPropagation();
+      });
+    }
+    actions.appendChild(editBtn);
+    actions.appendChild(deleteBtn);
+    item.appendChild(actions);
+
+    list.appendChild(item);
+  }
+}
+
+function createNotebookSection(
+  payload: Pick<HoverCardOverlayPayload, "type" | "value">,
+  doc: Document
+): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_NOTEBOOK_CLASS;
+  section.setAttribute("aria-label", HOVER_CARD_NOTEBOOK_SECTION_ARIA_LABEL);
+
+  const heading = createSectionHeading(HOVER_CARD_NOTEBOOK_LABEL, doc);
+  heading.id = "vera5-notebook-heading";
+  heading.className = HOVER_CARD_NOTEBOOK_LABEL_CLASS;
+
+  const tabs = doc.createElement("div");
+  tabs.className = HOVER_CARD_NOTEBOOK_TABS_CLASS;
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", "Notebook scope");
+
+  const empty = doc.createElement("p");
+  empty.className = HOVER_CARD_NOTEBOOK_EMPTY_CLASS;
+  empty.setAttribute("aria-live", "polite");
+
+  const list = doc.createElement("ul");
+  list.className = HOVER_CARD_NOTEBOOK_LIST_CLASS;
+  list.setAttribute("aria-labelledby", heading.id);
+
+  const feedback = doc.createElement("p");
+  feedback.className = HOVER_CARD_NOTEBOOK_FEEDBACK_CLASS;
+  feedback.setAttribute("aria-live", "polite");
+  feedback.hidden = true;
+
+  const addForm = doc.createElement("div");
+  addForm.className = HOVER_CARD_NOTEBOOK_FORM_CLASS;
+  addForm.setAttribute("role", "group");
+  addForm.setAttribute("aria-label", NOTEBOOK_FRAGMENT_ADD_FORM_ARIA_LABEL);
+
+  const typeLabel = doc.createElement("label");
+  typeLabel.textContent = NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL;
+  const typeSelect = doc.createElement("select");
+  typeSelect.className = HOVER_CARD_NOTEBOOK_SELECT_CLASS;
+  typeSelect.setAttribute("aria-label", NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL);
+  const defaultType = defaultNotebookFragmentType();
+  for (const option of listNotebookFragmentTypeOptions()) {
+    const opt = doc.createElement("option");
+    opt.value = option.value;
+    opt.textContent = option.label;
+    if (option.value === defaultType) {
+      opt.selected = true;
+    }
+    typeSelect.appendChild(opt);
+  }
+  typeLabel.appendChild(typeSelect);
+  addForm.appendChild(typeLabel);
+
+  const bodyLabel = doc.createElement("label");
+  bodyLabel.textContent = NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL;
+  const bodyInput = doc.createElement("textarea");
+  bodyInput.className = HOVER_CARD_NOTEBOOK_TEXTAREA_CLASS;
+  bodyInput.rows = 3;
+  bodyInput.placeholder = NOTEBOOK_FRAGMENT_BODY_PLACEHOLDER;
+  bodyInput.setAttribute("aria-label", NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL);
+  bodyLabel.appendChild(bodyInput);
+  addForm.appendChild(bodyLabel);
+
+  const addButton = doc.createElement("button");
+  addButton.type = "button";
+  addButton.className = HOVER_CARD_NOTEBOOK_ACTION_BUTTON_CLASS;
+  addButton.textContent = NOTEBOOK_FRAGMENT_ADD_LABEL;
+  addForm.appendChild(addButton);
+
+  for (const control of [typeSelect, bodyInput, addButton]) {
+    control.addEventListener("mousedown", (event) => {
+      event.stopPropagation();
+    });
+  }
+
+  const tabButtons = new Map<NotebookHoverTab, HTMLButtonElement>();
+  let activeTab: NotebookHoverTab = "ioc";
+  let latestView: HoverCardNotebookPanelView | null = null;
+  let editingFragmentId: string | null = null;
+
+  const setFeedback = (message: string | null): void => {
+    if (!message) {
+      feedback.hidden = true;
+      feedback.textContent = "";
+      return;
+    }
+    feedback.hidden = false;
+    feedback.textContent = message;
+  };
+
+  const syncAuthoringAvailability = (view: HoverCardNotebookPanelView): void => {
+    const gate = canAuthorNotebookFragmentsForScope({
+      scope: view.activeTab,
+      sessionId: view.sessionId,
+      pageScopeKey: view.pageScopeKey,
+    });
+    typeSelect.disabled = !gate.allowed;
+    bodyInput.disabled = !gate.allowed;
+    addButton.disabled = !gate.allowed;
+    if (!gate.allowed) {
+      bodyInput.placeholder = gate.reason;
+    } else {
+      bodyInput.placeholder = NOTEBOOK_FRAGMENT_BODY_PLACEHOLDER;
+    }
+  };
+
+  const syncTabButtons = (view: HoverCardNotebookPanelView): void => {
+    for (const tab of NOTEBOOK_HOVER_TABS) {
+      const button = tabButtons.get(tab);
+      if (!button) {
+        continue;
+      }
+      const count =
+        tab === "ioc"
+          ? view.iocCount
+          : tab === "session"
+            ? view.sessionCount
+            : view.pageCount;
+      button.textContent = formatNotebookTabLabel(tab, count);
+      const isActive = tab === view.activeTab;
+      button.classList.toggle(HOVER_CARD_NOTEBOOK_TAB_ACTIVE_CLASS, isActive);
+      button.setAttribute("aria-selected", isActive ? "true" : "false");
+      button.tabIndex = isActive ? 0 : -1;
+    }
+  };
+
+  const renderList = (view: HoverCardNotebookPanelView): void => {
+    renderNotebookFragmentList(list, empty, view, doc, {
+      editingFragmentId,
+      onEdit: (row) => {
+        editingFragmentId = row.fragmentId;
+        setFeedback(null);
+        if (latestView) {
+          renderList(latestView);
+        }
+      },
+      onCancelEdit: () => {
+        editingFragmentId = null;
+        if (latestView) {
+          renderList(latestView);
+        }
+      },
+      onSaveEdit: (row, type, body) => {
+        void (async () => {
+          const result = await editNotebookFragment({
+            fragmentId: row.fragmentId,
+            type,
+            body,
+          });
+          if (!result.ok) {
+            setFeedback(result.error);
+            return;
+          }
+          editingFragmentId = null;
+          setFeedback(NOTEBOOK_FRAGMENT_SAVED_FEEDBACK);
+          await refresh(activeTab);
+        })();
+      },
+      onDelete: (row) => {
+        const confirmed =
+          typeof doc.defaultView?.confirm === "function"
+            ? doc.defaultView.confirm(NOTEBOOK_FRAGMENT_DELETE_CONFIRM_TEXT)
+            : true;
+        if (!confirmed) {
+          return;
+        }
+        void (async () => {
+          const result = await deleteNotebookFragment(row.fragmentId);
+          if (!result.ok) {
+            setFeedback(result.error);
+            return;
+          }
+          if (editingFragmentId === row.fragmentId) {
+            editingFragmentId = null;
+          }
+          setFeedback(NOTEBOOK_FRAGMENT_DELETED_FEEDBACK);
+          await refresh(activeTab);
+        })();
+      },
+    });
+  };
+
+  const refresh = async (nextTab: NotebookHoverTab): Promise<void> => {
+    activeTab = nextTab;
+    const view = await loadHoverCardNotebookPanelView({
+      iocType: payload.type,
+      value: payload.value,
+      pageUrl: doc.defaultView?.location.href ?? "",
+      activeTab: nextTab,
+    });
+    latestView = view;
+    syncTabButtons(view);
+    syncAuthoringAvailability(view);
+    renderList(view);
+  };
+
+  addButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    void (async () => {
+      const result = await addNotebookFragmentForScope({
+        scope: activeTab,
+        type: typeSelect.value,
+        body: bodyInput.value,
+        iocType: payload.type,
+        value: payload.value,
+        sessionId: latestView?.sessionId ?? null,
+        pageUrl: doc.defaultView?.location.href ?? "",
+      });
+      if (!result.ok) {
+        setFeedback(result.error);
+        return;
+      }
+      bodyInput.value = "";
+      typeSelect.value = defaultNotebookFragmentType();
+      setFeedback(NOTEBOOK_FRAGMENT_SAVED_FEEDBACK);
+      await refresh(activeTab);
+    })();
+  });
+
+  for (const tab of NOTEBOOK_HOVER_TABS) {
+    const button = doc.createElement("button");
+    button.type = "button";
+    button.className = HOVER_CARD_NOTEBOOK_TAB_CLASS;
+    button.setAttribute("role", "tab");
+    button.dataset.vera5NotebookTab = tab;
+    button.textContent = formatNotebookTabLabel(tab, 0);
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      event.preventDefault();
+      editingFragmentId = null;
+      setFeedback(null);
+      void refresh(tab);
+    });
+    button.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const index = NOTEBOOK_HOVER_TABS.indexOf(tab);
+      const delta = event.key === "ArrowRight" ? 1 : -1;
+      const next =
+        NOTEBOOK_HOVER_TABS[
+          (index + delta + NOTEBOOK_HOVER_TABS.length) % NOTEBOOK_HOVER_TABS.length
+        ]!;
+      tabButtons.get(next)?.focus();
+      editingFragmentId = null;
+      setFeedback(null);
+      void refresh(next);
+    });
+    tabButtons.set(tab, button);
+    tabs.appendChild(button);
+  }
+
+  section.appendChild(heading);
+  section.appendChild(tabs);
+  section.appendChild(empty);
+  section.appendChild(list);
+  section.appendChild(addForm);
+  section.appendChild(feedback);
+
+  void refresh(activeTab).then(() => {
+    if (latestView) {
+      syncTabButtons(latestView);
+      syncAuthoringAvailability(latestView);
+    }
+  });
+
+  return section;
+}
+
 function createAnalystNotesSection(
   value: string,
   initialNote: string,
@@ -2717,6 +3208,7 @@ export function buildHoverCardPanel(
   );
   const iocTimelineSection = createIocTimelineSection(payload.value, doc);
   const coOccurrenceSection = createCoOccurrenceSection(payload, doc);
+  const notebookSection = createNotebookSection(payload, doc);
   const saveToCollectionSection = createSaveToCollectionSection(payload, doc);
   const exportSection = createExportSection(payload, doc);
   const localLlmSummarySection = createLocalLlmSummarySection(payload, doc);
@@ -2871,6 +3363,8 @@ export function buildHoverCardPanel(
   panel.appendChild(iocLabelSection);
   coOccurrenceSection.style.marginBottom = showFooter ? "8px" : "0";
   panel.appendChild(coOccurrenceSection);
+  notebookSection.style.marginBottom = showFooter ? "8px" : "0";
+  panel.appendChild(notebookSection);
   iocTimelineSection.style.marginBottom = showFooter ? "8px" : "0";
   panel.appendChild(iocTimelineSection);
   saveToCollectionSection.style.marginBottom = showFooter ? "8px" : "0";

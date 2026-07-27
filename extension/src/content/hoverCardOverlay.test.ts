@@ -21,6 +21,10 @@ import {
   HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
 } from "../lib/hoverCardEnrichment";
 import * as hoverCardCoOccurrence from "../lib/hoverCardCoOccurrence";
+import * as hoverCardNotebook from "../lib/hoverCardNotebook";
+import {
+  HOVER_CARD_NOTEBOOK_SECTION_ARIA_LABEL,
+} from "../lib/hoverCardNotebook";
 import {
   focusAdjacentCoOccurrenceListItem,
   handleCoOccurrenceListItemKeyDown,
@@ -50,6 +54,9 @@ import {
   hideHoverCard,
   HOVER_CARD_COPY_BUTTON_CLASS,
   HOVER_CARD_CO_OCCURRENCE_CLASS,
+  HOVER_CARD_NOTEBOOK_CLASS,
+  HOVER_CARD_NOTEBOOK_TAB_CLASS,
+  HOVER_CARD_NOTEBOOK_TAB_ACTIVE_CLASS,
   HOVER_CARD_GENERATE_SUMMARY_LABEL,
   HOVER_CARD_GENERATE_SUMMARY_LOADING_LABEL,
   HOVER_CARD_HOST_ID,
@@ -208,6 +215,166 @@ const PIVOT_PANEL_GOLDEN_CASES: ReadonlyArray<{
   { type: IOC_TYPE.FILEPATH, value: "/var/log/auth.log" },
   { type: IOC_TYPE.ONION, value: `${"a".repeat(56)}.onion` },
 ];
+
+describe("notebook panel", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+    document.getElementById(HOVER_CARD_HOST_ID)?.remove();
+  });
+
+  afterEach(() => {
+    setAutoEnrichmentFetcherForTests(null);
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    document.body.replaceChildren();
+    document.getElementById(HOVER_CARD_HOST_ID)?.remove();
+  });
+
+  it("renders notebook section with indicator/session/page tabs and IOC fragments", async () => {
+    vi.spyOn(hoverCardNotebook, "loadHoverCardNotebookPanelView").mockResolvedValue({
+      activeTab: "ioc",
+      iocCount: 1,
+      sessionCount: 0,
+      pageCount: 0,
+      fragments: [
+        {
+          fragmentId: "nf-hover-1",
+          type: "hypothesis",
+          typeLabel: "Hypothesis",
+          statusBadgeLabel: "Unverified",
+          showStatusBadge: true,
+          bodyPreview: "Possibly related C2.",
+          fullBody: "Possibly related C2.",
+          hint: "Working theory—not confirmed. Treat as unverified until validated.",
+        },
+      ],
+      emptyText: "No notebook fragments for this indicator.",
+      sessionId: null,
+      pageScopeKey: "https://portal.example.com/cases/1",
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const section = panel.querySelector(`.${HOVER_CARD_NOTEBOOK_CLASS}`);
+    expect(section).not.toBeNull();
+    expect(section?.getAttribute("aria-label")).toBe(
+      HOVER_CARD_NOTEBOOK_SECTION_ARIA_LABEL
+    );
+    expect(section?.textContent).toContain("Notebook");
+
+    await vi.waitFor(() => {
+      expect(section?.textContent).toContain("Hypothesis");
+      expect(section?.textContent).toContain("Unverified");
+      expect(section?.textContent).toContain("Possibly related C2.");
+    });
+
+    const tabs = section?.querySelectorAll(`.${HOVER_CARD_NOTEBOOK_TAB_CLASS}`);
+    expect(tabs?.length).toBe(3);
+    expect(tabs?.[0]?.textContent).toContain("Indicator");
+    expect(tabs?.[1]?.textContent).toContain("Session");
+    expect(tabs?.[2]?.textContent).toContain("Page");
+    expect(tabs?.[0]?.classList.contains(HOVER_CARD_NOTEBOOK_TAB_ACTIVE_CLASS)).toBe(
+      true
+    );
+    expect(section?.textContent).toContain("Add fragment");
+    expect(
+      section?.querySelector('button[aria-label="Edit Hypothesis"]')
+    ).not.toBeNull();
+    expect(
+      section?.querySelector('button[aria-label="Delete Hypothesis"]')
+    ).not.toBeNull();
+  });
+
+  it("switches notebook tabs to session and page scopes", async () => {
+    const loadSpy = vi
+      .spyOn(hoverCardNotebook, "loadHoverCardNotebookPanelView")
+      .mockImplementation(async (input) => {
+        const activeTab = input.activeTab ?? "ioc";
+        return {
+          activeTab,
+          iocCount: 1,
+          sessionCount: 1,
+          pageCount: 1,
+          fragments:
+            activeTab === "session"
+              ? [
+                  {
+                    fragmentId: "nf-session",
+                    type: "conclusion",
+                    typeLabel: "Conclusion",
+                    statusBadgeLabel: null,
+                    showStatusBadge: false,
+                    bodyPreview: "Session finding.",
+                    fullBody: "Session finding.",
+                    hint: "Analyst judgment for this investigation.",
+                  },
+                ]
+              : activeTab === "page"
+                ? [
+                    {
+                      fragmentId: "nf-page",
+                      type: "tag",
+                      typeLabel: "Tag",
+                      statusBadgeLabel: null,
+                      showStatusBadge: false,
+                      bodyPreview: "Page finding.",
+                      fullBody: "Page finding.",
+                      hint: "Lightweight label for triage grouping.",
+                    },
+                  ]
+                : [
+                    {
+                      fragmentId: "nf-ioc",
+                      type: "observation",
+                      typeLabel: "Observation",
+                      statusBadgeLabel: null,
+                      showStatusBadge: false,
+                      bodyPreview: "IOC finding.",
+                      fullBody: "IOC finding.",
+                      hint: "Logged finding from the investigation.",
+                    },
+                  ],
+          emptyText: "No notebook fragments for this indicator.",
+          sessionId: "vera5-inv-test",
+          pageScopeKey: "https://portal.example.com/cases/1",
+        };
+      });
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+    const section = panel.querySelector(`.${HOVER_CARD_NOTEBOOK_CLASS}`);
+    await vi.waitFor(() => {
+      expect(section?.textContent).toContain("IOC finding.");
+    });
+
+    const sessionTab = section?.querySelector<HTMLButtonElement>(
+      `[data-vera5-notebook-tab="session"]`
+    );
+    sessionTab?.click();
+    await vi.waitFor(() => {
+      expect(section?.textContent).toContain("Session finding.");
+    });
+    expect(loadSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ activeTab: "session" })
+    );
+
+    const pageTab = section?.querySelector<HTMLButtonElement>(
+      `[data-vera5-notebook-tab="page"]`
+    );
+    pageTab?.click();
+    await vi.waitFor(() => {
+      expect(section?.textContent).toContain("Page finding.");
+    });
+    expect(loadSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ activeTab: "page" })
+    );
+  });
+});
 
 describe("co-occurrence panel", () => {
   beforeEach(() => {

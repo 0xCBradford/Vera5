@@ -871,6 +871,146 @@ export function buildVera5UiStylesCss(): string {
   text-decoration: underline;
   outline: none;
 }
+.vera5-hover-card-notebook {
+  margin-top: 8px;
+}
+.vera5-hover-card-notebook-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-notebook-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 6px;
+}
+.vera5-hover-card-notebook-tab {
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid #3a4553;
+  border-radius: 4px;
+  background: transparent;
+  color: #a7b0ba;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.vera5-hover-card-notebook-tab--active,
+.vera5-hover-card-notebook-tab:focus-visible {
+  border-color: #6b7c90;
+  color: #e8eef5;
+  outline: none;
+}
+.vera5-hover-card-notebook-empty {
+  margin: 0;
+  color: #8f98a3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.vera5-hover-card-notebook-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vera5-hover-card-notebook-item {
+  margin: 0 0 6px;
+  padding: 6px 8px;
+  border: 1px solid #2f3945;
+  border-radius: 4px;
+}
+.vera5-hover-card-notebook-item-type {
+  display: inline-block;
+  margin: 0 6px 2px 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #c5ced8;
+}
+.vera5-hover-card-notebook-item-badge {
+  display: inline-block;
+  margin: 0 0 2px;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: #3a3420;
+  color: #e6c35c;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.vera5-hover-card-notebook-item-body {
+  margin: 2px 0 0;
+  color: #a7b0ba;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+}
+.vera5-hover-card-notebook-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.vera5-hover-card-notebook-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #c5ced8;
+  font-size: 11px;
+}
+.vera5-hover-card-notebook-select,
+.vera5-hover-card-notebook-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 4px 6px;
+  border: 1px solid #3a4553;
+  border-radius: 4px;
+  background: #1b222b;
+  color: #e8eef5;
+  font: inherit;
+  font-size: 12px;
+}
+.vera5-hover-card-notebook-textarea {
+  resize: vertical;
+  min-height: 54px;
+}
+.vera5-hover-card-notebook-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.vera5-hover-card-notebook-action {
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid #3a4553;
+  border-radius: 4px;
+  background: transparent;
+  color: #c5ced8;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.vera5-hover-card-notebook-action:hover,
+.vera5-hover-card-notebook-action:focus-visible {
+  border-color: #6b7c90;
+  color: #e8eef5;
+  outline: none;
+}
+.vera5-hover-card-notebook-action:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.vera5-hover-card-notebook-feedback {
+  margin: 6px 0 0;
+  color: #8f98a3;
+  font-size: 11px;
+  line-height: 1.4;
+}
 .vera5-tray-co-occurrence-item {
   display: block;
   width: 100%;

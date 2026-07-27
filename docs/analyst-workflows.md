@@ -1192,11 +1192,31 @@ Vera5 ships a conservative starter of **major CDN CIDRs** and **common SaaS doma
 | Action | Notes |
 |--------|--------|
 | Repository copy | [`examples/known-good-cdn-saas-starter.json`](../examples/known-good-cdn-saas-starter.json) — allowlisted entry fields only; **never** API keys. |
-| Import | Use known-good **JSON** or **CSV** import (add-only skips duplicates; replace-all needs confirmation). Prefer add-only until you review the list. |
+| Import | Storage-layer JSON/CSV import validates schema, rejects secrets/verdict fields, and supports add-only or replace-all with confirmation. Prefer add-only until you review the list. Options **Known-good lists** exports and manages stored entries today; there is no dedicated **Import list** control on that card. |
 
 CSV rows need `category`, `matchType`, `pattern`, and `labelText` columns (optional `id`). Invalid rows are rejected; duplicate id or pattern fingerprints are skipped on add-only. Imports stay on the local profile and must not include API keys, tokens, or silent score/verdict columns.
 
 The starter is representative, not exhaustive: vendor CDN ranges and SaaS hostnames change over time. Edit or delete entries after import to match your environment. Entries remain informational labels; they do not override composite risk or bypass domain deny / quiet mode.
+
+## Known-good lists vs noise rules vs composite score
+
+These three mechanisms solve different triage problems. Use them together without treating any one as a silent “safe” or “malicious” verdict.
+
+| Mechanism | What it is | What it changes | What it does **not** do |
+|-----------|------------|-----------------|-------------------------|
+| **Noise rules** | Inspectable local patterns (exact, regex, domain-suffix, CIDR) learned from explicit watchlist opt-in or optional import | Tray **Suppressed** partitioning, overlay deprioritized badge, optional hide-from-scan | Does not set composite **Risk score**; does not invent a detection verdict; does not bypass domain deny or quiet mode; is not curated “known good” inventory |
+| **Known-good lists** | Curated local entries (CDN/SaaS/VPN/scanner/internal patterns) with visible **Known benign** / **Known internal** (or custom) labels | Visible badge + match provenance; tray sort below active investigation IOCs; optional skip of **live** vendor enrich for matches (default off; cache still readable) | Does not override or replace composite risk; does not add a hidden second reputation score; does not auto-learn from scan traffic; is not the same as noise-rule **Suppressed** |
+| **Composite risk score** | Local advisory band (and **/100** when enough parseable OK sources exist) from normalized vendor enrichment summaries | Hover-card **Risk score**, explain-this-IOC reasoning, export score fields | Does not read known-good list entries or noise-rule actions as score inputs; connector confidence chips remain informational only |
+
+**How to choose**
+
+- Recurring false positives or dashboard chrome you want collapsed under **Suppressed** → **noise rules** (learn from label or import).
+- CDN, common SaaS, corp VPN, or other curated “we already know this” inventory with a visible benign/internal label → **known-good lists**.
+- Vendor-derived advisory severity for an enriched indicator → **composite risk score** (still independent of both lists above).
+
+**Same page, different outcomes:** A CDN IP on a known-good list can show **Known benign** while a non-listed IOC on the same page still enriches and receives a composite score. A noise-rule match can move a row to **Suppressed** without changing that score. Optional known-good skip-enrich only blocks **live** vendor calls for matches—it does not rewrite the composite formula, and domain deny / quiet mode still win.
+
+Detail: [Noise rule lifecycle](#noise-rule-lifecycle), [Known-good lists](#known-good-lists), [Composite risk score on the hover card](#composite-risk-score-on-the-hover-card), [Local noise rules and known-good lists](security-model.md#local-noise-rules-and-known-good-lists).
 
 ## Settings packs and threat profiles
 
@@ -1341,6 +1361,7 @@ Full control table and trust expectations: [security-model.md — Portable profi
 
 - [api-integrations.md](api-integrations.md) — per-source limits, 429 headers, monitoring links, and [connector confidence metadata definitions](api-integrations.md#connector-confidence-metadata-hover-card)
 - [local-mode.md](local-mode.md) — what stays on your machine vs what reaches vendors
-- [security-model.md](security-model.md) — permissions, host access, and [local noise rules](security-model.md#local-noise-rules-and-known-good-lists)
+- [security-model.md](security-model.md) — permissions, host access, and [local noise rules and known-good lists](security-model.md#local-noise-rules-and-known-good-lists)
+- [Known-good lists vs noise rules vs composite score](#known-good-lists-vs-noise-rules-vs-composite-score) — how the three triage mechanisms differ
 - [architecture.md](architecture.md) — supported indicator types and connector scope
 - [export-artifacts.md](export-artifacts.md) — per-indicator markdown and JSON export contract

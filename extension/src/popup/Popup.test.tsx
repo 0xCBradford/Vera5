@@ -701,6 +701,209 @@ describe("Popup IOC tray", () => {
     expect(rows[2]?.textContent).toMatch(/Exported/);
   });
 
+  it("shows an empty session notebook fragment timeline when none are attached", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "No notebook fragments for this session."
+      );
+    });
+    expect(mounted?.container.textContent).toContain("Notebook fragments");
+    expect(
+      mounted?.container.querySelector('[aria-label="Session notebook fragments"]')
+    ).toBeNull();
+  });
+
+  it("shows session notebook fragments in chronological order", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+      localStore: {
+        notebookFragments: {
+          schemaVersion: 4,
+          updatedAt: 500,
+          fragments: [
+            {
+              id: "nf-popup-later",
+              type: "conclusion",
+              body: "Later session conclusion",
+              createdAt: 400,
+              updatedAt: 400,
+            },
+            {
+              id: "nf-popup-earlier",
+              type: "observation",
+              body: "Earlier session observation",
+              createdAt: 150,
+              updatedAt: 150,
+            },
+            {
+              id: "nf-popup-hyp",
+              type: "hypothesis",
+              body: "Middle session hypothesis",
+              createdAt: 275,
+              updatedAt: 275,
+            },
+          ],
+          iocAttachments: {},
+          sessionAttachments: {
+            "vera5-inv-popup-test": [
+              "nf-popup-later",
+              "nf-popup-earlier",
+              "nf-popup-hyp",
+            ],
+          },
+          pageAttachments: {},
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(
+          '[aria-label="Session notebook fragments"]'
+        )
+      ).not.toBeNull();
+    });
+
+    const notebookList = mounted?.container.querySelector(
+      '[aria-label="Session notebook fragments"]'
+    );
+    expect(notebookList?.textContent).toMatch(
+      /Earlier session observation[\s\S]*Middle session hypothesis[\s\S]*Later session conclusion/
+    );
+    const rows = notebookList?.querySelectorAll("li") ?? [];
+    expect(rows.length).toBe(3);
+    expect(rows[0]?.textContent).toMatch(/Observation/);
+    expect(rows[0]?.textContent).toMatch(/Earlier session observation/);
+    expect(rows[1]?.textContent).toMatch(/Hypothesis/);
+    expect(rows[1]?.textContent).toMatch(/Unverified/);
+    expect(rows[2]?.textContent).toMatch(/Conclusion/);
+    expect(
+      mounted?.container.querySelector('button[aria-label="Edit Observation"]')
+    ).not.toBeNull();
+    expect(mounted?.container.textContent).toContain("Add fragment");
+  });
+
+  it("adds and edits a session notebook fragment from the popup", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+      localStore: {
+        notebookFragments: {
+          schemaVersion: 4,
+          updatedAt: 500,
+          fragments: [
+            {
+              id: "nf-popup-edit",
+              type: "observation",
+              body: "Editable session note",
+              createdAt: 150,
+              updatedAt: 150,
+            },
+          ],
+          iocAttachments: {},
+          sessionAttachments: {
+            "vera5-inv-popup-test": ["nf-popup-edit"],
+          },
+          pageAttachments: {},
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Editable session note");
+    });
+
+    const addGroup = mounted?.container.querySelector(
+      '[aria-label="Add notebook fragment"]'
+    );
+    const addBody = addGroup?.querySelector(
+      'textarea[aria-label="Fragment body"]'
+    ) as HTMLTextAreaElement | null;
+    expect(addBody).not.toBeNull();
+
+    flushSync(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(addBody!, "Brand new session fragment");
+      addBody!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const addButton = Array.from(
+      mounted?.container.querySelectorAll("button") ?? []
+    ).find((button) => button.textContent === "Add fragment") as
+      | HTMLButtonElement
+      | undefined;
+    expect(addButton?.disabled).toBe(false);
+    flushSync(() => {
+      addButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "Brand new session fragment"
+      );
+      expect(mounted?.container.textContent).toContain("Fragment saved.");
+    });
+
+    const editButton = mounted?.container.querySelector(
+      'button[aria-label="Edit Observation"]'
+    ) as HTMLButtonElement | null;
+    expect(editButton).not.toBeNull();
+    flushSync(() => {
+      editButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(
+          '[aria-label="Session notebook fragments"] textarea'
+        )
+      ).not.toBeNull();
+    });
+
+    const editBody = mounted?.container.querySelector(
+      '[aria-label="Session notebook fragments"] textarea'
+    ) as HTMLTextAreaElement | null;
+    flushSync(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(editBody!, "Updated session observation");
+      editBody!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const saveButton = Array.from(
+      mounted?.container.querySelectorAll("button") ?? []
+    ).find((button) => button.textContent === "Save") as
+      | HTMLButtonElement
+      | undefined;
+    flushSync(() => {
+      saveButton?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "Updated session observation"
+      );
+    });
+
+    expect(
+      mounted?.container.querySelector('button[aria-label="Delete Observation"]')
+    ).not.toBeNull();
+  });
+
   it("shows investigation replay controls for the active session", async () => {
     stubChrome({
       initialSummary: sampleSummary,

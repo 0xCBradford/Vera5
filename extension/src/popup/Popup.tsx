@@ -187,6 +187,32 @@ import {
 } from "../lib/investigationSessionStorage";
 import { getExportTemplateLabel } from "../lib/exportTemplates";
 import {
+  NOTEBOOK_FRAGMENT_ADD_LABEL,
+  NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL,
+  NOTEBOOK_FRAGMENT_BODY_PLACEHOLDER,
+  NOTEBOOK_FRAGMENT_BODY_REQUIRED_ERROR,
+  NOTEBOOK_FRAGMENT_CANCEL_LABEL,
+  NOTEBOOK_FRAGMENT_DELETE_CONFIRM_TEXT,
+  NOTEBOOK_FRAGMENT_DELETE_LABEL,
+  NOTEBOOK_FRAGMENT_DELETED_FEEDBACK,
+  NOTEBOOK_FRAGMENT_EDIT_LABEL,
+  NOTEBOOK_FRAGMENT_SAVE_LABEL,
+  NOTEBOOK_FRAGMENT_SAVED_FEEDBACK,
+  NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL,
+  POPUP_SESSION_NOTEBOOK_EMPTY_TEXT,
+  POPUP_SESSION_NOTEBOOK_LIST_ARIA_LABEL,
+  POPUP_SESSION_NOTEBOOK_SECTION_LABEL,
+  addNotebookFragmentForSession,
+  defaultNotebookFragmentType,
+  deleteNotebookFragment,
+  editNotebookFragment,
+  listNotebookFragmentTypeOptions,
+  loadPopupSessionNotebookFragmentTimeline,
+  type PopupSessionNotebookTimelineRow,
+} from "../lib/hoverCardNotebook";
+import { STORAGE_KEY_NOTEBOOK_FRAGMENTS } from "../lib/notebookFragmentStorage";
+import type { NotebookFragmentType } from "../lib/notebookFragment";
+import {
   buildTimelineEventNavigationAriaLabel,
   buildTimelineEventRowAriaLabel,
   createDefaultTimelineEventFilter,
@@ -1826,6 +1852,412 @@ function InvestigationSessionTimelinePanel({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function InvestigationSessionNotebookTimelinePanel({
+  sessionId,
+}: {
+  sessionId: string;
+}) {
+  const [rows, setRows] = useState<PopupSessionNotebookTimelineRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [draftType, setDraftType] = useState<NotebookFragmentType>(
+    defaultNotebookFragmentType
+  );
+  const [draftBody, setDraftBody] = useState("");
+  const [editingFragmentId, setEditingFragmentId] = useState<string | null>(null);
+  const [editType, setEditType] = useState<NotebookFragmentType>(
+    defaultNotebookFragmentType
+  );
+  const [editBody, setEditBody] = useState("");
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refresh = () => {
+      void loadPopupSessionNotebookFragmentTimeline(sessionId)
+        .then((view) => {
+          if (cancelled) {
+            return;
+          }
+          setRows(view.fragments);
+          setLoaded(true);
+        })
+        .catch(() => {
+          if (cancelled) {
+            return;
+          }
+          setRows([]);
+          setLoaded(true);
+        });
+    };
+
+    setLoaded(false);
+    refresh();
+
+    const onChanged = chrome.storage?.onChanged;
+    if (!onChanged?.addListener) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    const listener = (
+      changes: Record<string, chrome.storage.StorageChange>,
+      areaName: string
+    ) => {
+      if (areaName !== "local" || !changes[STORAGE_KEY_NOTEBOOK_FRAGMENTS]) {
+        return;
+      }
+      refresh();
+    };
+    onChanged.addListener(listener);
+    return () => {
+      cancelled = true;
+      onChanged.removeListener?.(listener);
+    };
+  }, [sessionId]);
+
+  const reloadRows = async (): Promise<void> => {
+    try {
+      const view = await loadPopupSessionNotebookFragmentTimeline(sessionId);
+      setRows(view.fragments);
+      setLoaded(true);
+    } catch {
+      setRows([]);
+      setLoaded(true);
+    }
+  };
+
+  const handleAdd = () => {
+    if (busy) {
+      return;
+    }
+    setBusy(true);
+    void (async () => {
+      const result = await addNotebookFragmentForSession({
+        sessionId,
+        type: draftType,
+        body: draftBody,
+      });
+      setBusy(false);
+      if (!result.ok) {
+        setFeedback(result.error);
+        return;
+      }
+      setDraftBody("");
+      setDraftType(defaultNotebookFragmentType());
+      setFeedback(NOTEBOOK_FRAGMENT_SAVED_FEEDBACK);
+      await reloadRows();
+    })();
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingFragmentId || busy) {
+      return;
+    }
+    setBusy(true);
+    void (async () => {
+      const result = await editNotebookFragment({
+        fragmentId: editingFragmentId,
+        type: editType,
+        body: editBody,
+      });
+      setBusy(false);
+      if (!result.ok) {
+        setFeedback(result.error);
+        return;
+      }
+      setEditingFragmentId(null);
+      setFeedback(NOTEBOOK_FRAGMENT_SAVED_FEEDBACK);
+      await reloadRows();
+    })();
+  };
+
+  const handleDelete = (row: PopupSessionNotebookTimelineRow) => {
+    if (busy) {
+      return;
+    }
+    const confirmed =
+      typeof window.confirm === "function"
+        ? window.confirm(NOTEBOOK_FRAGMENT_DELETE_CONFIRM_TEXT)
+        : true;
+    if (!confirmed) {
+      return;
+    }
+    setBusy(true);
+    void (async () => {
+      const result = await deleteNotebookFragment(row.fragmentId);
+      setBusy(false);
+      if (!result.ok) {
+        setFeedback(result.error);
+        return;
+      }
+      if (editingFragmentId === row.fragmentId) {
+        setEditingFragmentId(null);
+      }
+      setFeedback(NOTEBOOK_FRAGMENT_DELETED_FEEDBACK);
+      await reloadRows();
+    })();
+  };
+
+  const typeOptions = listNotebookFragmentTypeOptions();
+  const filterFieldStyle: CSSProperties = {
+    display: "block",
+    width: "100%",
+    marginTop: 4,
+    boxSizing: "border-box",
+    fontSize: 12,
+    padding: "6px 8px",
+    borderRadius: 6,
+    border: `1px solid ${POPUP_THEME.border}`,
+    backgroundColor: POPUP_THEME.surface,
+    color: POPUP_THEME.text,
+  };
+
+  return (
+    <div style={{ marginTop: 10, marginBottom: 10 }}>
+      <h3
+        style={{
+          fontSize: 12,
+          fontWeight: 700,
+          margin: "0 0 8px",
+          color: POPUP_THEME.accentText,
+        }}
+      >
+        {POPUP_SESSION_NOTEBOOK_SECTION_LABEL}
+      </h3>
+      {!loaded ? null : rows.length === 0 ? (
+        <p style={{ ...trayStatusStyle(), margin: 0 }} aria-live="polite">
+          {POPUP_SESSION_NOTEBOOK_EMPTY_TEXT}
+        </p>
+      ) : (
+        <ol
+          aria-label={POPUP_SESSION_NOTEBOOK_LIST_ARIA_LABEL}
+          style={{
+            listStyle: "none",
+            margin: 0,
+            padding: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 6,
+            maxHeight: 220,
+            overflowY: "auto",
+          }}
+        >
+          {rows.map((row) => (
+            <li
+              key={row.fragmentId}
+              title={row.hint}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 2,
+                padding: "6px 8px",
+                border: `1px solid ${POPUP_THEME.border}`,
+                borderRadius: 6,
+                backgroundColor: POPUP_THEME.surface,
+                fontSize: 12,
+                lineHeight: 1.45,
+              }}
+            >
+              {editingFragmentId === row.fragmentId ? (
+                <>
+                  <label style={{ color: POPUP_THEME.text }}>
+                    {NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL}
+                    <select
+                      aria-label={NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL}
+                      value={editType}
+                      onChange={(event) =>
+                        setEditType(event.target.value as NotebookFragmentType)
+                      }
+                      style={filterFieldStyle}
+                    >
+                      {typeOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label style={{ color: POPUP_THEME.text, marginTop: 6 }}>
+                    {NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL}
+                    <textarea
+                      aria-label={NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL}
+                      value={editBody}
+                      rows={3}
+                      onChange={(event) => setEditBody(event.target.value)}
+                      style={{ ...filterFieldStyle, resize: "vertical" }}
+                    />
+                  </label>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      marginTop: 6,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={handleSaveEdit}
+                      style={sessionActionButtonStyle()}
+                    >
+                      {NOTEBOOK_FRAGMENT_SAVE_LABEL}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setEditingFragmentId(null)}
+                      style={sessionActionButtonStyle()}
+                    >
+                      {NOTEBOOK_FRAGMENT_CANCEL_LABEL}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <span style={{ color: POPUP_THEME.muted }}>
+                    {row.createdAtLabel}
+                  </span>
+                  <span style={{ color: POPUP_THEME.text }}>
+                    {row.typeLabel}
+                    {row.showStatusBadge && row.statusBadgeLabel ? (
+                      <span
+                        style={{
+                          marginLeft: 6,
+                          fontSize: 10,
+                          fontWeight: 700,
+                          color: POPUP_THEME.accentText,
+                        }}
+                      >
+                        {row.statusBadgeLabel}
+                      </span>
+                    ) : null}
+                  </span>
+                  <span
+                    style={{
+                      color: POPUP_THEME.text,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {row.bodyPreview}
+                  </span>
+                  {row.authorLabel ? (
+                    <span style={{ color: POPUP_THEME.muted }}>
+                      {row.authorLabel}
+                    </span>
+                  ) : null}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      gap: 6,
+                      marginTop: 6,
+                    }}
+                  >
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-label={`${NOTEBOOK_FRAGMENT_EDIT_LABEL} ${row.typeLabel}`}
+                      onClick={() => {
+                        setEditingFragmentId(row.fragmentId);
+                        setEditType(row.type);
+                        setEditBody(row.fullBody);
+                        setFeedback(null);
+                      }}
+                      style={sessionActionButtonStyle()}
+                    >
+                      {NOTEBOOK_FRAGMENT_EDIT_LABEL}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-label={`${NOTEBOOK_FRAGMENT_DELETE_LABEL} ${row.typeLabel}`}
+                      onClick={() => handleDelete(row)}
+                      style={sessionActionButtonStyle()}
+                    >
+                      {NOTEBOOK_FRAGMENT_DELETE_LABEL}
+                    </button>
+                  </div>
+                </>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      <div
+        role="group"
+        aria-label="Add notebook fragment"
+        style={{ marginTop: 10 }}
+      >
+        <label
+          style={{
+            display: "block",
+            fontSize: 12,
+            color: POPUP_THEME.text,
+            marginBottom: 8,
+          }}
+        >
+          {NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL}
+          <select
+            aria-label={NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL}
+            value={draftType}
+            onChange={(event) =>
+              setDraftType(event.target.value as NotebookFragmentType)
+            }
+            style={filterFieldStyle}
+          >
+            {typeOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label
+          style={{
+            display: "block",
+            fontSize: 12,
+            color: POPUP_THEME.text,
+            marginBottom: 8,
+          }}
+        >
+          {NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL}
+          <textarea
+            aria-label={NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL}
+            value={draftBody}
+            rows={3}
+            placeholder={NOTEBOOK_FRAGMENT_BODY_PLACEHOLDER}
+            onChange={(event) => setDraftBody(event.target.value)}
+            style={{ ...filterFieldStyle, resize: "vertical" }}
+          />
+        </label>
+        <button
+          type="button"
+          disabled={busy || draftBody.trim().length === 0}
+          onClick={handleAdd}
+          style={sessionActionButtonStyle()}
+          title={
+            draftBody.trim().length === 0
+              ? NOTEBOOK_FRAGMENT_BODY_REQUIRED_ERROR
+              : undefined
+          }
+        >
+          {NOTEBOOK_FRAGMENT_ADD_LABEL}
+        </button>
+      </div>
+      {feedback ? (
+        <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "8px 0 0" }}>
+          {feedback}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -5137,6 +5569,9 @@ export function Popup() {
                 events={sessionTimelineEvents}
                 onActivateEvent={handleTimelineEventActivate}
                 navigationMessage={timelineNavigationMessage}
+              />
+              <InvestigationSessionNotebookTimelinePanel
+                sessionId={activeSession.id}
               />
               <InvestigationReplayPanel
                 sessionId={activeSession.id}
