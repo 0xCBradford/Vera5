@@ -18,11 +18,20 @@ import {
   KnownGoodExportError,
   KnownGoodImportError,
   listStoredKnownGoodEntries,
+  listStoredKnownGoodEntriesForMatching,
+  shouldSkipOutboundEnrichForKnownGoodMatch,
+  parseKnownGoodImportCsv,
   serializeKnownGoodCdnSaasStarterExportJson,
   serializeKnownGoodExportJson,
+  setStoredKnownGoodCategoryEnabled,
+  syncKnownGoodEntryLabelFromWatchlistPromotion,
   updateStoredKnownGoodEntry,
   upsertStoredKnownGoodEntry,
   validateKnownGoodExportDocument,
+  detectKnownGoodImportFormat,
+  importKnownGoodListFromCsv,
+  importKnownGoodListFromText,
+  KNOWN_GOOD_CSV_HEADER,
 } from "./knownGoodStorage";
 
 function stubChromeStorage(store: Record<string, unknown>): void {
@@ -183,6 +192,30 @@ describe("knownGoodStorage", () => {
     ]);
   });
 
+  it("round-trips import so listed values match and unlisted IOCs do not", async () => {
+    const { findMatchingKnownGoodEntry } = await import("./knownGood");
+    const listed = createKnownGoodEntry({
+      id: "kg-round-trip-cdn",
+      category: KNOWN_GOOD_CATEGORY.CDN,
+      matchType: KNOWN_GOOD_MATCH_TYPE.IP,
+      pattern: "1.1.1.1",
+      labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_BENIGN,
+    });
+    await upsertStoredKnownGoodEntry(listed);
+
+    const json = await exportStoredKnownGoodListJson("2026-07-26T18:00:00.000Z");
+    await clearStoredKnownGoodList();
+    expect(await listStoredKnownGoodEntries()).toEqual([]);
+
+    const imported = await importKnownGoodListFromJson(json);
+    expect(imported.importedCount).toBe(1);
+    const restored = await listStoredKnownGoodEntriesForMatching();
+    expect(findMatchingKnownGoodEntry(restored, "1.1.1.1")?.pattern).toBe("1.1.1.1");
+    expect(
+      findMatchingKnownGoodEntry(restored, "185.220.101.1")
+    ).toBeNull();
+  });
+
   it("rejects import JSON that contains secrets", async () => {
     await expect(
       importKnownGoodListFromJson(
@@ -213,6 +246,29 @@ describe("knownGoodStorage", () => {
         })
       )
     ).rejects.toBeInstanceOf(KnownGoodImportError);
+  });
+
+  it("rejects import entries that carry silent verdict or score fields", async () => {
+    const result = await importKnownGoodListFromJson(
+      JSON.stringify({
+        schemaVersion: 1,
+        exportedAt: "2026-07-26T00:00:00.000Z",
+        entries: [
+          {
+            id: "kg-verdict",
+            category: "cdn",
+            matchType: "domain",
+            pattern: "cdn.example",
+            labelText: "Known benign",
+            verdict: "safe",
+          },
+        ],
+      })
+    );
+    expect(result.importedCount).toBe(0);
+    expect(result.invalid.length).toBe(1);
+    expect(result.invalid[0]?.message).toMatch(/informational label only/i);
+    expect(await listStoredKnownGoodEntries()).toEqual([]);
   });
 
   it("skips duplicates on add-only and supports replace-all with confirmation", async () => {
@@ -335,5 +391,196 @@ describe("knownGoodStorage", () => {
     const second = await importKnownGoodCdnSaasStarterEntries();
     expect(second.importedCount).toBe(0);
     expect(second.duplicates.length).toBe(result.importedCount);
+  });
+
+  it("syncs known-good label text when watchlist promotes to benign or internal", async () => {
+    const entry = await upsertStoredKnownGoodEntry(
+      createKnownGoodEntry({
+        id: "kg-sync-promo",
+        category: KNOWN_GOOD_CATEGORY.CDN,
+        matchType: KNOWN_GOOD_MATCH_TYPE.DOMAIN,
+        pattern: "cdn.example",
+        labelText: "CDN edge",
+      })
+    );
+
+    const syncedBenign = await syncKnownGoodEntryLabelFromWatchlistPromotion(
+      "cdn.example",
+      "benign"
+    );
+    expect(syncedBenign).toMatchObject({
+      id: entry.id,
+      labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_BENIGN,
+    });
+    expect(await listStoredKnownGoodEntries()).toEqual([
+      expect.objectContaining({
+        id: entry.id,
+        labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_BENIGN,
+      }),
+    ]);
+
+    const syncedInternal = await syncKnownGoodEntryLabelFromWatchlistPromotion(
+      "cdn.example",
+      "internal"
+    );
+    expect(syncedInternal?.labelText).toBe(KNOWN_GOOD_LABEL_TEXT.KNOWN_INTERNAL);
+
+    expect(
+      await syncKnownGoodEntryLabelFromWatchlistPromotion("missing.example", "benign")
+    ).toBeNull();
+  });
+
+  it("detects JSON vs CSV import format from filename and content", () => {
+    expect(detectKnownGoodImportFormat("list.json")).toBe("json");
+    expect(detectKnownGoodImportFormat("list.csv")).toBe("csv");
+    expect(detectKnownGoodImportFormat("handoff", '{"entries":[]}')).toBe("json");
+    expect(
+      detectKnownGoodImportFormat("handoff", `${KNOWN_GOOD_CSV_HEADER}\ncdn,domain,a.com,Known benign`)
+    ).toBe("csv");
+  });
+
+  it("imports CSV with validation, duplicate skip, and invalid row rejection", async () => {
+    await upsertStoredKnownGoodEntry(
+      createKnownGoodEntry({
+        id: "kg-csv-existing",
+        category: KNOWN_GOOD_CATEGORY.CDN,
+        matchType: KNOWN_GOOD_MATCH_TYPE.DOMAIN,
+        pattern: "cdn.example",
+        labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_BENIGN,
+      })
+    );
+
+    const csv = [
+      KNOWN_GOOD_CSV_HEADER,
+      'cdn,domain,cdn.example,"Known benign",kg-csv-existing',
+      'saas,domain,saas.example,"Known benign",kg-csv-new',
+      "cdn,domain,,Known benign,kg-csv-empty-pattern",
+      "not-a-category,domain,bad.example,Known benign,kg-csv-bad-cat",
+      'cdn,cidr,"104.16.0.0/12","Known benign",kg-csv-cidr',
+    ].join("\n");
+
+    const parsed = parseKnownGoodImportCsv(csv);
+    expect(parsed.candidates).toHaveLength(5);
+
+    const result = await importKnownGoodListFromCsv(csv);
+    expect(result.importedCount).toBe(2);
+    expect(result.duplicates.length).toBeGreaterThanOrEqual(1);
+    expect(result.invalid.length).toBeGreaterThanOrEqual(2);
+    expect(formatKnownGoodImportStatus(result)).toMatch(/duplicate/i);
+    expect(formatKnownGoodImportStatus(result)).toMatch(/invalid/i);
+
+    const listed = await listStoredKnownGoodEntries();
+    expect(listed).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: "kg-csv-existing", pattern: "cdn.example" }),
+        expect.objectContaining({ id: "kg-csv-new", pattern: "saas.example" }),
+        expect.objectContaining({ id: "kg-csv-cidr", pattern: "104.16.0.0/12" }),
+      ])
+    );
+    expect(listed).toHaveLength(3);
+  });
+
+  it("rejects CSV columns that look like secrets or silent verdicts", () => {
+    expect(() =>
+      parseKnownGoodImportCsv(
+        "category,matchType,pattern,labelText,apiKey\ncdn,domain,a.com,Known benign,secret"
+      )
+    ).toThrow(/API keys|secrets/i);
+
+    expect(() =>
+      parseKnownGoodImportCsv(
+        "category,matchType,pattern,labelText,verdict\ncdn,domain,a.com,Known benign,safe"
+      )
+    ).toThrow(/informational labels only/i);
+
+    expect(() =>
+      parseKnownGoodImportCsv("pattern,labelText\ncdn.example,Known benign")
+    ).toThrow(/requires category, matchType, pattern, and labelText/i);
+  });
+
+  it("imports CSV via unified text import and supports replace-all with confirmation", async () => {
+    await upsertStoredKnownGoodEntry(
+      createKnownGoodEntry({
+        id: "kg-csv-old",
+        category: KNOWN_GOOD_CATEGORY.INTERNAL,
+        matchType: KNOWN_GOOD_MATCH_TYPE.IP,
+        pattern: "10.0.0.1",
+        labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_INTERNAL,
+      })
+    );
+
+    const csv = [
+      KNOWN_GOOD_CSV_HEADER,
+      'saas,domain,okta.com,"Known benign",kg-csv-replace',
+    ].join("\n");
+
+    const replaced = await importKnownGoodListFromText(
+      csv,
+      "csv",
+      KNOWN_GOOD_IMPORT_MERGE_MODE.REPLACE_ALL,
+      { confirmReplace: () => true }
+    );
+    expect(replaced.importedCount).toBe(1);
+    expect(replaced.replacedExistingCount).toBe(1);
+    expect(await listStoredKnownGoodEntries()).toEqual([
+      expect.objectContaining({ id: "kg-csv-replace", pattern: "okta.com" }),
+    ]);
+  });
+
+  it("persists per-category matching toggles and filters matching lists", async () => {
+    await upsertStoredKnownGoodEntry(
+      createKnownGoodEntry({
+        id: "kg-cat-cdn",
+        category: KNOWN_GOOD_CATEGORY.CDN,
+        matchType: KNOWN_GOOD_MATCH_TYPE.DOMAIN,
+        pattern: "cdn.example",
+        labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_BENIGN,
+      })
+    );
+    await upsertStoredKnownGoodEntry(
+      createKnownGoodEntry({
+        id: "kg-cat-saas",
+        category: KNOWN_GOOD_CATEGORY.SAAS,
+        matchType: KNOWN_GOOD_MATCH_TYPE.DOMAIN,
+        pattern: "saas.example",
+        labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_BENIGN,
+      })
+    );
+
+    const next = await setStoredKnownGoodCategoryEnabled(
+      KNOWN_GOOD_CATEGORY.CDN,
+      false
+    );
+    expect(next.cdn).toBe(false);
+    expect(next.saas).toBe(true);
+    expect(await listStoredKnownGoodEntries()).toHaveLength(2);
+    expect(await listStoredKnownGoodEntriesForMatching()).toEqual([
+      expect.objectContaining({ id: "kg-cat-saas" }),
+    ]);
+    expect(await getKnownGoodListStore()).toMatchObject({
+      categoryEnabled: expect.objectContaining({ cdn: false, saas: true }),
+    });
+  });
+
+  it("shouldSkipOutboundEnrichForKnownGoodMatch respects policy and match", async () => {
+    await upsertStoredKnownGoodEntry(
+      createKnownGoodEntry({
+        id: "kg-skip-policy",
+        category: KNOWN_GOOD_CATEGORY.SAAS,
+        matchType: KNOWN_GOOD_MATCH_TYPE.IP,
+        pattern: "8.8.8.8",
+        labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_BENIGN,
+      })
+    );
+
+    expect(
+      await shouldSkipOutboundEnrichForKnownGoodMatch("8.8.8.8", false)
+    ).toBe(false);
+    expect(
+      await shouldSkipOutboundEnrichForKnownGoodMatch("8.8.8.8", true)
+    ).toBe(true);
+    expect(
+      await shouldSkipOutboundEnrichForKnownGoodMatch("1.2.3.4", true)
+    ).toBe(false);
   });
 });

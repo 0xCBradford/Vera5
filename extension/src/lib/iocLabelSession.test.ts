@@ -8,6 +8,18 @@ import {
 } from "./iocLabelSession";
 import { STORAGE_KEY_IOC_LABELS } from "./iocLabelStorage";
 import {
+  createKnownGoodEntry,
+  KNOWN_GOOD_CATEGORY,
+  KNOWN_GOOD_LABEL_TEXT,
+  KNOWN_GOOD_MATCH_TYPE,
+} from "./knownGood";
+import {
+  clearStoredKnownGoodList,
+  listStoredKnownGoodEntries,
+  STORAGE_KEY_KNOWN_GOOD_LIST,
+  upsertStoredKnownGoodEntry,
+} from "./knownGoodStorage";
+import {
   clearLearnedNoiseRules,
   listLearnedNoiseRules,
 } from "./noiseRule";
@@ -180,9 +192,10 @@ describe("iocLabelSession persistence", () => {
     clearLearnedNoiseRules();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     clearSessionIocLabels();
     clearLearnedNoiseRules();
+    await clearStoredKnownGoodList();
     vi.unstubAllGlobals();
   });
 
@@ -203,5 +216,51 @@ describe("iocLabelSession persistence", () => {
     await hydrateIocLabelsFromStorage();
 
     expect(getSessionIocLabel("8.8.8.8")).toBe("case-important");
+  });
+
+  it("syncs matching known-good entry label text on benign/internal promote", async () => {
+    await upsertStoredKnownGoodEntry(
+      createKnownGoodEntry({
+        id: "kg-session-sync",
+        category: KNOWN_GOOD_CATEGORY.SAAS,
+        matchType: KNOWN_GOOD_MATCH_TYPE.DOMAIN,
+        pattern: "saas.example",
+        labelText: "Approved SaaS",
+      })
+    );
+
+    setSessionIocLabel("saas.example", "benign");
+    await vi.waitFor(async () => {
+      const entries = await listStoredKnownGoodEntries();
+      expect(entries).toEqual([
+        expect.objectContaining({
+          id: "kg-session-sync",
+          labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_BENIGN,
+        }),
+      ]);
+    });
+
+    setSessionIocLabel("saas.example", "internal");
+    await vi.waitFor(async () => {
+      const entries = await listStoredKnownGoodEntries();
+      expect(entries[0]?.labelText).toBe(KNOWN_GOOD_LABEL_TEXT.KNOWN_INTERNAL);
+    });
+
+    setSessionIocLabel("saas.example", "case-important");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(await listStoredKnownGoodEntries()).toEqual([
+      expect.objectContaining({
+        id: "kg-session-sync",
+        labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_INTERNAL,
+      }),
+    ]);
+    expect(store[STORAGE_KEY_KNOWN_GOOD_LIST]).toMatchObject({
+      entries: [
+        expect.objectContaining({
+          labelText: KNOWN_GOOD_LABEL_TEXT.KNOWN_INTERNAL,
+        }),
+      ],
+    });
   });
 });

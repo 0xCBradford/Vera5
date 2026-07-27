@@ -169,6 +169,180 @@ describe("HoverCard", () => {
     vi.unstubAllGlobals();
   });
 
+  it("shows known benign badge when a known-good entry matches", async () => {
+    const { STORAGE_KEY_KNOWN_GOOD_LIST, KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION } =
+      await import("../lib/knownGoodStorage");
+    const { createKnownGoodEntry } = await import("../lib/knownGood");
+    const tabsCreate = vi.fn(() => Promise.resolve({ id: 1 }));
+    const entry = createKnownGoodEntry({
+      id: "kg-hover-react",
+      category: "cdn",
+      matchType: "cidr",
+      pattern: "8.8.8.0/24",
+      labelText: "Known benign",
+    });
+    const localStore: Record<string, unknown> = {
+      [STORAGE_KEY_KNOWN_GOOD_LIST]: {
+        schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+        updatedAt: 1,
+        entries: [entry],
+      },
+    };
+    vi.stubGlobal("chrome", {
+      runtime: {
+        getURL: (path: string) => `chrome-extension://test/${path}`,
+      },
+      tabs: {
+        create: tabsCreate,
+      },
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in localStore) {
+                result[key] = localStore[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: () => Promise.resolve(),
+          remove: () => Promise.resolve(),
+        },
+      },
+    });
+
+    mounted = renderHoverCard({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector("[data-vera5-known-good-badge='true']")
+          ?.textContent
+      ).toBe("Known benign");
+    });
+
+    const provenance = mounted!.container.querySelector(
+      ".vera5-hover-card-known-good-match"
+    );
+    expect(provenance?.getAttribute("data-vera5-known-good-entry-id")).toBe(
+      "kg-hover-react"
+    );
+    expect(provenance?.getAttribute("data-vera5-known-good-category")).toBe("cdn");
+    expect(provenance?.getAttribute("data-vera5-known-good-match-type")).toBe(
+      "cidr"
+    );
+    expect(provenance?.getAttribute("data-vera5-known-good-pattern")).toBe(
+      "8.8.8.0/24"
+    );
+    expect(provenance?.textContent).toContain("CDN · CIDR · 8.8.8.0/24");
+    expect(provenance?.textContent).toContain("Entry id: kg-hover-react");
+    expect(provenance?.textContent).toMatch(/informational label only/i);
+    const link = mounted!.container.querySelector(
+      "[data-vera5-known-good-entry-link='true']"
+    ) as HTMLButtonElement | null;
+    expect(link?.textContent).toBe("View matched known-good entry");
+    link?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(tabsCreate).toHaveBeenCalledWith({
+      url: "chrome-extension://test/options.html#known-good/kg-hover-react",
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it("shows enrich skipped known-good policy with matched entry link", async () => {
+    const { STORAGE_KEY_KNOWN_GOOD_LIST, KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION } =
+      await import("../lib/knownGoodStorage");
+    const { createKnownGoodEntry } = await import("../lib/knownGood");
+    const { ENRICHMENT_ERROR_CODE } = await import("../lib/enrichment");
+    const entry = createKnownGoodEntry({
+      id: "kg-skip-react",
+      category: "saas",
+      matchType: "ip",
+      pattern: "1.2.3.4",
+      labelText: "Known benign",
+    });
+    const localStore: Record<string, unknown> = {
+      [STORAGE_KEY_KNOWN_GOOD_LIST]: {
+        schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+        updatedAt: 1,
+        entries: [entry],
+        categoryEnabled: {
+          cdn: true,
+          saas: true,
+          corp_vpn: true,
+          vuln_scanner: true,
+          internal: true,
+        },
+      },
+    };
+    vi.stubGlobal("chrome", {
+      runtime: {
+        getURL: (path: string) => `chrome-extension://test/${path}`,
+      },
+      tabs: {
+        create: vi.fn(() => Promise.resolve({ id: 1 })),
+      },
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in localStore) {
+                result[key] = localStore[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: () => Promise.resolve(),
+          remove: () => Promise.resolve(),
+        },
+      },
+    });
+
+    mounted = renderHoverCard({
+      value: "1.2.3.4",
+      type: IOC_TYPE.IPV4,
+      enrichmentState: "empty",
+      errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+      errorMessage: "Outbound vendor enrichment skipped (known-good match policy).",
+      sourceResults: [
+        {
+          sourceId: "abuseipdb",
+          label: "AbuseIPDB",
+          status: "skipped",
+          badgeText: "Skipped (known-good)",
+          detail: "Outbound vendor enrichment skipped (known-good match policy).",
+          errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+        },
+      ],
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector("[data-vera5-known-good-enrich-skipped='true']")
+          ?.textContent
+      ).toBe("Enrichment skipped (known-good policy)");
+    });
+    expect(
+      mounted!.container.querySelector("[data-vera5-known-good-entry-link='true']")
+    ).not.toBeNull();
+
+    vi.unstubAllGlobals();
+  });
+
   it("renders Why detected panel with Phase 2 email provenance", () => {
     mounted = renderHoverCard({
       value: "analyst@corp.example.com",

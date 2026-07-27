@@ -1,0 +1,27 @@
+---
+description: How to flip TODO.md checkboxes on task PASS so the editor buffer and disk stay in sync.
+alwaysApply: true
+---
+
+# TODO.md VERIFY-AND-CLOSE (checkbox flips)
+
+When a protocol task verification **PASS**es, you **must** mark that task complete in `TODO.md`. Do not leave completed work unchecked. Do not skip VERIFY-AND-CLOSE.
+
+## Required flip procedure (mandatory)
+
+1. **Read** the exact task line from `TODO.md` with the **Read** tool (workspace/editor view). Copy the line text exactly—do not invent wording or “normalize” punctuation.
+2. Flip **only that one** checkbox with **StrReplace**: change `- [ ]` → `- [x]` on that line (include enough surrounding context so the match is unique within the current week section if needed).
+3. **Read** the same line range again and confirm the disk/editor view shows `- [x]`.
+4. If Read still shows `- [ ]`, retry StrReplace using the exact text Read returned. Do not report success until Read shows `[x]`.
+
+## Forbidden for checkbox flips
+
+- **Never** flip `TODO.md` checkboxes via Shell, Python, PowerShell (`Set-Content`, `Out-File`, `Add-Content`, encoded rewrites), or other out-of-band file writers.
+- Those paths can write a different on-disk copy than the open editor buffer, so the operator still sees `- [ ]` after you “closed” the task.
+- **Never** use `Select-String` / shell alone as proof the box is closed—**Read** is the source of truth for what the operator sees.
+- **Never** uncheck a completed box unless the operator explicitly asks to reopen it.
+
+## Scope
+
+- VERIFY-AND-CLOSE may edit `TODO.md` for **one** verified checkbox only (protocol: one task per run).
+- USER / AGENT/USER tasks still need operator PASS before close when the protocol says so; once PASS is established, use this same StrReplace + Read procedure.

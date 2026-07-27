@@ -103,6 +103,16 @@ import {
   STORAGE_KEY_NOISE_RULES,
 } from "../lib/noiseRuleStorage";
 import {
+  buildKnownGoodMatchBadgeView,
+  findMatchingKnownGoodEntry,
+  sortTrayEntriesDeprioritizingKnownGoodMatches,
+  type KnownGoodEntry,
+} from "../lib/knownGood";
+import {
+  listStoredKnownGoodEntriesForMatching,
+  STORAGE_KEY_KNOWN_GOOD_LIST,
+} from "../lib/knownGoodStorage";
+import {
   getStoredAnalystNote,
   normalizeAnalystNotesRecord,
   normalizeIocNoteKey,
@@ -129,6 +139,7 @@ import {
   buildInvestigationSessionActivitySummaryText,
   INVESTIGATION_SESSION_EMPTY_STATE_TEXT,
   listInvestigationSessionIocMembers,
+  normalizeInvestigationSessionIocTimelineKey,
   normalizeInvestigationSessionTitle,
   type InvestigationSession,
 } from "../lib/investigationSession";
@@ -3450,6 +3461,7 @@ export function Popup() {
   >([]);
   const [trayCorrelationReady, setTrayCorrelationReady] = useState(false);
   const [noiseRules, setNoiseRules] = useState<NoiseRule[]>([]);
+  const [knownGoodEntries, setKnownGoodEntries] = useState<KnownGoodEntry[]>([]);
 
   const refreshActivePageContext = async () => {
     const [context, overrides] = await Promise.all([
@@ -3539,6 +3551,13 @@ export function Popup() {
       .catch(() => {
         setNoiseRules([]);
       });
+    void listStoredKnownGoodEntriesForMatching()
+      .then((entries) => {
+        setKnownGoodEntries(entries);
+      })
+      .catch(() => {
+        setKnownGoodEntries([]);
+      });
     void readPopupPanelFocus().then((panel) => {
       if (panel === POPUP_PANEL.INVESTIGATION_HISTORY) {
         setHistoryCollapsed(false);
@@ -3577,6 +3596,15 @@ export function Popup() {
           })
           .catch(() => {
             setNoiseRules([]);
+          });
+      }
+      if (changes[STORAGE_KEY_KNOWN_GOOD_LIST]) {
+        void listStoredKnownGoodEntriesForMatching()
+          .then((entries) => {
+            setKnownGoodEntries(entries);
+          })
+          .catch(() => {
+            setKnownGoodEntries([]);
           });
       }
     };
@@ -3795,7 +3823,25 @@ export function Popup() {
     () => partitionTrayEntriesByNoiseRules(filteredEntries, noiseRules),
     [filteredEntries, noiseRules]
   );
-  const activeTrayEntries = trayNoisePartition.active;
+  const activeTrayEntries = useMemo(() => {
+    const investigationKeys = new Set(
+      activeSession
+        ? listInvestigationSessionIocMembers(activeSession).map((member) =>
+            normalizeInvestigationSessionIocTimelineKey(member.value)
+          )
+        : []
+    );
+    return sortTrayEntriesDeprioritizingKnownGoodMatches(
+      trayNoisePartition.active,
+      knownGoodEntries,
+      {
+        isActiveInvestigationIoc: (value) =>
+          investigationKeys.has(
+            normalizeInvestigationSessionIocTimelineKey(value)
+          ),
+      }
+    );
+  }, [trayNoisePartition.active, knownGoodEntries, activeSession]);
   const suppressedTrayEntries = trayNoisePartition.suppressed;
   const whyStillVisibleTooltip = useMemo(
     () =>
@@ -4495,6 +4541,10 @@ export function Popup() {
     const enrichmentStatus = trayEnrichmentStatuses[entry.anchorId];
     const provenance = resolveTrayEntryMatchProvenance(entry);
     const noiseSuppressed = options?.noiseSuppressed === true;
+    const knownGoodMatch = findMatchingKnownGoodEntry(knownGoodEntries, entry.value);
+    const knownGoodBadge = knownGoodMatch
+      ? buildKnownGoodMatchBadgeView(knownGoodMatch)
+      : null;
 
     return (
       <li
@@ -4508,6 +4558,10 @@ export function Popup() {
         data-vera5-rule-id={provenance?.ruleId}
         data-vera5-source-text-hint={provenance?.sourceTextHint}
         data-vera5-noise-suppressed={noiseSuppressed ? "true" : undefined}
+        data-vera5-known-good-entry-id={knownGoodBadge?.entryId}
+        data-vera5-known-good-category={knownGoodBadge?.category}
+        data-vera5-known-good-match-type={knownGoodBadge?.matchType}
+        data-vera5-known-good-pattern={knownGoodBadge?.pattern}
         aria-label={buildTrayRowNavigationAriaLabel(entry.value, enrichmentStatus)}
         onClick={() => handleTrayRowActivate(entry)}
         onKeyDown={(event) => {
@@ -4552,6 +4606,24 @@ export function Popup() {
           >
             {IOC_TYPE_TRAY_LABEL[entry.type]}
           </span>
+          {knownGoodBadge ? (
+            <span
+              data-vera5-known-good-badge="true"
+              title={knownGoodBadge.entrySummary}
+              style={{
+                flexShrink: 0,
+                padding: "1px 6px",
+                borderRadius: 4,
+                border: `1px solid ${POPUP_THEME.border}`,
+                backgroundColor: POPUP_THEME.buttonBg,
+                color: POPUP_THEME.muted,
+                fontSize: 10,
+                fontWeight: 700,
+              }}
+            >
+              {knownGoodBadge.badgeLabel}
+            </span>
+          ) : null}
           <span
             style={{
               display: "flex",
@@ -4572,6 +4644,21 @@ export function Popup() {
             ) : null}
           </span>
         </div>
+        {knownGoodBadge ? (
+          <p
+            data-vera5-known-good-provenance="true"
+            title={knownGoodBadge.hint}
+            style={{
+              margin: 0,
+              fontSize: 11,
+              lineHeight: 1.35,
+              color: POPUP_THEME.muted,
+              wordBreak: "break-word",
+            }}
+          >
+            Matched: {knownGoodBadge.entrySummary}
+          </p>
+        ) : null}
         <SaveToCollectionTrayPanel
           entry={entry}
           open={saveToCollectionAnchorId === entry.anchorId}

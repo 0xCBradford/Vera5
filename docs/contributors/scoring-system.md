@@ -61,6 +61,8 @@ After enrichment on an extended-type indicator, `numericSignals.length === 0`, `
 
 **Invariant:** No fabricated composite band when enrichment data is absent by design. Operators rely on per-source skipped rows, pivots, and vendor pages—not a local numeric blend.
 
+**Known-good lists:** Curated local known-good entries (`knownGood.ts`) are informational labels only. They do not feed `computeCompositeRiskScore`, do not set a silent malware-negative or safe verdict, and must not introduce a second reputation score that overrides composite risk (`KNOWN_GOOD_AFFECTS_COMPOSITE_SCORE` remains false).
+
 ## Disagreement
 
 `computeCompositeRiskScore` sets `disagreement` when:

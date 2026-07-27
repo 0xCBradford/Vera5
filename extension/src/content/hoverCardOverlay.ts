@@ -15,6 +15,15 @@ import {
   shouldOfferNoiseRuleLearnForLabel,
 } from "../lib/noiseRule";
 import { listStoredNoiseRules } from "../lib/noiseRuleStorage";
+import {
+  buildKnownGoodMatchBadgeView,
+  buildKnownGoodOptionsHash,
+  findMatchingKnownGoodEntry,
+  KNOWN_GOOD_ENRICH_SKIPPED_LABEL,
+  KNOWN_GOOD_MATCH_SECTION_ARIA_LABEL,
+} from "../lib/knownGood";
+import { listStoredKnownGoodEntriesForMatching } from "../lib/knownGoodStorage";
+import { ENRICHMENT_ERROR_CODE } from "../lib/enrichment";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
   buildNormalizedEnrichmentRecord,
@@ -340,6 +349,11 @@ export const HOVER_CARD_IOC_PIN_BUTTON_CLASS = "vera5-hover-card-ioc-pin";
 export const HOVER_CARD_IOC_PIN_BUTTON_PINNED_CLASS = "vera5-hover-card-ioc-pin--pinned";
 export const HOVER_CARD_NOISE_RULE_MATCH_CLASS = "vera5-hover-card-noise-rule-match";
 export const HOVER_CARD_NOISE_RULE_BADGE_CLASS = "vera5-hover-card-noise-rule-badge";
+export const HOVER_CARD_KNOWN_GOOD_BADGE_CLASS = "vera5-hover-card-known-good-badge";
+export const HOVER_CARD_KNOWN_GOOD_MATCH_CLASS = "vera5-hover-card-known-good-match";
+export const HOVER_CARD_KNOWN_GOOD_SUMMARY_CLASS = "vera5-hover-card-known-good-summary";
+export const HOVER_CARD_KNOWN_GOOD_HINT_CLASS = "vera5-hover-card-known-good-hint";
+export const HOVER_CARD_KNOWN_GOOD_ID_CLASS = "vera5-hover-card-known-good-id";
 export const HOVER_CARD_NOISE_RULE_SUMMARY_CLASS = "vera5-hover-card-noise-rule-summary";
 export const HOVER_CARD_NOISE_RULE_HINT_CLASS = "vera5-hover-card-noise-rule-hint";
 export const HOVER_CARD_EXPORT_SECTION_CLASS = "vera5-hover-card-export";
@@ -802,6 +816,84 @@ function createMissingKeyAction(doc: Document): HTMLElement {
     safeOpenOptionsPage();
   });
   return button;
+}
+
+function createKnownGoodMatchSection(
+  iocValue: string,
+  doc: Document,
+  options?: {
+    insertBadgeAfter?: HTMLElement;
+    enrichSkippedByPolicy?: boolean;
+  }
+): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_KNOWN_GOOD_MATCH_CLASS;
+  section.hidden = true;
+  section.setAttribute("aria-label", KNOWN_GOOD_MATCH_SECTION_ARIA_LABEL);
+
+  void listStoredKnownGoodEntriesForMatching()
+    .then((entries) => {
+      const matched = findMatchingKnownGoodEntry(entries, iocValue);
+      if (!matched || !section.isConnected) {
+        return;
+      }
+      const view = buildKnownGoodMatchBadgeView(matched);
+      section.hidden = false;
+      section.dataset.vera5KnownGoodEntryId = view.entryId;
+      section.dataset.vera5KnownGoodCategory = view.category;
+      section.dataset.vera5KnownGoodMatchType = view.matchType;
+      section.dataset.vera5KnownGoodPattern = view.pattern;
+
+      if (options?.insertBadgeAfter?.isConnected) {
+        const headerBadge = doc.createElement("span");
+        headerBadge.className = HOVER_CARD_KNOWN_GOOD_BADGE_CLASS;
+        headerBadge.textContent = view.badgeLabel;
+        headerBadge.setAttribute("data-vera5-known-good-badge", "true");
+        headerBadge.dataset.vera5KnownGoodEntryId = view.entryId;
+        options.insertBadgeAfter.insertAdjacentElement("afterend", headerBadge);
+      }
+
+      const summary = doc.createElement("p");
+      summary.className = HOVER_CARD_KNOWN_GOOD_SUMMARY_CLASS;
+      summary.textContent = view.entrySummary;
+      section.appendChild(summary);
+
+      const hint = doc.createElement("p");
+      hint.className = HOVER_CARD_KNOWN_GOOD_HINT_CLASS;
+      hint.textContent = view.hint;
+      section.appendChild(hint);
+
+      const idLine = doc.createElement("p");
+      idLine.className = HOVER_CARD_KNOWN_GOOD_ID_CLASS;
+      idLine.textContent = `Entry id: ${view.entryId}`;
+      section.appendChild(idLine);
+
+      if (options?.enrichSkippedByPolicy === true) {
+        const skipped = doc.createElement("p");
+        skipped.className = "vera5-hover-card-known-good-enrich-skipped";
+        skipped.setAttribute("data-vera5-known-good-enrich-skipped", "true");
+        skipped.setAttribute("role", "status");
+        skipped.textContent = KNOWN_GOOD_ENRICH_SKIPPED_LABEL;
+        section.appendChild(skipped);
+      }
+
+      const link = doc.createElement("button");
+      link.type = "button";
+      link.className = HOVER_CARD_ACTION_CLASS;
+      link.textContent = view.viewEntryLabel;
+      link.setAttribute("aria-label", view.viewEntryAriaLabel);
+      link.setAttribute("data-vera5-known-good-entry-link", "true");
+      link.addEventListener("click", (event) => {
+        event.stopPropagation();
+        safeOpenOptionsPageWithHash(buildKnownGoodOptionsHash(view.entryId));
+      });
+      section.appendChild(link);
+    })
+    .catch(() => {
+      /* keep panel without known-good provenance when list cannot load */
+    });
+
+  return section;
 }
 
 function createNoiseRuleDeprioritizedSection(
@@ -2667,6 +2759,17 @@ export function buildHoverCardPanel(
   }
   headerRow.appendChild(headerActions);
   panel.appendChild(headerRow);
+
+  const knownGoodMatchSection = createKnownGoodMatchSection(payload.value, doc, {
+    insertBadgeAfter: typeRow,
+    enrichSkippedByPolicy:
+      payload.errorCode === ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY ||
+      (payload.sourceResults ?? []).some(
+        (entry) => entry.errorCode === ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY
+      ),
+  });
+  knownGoodMatchSection.style.marginBottom = "8px";
+  panel.appendChild(knownGoodMatchSection);
 
   const noiseRuleMatchSection = createNoiseRuleDeprioritizedSection(payload.value, doc, {
     insertBadgeAfter: typeRow,

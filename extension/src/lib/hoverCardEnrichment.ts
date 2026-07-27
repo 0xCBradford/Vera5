@@ -15,6 +15,8 @@ import {
   formatDisabledSourceMessage,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
+import { ENRICHMENT_ERROR_CODE } from "./enrichment";
+import { KNOWN_GOOD_ENRICH_SKIPPED_BADGE } from "./knownGood";
 import {
   CONNECTOR_FRESHNESS_POLICY,
   CONNECTOR_SOURCE_CLASS,
@@ -291,13 +293,17 @@ export function buildHoverCardLastUpdatedLine(
 
 export function formatSourceStatusBadge(
   status: HoverCardSourceEntryStatus,
-  fromCache?: boolean
+  fromCache?: boolean,
+  errorCode?: string
 ): string {
   if (status === "ok") {
     return fromCache === true ? "Cached" : "Live";
   }
   if (status === "error") {
     return "Error";
+  }
+  if (errorCode === ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY) {
+    return KNOWN_GOOD_ENRICH_SKIPPED_BADGE;
   }
   return "Skipped";
 }
@@ -450,7 +456,7 @@ export function buildHoverCardSourceEntry(
     label: result.sourceLabel.trim() || ENRICHMENT_SOURCE_LABELS[result.sourceId],
     status: result.status,
     fromCache,
-    badgeText: formatSourceStatusBadge(result.status, fromCache),
+    badgeText: formatSourceStatusBadge(result.status, fromCache, result.errorCode),
     detail: resolveSourceEntryDetail(result),
     metadataChips: buildHoverCardSourceMetadataChips(result.sourceId),
   };

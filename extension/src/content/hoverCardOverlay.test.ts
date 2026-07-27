@@ -640,6 +640,186 @@ describe("match provenance exposure", () => {
     vi.unstubAllGlobals();
   });
 
+  it("shows known benign badge when a known-good entry matches", async () => {
+    const { STORAGE_KEY_KNOWN_GOOD_LIST, KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION } =
+      await import("../lib/knownGoodStorage");
+    const { createKnownGoodEntry } = await import("../lib/knownGood");
+    const localStore: Record<string, unknown> = {};
+    const tabsCreate = vi.fn(() => Promise.resolve({ id: 1 }));
+    const entry = createKnownGoodEntry({
+      id: "kg-hover-overlay",
+      category: "saas",
+      matchType: "domain",
+      pattern: "noise.example",
+      labelText: "Known benign",
+    });
+    localStore[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [entry],
+    };
+
+    vi.stubGlobal("chrome", {
+      runtime: {
+        getURL: (path: string) => `chrome-extension://test/${path}`,
+      },
+      tabs: {
+        create: tabsCreate,
+      },
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in localStore) {
+                result[key] = localStore[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(localStore, items);
+            return Promise.resolve();
+          },
+          remove: () => Promise.resolve(),
+        },
+      },
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "noise.example",
+      type: IOC_TYPE.DOMAIN,
+    });
+    document.body.appendChild(panel);
+
+    await vi.waitFor(() => {
+      expect(
+        panel.querySelector("[data-vera5-known-good-badge='true']")?.textContent
+      ).toBe("Known benign");
+    });
+
+    const provenance = panel.querySelector(".vera5-hover-card-known-good-match");
+    expect(provenance?.getAttribute("data-vera5-known-good-entry-id")).toBe(
+      "kg-hover-overlay"
+    );
+    expect(provenance?.getAttribute("data-vera5-known-good-category")).toBe(
+      "saas"
+    );
+    expect(provenance?.getAttribute("data-vera5-known-good-match-type")).toBe(
+      "domain"
+    );
+    expect(provenance?.getAttribute("data-vera5-known-good-pattern")).toBe(
+      "noise.example"
+    );
+    expect(provenance?.textContent).toContain("SaaS · domain · noise.example");
+    expect(provenance?.textContent).toContain("Entry id: kg-hover-overlay");
+    const link = panel.querySelector(
+      "[data-vera5-known-good-entry-link='true']"
+    ) as HTMLButtonElement | null;
+    expect(link?.textContent).toBe("View matched known-good entry");
+    link?.click();
+    expect(tabsCreate).toHaveBeenCalledWith({
+      url: "chrome-extension://test/options.html#known-good/kg-hover-overlay",
+    });
+
+    vi.unstubAllGlobals();
+  });
+
+  it("shows enrich skipped known-good policy with matched entry link", async () => {
+    const { STORAGE_KEY_KNOWN_GOOD_LIST, KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION } =
+      await import("../lib/knownGoodStorage");
+    const { createKnownGoodEntry } = await import("../lib/knownGood");
+    const { ENRICHMENT_ERROR_CODE } = await import("../lib/enrichment");
+    const localStore: Record<string, unknown> = {};
+    const entry = createKnownGoodEntry({
+      id: "kg-skip-overlay",
+      category: "saas",
+      matchType: "domain",
+      pattern: "skip.example",
+      labelText: "Known benign",
+    });
+    localStore[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [entry],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+
+    vi.stubGlobal("chrome", {
+      runtime: {
+        getURL: (path: string) => `chrome-extension://test/${path}`,
+      },
+      tabs: {
+        create: vi.fn(() => Promise.resolve({ id: 1 })),
+      },
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in localStore) {
+                result[key] = localStore[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(localStore, items);
+            return Promise.resolve();
+          },
+          remove: () => Promise.resolve(),
+        },
+      },
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "skip.example",
+      type: IOC_TYPE.DOMAIN,
+      enrichmentState: "empty",
+      errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+      errorMessage: "Outbound vendor enrichment skipped (known-good match policy).",
+      sourceResults: [
+        {
+          sourceId: "abuseipdb",
+          label: "AbuseIPDB",
+          status: "skipped",
+          badgeText: "Skipped (known-good)",
+          detail: "Outbound vendor enrichment skipped (known-good match policy).",
+          errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+        },
+      ],
+    });
+    document.body.appendChild(panel);
+
+    await vi.waitFor(() => {
+      expect(
+        panel.querySelector("[data-vera5-known-good-enrich-skipped='true']")
+          ?.textContent
+      ).toBe("Enrichment skipped (known-good policy)");
+    });
+    expect(
+      panel.querySelector("[data-vera5-known-good-entry-link='true']")
+    ).not.toBeNull();
+
+    vi.unstubAllGlobals();
+  });
+
   it("renders on-page and refanged values when displayValue differs", () => {
     const panel = buildHoverCardPanel({
       value: "https://example.com/evil",

@@ -1040,6 +1040,10 @@ describe("hover card enrichment placeholders", () => {
     });
     expect(formatSourceStatusBadge("ok", true)).toBe("Cached");
     expect(formatSourceStatusBadge("ok", false)).toBe("Live");
+    expect(formatSourceStatusBadge("skipped")).toBe("Skipped");
+    expect(
+      formatSourceStatusBadge("skipped", false, "known_good_policy")
+    ).toBe("Skipped (known-good)");
   });
 
   it("resolves single-source RDAP/WHOIS enrichment with attribution footer and timestamp", () => {

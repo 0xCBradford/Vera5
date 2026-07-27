@@ -297,6 +297,8 @@ export function formatEnrichmentSourceLastErrorLabel(
       return "Blocked by internal asset policy";
     case ENRICHMENT_ERROR_CODE.QUIET_MODE:
       return "Blocked by quiet mode";
+    case ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY:
+      return "Skipped (known-good policy)";
     case ENRICHMENT_ERROR_CODE.VENDOR:
       return "Vendor error";
     default:

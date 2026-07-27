@@ -8,8 +8,17 @@ import {
   DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
   STORAGE_KEY_QUIET_MODE,
+  STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH,
   QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
 } from "../lib/storage";
+import {
+  createKnownGoodEntry,
+  SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_BLOCKED_MESSAGE,
+} from "../lib/knownGood";
+import {
+  KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+  STORAGE_KEY_KNOWN_GOOD_LIST,
+} from "../lib/knownGoodStorage";
 import { clearGlobalEnrichmentCooldown } from "../lib/enrichmentCooldown";
 import {
   STORAGE_KEY_INVESTIGATION_SESSIONS,
@@ -162,6 +171,7 @@ describe("enrichment handler", () => {
     store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
       DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     store[STORAGE_KEY_QUIET_MODE] = false;
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = false;
     stubChromeStorage(store);
   });
 
@@ -1079,6 +1089,606 @@ describe("enrichment handler", () => {
           },
         ],
       },
+    });
+  });
+
+  it("skips outbound vendor enrich when known-good match policy is on", async () => {
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = true;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-skip-enrich",
+          category: "saas",
+          matchType: "ip",
+          pattern: "8.8.8.8",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+          errorMessage: SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_BLOCKED_MESSAGE,
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+            errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+            errorMessage: SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_BLOCKED_MESSAGE,
+          },
+        ],
+      },
+    });
+  });
+
+  it("prefers quiet mode over known-good skip when both apply", async () => {
+    store[STORAGE_KEY_QUIET_MODE] = true;
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = true;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-quiet-wins",
+          category: "saas",
+          matchType: "ip",
+          pattern: "8.8.8.8",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+          errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+            errorCode: ENRICHMENT_ERROR_CODE.QUIET_MODE,
+            errorMessage: QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
+          },
+        ],
+      },
+    });
+  });
+
+  it("still enriches when known-good match policy is off", async () => {
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = false;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-skip-enrich-off",
+          category: "saas",
+          matchType: "ip",
+          pattern: "8.8.8.8",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+    expect(response.payload.source).toMatchObject({
+      sourceId: "abuseipdb",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+  });
+
+  it("still enriches a non-listed IOC when skip policy is on for another same-page match", async () => {
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = true;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-same-page-cdn",
+          category: "cdn",
+          matchType: "ip",
+          pattern: "1.1.1.1",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live malicious summary",
+    });
+
+    const listedSkipped = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "1.1.1.1",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(listedSkipped.ok).toBe(true);
+    if (!listedSkipped.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+    expect(listedSkipped.payload.source).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+    });
+
+    enrichWithAbuseIpdb.mockClear();
+    const unlistedEnriched = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "185.220.101.1",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).toHaveBeenCalledTimes(1);
+    expect(enrichWithAbuseIpdb).toHaveBeenCalledWith(
+      expect.objectContaining({ value: "185.220.101.1" })
+    );
+    expect(unlistedEnriched.ok).toBe(true);
+    if (!unlistedEnriched.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+    expect(unlistedEnriched.payload.source).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live malicious summary",
+    });
+  });
+
+  it("returns cached enrichment when known-good skip policy is on and cache hits", async () => {
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = true;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-skip-enrich-cache",
+          category: "saas",
+          matchType: "ip",
+          pattern: "8.8.8.8",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: Date.now() - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+          fromCache: true,
+        },
+      },
+    };
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+    expect(response.payload.source).toMatchObject({
+      sourceId: "abuseipdb",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "cached summary",
+      fromCache: true,
+    });
+  });
+
+  it("blocks live call under known-good skip but still allows cache display", async () => {
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = true;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-skip-live-vs-cache",
+          category: "saas",
+          matchType: "ip",
+          pattern: "9.9.9.9",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+
+    const liveBlocked = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "9.9.9.9",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(liveBlocked.ok).toBe(true);
+    if (!liveBlocked.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+    expect(liveBlocked.payload.source).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+      errorMessage: SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_BLOCKED_MESSAGE,
+    });
+
+    enrichWithAbuseIpdb.mockClear();
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "9.9.9.9|abuseipdb": {
+        fetchedAt: Date.now() - 2_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "prior cached summary",
+          fromCache: true,
+        },
+      },
+    };
+
+    const cacheDisplayed = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "9.9.9.9",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(cacheDisplayed.ok).toBe(true);
+    if (!cacheDisplayed.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+    expect(cacheDisplayed.payload.source).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "prior cached summary",
+      fromCache: true,
+    });
+  });
+
+  it("blocks live enrichment with bypassCache when known-good skip policy is on", async () => {
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = true;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-skip-bypass-cache",
+          category: "saas",
+          matchType: "ip",
+          pattern: "8.8.8.8",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: Date.now() - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+        },
+      },
+    };
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+        sourceId: "abuseipdb",
+        bypassCache: true,
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        source: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+          errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+          errorMessage: SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_BLOCKED_MESSAGE,
+        },
+        sources: [
+          {
+            sourceId: "abuseipdb",
+            sourceLabel: "AbuseIPDB",
+            status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+            errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+            errorMessage: SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_BLOCKED_MESSAGE,
+          },
+        ],
+      },
+    });
+  });
+
+  it("returns partial cache hits with cached vs skip labels when known-good skip is on", async () => {
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = true;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-skip-partial-cache",
+          category: "saas",
+          matchType: "ip",
+          pattern: "8.8.8.8",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: Date.now() - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+        },
+      },
+    };
+    enrichWithAbuseIpdb.mockResolvedValue({
+      sourceId: "abuseipdb",
+      sourceLabel: "AbuseIPDB",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live summary",
+    });
+    enrichWithOtx.mockResolvedValue({
+      sourceId: "otx",
+      sourceLabel: "OTX",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "live otx summary",
+    });
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+      })
+    );
+
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(enrichWithOtx).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+
+    const abuse = response.payload.sources.find(
+      (source) => source.sourceId === "abuseipdb"
+    );
+    const otx = response.payload.sources.find((source) => source.sourceId === "otx");
+
+    expect(abuse).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "cached summary",
+      fromCache: true,
+    });
+    expect(otx).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+      errorMessage: SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_BLOCKED_MESSAGE,
+    });
+    expect(response.payload.source).toMatchObject({
+      sourceId: "abuseipdb",
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      fromCache: true,
+    });
+  });
+
+  it("reads extension cache per source under known-good skip when local backend is enabled", async () => {
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = true;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-skip-backend-cache",
+          category: "saas",
+          matchType: "ip",
+          pattern: "8.8.8.8",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+    vi.mocked(storage.getLocalBackendEnabled).mockResolvedValue(true);
+    store[STORAGE_KEY_ENRICHMENT_CACHE] = {
+      "8.8.8.8|abuseipdb": {
+        fetchedAt: Date.now() - 5_000,
+        payload: {
+          sourceId: "abuseipdb",
+          sourceLabel: "AbuseIPDB",
+          status: ENRICHMENT_SOURCE_STATUS.OK,
+          summary: "cached summary",
+        },
+      },
+    };
+
+    const response = await handleEnrichIocMessage(
+      enrichIocMessage({
+        value: "8.8.8.8",
+        iocType: "ipv4",
+      })
+    );
+
+    expect(requestLocalBackendEnrichment).not.toHaveBeenCalled();
+    expect(enrichWithAbuseIpdb).not.toHaveBeenCalled();
+    expect(enrichWithOtx).not.toHaveBeenCalled();
+    expect(response.ok).toBe(true);
+    if (!response.ok) {
+      throw new Error("Expected enrich response to succeed");
+    }
+
+    const abuse = response.payload.sources.find(
+      (source) => source.sourceId === "abuseipdb"
+    );
+    const otx = response.payload.sources.find((source) => source.sourceId === "otx");
+
+    expect(abuse).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.OK,
+      summary: "cached summary",
+      fromCache: true,
+    });
+    expect(otx).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
     });
   });
 

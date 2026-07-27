@@ -871,6 +871,62 @@ describe("domain policy enrich gate", () => {
     expect(panel?.textContent).toContain(DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE);
   });
 
+  it("keeps domain deny when known-good skip enrich is on for a matching indicator", async () => {
+    const { STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH } = await import(
+      "../lib/storage"
+    );
+    const {
+      KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      STORAGE_KEY_KNOWN_GOOD_LIST,
+    } = await import("../lib/knownGoodStorage");
+    const { createKnownGoodEntry } = await import("../lib/knownGood");
+
+    store[STORAGE_KEY_DOMAIN_POLICY_ENRICH_GATE_ENABLED] = true;
+    store[STORAGE_KEY_DOMAIN_DENYLIST] = ["mail.example.com"];
+    store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH] = true;
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [
+        createKnownGoodEntry({
+          id: "kg-deny-wins",
+          category: "saas",
+          matchType: "ip",
+          pattern: "8.8.8.8",
+          labelText: "Known benign",
+        }),
+      ],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+
+    const anchor = document.createElement("span");
+    document.body.appendChild(anchor);
+    showHoverCardNearAnchor(anchor, {
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await runBackgroundEnrichment({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    expect(
+      enrichmentMessageClient.requestEnrichmentFromServiceWorker
+    ).not.toHaveBeenCalled();
+    const panel = document.querySelector(`.${HOVER_CARD_PANEL_CLASS}`);
+    expect(panel?.textContent).toContain(DOMAIN_POLICY_ENRICHMENT_BLOCKED_MESSAGE);
+    expect(panel?.textContent).not.toContain(
+      "Outbound vendor enrichment skipped (known-good match policy)."
+    );
+  });
+
   it("blocks outbound enrichment outside the allowlist in deny-by-default mode", async () => {
     Object.defineProperty(document, "location", {
       configurable: true,

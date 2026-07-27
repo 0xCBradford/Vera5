@@ -205,6 +205,7 @@ export function serializeBuiltInThreatProfile(
 /**
  * Versioned portable workflow profile (no API keys or vendor credentials).
  * Optional `noiseListRef` points at a local noise-rule list id or starter ref.
+ * Optional `knownGoodListRef` points at a local known-good list id or starter ref.
  * Parse/normalize rejects documents whose keys look like apiKey, tokens, or credentials.
  */
 export type ThreatProfile = {
@@ -218,6 +219,7 @@ export type ThreatProfile = {
   analystMode: string;
   quietModeDefault: boolean;
   noiseListRef?: string;
+  knownGoodListRef?: string;
 };
 
 /**
@@ -237,6 +239,7 @@ export type ThreatProfileDocument = {
   defaultExportTemplateId?: ExportTemplateId;
   analystMode?: string;
   noiseListRef?: string;
+  knownGoodListRef?: string;
   connectorConfidenceMetadataOverrides?: ConnectorConfidenceMetadataOverridesRecord;
 };
 
@@ -543,7 +546,8 @@ export function isThreatProfileDocument(value: unknown): boolean {
   return (
     typeof value.pivotRecipeSetId === "string" ||
     typeof value.quietModeDefault === "boolean" ||
-    value.noiseListRef !== undefined
+    value.noiseListRef !== undefined ||
+    value.knownGoodListRef !== undefined
   );
 }
 
@@ -649,6 +653,10 @@ export function normalizeThreatProfileDocument(value: unknown): ThreatProfileDoc
     profile.noiseListRef = value.noiseListRef.trim();
   }
 
+  if (typeof value.knownGoodListRef === "string" && value.knownGoodListRef.trim()) {
+    profile.knownGoodListRef = value.knownGoodListRef.trim();
+  }
+
   const enabledConnectors = normalizeThreatProfileEnabledConnectors(
     value.enabledConnectors
   );
@@ -675,7 +683,7 @@ export function normalizeThreatProfileDocument(value: unknown): ThreatProfileDoc
   return profile;
 }
 
-/** True when every required ThreatProfile field is present (noiseListRef remains optional). */
+/** True when every required ThreatProfile field is present (noiseListRef / knownGoodListRef remain optional). */
 export function isCompleteThreatProfile(
   value: ThreatProfileDocument
 ): value is ThreatProfile {
@@ -920,7 +928,7 @@ export function mergeImportedThreatProfile(
     next = { ...next, quietMode: analystPartial.quietMode };
   }
 
-  // noiseListRef is an optional import slot only — not a Vera5Settings field.
+  // noiseListRef / knownGoodListRef are optional import slots only — not Vera5Settings fields.
   return next;
 }
 

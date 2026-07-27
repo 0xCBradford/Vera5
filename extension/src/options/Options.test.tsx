@@ -3110,6 +3110,172 @@ describe("Options noise rules controls", () => {
     clickSpy.mockRestore();
   });
 
+  it("exports known-good list JSON for team handoff without API keys", async () => {
+    const { STORAGE_KEY_KNOWN_GOOD_LIST, KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION } =
+      await import("../lib/knownGoodStorage");
+    const { createKnownGoodEntry } = await import("../lib/knownGood");
+
+    const entry = createKnownGoodEntry({
+      id: "kg-export-ui",
+      category: "cdn",
+      matchType: "domain",
+      pattern: "cdn.handoff.example",
+      labelText: "Known benign",
+    });
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [entry],
+    };
+    store[STORAGE_KEY_API_KEYS] = {
+      abuseipdb: "should-not-appear-in-known-good-export",
+    };
+
+    const createObjectURL = vi.fn(() => "blob:known-good");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL,
+    });
+    const clickSpy = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const exportButton = mounted.container.querySelector(
+      'button[aria-label="Export list JSON"]'
+    ) as HTMLButtonElement;
+    expect(exportButton).not.toBeNull();
+    await act(async () => {
+      exportButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(createObjectURL).toHaveBeenCalled();
+    const blob = createObjectURL.mock.calls[0]?.[0] as Blob;
+    const text = await blob.text();
+    expect(text).toContain("cdn.handoff.example");
+    expect(text).not.toContain("should-not-appear-in-known-good-export");
+    expect(text).not.toMatch(/apiKey|api_key|abuseipdb/i);
+    expect(mounted.container.textContent).toContain("Known-good list exported");
+    expect(clickSpy).toHaveBeenCalled();
+    clickSpy.mockRestore();
+  });
+
+  it("toggles known-good category matching and edits or deletes entries", async () => {
+    const { STORAGE_KEY_KNOWN_GOOD_LIST, KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION } =
+      await import("../lib/knownGoodStorage");
+    const { createKnownGoodEntry } = await import("../lib/knownGood");
+
+    const entry = createKnownGoodEntry({
+      id: "kg-options-edit",
+      category: "cdn",
+      matchType: "domain",
+      pattern: "edit.example",
+      labelText: "Known benign",
+    });
+    store[STORAGE_KEY_KNOWN_GOOD_LIST] = {
+      schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      entries: [entry],
+      categoryEnabled: {
+        cdn: true,
+        saas: true,
+        corp_vpn: true,
+        vuln_scanner: true,
+        internal: true,
+      },
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(
+      mounted.container.querySelector('[data-known-good-entry-id="kg-options-edit"]')
+    ).not.toBeNull();
+
+    const skipEnrichToggle = mounted.container.querySelector(
+      'input[aria-label="Skip outbound vendor enrich on known-good match"]'
+    ) as HTMLInputElement;
+    expect(skipEnrichToggle).not.toBeNull();
+    expect(skipEnrichToggle.checked).toBe(false);
+    await act(async () => {
+      skipEnrichToggle.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(skipEnrichToggle.checked).toBe(true);
+    const { STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH } = await import(
+      "../lib/storage"
+    );
+    expect(store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH]).toBe(true);
+
+    const cdnToggle = mounted.container.querySelector(
+      'input[aria-label="Match this category: CDN"]'
+    ) as HTMLInputElement;
+    expect(cdnToggle).not.toBeNull();
+    expect(cdnToggle.checked).toBe(true);
+    await act(async () => {
+      cdnToggle.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(cdnToggle.checked).toBe(false);
+    expect(mounted.container.textContent).toContain("CDN matching disabled");
+
+    const editButton = mounted.container.querySelector(
+      'button[aria-label="Edit kg-options-edit"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      editButton.click();
+      await Promise.resolve();
+    });
+    const patternInput = mounted.container.querySelector(
+      'input[aria-label="Edit pattern for kg-options-edit"]'
+    ) as HTMLInputElement;
+    await act(async () => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      nativeInputValueSetter?.call(patternInput, "edited.example");
+      patternInput.dispatchEvent(new Event("input", { bubbles: true }));
+      await Promise.resolve();
+    });
+    const saveButton = mounted.container.querySelector(
+      'button[aria-label="Save kg-options-edit"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      saveButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mounted.container.textContent).toContain("edited.example");
+    expect(mounted.container.textContent).toContain("Known-good entry saved");
+
+    const deleteButton = mounted.container.querySelector(
+      'button[aria-label="Delete kg-options-edit"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      deleteButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(
+      mounted.container.querySelector('[data-known-good-entry-id="kg-options-edit"]')
+    ).toBeNull();
+    expect(mounted.container.textContent).toContain("Known-good entry deleted");
+  });
+
   it("imports noise rules JSON from Options with duplicate skip feedback", async () => {
     mounted = renderOptions();
     await act(async () => {

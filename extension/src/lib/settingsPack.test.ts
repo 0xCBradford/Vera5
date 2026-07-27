@@ -1259,6 +1259,7 @@ describe("threat profile import", () => {
       analystMode: "soc",
       quietModeDefault: false,
       noiseListRef: "soc-dashboard-starter",
+      knownGoodListRef: "cdn-saas-starter",
     });
 
     expect(profile).toEqual({
@@ -1272,8 +1273,47 @@ describe("threat profile import", () => {
       analystMode: "soc",
       quietModeDefault: false,
       noiseListRef: "soc-dashboard-starter",
+      knownGoodListRef: "cdn-saas-starter",
     });
     expect(isCompleteThreatProfile(profile)).toBe(true);
+  });
+
+  it("accepts optional knownGoodListRef on import without writing it into settings", () => {
+    expect(
+      isThreatProfileDocument({
+        threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+        knownGoodListRef: "cdn-saas-starter",
+        enabledConnectors: ["abuseipdb"],
+      })
+    ).toBe(true);
+
+    const profile = normalizeThreatProfileDocument({
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      id: "kg-ref-only",
+      name: "Known-good ref sample",
+      description: "Optional known-good list reference.",
+      enabledConnectors: ["abuseipdb"],
+      pivotRecipeSetId: "soc-triage",
+      defaultExportTemplateId: "jira-comment",
+      analystMode: "soc",
+      quietModeDefault: false,
+      knownGoodListRef: "  cdn-saas-starter  ",
+    });
+    expect(profile.knownGoodListRef).toBe("cdn-saas-starter");
+
+    const withoutRef = normalizeThreatProfileDocument({
+      threatProfileSchemaVersion: THREAT_PROFILE_SCHEMA_VERSION,
+      id: "kg-ref-blank",
+      name: "Blank known-good ref",
+      description: "Blank known-good list reference is dropped.",
+      enabledConnectors: ["abuseipdb"],
+      pivotRecipeSetId: "soc-triage",
+      defaultExportTemplateId: "jira-comment",
+      analystMode: "soc",
+      quietModeDefault: false,
+      knownGoodListRef: "   ",
+    });
+    expect(withoutRef).not.toHaveProperty("knownGoodListRef");
   });
 
   it("maps legacy label into name when name is omitted", () => {
@@ -1935,6 +1975,7 @@ describe("threat profile import", () => {
       pivotRecipeSetId: "soc-triage",
       quietModeDefault: true,
       noiseListRef: "soc-dashboard-starter",
+      knownGoodListRef: "cdn-saas-starter",
     });
 
     expect(merged.apiKeys).toEqual({ abuseipdb: TEST_FIXTURE_STORED_API_KEY });
@@ -1946,5 +1987,6 @@ describe("threat profile import", () => {
     expect(merged.enrichmentSourceEnabled.rdap_whois).toBe(false);
     expect(merged.pivotEmphasisProviders[0]).toBe("abuseipdb");
     expect(merged).not.toHaveProperty("noiseListRef");
+    expect(merged).not.toHaveProperty("knownGoodListRef");
   });
 });

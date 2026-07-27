@@ -23,6 +23,7 @@ export const ENRICHMENT_ERROR_CODE = {
   DOMAIN_POLICY: "domain_policy",
   INTERNAL_ASSET: "internal_asset",
   QUIET_MODE: "quiet_mode",
+  KNOWN_GOOD_POLICY: "known_good_policy",
   DISCLOSURE_DECLINED: "disclosure_declined",
   VENDOR: "vendor_error",
 } as const;

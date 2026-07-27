@@ -1467,6 +1467,98 @@ describe("Popup IOC tray", () => {
     expect(whyStillVisible?.getAttribute("title")).toContain("Source context: 192.0.2.1");
   });
 
+  it("shows known benign badge on tray rows that match known-good entries", async () => {
+    const { STORAGE_KEY_KNOWN_GOOD_LIST, KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION } =
+      await import("../lib/knownGoodStorage");
+    const { createKnownGoodEntry } = await import("../lib/knownGood");
+    const entry = createKnownGoodEntry({
+      id: "kg-tray-badge",
+      category: "cdn",
+      matchType: "ip",
+      pattern: "8.8.8.8",
+      labelText: "Known benign",
+    });
+
+    stubChrome({
+      initialSummary: sampleSummary,
+      localStore: {
+        [STORAGE_KEY_KNOWN_GOOD_LIST]: {
+          schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+          updatedAt: 1,
+          entries: [entry],
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector("[data-vera5-known-good-badge='true']")
+          ?.textContent
+      ).toBe("Known benign");
+    });
+
+    const badgedRow = mounted!.container.querySelector<HTMLElement>(
+      "[data-vera5-tray-entry='true'][data-vera5-value='8.8.8.8']"
+    );
+    expect(badgedRow?.dataset.vera5KnownGoodEntryId).toBe("kg-tray-badge");
+    expect(badgedRow?.dataset.vera5KnownGoodCategory).toBe("cdn");
+    expect(badgedRow?.dataset.vera5KnownGoodMatchType).toBe("ip");
+    expect(badgedRow?.dataset.vera5KnownGoodPattern).toBe("8.8.8.8");
+    expect(
+      badgedRow?.querySelector("[data-vera5-known-good-provenance='true']")
+        ?.textContent
+    ).toBe("Matched: CDN · IP · 8.8.8.8");
+  });
+
+  it("sorts known-good matches below active investigation IOCs in the tray", async () => {
+    const { STORAGE_KEY_KNOWN_GOOD_LIST, KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION } =
+      await import("../lib/knownGoodStorage");
+    const { createKnownGoodEntry } = await import("../lib/knownGood");
+    const entry = createKnownGoodEntry({
+      id: "kg-tray-sort",
+      category: "cdn",
+      matchType: "ip",
+      pattern: "192.0.2.1",
+      labelText: "Known benign",
+    });
+
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+      localStore: {
+        [STORAGE_KEY_KNOWN_GOOD_LIST]: {
+          schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+          updatedAt: 1,
+          entries: [entry],
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(
+          "[data-vera5-tray-entry='true'][data-vera5-value='192.0.2.1'][data-vera5-known-good-badge]"
+        ) ||
+          mounted?.container.querySelector(
+            "[data-vera5-tray-entry='true'][data-vera5-value='192.0.2.1'] [data-vera5-known-good-badge='true']"
+          )
+      ).not.toBeNull();
+    });
+
+    const activeRows = Array.from(
+      mounted!.container.querySelectorAll<HTMLElement>(
+        "[data-vera5-tray-entry='true']:not([data-vera5-noise-suppressed='true'])"
+      )
+    );
+    expect(activeRows.map((row) => row.dataset.vera5Value)).toEqual([
+      "8.8.8.8",
+      "CVE-2021-44228",
+      "192.0.2.1",
+    ]);
+  });
+
   it("shows active page context badge in the IOC tray header", async () => {
     stubChrome({
       initialSummary: sampleSummary,

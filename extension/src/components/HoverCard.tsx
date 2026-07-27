@@ -20,7 +20,17 @@ import {
   type NoiseRuleHoverMatchView,
 } from "../lib/noiseRule";
 import { listStoredNoiseRules } from "../lib/noiseRuleStorage";
+import {
+  buildKnownGoodMatchBadgeView,
+  buildKnownGoodOptionsHash,
+  findMatchingKnownGoodEntry,
+  KNOWN_GOOD_ENRICH_SKIPPED_LABEL,
+  KNOWN_GOOD_MATCH_SECTION_ARIA_LABEL,
+  type KnownGoodMatchBadgeView,
+} from "../lib/knownGood";
+import { listStoredKnownGoodEntriesForMatching } from "../lib/knownGoodStorage";
 import { safeOpenOptionsPageWithHash } from "../lib/extensionContext";
+import { ENRICHMENT_ERROR_CODE } from "../lib/enrichment";
 import {
   getActiveInvestigationSession,
   toggleActiveInvestigationSessionIocPin,
@@ -335,6 +345,9 @@ export function HoverCard({
   const [noiseRuleMatch, setNoiseRuleMatch] = useState<NoiseRuleHoverMatchView | null>(
     null
   );
+  const [knownGoodMatch, setKnownGoodMatch] = useState<KnownGoodMatchBadgeView | null>(
+    null
+  );
   const pivotLinks = getPivotLinks(type, value);
   const view = resolveHoverCardDisplayView({
     enrichmentState,
@@ -385,6 +398,7 @@ export function HoverCard({
   useEffect(() => {
     let cancelled = false;
     setNoiseRuleMatch(null);
+    setKnownGoodMatch(null);
     void listStoredNoiseRules()
       .then((rules) => {
         if (cancelled) {
@@ -396,6 +410,19 @@ export function HoverCard({
       .catch(() => {
         if (!cancelled) {
           setNoiseRuleMatch(null);
+        }
+      });
+    void listStoredKnownGoodEntriesForMatching()
+      .then((entries) => {
+        if (cancelled) {
+          return;
+        }
+        const matched = findMatchingKnownGoodEntry(entries, value);
+        setKnownGoodMatch(matched ? buildKnownGoodMatchBadgeView(matched) : null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setKnownGoodMatch(null);
         }
       });
     return () => {
@@ -457,6 +484,15 @@ export function HoverCard({
     >
       <div className="vera5-hover-card-header">
         <span className="vera5-hover-card-type">{typeLabel}</span>
+        {knownGoodMatch ? (
+          <span
+            className="vera5-hover-card-known-good-badge"
+            data-vera5-known-good-badge="true"
+            data-vera5-known-good-entry-id={knownGoodMatch.entryId}
+          >
+            {knownGoodMatch.badgeLabel}
+          </span>
+        ) : null}
         {noiseRuleMatch ? (
           <span
             className="vera5-hover-card-noise-rule-badge"
@@ -499,6 +535,50 @@ export function HoverCard({
           );
         })}
       </div>
+      {knownGoodMatch ? (
+        <section
+          className="vera5-hover-card-known-good-match"
+          aria-label={KNOWN_GOOD_MATCH_SECTION_ARIA_LABEL}
+          data-vera5-known-good-entry-id={knownGoodMatch.entryId}
+          data-vera5-known-good-category={knownGoodMatch.category}
+          data-vera5-known-good-match-type={knownGoodMatch.matchType}
+          data-vera5-known-good-pattern={knownGoodMatch.pattern}
+          style={{ marginBottom: 8 }}
+        >
+          <p className="vera5-hover-card-known-good-summary">
+            {knownGoodMatch.entrySummary}
+          </p>
+          <p className="vera5-hover-card-known-good-hint">{knownGoodMatch.hint}</p>
+          <p className="vera5-hover-card-known-good-id">
+            Entry id: {knownGoodMatch.entryId}
+          </p>
+          {errorCode === ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY ||
+          sourceResults.some(
+            (entry) => entry.errorCode === ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY
+          ) ? (
+            <p
+              className="vera5-hover-card-known-good-enrich-skipped"
+              data-vera5-known-good-enrich-skipped="true"
+              role="status"
+            >
+              {KNOWN_GOOD_ENRICH_SKIPPED_LABEL}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            className="vera5-hover-card-action"
+            data-vera5-known-good-entry-link="true"
+            aria-label={knownGoodMatch.viewEntryAriaLabel}
+            onClick={() => {
+              safeOpenOptionsPageWithHash(
+                buildKnownGoodOptionsHash(knownGoodMatch.entryId)
+              );
+            }}
+          >
+            {knownGoodMatch.viewEntryLabel}
+          </button>
+        </section>
+      ) : null}
       {noiseRuleMatch ? (
         <section
           className="vera5-hover-card-noise-rule-match"

@@ -429,7 +429,7 @@ Clear-all controls for correlation or relationship memory do not delete investig
 
 ## Portable profiles, settings packs, and third-party JSON
 
-Threat profiles and settings packs import connector toggles, TTL, domain policy, analyst mode, export templates, and optional noise-list references—**never API keys or tokens**. This matches the repository [SECURITY.md](../SECURITY.md#portable-threat-profiles-and-settings-packs) BYOK/BYOA posture: you supply vendor keys locally; portable JSON never carries them.
+Threat profiles and settings packs import connector toggles, TTL, domain policy, analyst mode, export templates, and optional noise-list or known-good list references—**never API keys or tokens**. This matches the repository [SECURITY.md](../SECURITY.md#portable-threat-profiles-and-settings-packs) BYOK/BYOA posture: you supply vendor keys locally; portable JSON never carries them.
 
 | Control | Behavior |
 |---------|----------|
@@ -441,7 +441,7 @@ Threat profiles and settings packs import connector toggles, TTL, domain policy,
 
 ### Threat profile vs settings pack precedence
 
-Portable **threat profiles** are richer workflow bundles (connectors, pivot recipes, export templates, analyst mode, quiet-mode default, optional noise-list references). **Settings packs** are narrower handoff files focused on connector toggles, cache TTL, domain policy, and analyst mode—without API keys.
+Portable **threat profiles** are richer workflow bundles (connectors, pivot recipes, export templates, analyst mode, quiet-mode default, optional noise-list and known-good list references). **Settings packs** are narrower handoff files focused on connector toggles, cache TTL, domain policy, and analyst mode—without API keys.
 
 | Preference area | Settings pack | Threat profile | Winner when both apply |
 |-----------------|---------------|----------------|------------------------|
@@ -451,6 +451,7 @@ Portable **threat profiles** are richer workflow bundles (connectors, pivot reci
 | Pivot emphasis / recipe set | Yes | Yes | Threat profile |
 | Quiet mode default | No | Yes | Threat profile |
 | Optional noise-list reference | No | Yes | Threat profile |
+| Optional known-good list reference | No | Yes | Threat profile |
 | Global and per-source cache TTL | Yes | No (unless profile adds later) | Settings pack |
 | Domain policy mode, lists, enrich gate | Yes | No (unless profile adds later) | Settings pack |
 | Stored API keys | Never exported | Never exported | Local profile only |
@@ -472,9 +473,22 @@ Noise reduction and known-good intelligence use **inspectable local rules** only
 - stored and exported as human-readable JSON for team handoff (allowlisted pattern/action fields only; never API keys or enrichment secrets)
 - optional SOC dashboard starter list (`examples/soc-dashboard-noise-starter.json` or Options **Import SOC dashboard starter**)—never auto-applied; import review supports add-only or replace-all with confirmation
 - no telemetry, cloud training, or opaque ML weight vectors
+- no cloud goodware or global reputation API for known-good decisions
 - importable pattern lists for team handoff without secrets
 
-Known-good labels are informational; optional skip-enrich policy does not bypass domain deny or quiet mode.
+Known-good labels are **informational only**. A match surfaces a visible **Known benign** or **Known internal** (or custom) label for triage—it is **not** a silent malware negative, automatic safe verdict, or hidden second score that overrides composite risk. Optional skip-enrich policy does not bypass domain deny or quiet mode. List entries store allowlisted label fields only; import rejects score/verdict-style fields.
+
+### Privacy: no cloud goodware API
+
+Known-good intelligence is **local curated lists only**. Vera5 does not consult a cloud goodware, malware-negative, or global reputation API to decide whether an indicator is benign or internal.
+
+| Guarantee | Behavior |
+|-----------|----------|
+| **No cloud goodware API** | Matching uses only entries you maintain or import on the local profile (`knownGoodList` in extension storage). There is no Vera5-hosted known-good feed, no fleet “goodware” lookup, and no third-party goodware/reputation cloud called for known-good labels. |
+| **No hidden reputation score** | A known-good match does not introduce a second score that overrides composite risk. Labels remain visible triage context only. |
+| **Local-only lists** | Entries persist in `chrome.storage.local`. Team handoff is operator-initiated JSON/CSV export/import of allowlisted fields—never API keys or enrichment secrets. Optional CDN/SaaS starter JSON applies only after explicit import. |
+
+Vendor enrichment connectors (AbuseIPDB, OTX, and other BYOK/BYOA sources you enable) remain separate: they query **your** configured vendors for indicator enrichment. They are not a Vera5 goodware cloud and do not replace or power the local known-good list.
 
 ### Privacy: no telemetry, no cloud learning, local-only rules
 
@@ -500,6 +514,18 @@ Noise rules and **domain policy** (Settings → **Trust & consent**) apply at di
 **Domain deny wins.** A noise rule never authorizes live enrichment—or auto-scan—on a host blocked by domain policy. Clearing a noise rule, disabling a rule, or leaving **Hide suppressed indicators from scan** off does not reopen vendor calls on a denied hostname. Noise rules affect local triage display (and optional scan omission); they are not an outbound trust gate and cannot weaken denylist or allowlist-mode restrictions.
 
 Stacked with other gates: even on an allowed host, quiet mode, internal asset lists, manual-only enrichment, and pre-query disclosure still apply as documented in [Trust gates (stacked)](#trust-gates-stacked). Domain policy remains the page-hostname enrich boundary; noise rules sit downstream for display and optional detection filtering only.
+
+### Known-good skip enrich vs domain policy and quiet mode (precedence)
+
+Optional **Skip outbound vendor enrich on known-good match** (Settings → **Known-good lists**, default **off**) is a downstream outbound filter for matching indicators. It does **not** weaken earlier trust gates.
+
+| Control | Scope | Effect |
+|---------|-------|--------|
+| **Domain policy** | Page **hostname** | Blocks live enrichment (and auto-scan) on denied hosts before the service worker runs vendor calls. |
+| **Quiet mode** | Global outbound enrich | Blocks live vendor enrichment after cache reads; surfaces quiet-mode skip messaging. |
+| **Known-good skip enrich** | Matching **indicator values** on enabled list categories | When on, skips live vendor enrichment for known-good matches only after domain allow and after quiet mode is off. Local **cached** enrichment for those indicators remains readable (cache is consulted before the skip). |
+
+**Domain deny wins.** Enabling known-good skip enrich never authorizes vendor calls on a host blocked by domain policy. **Quiet mode wins** over known-good skip: when quiet mode is on, enrich is blocked as quiet mode—not as a known-good policy skip—even if the indicator matches a known-good entry. Known-good skip remains an optional noise-reduction filter on allowed hosts with quiet mode off. Cached responses stay available under the skip policy the same way they do under quiet mode: a TTL-valid local cache hit is returned with a **Cached** label before any outbound skip applies.
 
 ## Permission changes
 

@@ -15,6 +15,8 @@ import {
   type NoiseRule,
 } from "./noiseRule";
 import { persistLearnedNoiseRule } from "./noiseRuleStorage";
+import { isKnownGoodWatchlistPromotionLabel } from "./knownGood";
+import { syncKnownGoodEntryLabelFromWatchlistPromotion } from "./knownGoodStorage";
 
 const sessionIocLabels = new Map<string, IocLabelId>();
 
@@ -57,6 +59,7 @@ export type SetSessionIocLabelOptions = {
 /**
  * Applies a watchlist label and, when `learnNoiseRule` is true for
  * suppress/internal/benign, creates and remembers a local exact-match noise rule.
+ * Promoting to `benign` or `internal` also syncs matching known-good entry label text.
  */
 export function setSessionIocLabel(
   value: string,
@@ -73,6 +76,13 @@ export function setSessionIocLabel(
   }
   if (canPersistIocLabels()) {
     void setStoredIocLabel(value, normalizedLabel).catch(rethrowUnlessStaleExtensionError);
+  }
+
+  if (isKnownGoodWatchlistPromotionLabel(normalizedLabel)) {
+    void syncKnownGoodEntryLabelFromWatchlistPromotion(
+      value,
+      normalizedLabel
+    ).catch(rethrowUnlessStaleExtensionError);
   }
 
   const learned = createNoiseRuleFromWatchlistLabel({

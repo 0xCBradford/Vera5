@@ -25,6 +25,7 @@ import {
   getHighlightEnabled,
   getIncludePrivateIpv4,
   getHideSuppressedFromScan,
+  getSkipEnrichOnKnownGoodMatch,
   getLocalBackendEnabled,
   getLocalLlmSummaryEnabled,
   getQuietMode,
@@ -46,6 +47,7 @@ import {
   setEnrichmentCacheTtlSeconds,
   setIncludePrivateIpv4,
   setHideSuppressedFromScan,
+  setSkipEnrichOnKnownGoodMatch,
   setLocalBackendEnabled,
   setLocalLlmSummaryEnabled,
   setQuietMode,
@@ -90,6 +92,8 @@ import {
   STORAGE_KEY_EXTENSION_ENABLED,
   STORAGE_KEY_HIGHLIGHT_ENABLED,
   STORAGE_KEY_INCLUDE_PRIVATE_IPV4,
+  STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN,
+  STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH,
   STORAGE_KEY_IOC_TYPE_ENABLED,
   STORAGE_KEY_STORAGE_SCHEMA_VERSION,
   STORAGE_KEY_SCHEMA_VERSION,
@@ -321,6 +325,11 @@ describe("enrichment source enabled storage", () => {
   it("persists hideSuppressedFromScan", async () => {
     await setHideSuppressedFromScan(true);
     await expect(getHideSuppressedFromScan()).resolves.toBe(true);
+  });
+
+  it("persists skipEnrichOnKnownGoodMatch", async () => {
+    await setSkipEnrichOnKnownGoodMatch(true);
+    await expect(getSkipEnrichOnKnownGoodMatch()).resolves.toBe(true);
   });
 
   it("persists global enrichment cache TTL", async () => {
@@ -794,6 +803,7 @@ describe("migrate-safe defaults", () => {
     expect(defaults.manualOnlyMode).toBe(true);
     expect(defaults.includePrivateIpv4).toBe(false);
     expect(defaults.hideSuppressedFromScan).toBe(false);
+    expect(defaults.skipEnrichOnKnownGoodMatch).toBe(false);
     expect(defaults.localBackendEnabled).toBe(false);
     expect(defaults.localLlmSummaryEnabled).toBe(false);
     expect(defaults.quietMode).toBe(false);
@@ -958,6 +968,8 @@ describe("migrate-safe defaults", () => {
         [STORAGE_KEY_AUTO_SCAN_ENABLED]: false,
         [STORAGE_KEY_MANUAL_ONLY_MODE]: true,
         [STORAGE_KEY_INCLUDE_PRIVATE_IPV4]: false,
+        [STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN]: false,
+        [STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH]: false,
         [STORAGE_KEY_LOCAL_BACKEND_ENABLED]: false,
         [STORAGE_KEY_LOCAL_LLM_SUMMARY_ENABLED]: false,
         [STORAGE_KEY_QUIET_MODE]: false,

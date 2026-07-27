@@ -7,16 +7,26 @@ import {
 import {
   buildKnownGoodCdnSaasStarterEntries,
   confirmKnownGoodReplaceAllImport,
+  createDefaultKnownGoodCategoryEnabled,
   createKnownGoodEntry,
+  findMatchingKnownGoodEntry,
+  filterKnownGoodEntriesByCategoryEnabled,
   isKnownGoodCategory,
   isKnownGoodImportMergeMode,
   isKnownGoodMatchType,
+  isKnownGoodWatchlistPromotionLabel,
   knownGoodEntryFingerprint,
+  knownGoodLabelTextForWatchlistPromotion,
+  knownGoodRecordHasForbiddenVerdictFields,
+  normalizeKnownGoodCategoryEnabled,
+  normalizeKnownGoodEntry,
   KNOWN_GOOD_CDN_SAAS_STARTER_EXPORT_AT,
   KNOWN_GOOD_IMPORT_MERGE_MODE,
-  normalizeKnownGoodEntry,
+  type KnownGoodCategory,
+  type KnownGoodCategoryEnabledRecord,
   type KnownGoodEntry,
   type KnownGoodImportMergeMode,
+  type KnownGoodWatchlistPromotionLabel,
 } from "./knownGood";
 
 /** Store envelope version for persisted known-good entries. */
@@ -34,6 +44,7 @@ export type KnownGoodListStore = {
   schemaVersion: typeof KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION;
   updatedAt: number;
   entries: KnownGoodEntry[];
+  categoryEnabled: KnownGoodCategoryEnabledRecord;
 };
 
 export type KnownGoodExportDocument = {
@@ -111,7 +122,17 @@ export function createEmptyKnownGoodListStore(
     schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
     updatedAt,
     entries: [],
+    categoryEnabled: createDefaultKnownGoodCategoryEnabled(),
   };
+}
+
+function isDefaultKnownGoodCategoryEnabled(
+  categoryEnabled: KnownGoodCategoryEnabledRecord
+): boolean {
+  const defaults = createDefaultKnownGoodCategoryEnabled();
+  return (Object.keys(defaults) as KnownGoodCategory[]).every(
+    (category) => categoryEnabled[category] === defaults[category]
+  );
 }
 
 export function normalizeKnownGoodListStore(value: unknown): KnownGoodListStore {
@@ -130,6 +151,7 @@ export function normalizeKnownGoodListStore(value: unknown): KnownGoodListStore 
     schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
     updatedAt,
     entries: normalizeEntryList(record.entries),
+    categoryEnabled: normalizeKnownGoodCategoryEnabled(record.categoryEnabled),
   };
 }
 
@@ -137,7 +159,10 @@ async function writeKnownGoodListStore(store: KnownGoodListStore): Promise<void>
   if (!canUseKnownGoodStorage()) {
     return;
   }
-  if (store.entries.length === 0) {
+  if (
+    store.entries.length === 0 &&
+    isDefaultKnownGoodCategoryEnabled(store.categoryEnabled)
+  ) {
     await safeStorageLocalRemove(STORAGE_KEY_KNOWN_GOOD_LIST);
     return;
   }
@@ -157,6 +182,54 @@ export async function getKnownGoodListStore(): Promise<KnownGoodListStore> {
 export async function listStoredKnownGoodEntries(): Promise<KnownGoodEntry[]> {
   const store = await getKnownGoodListStore();
   return store.entries;
+}
+
+/** Entries whose category is enabled for matching (tray / hover). */
+export async function listStoredKnownGoodEntriesForMatching(): Promise<
+  KnownGoodEntry[]
+> {
+  const store = await getKnownGoodListStore();
+  return filterKnownGoodEntriesByCategoryEnabled(
+    store.entries,
+    store.categoryEnabled
+  );
+}
+
+/** True when policy is on and the IOC matches an enabled known-good entry. */
+export async function shouldSkipOutboundEnrichForKnownGoodMatch(
+  iocValue: string,
+  skipPolicyEnabled: boolean
+): Promise<boolean> {
+  if (!skipPolicyEnabled) {
+    return false;
+  }
+  const matched = findMatchingKnownGoodEntry(
+    await listStoredKnownGoodEntriesForMatching(),
+    iocValue
+  );
+  return matched !== null;
+}
+
+export async function getStoredKnownGoodCategoryEnabled(): Promise<KnownGoodCategoryEnabledRecord> {
+  const store = await getKnownGoodListStore();
+  return store.categoryEnabled;
+}
+
+export async function setStoredKnownGoodCategoryEnabled(
+  category: KnownGoodCategory,
+  enabled: boolean
+): Promise<KnownGoodCategoryEnabledRecord> {
+  const store = await getKnownGoodListStore();
+  const categoryEnabled = {
+    ...store.categoryEnabled,
+    [category]: enabled,
+  };
+  await writeKnownGoodListStore({
+    ...store,
+    updatedAt: Date.now(),
+    categoryEnabled,
+  });
+  return categoryEnabled;
 }
 
 /**
@@ -189,6 +262,7 @@ export async function upsertStoredKnownGoodEntry(
     schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
     updatedAt: Date.now(),
     entries: trimmed,
+    categoryEnabled: store.categoryEnabled,
   });
 
   return toStore;
@@ -222,6 +296,7 @@ export async function updateStoredKnownGoodEntry(
     schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
     updatedAt: Date.now(),
     entries: trimmed,
+    categoryEnabled: store.categoryEnabled,
   });
 
   return normalized;
@@ -242,6 +317,7 @@ export async function deleteStoredKnownGoodEntry(
     schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
     updatedAt: Date.now(),
     entries: nextEntries,
+    categoryEnabled: store.categoryEnabled,
   });
   return true;
 }
@@ -250,7 +326,13 @@ export async function clearStoredKnownGoodList(): Promise<void> {
   if (!canUseKnownGoodStorage()) {
     return;
   }
-  await safeStorageLocalRemove(STORAGE_KEY_KNOWN_GOOD_LIST);
+  const store = await getKnownGoodListStore();
+  await writeKnownGoodListStore({
+    schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
+    updatedAt: Date.now(),
+    entries: [],
+    categoryEnabled: store.categoryEnabled,
+  });
 }
 
 export async function replaceStoredKnownGoodEntries(
@@ -276,10 +358,12 @@ export async function replaceStoredKnownGoodEntries(
     return trimmed;
   }
 
+  const existingStore = await getKnownGoodListStore();
   await writeKnownGoodListStore({
     schemaVersion: KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION,
     updatedAt: Date.now(),
     entries: trimmed,
+    categoryEnabled: existingStore.categoryEnabled,
   });
   return trimmed;
 }
@@ -455,6 +539,11 @@ export class KnownGoodImportError extends Error {
   }
 }
 
+export type KnownGoodImportFormat = "json" | "csv";
+
+export const KNOWN_GOOD_CSV_HEADER =
+  "category,matchType,pattern,labelText,id";
+
 export type KnownGoodImportDuplicateReason =
   | "import-id"
   | "import-pattern"
@@ -493,6 +582,88 @@ export type KnownGoodImportPreview = {
   wouldRemoveExistingCount: number;
 };
 
+export function detectKnownGoodImportFormat(
+  filenameOrHint: string,
+  rawText?: string
+): KnownGoodImportFormat {
+  const lower = filenameOrHint.trim().toLowerCase();
+  if (lower.endsWith(".csv") || lower.includes("text/csv")) {
+    return "csv";
+  }
+  if (lower.endsWith(".json") || lower.includes("application/json")) {
+    return "json";
+  }
+  const trimmed = (rawText ?? "").trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+    return "json";
+  }
+  return "csv";
+}
+
+function parseKnownGoodCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index]!;
+    if (inQuotes) {
+      if (char === '"') {
+        if (line[index + 1] === '"') {
+          current += '"';
+          index += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += char;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (char === ",") {
+      cells.push(current);
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  cells.push(current);
+  return cells.map((cell) => cell.trim());
+}
+
+function splitKnownGoodCsvLines(raw: string): string[] {
+  const normalized = raw
+    .replace(/^\uFEFF/, "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n");
+  const lines: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index]!;
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (char === "\n" && !inQuotes) {
+      if (current.trim().length > 0) {
+        lines.push(current);
+      }
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+  if (current.trim().length > 0) {
+    lines.push(current);
+  }
+  return lines;
+}
+
 function coerceKnownGoodEntryFromImportRecord(
   value: unknown,
   index: number
@@ -501,6 +672,11 @@ function coerceKnownGoodEntryFromImportRecord(
     return { error: `Entry at index ${index} must be an object.` };
   }
   const record = value as Record<string, unknown>;
+  if (knownGoodRecordHasForbiddenVerdictFields(record)) {
+    return {
+      error: `Entry at index ${index} must be an informational label only (no score, verdict, or silent malware-negative fields).`,
+    };
+  }
   const normalized = normalizeKnownGoodEntry(record);
   if (normalized) {
     return { entry: normalized };
@@ -589,11 +765,12 @@ export function parseKnownGoodImportJson(raw: string): {
 
 export function analyzeKnownGoodImport(
   candidates: readonly unknown[],
-  existing: readonly KnownGoodEntry[]
+  existing: readonly KnownGoodEntry[],
+  seededInvalid: readonly KnownGoodImportInvalidRow[] = []
 ): KnownGoodImportAnalysis {
   const accepted: KnownGoodEntry[] = [];
   const duplicates: KnownGoodImportDuplicate[] = [];
-  const invalid: KnownGoodImportInvalidRow[] = [];
+  const invalid: KnownGoodImportInvalidRow[] = [...seededInvalid];
 
   const existingIds = new Set(existing.map((entry) => entry.id));
   const existingFingerprints = new Set(
@@ -637,10 +814,89 @@ export function analyzeKnownGoodImport(
   return { accepted, duplicates, invalid };
 }
 
+export function parseKnownGoodImportCsv(raw: string): {
+  candidates: unknown[];
+  invalid: KnownGoodImportInvalidRow[];
+} {
+  const lines = splitKnownGoodCsvLines(raw);
+  if (lines.length === 0) {
+    throw new KnownGoodImportError("Known-good CSV import is empty.");
+  }
+
+  const headerCells = parseKnownGoodCsvLine(lines[0]!).map((cell) =>
+    cell.toLowerCase()
+  );
+  for (const header of headerCells) {
+    if (KNOWN_GOOD_SECRET_KEY_PATTERN.test(header)) {
+      throw new KnownGoodImportError(
+        "Known-good payload must not include API keys, tokens, or secrets."
+      );
+    }
+    if (
+      /^(risk|score|verdict|malware[_-]?negative|safe|malicious|confidence)$/i.test(
+        header
+      )
+    ) {
+      throw new KnownGoodImportError(
+        "Known-good CSV must be informational labels only (no score, verdict, or silent malware-negative columns)."
+      );
+    }
+  }
+
+  const columnIndex = (name: string): number => headerCells.indexOf(name);
+  const categoryIndex = columnIndex("category");
+  const matchTypeIndex = columnIndex("matchtype");
+  const patternIndex = columnIndex("pattern");
+  const labelTextIndex = columnIndex("labeltext");
+  if (
+    categoryIndex < 0 ||
+    matchTypeIndex < 0 ||
+    patternIndex < 0 ||
+    labelTextIndex < 0
+  ) {
+    throw new KnownGoodImportError(
+      "Known-good CSV requires category, matchType, pattern, and labelText columns."
+    );
+  }
+
+  const idIndex = columnIndex("id");
+  const candidates: unknown[] = [];
+  const invalid: KnownGoodImportInvalidRow[] = [];
+
+  for (let lineIndex = 1; lineIndex < lines.length; lineIndex += 1) {
+    const cells = parseKnownGoodCsvLine(lines[lineIndex]!);
+    const category = cells[categoryIndex] ?? "";
+    const matchType = cells[matchTypeIndex] ?? "";
+    const pattern = cells[patternIndex] ?? "";
+    const labelText = cells[labelTextIndex] ?? "";
+    if (!category && !matchType && !pattern && !labelText) {
+      continue;
+    }
+
+    const record: Record<string, unknown> = {
+      category,
+      matchType,
+      pattern,
+      labelText,
+    };
+    if (idIndex >= 0 && cells[idIndex]) {
+      record.id = cells[idIndex];
+    }
+    candidates.push(record);
+  }
+
+  return { candidates, invalid };
+}
+
 export function parseAndAnalyzeKnownGoodImport(
   raw: string,
-  existing: readonly KnownGoodEntry[]
+  existing: readonly KnownGoodEntry[],
+  format: KnownGoodImportFormat = "json"
 ): KnownGoodImportAnalysis {
+  if (format === "csv") {
+    const { candidates, invalid } = parseKnownGoodImportCsv(raw);
+    return analyzeKnownGoodImport(candidates, existing, invalid);
+  }
   const { candidates } = parseKnownGoodImportJson(raw);
   return analyzeKnownGoodImport(candidates, existing);
 }
@@ -648,7 +904,8 @@ export function parseAndAnalyzeKnownGoodImport(
 export function buildKnownGoodImportPreview(
   raw: string,
   existing: readonly KnownGoodEntry[],
-  mergeMode: KnownGoodImportMergeMode = KNOWN_GOOD_IMPORT_MERGE_MODE.ADD_ONLY
+  mergeMode: KnownGoodImportMergeMode = KNOWN_GOOD_IMPORT_MERGE_MODE.ADD_ONLY,
+  format: KnownGoodImportFormat = "json"
 ): KnownGoodImportPreview {
   if (!isKnownGoodImportMergeMode(mergeMode)) {
     throw new KnownGoodImportError("Unsupported known-good import merge mode.");
@@ -656,7 +913,7 @@ export function buildKnownGoodImportPreview(
 
   const compareAgainst =
     mergeMode === KNOWN_GOOD_IMPORT_MERGE_MODE.REPLACE_ALL ? [] : existing;
-  const analysis = parseAndAnalyzeKnownGoodImport(raw, compareAgainst);
+  const analysis = parseAndAnalyzeKnownGoodImport(raw, compareAgainst, format);
   const capacity =
     mergeMode === KNOWN_GOOD_IMPORT_MERGE_MODE.REPLACE_ALL
       ? MAX_STORED_KNOWN_GOOD_ENTRIES
@@ -678,12 +935,13 @@ export function buildKnownGoodImportPreview(
 }
 
 /**
- * Imports known-good entries from JSON:
+ * Imports known-good entries from JSON or CSV text:
  * - add-only: skip duplicates, append accepted entries
  * - replace-all: clear stored entries, then write accepted import entries (requires confirmation)
  */
-export async function importKnownGoodListFromJson(
+export async function importKnownGoodListFromText(
   raw: string,
+  format: KnownGoodImportFormat,
   mergeMode: KnownGoodImportMergeMode = KNOWN_GOOD_IMPORT_MERGE_MODE.ADD_ONLY,
   options: { confirmReplace?: (message: string) => boolean } = {}
 ): Promise<KnownGoodImportApplyResult> {
@@ -692,7 +950,12 @@ export async function importKnownGoodListFromJson(
   }
 
   const existing = await listStoredKnownGoodEntries();
-  const preview = buildKnownGoodImportPreview(raw, existing, mergeMode);
+  const preview = buildKnownGoodImportPreview(
+    raw,
+    existing,
+    mergeMode,
+    format
+  );
   const acceptedToWrite = preview.analysis.accepted.slice(
     0,
     preview.wouldImportCount
@@ -730,6 +993,28 @@ export async function importKnownGoodListFromJson(
   };
 }
 
+/**
+ * Imports known-good entries from JSON:
+ * - add-only: skip duplicates, append accepted entries
+ * - replace-all: clear stored entries, then write accepted import entries (requires confirmation)
+ */
+export async function importKnownGoodListFromJson(
+  raw: string,
+  mergeMode: KnownGoodImportMergeMode = KNOWN_GOOD_IMPORT_MERGE_MODE.ADD_ONLY,
+  options: { confirmReplace?: (message: string) => boolean } = {}
+): Promise<KnownGoodImportApplyResult> {
+  return importKnownGoodListFromText(raw, "json", mergeMode, options);
+}
+
+/** Imports known-good entries from CSV with the same merge/duplicate rules as JSON. */
+export async function importKnownGoodListFromCsv(
+  raw: string,
+  mergeMode: KnownGoodImportMergeMode = KNOWN_GOOD_IMPORT_MERGE_MODE.ADD_ONLY,
+  options: { confirmReplace?: (message: string) => boolean } = {}
+): Promise<KnownGoodImportApplyResult> {
+  return importKnownGoodListFromText(raw, "csv", mergeMode, options);
+}
+
 export function formatKnownGoodImportStatus(
   result: KnownGoodImportApplyResult
 ): string {
@@ -760,4 +1045,33 @@ export function formatKnownGoodImportStatus(
     parts.push(`${result.skippedCapacity} skipped (capacity)`);
   }
   return `${parts.join("; ")}.`;
+}
+
+/**
+ * When the analyst promotes an IOC to watchlist `benign` or `internal`, sync
+ * any matching known-good entry label text to Known benign / Known internal.
+ * No-op when no entry matches or the label text already matches.
+ */
+export async function syncKnownGoodEntryLabelFromWatchlistPromotion(
+  iocValue: string,
+  label: KnownGoodWatchlistPromotionLabel
+): Promise<KnownGoodEntry | null> {
+  if (!isKnownGoodWatchlistPromotionLabel(label)) {
+    return null;
+  }
+  const matched = findMatchingKnownGoodEntry(
+    await listStoredKnownGoodEntries(),
+    iocValue
+  );
+  if (!matched) {
+    return null;
+  }
+  const nextLabelText = knownGoodLabelTextForWatchlistPromotion(label);
+  if (matched.labelText === nextLabelText) {
+    return matched;
+  }
+  return updateStoredKnownGoodEntry({
+    ...matched,
+    labelText: nextLabelText,
+  });
 }

@@ -1143,6 +1143,48 @@ Creating, matching, importing, exporting, editing, enabling/disabling, deleting,
 
 Maintain a local **known-good** list of inspectable CDN ranges, common SaaS domains, and similar curated patterns. Matches are meant as visible **Known benign** or **Known internal** labels—not a silent “safe” verdict, cloud goodware score, or automatic malware negative. Lists stay in extension local storage only; there is no Vera5-hosted known-good feed.
 
+### Informational labels only
+
+Known-good entries carry only list metadata (id, category, match type, pattern, and label text). They do **not**:
+
+- Act as a silent malware negative or automatic **safe** verdict without a visible label
+- Override or replace the composite risk score from vendor enrichment
+- Add a hidden second reputation score alongside composite risk
+
+Treat matches as triage hints you can inspect and edit. Composite scoring and trust gates (domain deny, quiet mode, disclosure) continue to apply independently. Detail: [Local noise rules and known-good lists](security-model.md#local-noise-rules-and-known-good-lists).
+
+### Badges on match
+
+When a scanned indicator matches a local known-good entry, Vera5 shows the entry’s label text as a badge—typically **Known benign** or **Known internal**—on the hover card and the IOC tray row. The badge is visible triage context only; it does not change composite risk by itself.
+
+### Match provenance
+
+Hover cards and tray rows also show **which list entry matched**: category, match type, pattern, and entry id (for example `CDN · CIDR · 104.16.0.0/12`). That provenance stays inspectable on the local profile—it is not a silent safe verdict or a cloud reputation score. On the hover card, **View matched known-good entry** opens Settings on that list entry. When live enrich is skipped by the known-good skip policy, the card also shows **Enrichment skipped (known-good policy)** next to that link.
+
+### Export list
+
+Use **Settings → Known-good lists → Export list JSON** to download your user-maintained list for team handoff. The file uses allowlisted entry fields only (`id`, `category`, `matchType`, `pattern`, `labelText`) and **never** includes API keys or enrichment secrets.
+
+### Manage categories and entries
+
+In **Settings → Known-good lists**:
+
+- **Skip outbound vendor enrich on known-good match** (off by default). When on, Vera5 skips live vendor enrichment for indicators that match an enabled known-good entry. Cached enrichment remains readable. **Domain deny and quiet mode still win**—known-good skip does not authorize vendor calls on a blocked host or while quiet mode is on. Detail: [Known-good skip enrich vs domain policy and quiet mode (precedence)](security-model.md#known-good-skip-enrich-vs-domain-policy-and-quiet-mode-precedence).
+- Enable or disable matching **per category** (CDN, SaaS, Corporate VPN, Vuln scanner, Internal). Disabled categories stay stored but no longer badge or deprioritize matches until you re-enable them.
+- **Edit** or **Delete** individual entries (category, match type, pattern, and label text).
+
+### Cached enrichment with skip policy
+
+When **Skip outbound vendor enrich on known-good match** is on, Vera5 still serves **Cached** enrichment for matching indicators if a local cache entry is within TTL. Cache is read **before** the skip policy blocks a live vendor call. Uncached sources for that indicator show **Enrichment skipped (known-good policy)** with a **View matched known-good entry** link to the list entry in Settings. Manual refresh that bypasses cache does not force a vendor call while the skip policy applies—use pivots or turn the skip toggle off when you need a fresh live response.
+
+### Tray sort
+
+In the IOC tray, known-good matches are sorted **below** indicators that belong to the active investigation session. Other unmatched indicators stay above known-good rows. Relative order within each group is preserved. Noise-rule **Suppressed** partitioning is unchanged.
+
+### Watchlist label sync
+
+When you set an indicator’s watchlist label to **benign** or **internal**, Vera5 updates any matching known-good entry’s label text to **Known benign** or **Known internal**. Other watchlist labels (for example **case-important** or **suppress-false-positive**) do not change the known-good list. Sync stays on the local profile—no cloud reputation lookup.
+
 ### Optional CDN and SaaS starter
 
 Vera5 ships a conservative starter of **major CDN CIDRs** and **common SaaS domains**. It is **never auto-applied**. Import on demand when you want a reviewable baseline:
@@ -1150,7 +1192,9 @@ Vera5 ships a conservative starter of **major CDN CIDRs** and **common SaaS doma
 | Action | Notes |
 |--------|--------|
 | Repository copy | [`examples/known-good-cdn-saas-starter.json`](../examples/known-good-cdn-saas-starter.json) — allowlisted entry fields only; **never** API keys. |
-| Import | Use known-good JSON import (add-only skips duplicates; replace-all needs confirmation). Prefer add-only until you review the list. |
+| Import | Use known-good **JSON** or **CSV** import (add-only skips duplicates; replace-all needs confirmation). Prefer add-only until you review the list. |
+
+CSV rows need `category`, `matchType`, `pattern`, and `labelText` columns (optional `id`). Invalid rows are rejected; duplicate id or pattern fingerprints are skipped on add-only. Imports stay on the local profile and must not include API keys, tokens, or silent score/verdict columns.
 
 The starter is representative, not exhaustive: vendor CDN ranges and SaaS hostnames change over time. Edit or delete entries after import to match your environment. Entries remain informational labels; they do not override composite risk or bypass domain deny / quiet mode.
 
@@ -1271,7 +1315,7 @@ Threat profiles are richer workflow bundles. Settings packs are narrower handoff
 4. **Manual Settings** changes after the last pack or profile import override those imported values until the next import.
 5. Use **Import threat profile** for profile JSON and **Import settings pack** for pack JSON—the pack importer rejects threat-profile-shaped files.
 
-An optional noise-list reference may appear in threat profile JSON as a reserved field; it does **not** create or replace **Noise rules** in Settings. Profiles cannot bypass pre-query disclosure, domain deny, quiet mode, or internal asset gates.
+An optional noise-list reference may appear in threat profile JSON as a reserved field; it does **not** create or replace **Noise rules** in Settings. An optional known-good list reference (`knownGoodListRef`) may also appear; it does **not** create, import, or replace **Known-good lists** in Settings. Profiles cannot bypass pre-query disclosure, domain deny, quiet mode, or internal asset gates.
 
 Full control table and trust expectations: [security-model.md — Portable profiles, settings packs, and third-party JSON](security-model.md#portable-profiles-settings-packs-and-third-party-json).
 

@@ -92,6 +92,48 @@ import {
   type NoiseRulesImportFormat,
   type NoiseRulesImportPreview,
 } from "../lib/noiseRuleStorage";
+import {
+  createDefaultKnownGoodCategoryEnabled,
+  createKnownGoodEntry,
+  formatKnownGoodCategoryDisplay,
+  formatKnownGoodEntrySummary,
+  formatKnownGoodMatchTypeDisplay,
+  KNOWN_GOOD_CATEGORIES,
+  KNOWN_GOOD_DISCLAIMER_TEXT,
+  KNOWN_GOOD_MATCH_TYPES,
+  KNOWN_GOOD_OPTIONS_CANCEL_LABEL,
+  KNOWN_GOOD_OPTIONS_CATEGORIES_HEADING,
+  KNOWN_GOOD_OPTIONS_CATEGORIES_HINT,
+  KNOWN_GOOD_OPTIONS_DELETE_LABEL,
+  KNOWN_GOOD_OPTIONS_EDIT_LABEL,
+  KNOWN_GOOD_OPTIONS_ENABLE_CATEGORY_LABEL,
+  KNOWN_GOOD_OPTIONS_ENTRIES_HEADING,
+  KNOWN_GOOD_OPTIONS_EMPTY_TEXT,
+  KNOWN_GOOD_OPTIONS_EXPORT_ERROR,
+  KNOWN_GOOD_OPTIONS_EXPORT_HINT,
+  KNOWN_GOOD_OPTIONS_EXPORT_LABEL,
+  KNOWN_GOOD_OPTIONS_EXPORT_SUCCESS,
+  KNOWN_GOOD_OPTIONS_SAVE_LABEL,
+  KNOWN_GOOD_OPTIONS_SECTION_DESC,
+  KNOWN_GOOD_OPTIONS_SECTION_ID,
+  KNOWN_GOOD_OPTIONS_SECTION_TITLE,
+  SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_DEFAULT,
+  SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_OPTIONS_HINT,
+  SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_OPTIONS_LABEL,
+  parseKnownGoodOptionsHash,
+  type KnownGoodCategory,
+  type KnownGoodCategoryEnabledRecord,
+  type KnownGoodEntry,
+  type KnownGoodMatchType,
+} from "../lib/knownGood";
+import {
+  deleteStoredKnownGoodEntry,
+  downloadKnownGoodExportJson,
+  exportStoredKnownGoodListJson,
+  getKnownGoodListStore,
+  setStoredKnownGoodCategoryEnabled,
+  updateStoredKnownGoodEntry,
+} from "../lib/knownGoodStorage";
 import { ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE } from "../lib/enrichmentSourceOps";
 import { prefersReducedMotion } from "../lib/motionPreference";
 import {
@@ -206,6 +248,7 @@ import {
   getEnrichmentSourceEnabled,
   getIncludePrivateIpv4,
   getHideSuppressedFromScan,
+  getSkipEnrichOnKnownGoodMatch,
   getInstallQuickStartCompleted,
   getVera5Settings,
   getLocalBackendEnabled,
@@ -242,6 +285,7 @@ import {
   setEnrichmentSourceEnabled,
   setIncludePrivateIpv4,
   setHideSuppressedFromScan,
+  setSkipEnrichOnKnownGoodMatch,
   setLocalBackendEnabled,
   setLocalLlmSummaryEnabled,
   setInternalAssetCidrRanges,
@@ -352,6 +396,7 @@ const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "cache", label: "Enrichment Cache" },
   { id: "correlation", label: "Cross-session correlation" },
   { id: "noise-rules", label: "Noise rules" },
+  { id: "known-good", label: "Known-good lists" },
   { id: "backup", label: "Settings Backup" },
 ];
 
@@ -1625,6 +1670,7 @@ export function Options() {
     cache: true,
     correlation: true,
     "noise-rules": true,
+    "known-good": true,
     backup: true,
     "api-keys": true,
   }));
@@ -1641,6 +1687,8 @@ export function Options() {
   const [hideSuppressedFromScan, setHideSuppressedFromScanState] = useState(
     HIDE_SUPPRESSED_FROM_SCAN_DEFAULT
   );
+  const [skipEnrichOnKnownGoodMatch, setSkipEnrichOnKnownGoodMatchState] =
+    useState(SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_DEFAULT);
   const [localBackendEnabled, setLocalBackendEnabledState] = useState(false);
   const [localLlmSummaryEnabled, setLocalLlmSummaryEnabledState] = useState(false);
   const [attributeHrefExtractionEnabled, setAttributeHrefExtractionEnabledState] = useState(false);
@@ -1741,7 +1789,28 @@ export function Options() {
     "idle" | "clearing" | "cleared" | "error"
   >("idle");
   const [focusedNoiseRuleId, setFocusedNoiseRuleId] = useState<string | null>(null);
+  const [focusedKnownGoodEntryId, setFocusedKnownGoodEntryId] = useState<string | null>(
+    null
+  );
   const [noiseRulesSearchQuery, setNoiseRulesSearchQuery] = useState("");
+  const [knownGoodEntries, setKnownGoodEntries] = useState<KnownGoodEntry[]>([]);
+  const [knownGoodCategoryEnabled, setKnownGoodCategoryEnabled] =
+    useState<KnownGoodCategoryEnabledRecord>(createDefaultKnownGoodCategoryEnabled);
+  const [knownGoodExportState, setKnownGoodExportState] = useState<
+    "idle" | "exporting" | "exported" | "error"
+  >("idle");
+  const [knownGoodManageStatus, setKnownGoodManageStatus] = useState<string | null>(
+    null
+  );
+  const [editingKnownGoodEntryId, setEditingKnownGoodEntryId] = useState<string | null>(
+    null
+  );
+  const [knownGoodEditDraft, setKnownGoodEditDraft] = useState<{
+    category: KnownGoodCategory;
+    matchType: KnownGoodMatchType;
+    pattern: string;
+    labelText: string;
+  } | null>(null);
   const [editingNoiseRuleId, setEditingNoiseRuleId] = useState<string | null>(null);
   const [noiseRuleEditDraft, setNoiseRuleEditDraft] = useState<{
     patternType: NoiseRulePatternType;
@@ -1872,6 +1941,18 @@ export function Options() {
   }, [settingsReloadToken]);
 
   useEffect(() => {
+    void getKnownGoodListStore()
+      .then((store) => {
+        setKnownGoodEntries(store.entries);
+        setKnownGoodCategoryEnabled(store.categoryEnabled);
+      })
+      .catch(() => {
+        setKnownGoodEntries([]);
+        setKnownGoodCategoryEnabled(createDefaultKnownGoodCategoryEnabled());
+      });
+  }, [settingsReloadToken]);
+
+  useEffect(() => {
     void getActiveThreatProfileState()
       .then((state) => {
         setActiveThreatProfileState(state);
@@ -1885,14 +1966,28 @@ export function Options() {
     if (!ready || typeof window === "undefined") {
       return;
     }
-    const parsed = parseNoiseRulesOptionsHash(window.location.hash);
-    if (!parsed) {
+    const noiseParsed = parseNoiseRulesOptionsHash(window.location.hash);
+    if (noiseParsed) {
+      setActiveSection(NOISE_RULES_OPTIONS_SECTION_ID);
+      setCollapsedSections((prev) => ({
+        ...prev,
+        [NOISE_RULES_OPTIONS_SECTION_ID]: false,
+      }));
+      setFocusedNoiseRuleId(noiseParsed.ruleId);
+      scrollToSection(NOISE_RULES_OPTIONS_SECTION_ID);
       return;
     }
-    setActiveSection(NOISE_RULES_OPTIONS_SECTION_ID);
-    setCollapsedSections((prev) => ({ ...prev, [NOISE_RULES_OPTIONS_SECTION_ID]: false }));
-    setFocusedNoiseRuleId(parsed.ruleId);
-    scrollToSection(NOISE_RULES_OPTIONS_SECTION_ID);
+    const knownGoodParsed = parseKnownGoodOptionsHash(window.location.hash);
+    if (!knownGoodParsed) {
+      return;
+    }
+    setActiveSection(KNOWN_GOOD_OPTIONS_SECTION_ID);
+    setCollapsedSections((prev) => ({
+      ...prev,
+      [KNOWN_GOOD_OPTIONS_SECTION_ID]: false,
+    }));
+    setFocusedKnownGoodEntryId(knownGoodParsed.entryId);
+    scrollToSection(KNOWN_GOOD_OPTIONS_SECTION_ID);
   }, [ready]);
 
   useEffect(() => {
@@ -1911,6 +2006,22 @@ export function Options() {
   }, [ready, focusedNoiseRuleId, noiseRules]);
 
   useEffect(() => {
+    if (!ready || !focusedKnownGoodEntryId || typeof document === "undefined") {
+      return;
+    }
+    const target = document.querySelector(
+      `[data-known-good-entry-id="${CSS.escape(focusedKnownGoodEntryId)}"]`
+    );
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+    const behavior: ScrollBehavior =
+      typeof window !== "undefined" && prefersReducedMotion(window) ? "auto" : "smooth";
+    target.scrollIntoView({ behavior, block: "nearest" });
+    target.classList.add("v5-domain-list__item--noise-rule-focus");
+  }, [ready, focusedKnownGoodEntryId, knownGoodEntries]);
+
+  useEffect(() => {
     setReady(false);
     void Promise.all([
       getAutoScanEnabled(),
@@ -1920,6 +2031,7 @@ export function Options() {
       getIocTypeEnabled(),
       getIncludePrivateIpv4(),
       getHideSuppressedFromScan(),
+      getSkipEnrichOnKnownGoodMatch(),
       getLocalBackendEnabled(),
       getLocalLlmSummaryEnabled(),
       getAttributeHrefExtractionEnabled(),
@@ -1969,6 +2081,7 @@ export function Options() {
           iocTypeEnabledValue,
           includePrivateIpv4Value,
           hideSuppressedFromScanValue,
+          skipEnrichOnKnownGoodMatchValue,
           localBackendEnabledValue,
           localLlmSummaryEnabledValue,
           attributeHrefExtractionEnabledValue,
@@ -2000,6 +2113,7 @@ export function Options() {
           setIocTypeEnabledState(iocTypeEnabledValue);
           setIncludePrivateIpv4State(includePrivateIpv4Value);
           setHideSuppressedFromScanState(hideSuppressedFromScanValue);
+          setSkipEnrichOnKnownGoodMatchState(skipEnrichOnKnownGoodMatchValue);
           setLocalBackendEnabledState(localBackendEnabledValue);
           setLocalLlmSummaryEnabledState(localLlmSummaryEnabledValue);
           setAttributeHrefExtractionEnabledState(attributeHrefExtractionEnabledValue);
@@ -2138,6 +2252,11 @@ export function Options() {
   const handleHideSuppressedFromScanToggle = (checked: boolean) => {
     setHideSuppressedFromScanState(checked);
     void setHideSuppressedFromScan(checked);
+  };
+
+  const handleSkipEnrichOnKnownGoodMatchToggle = (checked: boolean) => {
+    setSkipEnrichOnKnownGoodMatchState(checked);
+    void setSkipEnrichOnKnownGoodMatch(checked);
   };
 
   const handleLocalBackendToggle = (checked: boolean) => {
@@ -2877,6 +2996,131 @@ export function Options() {
       })
       .catch(() => {
         setNoiseRulesExportState("error");
+      });
+  };
+
+  const handleExportKnownGoodList = () => {
+    setKnownGoodExportState("exporting");
+    void exportStoredKnownGoodListJson()
+      .then((json) => {
+        downloadKnownGoodExportJson(json);
+        setKnownGoodExportState("exported");
+      })
+      .catch(() => {
+        setKnownGoodExportState("error");
+      });
+  };
+
+  const handleToggleKnownGoodCategory = (
+    category: KnownGoodCategory,
+    enabled: boolean
+  ) => {
+    void setStoredKnownGoodCategoryEnabled(category, enabled)
+      .then((next) => {
+        setKnownGoodCategoryEnabled(next);
+        setKnownGoodManageStatus(
+          enabled
+            ? `${formatKnownGoodCategoryDisplay(category)} matching enabled.`
+            : `${formatKnownGoodCategoryDisplay(category)} matching disabled.`
+        );
+      })
+      .catch(() => {
+        setKnownGoodManageStatus("Could not update category matching.");
+      });
+  };
+
+  const beginEditKnownGoodEntry = (entry: KnownGoodEntry) => {
+    setEditingKnownGoodEntryId(entry.id);
+    setKnownGoodEditDraft({
+      category: entry.category,
+      matchType: entry.matchType,
+      pattern: entry.pattern,
+      labelText: entry.labelText,
+    });
+    setKnownGoodManageStatus(null);
+  };
+
+  const cancelEditKnownGoodEntry = () => {
+    setEditingKnownGoodEntryId(null);
+    setKnownGoodEditDraft(null);
+  };
+
+  const handleSaveKnownGoodEntryEdit = () => {
+    if (!editingKnownGoodEntryId || !knownGoodEditDraft) {
+      return;
+    }
+    const pattern = knownGoodEditDraft.pattern.trim();
+    const labelText = knownGoodEditDraft.labelText.trim();
+    if (!pattern) {
+      setKnownGoodManageStatus("Pattern cannot be empty.");
+      return;
+    }
+    if (!labelText) {
+      setKnownGoodManageStatus("Label text cannot be empty.");
+      return;
+    }
+    let nextEntry: KnownGoodEntry;
+    try {
+      nextEntry = createKnownGoodEntry({
+        id: editingKnownGoodEntryId,
+        category: knownGoodEditDraft.category,
+        matchType: knownGoodEditDraft.matchType,
+        pattern,
+        labelText,
+      });
+    } catch {
+      setKnownGoodManageStatus("Could not validate known-good entry.");
+      return;
+    }
+    void updateStoredKnownGoodEntry(nextEntry)
+      .then((saved) => {
+        setKnownGoodEntries((current) =>
+          current
+            .map((entry) => (entry.id === saved.id ? saved : entry))
+            .sort((left, right) =>
+              left.category !== right.category
+                ? left.category < right.category
+                  ? -1
+                  : 1
+                : left.pattern < right.pattern
+                  ? -1
+                  : left.pattern > right.pattern
+                    ? 1
+                    : 0
+            )
+        );
+        cancelEditKnownGoodEntry();
+        setKnownGoodManageStatus("Known-good entry saved.");
+      })
+      .catch(() => {
+        setKnownGoodManageStatus("Could not save known-good entry.");
+      });
+  };
+
+  const handleDeleteKnownGoodEntry = (entry: KnownGoodEntry) => {
+    const confirmed =
+      typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm(`Delete known-good entry ${entry.pattern}?`)
+        : true;
+    if (!confirmed) {
+      return;
+    }
+    void deleteStoredKnownGoodEntry(entry.id)
+      .then((ok) => {
+        if (!ok) {
+          setKnownGoodManageStatus("Could not delete known-good entry.");
+          return;
+        }
+        setKnownGoodEntries((current) =>
+          current.filter((item) => item.id !== entry.id)
+        );
+        if (editingKnownGoodEntryId === entry.id) {
+          cancelEditKnownGoodEntry();
+        }
+        setKnownGoodManageStatus("Known-good entry deleted.");
+      })
+      .catch(() => {
+        setKnownGoodManageStatus("Could not delete known-good entry.");
       });
   };
 
@@ -5466,6 +5710,271 @@ export function Options() {
               <p className="v5-row__hint" style={{ marginTop: 8 }}>
                 {NOISE_RULES_OPTIONS_IMPORT_STARTER_HINT} File copy:{" "}
                 <code>{SOC_DASHBOARD_NOISE_STARTER_EXAMPLES_PATH}</code>.
+              </p>
+            </div>
+          </section>
+
+          <section
+            id={KNOWN_GOOD_OPTIONS_SECTION_ID}
+            className="v5-card"
+            aria-labelledby="known-good-heading"
+          >
+            <div className="v5-card__head">
+              <h2 id="known-good-heading" className="v5-card__title">
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections[KNOWN_GOOD_OPTIONS_SECTION_ID]}
+                  aria-controls="known-good-body"
+                  onClick={() => toggleSection(KNOWN_GOOD_OPTIONS_SECTION_ID)}
+                >
+                  <span className="v5-card__toggle-text">
+                    {KNOWN_GOOD_OPTIONS_SECTION_TITLE}
+                  </span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
+              </h2>
+              <p className="v5-card__desc">{KNOWN_GOOD_OPTIONS_SECTION_DESC}</p>
+            </div>
+            <div
+              id="known-good-body"
+              className="v5-card__body"
+              hidden={collapsedSections[KNOWN_GOOD_OPTIONS_SECTION_ID]}
+            >
+              <p className="v5-row__hint">{KNOWN_GOOD_DISCLAIMER_TEXT}</p>
+              <ToggleRow
+                label={SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_OPTIONS_LABEL}
+                hint={SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_OPTIONS_HINT}
+                ariaLabel={SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_OPTIONS_LABEL}
+                checked={skipEnrichOnKnownGoodMatch}
+                disabled={!ready}
+                onChange={handleSkipEnrichOnKnownGoodMatchToggle}
+              />
+              <p className="v5-field__label" style={{ marginTop: 8 }}>
+                {KNOWN_GOOD_OPTIONS_CATEGORIES_HEADING}
+              </p>
+              <p className="v5-row__hint">{KNOWN_GOOD_OPTIONS_CATEGORIES_HINT}</p>
+              {KNOWN_GOOD_CATEGORIES.map((category) => (
+                <ToggleRow
+                  key={category}
+                  label={formatKnownGoodCategoryDisplay(category)}
+                  hint={`${KNOWN_GOOD_OPTIONS_ENABLE_CATEGORY_LABEL} (${category})`}
+                  ariaLabel={`${KNOWN_GOOD_OPTIONS_ENABLE_CATEGORY_LABEL}: ${formatKnownGoodCategoryDisplay(category)}`}
+                  checked={knownGoodCategoryEnabled[category]}
+                  disabled={!ready}
+                  onChange={(enabled) =>
+                    handleToggleKnownGoodCategory(category, enabled)
+                  }
+                />
+              ))}
+              <p className="v5-field__label" style={{ marginTop: 12 }}>
+                {KNOWN_GOOD_OPTIONS_ENTRIES_HEADING}
+              </p>
+              {knownGoodEntries.length === 0 ? (
+                <p className="v5-status v5-status--muted" role="status">
+                  {KNOWN_GOOD_OPTIONS_EMPTY_TEXT}
+                </p>
+              ) : (
+                <ul className="v5-domain-list" aria-label="Stored known-good entries">
+                  {knownGoodEntries.map((entry) => {
+                    const editing = editingKnownGoodEntryId === entry.id;
+                    return (
+                      <li
+                        key={entry.id}
+                        className="v5-domain-list__item"
+                        data-known-good-entry-id={entry.id}
+                      >
+                        <div className="v5-row__text" style={{ flex: 1 }}>
+                          <span className="v5-row__label">
+                            {formatKnownGoodEntrySummary(entry)}
+                          </span>
+                          <span className="v5-row__hint">Label: {entry.labelText}</span>
+                          <span className="v5-row__hint">Id: {entry.id}</span>
+                          <span className="v5-row__hint">
+                            Category matching:{" "}
+                            {knownGoodCategoryEnabled[entry.category]
+                              ? "enabled"
+                              : "disabled"}
+                          </span>
+                          {editing && knownGoodEditDraft ? (
+                            <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
+                              <label className="v5-field__label">
+                                Category
+                                <select
+                                  className="v5-input"
+                                  value={knownGoodEditDraft.category}
+                                  disabled={!ready}
+                                  aria-label={`Edit category for ${entry.id}`}
+                                  onChange={(event) =>
+                                    setKnownGoodEditDraft((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            category: event.target
+                                              .value as KnownGoodCategory,
+                                          }
+                                        : current
+                                    )
+                                  }
+                                >
+                                  {KNOWN_GOOD_CATEGORIES.map((category) => (
+                                    <option key={category} value={category}>
+                                      {formatKnownGoodCategoryDisplay(category)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="v5-field__label">
+                                Match type
+                                <select
+                                  className="v5-input"
+                                  value={knownGoodEditDraft.matchType}
+                                  disabled={!ready}
+                                  aria-label={`Edit match type for ${entry.id}`}
+                                  onChange={(event) =>
+                                    setKnownGoodEditDraft((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            matchType: event.target
+                                              .value as KnownGoodMatchType,
+                                          }
+                                        : current
+                                    )
+                                  }
+                                >
+                                  {KNOWN_GOOD_MATCH_TYPES.map((matchType) => (
+                                    <option key={matchType} value={matchType}>
+                                      {formatKnownGoodMatchTypeDisplay(matchType)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="v5-field__label">
+                                Pattern
+                                <input
+                                  className="v5-input"
+                                  value={knownGoodEditDraft.pattern}
+                                  disabled={!ready}
+                                  aria-label={`Edit pattern for ${entry.id}`}
+                                  onChange={(event) =>
+                                    setKnownGoodEditDraft((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            pattern: event.target.value,
+                                          }
+                                        : current
+                                    )
+                                  }
+                                />
+                              </label>
+                              <label className="v5-field__label">
+                                Label text
+                                <input
+                                  className="v5-input"
+                                  value={knownGoodEditDraft.labelText}
+                                  disabled={!ready}
+                                  aria-label={`Edit label text for ${entry.id}`}
+                                  onChange={(event) =>
+                                    setKnownGoodEditDraft((current) =>
+                                      current
+                                        ? {
+                                            ...current,
+                                            labelText: event.target.value,
+                                          }
+                                        : current
+                                    )
+                                  }
+                                />
+                              </label>
+                            </div>
+                          ) : null}
+                          <div className="v5-actions" style={{ marginTop: 8 }}>
+                            {editing ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="v5-btn"
+                                  disabled={!ready}
+                                  onClick={handleSaveKnownGoodEntryEdit}
+                                  aria-label={`${KNOWN_GOOD_OPTIONS_SAVE_LABEL} ${entry.id}`}
+                                >
+                                  {KNOWN_GOOD_OPTIONS_SAVE_LABEL}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="v5-btn"
+                                  disabled={!ready}
+                                  onClick={cancelEditKnownGoodEntry}
+                                  aria-label={`${KNOWN_GOOD_OPTIONS_CANCEL_LABEL} ${entry.id}`}
+                                >
+                                  {KNOWN_GOOD_OPTIONS_CANCEL_LABEL}
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                className="v5-btn"
+                                disabled={!ready}
+                                onClick={() => beginEditKnownGoodEntry(entry)}
+                                aria-label={`${KNOWN_GOOD_OPTIONS_EDIT_LABEL} ${entry.id}`}
+                              >
+                                {KNOWN_GOOD_OPTIONS_EDIT_LABEL}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="v5-btn v5-btn--danger"
+                              disabled={!ready}
+                              onClick={() => handleDeleteKnownGoodEntry(entry)}
+                              aria-label={`${KNOWN_GOOD_OPTIONS_DELETE_LABEL} ${entry.id}`}
+                            >
+                              {KNOWN_GOOD_OPTIONS_DELETE_LABEL}
+                            </button>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {knownGoodManageStatus ? (
+                <p className="v5-status v5-status--muted" role="status">
+                  {knownGoodManageStatus}
+                </p>
+              ) : null}
+              <div className="v5-actions">
+                <button
+                  type="button"
+                  className="v5-btn"
+                  disabled={!ready || knownGoodExportState === "exporting"}
+                  onClick={handleExportKnownGoodList}
+                  aria-label={KNOWN_GOOD_OPTIONS_EXPORT_LABEL}
+                  title={KNOWN_GOOD_OPTIONS_EXPORT_HINT}
+                >
+                  {knownGoodExportState === "exporting"
+                    ? "Exporting…"
+                    : KNOWN_GOOD_OPTIONS_EXPORT_LABEL}
+                </button>
+                <span className="v5-status v5-status--muted">
+                  {knownGoodEntries.length} stored entr
+                  {knownGoodEntries.length === 1 ? "y" : "ies"}
+                </span>
+                {knownGoodExportState === "exported" ? (
+                  <span className="v5-status v5-status--success" role="status">
+                    <CheckIcon />
+                    {KNOWN_GOOD_OPTIONS_EXPORT_SUCCESS}
+                  </span>
+                ) : null}
+                {knownGoodExportState === "error" ? (
+                  <span className="v5-status v5-status--error" role="status">
+                    {KNOWN_GOOD_OPTIONS_EXPORT_ERROR}
+                  </span>
+                ) : null}
+              </div>
+              <p className="v5-row__hint" style={{ marginTop: 8 }}>
+                {KNOWN_GOOD_OPTIONS_EXPORT_HINT}
               </p>
             </div>
           </section>

@@ -23,6 +23,10 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "../lib/enrichment";
+import {
+  SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_BLOCKED_MESSAGE,
+} from "../lib/knownGood";
+import { shouldSkipOutboundEnrichForKnownGoodMatch } from "../lib/knownGoodStorage";
 import { sanitizeEnrichmentIoc } from "../lib/iocRequestBoundaries";
 import {
   ENRICHMENT_SOURCE,
@@ -56,6 +60,7 @@ import {
   getEnrichmentSourceCacheTtlSeconds,
   getLocalBackendEnabled,
   getQuietMode,
+  getSkipEnrichOnKnownGoodMatch,
   QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE,
 } from "../lib/storage";
 
@@ -79,6 +84,16 @@ function createQuietModeBlockedSourceResult(
     sourceId,
     ENRICHMENT_ERROR_CODE.QUIET_MODE,
     QUIET_MODE_LIVE_ENRICHMENT_BLOCKED_MESSAGE
+  );
+}
+
+function createKnownGoodPolicySkippedSourceResult(
+  sourceId: EnrichmentSourceId
+): EnrichmentSourceResult {
+  return createSkippedSourceResult(
+    sourceId,
+    ENRICHMENT_ERROR_CODE.KNOWN_GOOD_POLICY,
+    SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_BLOCKED_MESSAGE
   );
 }
 
@@ -129,6 +144,15 @@ async function enrichLiveSource(
 
   if (await getQuietMode()) {
     return createQuietModeBlockedSourceResult(sourceId);
+  }
+
+  if (
+    await shouldSkipOutboundEnrichForKnownGoodMatch(
+      ioc.value,
+      await getSkipEnrichOnKnownGoodMatch()
+    )
+  ) {
+    return createKnownGoodPolicySkippedSourceResult(sourceId);
   }
 
   try {
@@ -301,6 +325,15 @@ async function enrichFromLocalBackend(
   }
 
   if (await getQuietMode()) {
+    return enrichFromExtensionConnectors(message, ioc, enabled, bypassCache);
+  }
+
+  if (
+    await shouldSkipOutboundEnrichForKnownGoodMatch(
+      ioc.value,
+      await getSkipEnrichOnKnownGoodMatch()
+    )
+  ) {
     return enrichFromExtensionConnectors(message, ioc, enabled, bypassCache);
   }
 
