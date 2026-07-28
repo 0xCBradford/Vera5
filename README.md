@@ -1,6 +1,32 @@
+<p align="center">
+  <img src="docs/vera5-logo-mark.png" alt="Vera5 logo" width="180" />
+</p>
+
 # Vera5
 
 Browser extension for on-demand IOC detection and triage on `http://` and `https://` pages you browse. Visible-text IOC detection runs by default; optional link attribute scanning is off until you enable it in Settings. Scans, enrichment, scoring, export, investigation sessions (including session timelines, **Investigation replay**, and a text-first **Investigation notebook** with typed fragments), same-page **Appeared alongside** co-occurrence, cross-session **Appeared across sessions** clusters, IOC collections, operator macros, inspectable local **noise rules** (learned from explicit labels or optional import), local **known-good lists** (CDN/SaaS and similar curated patterns with visible **Known benign** / **Known internal** labels), and portable **threat profiles** / **settings packs** (workflow preferences without API keys) run locally—you bring your own API keys; Vera5 does not operate a shared enrichment cloud. Overlay and tray can show **Previously appeared with** when local relationship edges exist; automatic write from **Scan page** into that store is not wired today (see **Limitations**). **Local page profile** classifies the active tab from URL and bounded DOM signals only (no page upload or cloud fingerprinting) to tune tray ordering, default export templates, analyst preset defaults, and optional playbook suggestions. **Quiet mode** (off by default) blocks outbound live vendor enrichment while preserving local detection, cached enrichment display, and attributed pivot links. **Chromium** is the primary install target (`extension/dist/`); an experimental **Firefox** Manifest V3 build ships as `extension/dist-firefox/`. Optional **local AI summary** stays on `127.0.0.1`; the extension also includes an off-by-default client bridge for a compatible localhost enrichment service, but this repository does not ship that server.
+
+## Table of contents
+
+- [Quick start (install and keys)](#quick-start-install-and-keys)
+- [Limitations](#limitations)
+- [Operator surfaces](#operator-surfaces)
+- [What works today](#what-works-today)
+- [Configuration flow](#configuration-flow)
+- [Example exported markdown](#example-exported-markdown)
+- [Example ticket templates](#example-ticket-templates)
+- [Example timeline appendix](#example-timeline-appendix)
+- [Repository contents](#repository-contents)
+- [Code layout](#code-layout)
+- [Browser support](#browser-support)
+- [Load unpacked (Chrome)](#load-unpacked-chrome)
+- [Load temporary add-on (Firefox)](#load-temporary-add-on-firefox)
+  - [Try detection and enrichment locally](#try-detection-and-enrichment-locally)
+- [Permissions](#permissions)
+- [Privacy and keys (BYOK/BYOA)](#privacy-and-keys-byokbyoa)
+- [Security](#security)
+- [Development](#development)
+- [License](#license)
 
 ## Quick start (install and keys)
 
@@ -75,7 +101,7 @@ What Vera5 does **not** do today:
 | **Connector confidence metadata** | Informational tier, freshness, and source-class chips on multi-source hover cards only (single-source cards omit the **Sources** section). No Vera5-operated metadata feed, no hidden second score, and no Vera5 **malicious** verdict from chips. Per-connector overrides import through **settings packs** or full **Settings Backup** JSON in Options—[connector profile JSON](docs/export-artifacts.md) is a library contract only, not a separate Options export control (distinct from portable **threat profiles**). |
 | **Automation** | Pull request CI runs browser smokes on Playwright Chromium with mocked vendors—it does not replace manual checks on an unpacked Chromium build or a Firefox temporary add-on before you rely on the extension in production triage. Optional local Firefox smokes (`npm run test:e2e:firefox`) cover temporary add-on load and a scan → enrich → export path on a fixture page; they do not gate merge today. |
 | **Workspace snapshot UI** | Versioned JSON export, markdown bundle, Obsidian vault zip, and merge/replace import (with confirmation and secret-field rejection) are implemented as library builders only—there are no **Export workspace snapshot** or **Import workspace snapshot** controls in the extension workspace today. Use **Session export** (including **Session notebook** markdown from session-attached fragments), **Collection export**, **Timeline appendix export**, and **Settings packs** for operator handoff. Artifact contracts: [docs/export-artifacts.md](docs/export-artifacts.md). |
-| **README images** | No embedded screenshots. Capture guide: [docs/screenshots.md](docs/screenshots.md). |
+| **README images** | Brand mark at the top of this README (`docs/vera5-logo-mark.png`). No embedded product screenshots yet. Capture guide: [docs/screenshots.md](docs/screenshots.md). |
 
 More detail: [docs/architecture.md](docs/architecture.md), [docs/api-integrations.md](docs/api-integrations.md), [docs/contributors/testing.md](docs/contributors/testing.md) (E2E scope and limits).
 
