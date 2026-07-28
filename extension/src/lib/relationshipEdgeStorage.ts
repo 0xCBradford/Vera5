@@ -6,10 +6,13 @@ import {
 import {
   DEFAULT_RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY,
   DEFAULT_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT,
+  DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS,
   mergeRelationshipEdgePair,
   normalizeRelationshipEdge,
   normalizeRelationshipEdgeKnownGoodPolicy,
   normalizeRelationshipEdgeMinCoOccurrenceCount,
+  normalizeRelationshipEdgeRetentionDays,
+  pruneRelationshipEdgesOlderThan,
   relationshipEdgeCoOccurrenceCount,
   type RelationshipEdge,
   type RelationshipEdgeKnownGoodPolicy,
@@ -31,6 +34,8 @@ export type RelationshipEdgesStore = {
   minCoOccurrenceCount: number;
   /** Known-good edge policy (`off` / `exclude` / `down_rank`). */
   knownGoodPolicy: RelationshipEdgeKnownGoodPolicy;
+  /** Retention window in days; edges older than the window are pruned on read. */
+  retentionDays: number;
 };
 
 export type RelationshipEdgesMigrationResult = {
@@ -110,7 +115,8 @@ function normalizeEdgeList(value: unknown): RelationshipEdge[] {
 export function createEmptyRelationshipEdgesStore(
   updatedAt: number = Date.now(),
   minCoOccurrenceCount: number = DEFAULT_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT,
-  knownGoodPolicy: RelationshipEdgeKnownGoodPolicy = DEFAULT_RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY
+  knownGoodPolicy: RelationshipEdgeKnownGoodPolicy = DEFAULT_RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY,
+  retentionDays: number = DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS
 ): RelationshipEdgesStore {
   return {
     schemaVersion: RELATIONSHIP_EDGES_STORE_SCHEMA_VERSION,
@@ -120,6 +126,7 @@ export function createEmptyRelationshipEdgesStore(
       minCoOccurrenceCount
     ),
     knownGoodPolicy: normalizeRelationshipEdgeKnownGoodPolicy(knownGoodPolicy),
+    retentionDays: normalizeRelationshipEdgeRetentionDays(retentionDays),
   };
 }
 
@@ -128,6 +135,7 @@ export function buildRelationshipEdgesStorePayload(input: {
   updatedAt?: number;
   minCoOccurrenceCount?: number | null;
   knownGoodPolicy?: RelationshipEdgeKnownGoodPolicy | string | null;
+  retentionDays?: number | null;
 }): RelationshipEdgesStore {
   return {
     schemaVersion: RELATIONSHIP_EDGES_STORE_SCHEMA_VERSION,
@@ -137,6 +145,7 @@ export function buildRelationshipEdgesStorePayload(input: {
       input.minCoOccurrenceCount
     ),
     knownGoodPolicy: normalizeRelationshipEdgeKnownGoodPolicy(input.knownGoodPolicy),
+    retentionDays: normalizeRelationshipEdgeRetentionDays(input.retentionDays),
   };
 }
 
@@ -164,6 +173,7 @@ export function normalizeRelationshipEdgesStore(
     updatedAt,
     minCoOccurrenceCount: record.minCoOccurrenceCount,
     knownGoodPolicy: record.knownGoodPolicy as RelationshipEdgeKnownGoodPolicy,
+    retentionDays: record.retentionDays,
   });
 }
 
@@ -180,6 +190,7 @@ function migrateLegacyUnversionedRelationshipEdgesStore(
       updatedAt,
       minCoOccurrenceCount: record.minCoOccurrenceCount,
       knownGoodPolicy: record.knownGoodPolicy as RelationshipEdgeKnownGoodPolicy,
+      retentionDays: record.retentionDays,
     }),
     migrated: true,
     fromSchemaVersion: null,
@@ -240,6 +251,7 @@ export function migrateRelationshipEdgesStore(
         updatedAt,
         minCoOccurrenceCount: record.minCoOccurrenceCount,
         knownGoodPolicy: record.knownGoodPolicy as RelationshipEdgeKnownGoodPolicy,
+        retentionDays: record.retentionDays,
       }),
       migrated: true,
       fromSchemaVersion,
@@ -278,6 +290,44 @@ export function isRelationshipEdgesStore(
   );
 }
 
+/**
+ * Applies the store retention window to drop edges older than the cutoff.
+ * Returns a new store when any edges were removed.
+ */
+export function applyRelationshipEdgesStoreRetention(
+  store: RelationshipEdgesStore,
+  nowMs: number = Date.now()
+): { store: RelationshipEdgesStore; pruned: boolean } {
+  const retentionDays = normalizeRelationshipEdgeRetentionDays(store.retentionDays);
+  const edges = pruneRelationshipEdgesOlderThan(store.edges, {
+    retentionDays,
+    nowMs,
+  });
+  if (edges.length === store.edges.length) {
+    return {
+      store: {
+        ...store,
+        retentionDays,
+        minCoOccurrenceCount: normalizeRelationshipEdgeMinCoOccurrenceCount(
+          store.minCoOccurrenceCount
+        ),
+        knownGoodPolicy: normalizeRelationshipEdgeKnownGoodPolicy(store.knownGoodPolicy),
+      },
+      pruned: false,
+    };
+  }
+  return {
+    store: buildRelationshipEdgesStorePayload({
+      edges,
+      updatedAt: nowMs,
+      retentionDays,
+      minCoOccurrenceCount: store.minCoOccurrenceCount,
+      knownGoodPolicy: store.knownGoodPolicy,
+    }),
+    pruned: true,
+  };
+}
+
 export async function getRelationshipEdgesStore(): Promise<RelationshipEdgesStore> {
   if (!canUseRelationshipEdgeStorage()) {
     return createEmptyRelationshipEdgesStore();
@@ -287,12 +337,13 @@ export async function getRelationshipEdgesStore(): Promise<RelationshipEdgesStor
   const migration = migrateRelationshipEdgesStore(
     result[STORAGE_KEY_RELATIONSHIP_EDGES]
   );
+  const retention = applyRelationshipEdgesStoreRetention(migration.store);
 
-  if (migration.migrated) {
-    await persistRelationshipEdgesStore(migration.store);
+  if (migration.migrated || retention.pruned) {
+    await persistRelationshipEdgesStore(retention.store);
   }
 
-  return migration.store;
+  return retention.store;
 }
 
 export async function persistRelationshipEdgesStore(
@@ -310,6 +361,7 @@ export async function persistRelationshipEdgesStore(
       edges: normalized.edges,
       minCoOccurrenceCount: normalized.minCoOccurrenceCount,
       knownGoodPolicy: normalized.knownGoodPolicy,
+      retentionDays: normalized.retentionDays,
     },
   });
 }
@@ -336,6 +388,7 @@ export async function replaceStoredRelationshipEdges(
     updatedAt?: number;
     minCoOccurrenceCount?: number | null;
     knownGoodPolicy?: RelationshipEdgeKnownGoodPolicy | string | null;
+    retentionDays?: number | null;
   }
 ): Promise<RelationshipEdgesStore> {
   const current = await getRelationshipEdgesStore();
@@ -350,6 +403,10 @@ export async function replaceStoredRelationshipEdges(
       options?.knownGoodPolicy === undefined
         ? current.knownGoodPolicy
         : options.knownGoodPolicy,
+    retentionDays:
+      options?.retentionDays === undefined
+        ? current.retentionDays
+        : options.retentionDays,
   });
   await persistRelationshipEdgesStore(store);
   return store;
@@ -384,13 +441,20 @@ export async function upsertStoredRelationshipEdge(
     updatedAt: options?.updatedAt ?? Date.now(),
     minCoOccurrenceCount: current.minCoOccurrenceCount,
     knownGoodPolicy: current.knownGoodPolicy,
+    retentionDays: current.retentionDays,
   });
   await persistRelationshipEdgesStore(store);
   return store;
 }
 
 /**
- * Clears stored edges while preserving min co-occurrence and known-good policy.
+ * Clears stored edges while preserving min co-occurrence, known-good policy,
+ * and retention window preferences.
+ *
+ * Writes only the `relationshipEdges` storage key. Does not clear investigation
+ * sessions (`investigationSessions`) or other local memory stores. A combined
+ * wipe of edges plus sessions is a separate operator action—not part of this
+ * clear path.
  */
 export async function clearStoredRelationshipEdges(
   options?: { updatedAt?: number }
@@ -399,7 +463,8 @@ export async function clearStoredRelationshipEdges(
   const store = createEmptyRelationshipEdgesStore(
     options?.updatedAt ?? Date.now(),
     current.minCoOccurrenceCount,
-    current.knownGoodPolicy
+    current.knownGoodPolicy,
+    current.retentionDays
   );
   await persistRelationshipEdgesStore(store);
   return store;
@@ -414,6 +479,7 @@ export async function setRelationshipEdgeMinCoOccurrenceCount(
     updatedAt: Date.now(),
     minCoOccurrenceCount,
     knownGoodPolicy: current.knownGoodPolicy,
+    retentionDays: current.retentionDays,
   });
   await persistRelationshipEdgesStore(store);
   return store;
@@ -428,6 +494,28 @@ export async function setRelationshipEdgeKnownGoodPolicy(
     updatedAt: Date.now(),
     minCoOccurrenceCount: current.minCoOccurrenceCount,
     knownGoodPolicy,
+    retentionDays: current.retentionDays,
+  });
+  await persistRelationshipEdgesStore(store);
+  return store;
+}
+
+export async function setRelationshipEdgeRetentionDays(
+  retentionDays: number
+): Promise<RelationshipEdgesStore> {
+  const current = await getRelationshipEdgesStore();
+  const normalizedDays = normalizeRelationshipEdgeRetentionDays(retentionDays);
+  const nowMs = Date.now();
+  const edges = pruneRelationshipEdgesOlderThan(current.edges, {
+    retentionDays: normalizedDays,
+    nowMs,
+  });
+  const store = buildRelationshipEdgesStorePayload({
+    edges,
+    updatedAt: nowMs,
+    minCoOccurrenceCount: current.minCoOccurrenceCount,
+    knownGoodPolicy: current.knownGoodPolicy,
+    retentionDays: normalizedDays,
   });
   await persistRelationshipEdgesStore(store);
   return store;

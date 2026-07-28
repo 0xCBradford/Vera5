@@ -129,10 +129,12 @@ import {
   loadHoverCardCoOccurrencePanelView,
 } from "../lib/hoverCardCoOccurrence";
 import {
+  HOVER_CARD_RELATIONSHIP_DISCLAIMER_CLASS,
   HOVER_CARD_RELATIONSHIP_EMPTY_TEXT,
   HOVER_CARD_RELATIONSHIP_LABEL,
   HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL,
   RELATIONSHIP_HOVER_UI_LAYOUT,
+  RELATIONSHIP_MEMORY_DISCLAIMER_TEXT,
   buildRelationshipEntryDisplaysForView,
   formatRelationshipEntryAccessibleLabel,
   loadHoverCardRelationshipPanelView,
@@ -393,6 +395,7 @@ export const HOVER_CARD_RELATIONSHIP_LIST_CLASS =
   "vera5-hover-card-relationship-list";
 export const HOVER_CARD_RELATIONSHIP_ITEM_CLASS =
   "vera5-hover-card-relationship-item";
+export { HOVER_CARD_RELATIONSHIP_DISCLAIMER_CLASS };
 export const HOVER_CARD_NOTEBOOK_CLASS = "vera5-hover-card-notebook";
 export const HOVER_CARD_NOTEBOOK_LABEL_CLASS = "vera5-hover-card-notebook-label";
 export const HOVER_CARD_NOTEBOOK_TABS_CLASS = "vera5-hover-card-notebook-tabs";
@@ -2252,6 +2255,12 @@ function createRelationshipSection(
 
   section.appendChild(heading);
   section.appendChild(list);
+
+  const disclaimer = doc.createElement("p");
+  disclaimer.className = HOVER_CARD_RELATIONSHIP_DISCLAIMER_CLASS;
+  disclaimer.setAttribute("role", "note");
+  disclaimer.textContent = RELATIONSHIP_MEMORY_DISCLAIMER_TEXT;
+  section.appendChild(disclaimer);
 
   void loadHoverCardRelationshipPanelView({
     iocType: payload.type,

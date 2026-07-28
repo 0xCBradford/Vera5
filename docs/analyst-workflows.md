@@ -732,7 +732,7 @@ Limits persist in extension local storage under the co-occurrence settings key. 
 
 ### Same-page adjacency vs cross-session correlation (scope split)
 
-Vera5 keeps two shipped “appeared together” surfaces separate so operators do not confuse **this page scan** with **other investigation sessions**:
+Vera5 keeps two shipped “appeared together” surfaces separate so operators do not confuse **this page scan** with **other investigation sessions**. Entity-level **Previously appeared with** is a third layer—see [Same-page adjacency, cross-session correlation, and relationship memory](#same-page-adjacency-cross-session-correlation-and-relationship-memory).
 
 | | **Appeared alongside** (same-page) | **Appeared across sessions** (cross-session) |
 |--|-----------------------------------|----------------------------------------------|
@@ -740,24 +740,33 @@ Vera5 keeps two shipped “appeared together” surfaces separate so operators d
 | **Data** | Tab scan snapshot on the active investigation session | Merged IOC sets from saved investigation sessions (local cluster storage) |
 | **Surfaces** | Hover card + tray expander | Tray expander only (list/adjacency—no graph canvas) |
 | **Navigation** | Jump to highlights on the **current tab** | Drill-down to other session title / truncated URL / date; optional link into **Appeared alongside** when viewing the current tab scan |
-| **Settings** | No Options controls for same-page caps today (defaults apply) | **Cross-session correlation**: retention, overlap merge, **Clear all clusters** |
+| **Settings** | No Options controls for same-page caps today (defaults apply) | **Cross-session correlation**: retention, overlap merge, **Clear all clusters** (does not delete investigation sessions) |
 | **Does not** | Read other tabs, other sessions, or historical investigations | Duplicate the same-page panel; act as a global threat graph; imply causation or a detection verdict |
 
 Use **Appeared alongside** for in-page pivot adjacency. Use **Appeared across sessions** when you need local “these sets showed up together across cases” context. The tray can show both expanders on one row; they stay sibling panels (cross-session may link into same-page for current-tab context without merging the lists).
 
 ### Same-page adjacency, cross-session correlation, and relationship memory
 
-Vera5 separates “appeared together” intelligence into three layers. Each layer stays **local-only** on your browser profile: no Vera5-hosted graph, no cross-user intelligence, and no machine-learned entity resolution.
+Vera5 separates “appeared together” intelligence into **three** local layers. Each stays on your browser profile only: no Vera5-hosted graph, no cross-user intelligence, and no machine-learned entity resolution.
 
-| Layer | Operator surface | Question it answers | Data source | In current release |
-|-------|------------------|---------------------|-------------|-------------------|
-| **Same-page adjacency** | **Appeared alongside** on the hover card and tray | Which other indicators share **this page scan**? | Tab scan snapshot on the active investigation session | Yes |
-| **Cross-session correlation** | **Appeared across sessions** tray rows; correlation pack appendix **builders** (library) | Which **other investigation sessions** saw a similar IOC set? | Merged IOC sets from saved investigation sessions | Yes (local clusters + Options; performance caps apply; pack export UI not exposed) |
-| **Relationship memory** | **Previously appeared with** on the hover card and tray (when available) | Which **entities** (IP, domain, hash, …) co-appeared across my past work? | Rolled-up relationship edges from scan and enrich events across sessions | No |
+| | **Appeared alongside** (same-page adjacency) | **Appeared across sessions** (cross-session correlation) | **Previously appeared with** (relationship memory) |
+|--|---------------------------------------------|----------------------------------------------------------|-----------------------------------------------------|
+| **Question** | Which other indicators share **this page scan**? | Which **other investigation sessions** saw a similar **IOC set**? | Which **entities** (IP, domain, hash, …) co-appeared with this indicator in local relationship-edge memory? |
+| **Grain** | Indicators on **one** scan / page URL | **Sets** of indicators across sessions | **Entity pairs** (co-seen / resolved-from partners) |
+| **Data** | Tab scan snapshot on the active investigation session | Merged IOC sets from saved investigation sessions (local cluster storage) | Local `relationshipEdges` store (when edges exist) |
+| **Surfaces** | Hover card + tray expander | Tray expander only (list/adjacency—no graph canvas) | Hover card + tray expander (when partners exist) |
+| **Settings** | Caps are code defaults (no Options card today) | **Cross-session correlation**: retention, overlap merge, **Clear all clusters** | **Relationship memory**: retention, **Clear all relationship memory** (edges only—sessions stay) |
+| **Does not** | Read other tabs or other sessions | Duplicate the same-page list; export a correlation pack from the UI today | Act as a global graph; auto-attribute actors/campaigns; replace sessions or notebook |
 
-**Same-page adjacency (`Appeared alongside`)** — Shipped today. Builds pairs and groups from one scan on one page URL while your investigation session is active. Jump navigation stays on the current tab. Performance caps in the table above apply. It does not read other tabs, archived sessions, or historical investigations.
+| Layer | Operator surface | In current release |
+|-------|------------------|-------------------|
+| **Same-page adjacency** | **Appeared alongside** | Yes — built from the active tab scan while a session is active |
+| **Cross-session correlation** | **Appeared across sessions**; correlation pack appendix **builders** (library only) | Yes — local clusters + Options; pack export UI not exposed |
+| **Relationship memory** | **Previously appeared with** / **Appeared with** | Panels and Options ship; automatic write from **Scan page** / enrich into `relationshipEdges` is **not** wired in the background worker today—panels stay empty until edges exist locally |
 
-**Cross-session correlation (`Appeared across sessions`)** — Shipped today as local IOC-set clusters on the popup tray. Clusters sets that appeared together across investigation sessions; list/adjacency only (not a force-directed graph or global threat map). Links to **Appeared alongside** for current-tab scan context without duplicating that panel. In-product copy states **Correlation ≠ causation** and that co-occurrence / cross-session clusters are advisory only—not a detection verdict. Markdown/JSON correlation pack appendix builders (cluster summary, member IOC table, session refs, same disclaimer; secrets redacted) exist as a library contract—there is no workspace or overlay **Export correlation pack** control today.
+**Same-page adjacency (`Appeared alongside`)** — Builds pairs and groups from one scan on one page URL while your investigation session is active. Jump navigation stays on the current tab. Performance caps in the same-page limits table apply. It does not read other tabs, archived sessions, or historical investigations.
+
+**Cross-session correlation (`Appeared across sessions`)** — Local IOC-set clusters on the popup tray. Clusters sets that appeared together across investigation sessions; list/adjacency only (not a force-directed graph or global threat map). Links to **Appeared alongside** for current-tab scan context without duplicating that panel. In-product copy states **Correlation ≠ causation** and that co-occurrence / cross-session clusters are advisory only—not a detection verdict. Markdown/JSON correlation pack appendix builders (cluster summary, member IOC table, session refs, same disclaimer; secrets redacted) exist as a library contract—there is no workspace or overlay **Export correlation pack** control today.
 
 ### Cross-session correlation limits (performance)
 
@@ -771,7 +780,30 @@ Cluster promotion ranks by how many sessions share a set, then by last seen. Cap
 
 Minimum cluster size remains two indicators and two sessions (unless overlap merge is configured). Defaults apply when limits are omitted; overrides clamp to safe ranges (1–256 clusters; 2–512 members per cluster; retention 1–3650 days). Retention prune runs when local cluster storage is read so stale clusters do not linger indefinitely. Options also expose the overlap-merge mode (exact sets only, Jaccard threshold, or minimum shared indicators) and a **Clear all clusters** control that removes stored clusters without deleting investigation session history.
 
-**Relationship memory** — Not in the current extension build. When shipped, it would roll up co-seen entity pairs across sessions (deeper than whole-scan IOC-set overlap). It is out of scope for same-page adjacency and for cross-session cluster packs.
+**Relationship memory (`Previously appeared with`)** — Local entity-partner panels on the hover card and tray when related entities exist in `relationshipEdges` storage. Shows co-seen / resolved-from partners (IP, domain, hash, and similar) as a ranked list—not a force-directed graph or global threat map. Prior-session drill-down, optional investigation replay, and notebook fragment links stay on your browser profile only. In-product copy reuses **Correlation ≠ causation** / advisory-not-verdict language. Edge builders and storage ship with the extension; automatic persistence from **Scan page** / enrich is not wired in the background worker today, so panels stay empty on a fresh profile until edges exist locally. It does not upload relationship graphs to Vera5 infrastructure (there is none in the current release).
+
+### Relationship memory limits (performance)
+
+| Limit | Default | What it does |
+|-------|---------|--------------|
+| **Max stored edges** | 4096 | After merge and co-occurrence ranking, keeps at most 4096 relationship edges in local storage. Lower-ranked edges beyond the cap are dropped on normalize/persist. |
+| **Max related entities per indicator** | 64 | For one focus IOC, hover and tray list at most 64 related partners (ranked by session count, then last seen). Partners beyond the cap are omitted from that view. |
+| **Retention window** | 90 days | Drops persisted edges whose **last seen** timestamp is older than the window. The window is configurable in Options (**Relationship memory**); the default is 90 days. |
+
+Overrides for the per-indicator related-entity cap clamp to 1–256 when provided by callers. Retention overrides clamp to 1–3650 days. Retention prune runs when local relationship storage is read so stale edges do not linger indefinitely. Options **Relationship memory** also provides **Clear all relationship memory** (confirmation required); clear removes stored edges while keeping retention and policy settings and does not delete investigation session history. These caps keep list/adjacency surfaces responsive; they are not a detection or attribution verdict.
+
+### Clear relationship memory vs investigation sessions
+
+**Clear all relationship memory** (Options → **Relationship memory**) removes only local **Previously appeared with** edges. It is intentionally separate from investigation session history:
+
+| Action | What it clears | What it keeps |
+|--------|----------------|---------------|
+| **Clear all relationship memory** | Stored relationship edges under local relationship memory | Investigation sessions, session timelines, pins/labels on sessions, retention/policy preferences for relationship memory |
+| **Investigation session management** (popup / session history) | Sessions you delete or archive through session UI | Relationship edges (unless you also clear relationship memory) |
+
+There is **no combined wipe** on the Relationship memory clear control. Clearing edges and deleting investigation sessions in one step is not offered there; treat those as separate operator choices. Confirm dialog copy states that investigation sessions are not deleted.
+
+See also [Session vs IOC collection](#session-vs-ioc-collection) for durable handoff paths that are independent of relationship memory.
 
 **Shared out-of-scope boundaries (all three layers):**
 

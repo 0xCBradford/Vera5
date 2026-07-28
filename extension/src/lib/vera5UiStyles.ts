@@ -684,7 +684,8 @@ export function buildVera5UiStylesCss(): string {
 }
 .vera5-workspace-tray-row .vera5-tray-save-collection-toggle,
 .vera5-workspace-tray-row .vera5-tray-why-detected summary,
-.vera5-workspace-tray-row .vera5-tray-co-occurrence summary {
+.vera5-workspace-tray-row .vera5-tray-co-occurrence summary,
+.vera5-workspace-tray-row .vera5-tray-relationship summary {
   opacity: 0.55;
   transition: opacity 0.14s ease;
 }
@@ -696,7 +697,10 @@ export function buildVera5UiStylesCss(): string {
 .vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-why-detected summary,
 .vera5-workspace-tray-row:hover .vera5-tray-co-occurrence summary,
 .vera5-workspace-tray-row:focus-within .vera5-tray-co-occurrence summary,
-.vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-co-occurrence summary {
+.vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-co-occurrence summary,
+.vera5-workspace-tray-row:hover .vera5-tray-relationship summary,
+.vera5-workspace-tray-row:focus-within .vera5-tray-relationship summary,
+.vera5-workspace-tray-row[aria-selected="true"] .vera5-tray-relationship summary {
   opacity: 1;
 }
 .vera5-tray-save-collection-panel {
@@ -894,6 +898,12 @@ export function buildVera5UiStylesCss(): string {
 .vera5-hover-card-relationship-item {
   margin: 0;
 }
+.vera5-hover-card-relationship-disclaimer {
+  margin: 8px 0 0;
+  color: var(--vera5-muted-label);
+  font-size: 11px;
+  line-height: 1.4;
+}
 .vera5-hover-card-notebook {
   margin-top: 8px;
 }
@@ -1084,6 +1094,16 @@ export function buildVera5UiStylesCss(): string {
 .vera5-tray-co-occurrence-item:focus-visible {
   text-decoration: underline;
   outline: none;
+}
+.vera5-tray-relationship-list {
+  margin: 0;
+  padding-left: 16px;
+  color: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.vera5-tray-relationship-item {
+  margin: 0;
 }
 .vera5-hover-card-ioc-pin {
   border: 1px solid var(--vera5-border);

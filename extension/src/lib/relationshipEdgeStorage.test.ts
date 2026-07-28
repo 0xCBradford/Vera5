@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY,
   DEFAULT_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT,
+  DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS,
   RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY,
+  RELATIONSHIP_EDGE_MS_PER_DAY,
   RELATIONSHIP_TYPE,
   createRelationshipEdge,
 } from "./relationshipEdge";
@@ -21,6 +23,7 @@ import {
   replaceStoredRelationshipEdges,
   setRelationshipEdgeKnownGoodPolicy,
   setRelationshipEdgeMinCoOccurrenceCount,
+  setRelationshipEdgeRetentionDays,
   upsertStoredRelationshipEdge,
 } from "./relationshipEdgeStorage";
 
@@ -60,6 +63,7 @@ function stubChromeStorage(localStore: Record<string, unknown>): void {
 
 describe("relationshipEdgeStorage", () => {
   let localStore: Record<string, unknown>;
+  const nowMs = Date.UTC(2026, 6, 22);
 
   function sampleEdge(sessionIds: string[] = ["vera5-inv-a", "vera5-inv-b"]) {
     return createRelationshipEdge({
@@ -67,8 +71,8 @@ describe("relationshipEdgeStorage", () => {
       entityB: "domain:example.com",
       relationship: RELATIONSHIP_TYPE.CO_SEEN,
       sessionIds,
-      firstSeen: 100,
-      lastSeen: 200,
+      firstSeen: nowMs - 1_000,
+      lastSeen: nowMs - 500,
       weight: sessionIds.length,
     });
   }
@@ -76,6 +80,7 @@ describe("relationshipEdgeStorage", () => {
   beforeEach(() => {
     localStore = {};
     stubChromeStorage(localStore);
+    vi.spyOn(Date, "now").mockReturnValue(nowMs);
   });
 
   afterEach(() => {
@@ -91,6 +96,7 @@ describe("relationshipEdgeStorage", () => {
       edges: [],
       minCoOccurrenceCount: DEFAULT_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT,
       knownGoodPolicy: DEFAULT_RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY,
+      retentionDays: DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS,
     });
   });
 
@@ -103,6 +109,7 @@ describe("relationshipEdgeStorage", () => {
     expect(store.schemaVersion).toBe(RELATIONSHIP_EDGES_STORE_SCHEMA_VERSION);
     expect(store.updatedAt).toBe(999);
     expect(store.edges).toEqual([edge]);
+    expect(store.retentionDays).toBe(DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS);
     expect(localStore[STORAGE_KEY_RELATIONSHIP_EDGES]).toEqual(store);
     expect(await listStoredRelationshipEdges()).toEqual([edge]);
     expect(await getStoredRelationshipEdge(edge.edgeId)).toEqual(edge);
@@ -115,14 +122,15 @@ describe("relationshipEdgeStorage", () => {
     await setRelationshipEdgeKnownGoodPolicy(
       RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY.EXCLUDE
     );
+    await setRelationshipEdgeRetentionDays(45);
 
     const second = createRelationshipEdge({
       entityA: "domain:example.com",
       entityB: "ipv4:8.8.8.8",
       relationship: RELATIONSHIP_TYPE.CO_SEEN,
       sessionIds: ["vera5-inv-b"],
-      firstSeen: 50,
-      lastSeen: 250,
+      firstSeen: nowMs - 2_000,
+      lastSeen: nowMs - 100,
       weight: 1,
     });
     await upsertStoredRelationshipEdge(second, { updatedAt: 2 });
@@ -130,8 +138,8 @@ describe("relationshipEdgeStorage", () => {
     const listed = await listStoredRelationshipEdges();
     expect(listed).toHaveLength(1);
     expect(listed[0]?.sessionIds).toEqual(["vera5-inv-a", "vera5-inv-b"]);
-    expect(listed[0]?.firstSeen).toBe(50);
-    expect(listed[0]?.lastSeen).toBe(250);
+    expect(listed[0]?.firstSeen).toBe(nowMs - 2_000);
+    expect(listed[0]?.lastSeen).toBe(nowMs - 100);
     expect(listed[0]?.weight).toBe(2);
 
     const cleared = await clearStoredRelationshipEdges({ updatedAt: 3 });
@@ -140,14 +148,40 @@ describe("relationshipEdgeStorage", () => {
     expect(cleared.knownGoodPolicy).toBe(
       RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY.EXCLUDE
     );
+    expect(cleared.retentionDays).toBe(45);
     expect(localStore[STORAGE_KEY_RELATIONSHIP_EDGES]).toEqual(
       expect.objectContaining({
         schemaVersion: RELATIONSHIP_EDGES_STORE_SCHEMA_VERSION,
         edges: [],
         minCoOccurrenceCount: 3,
         knownGoodPolicy: RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY.EXCLUDE,
+        retentionDays: 45,
       })
     );
+  });
+
+  it("clear-all does not delete investigation sessions storage", async () => {
+    const { STORAGE_KEY_INVESTIGATION_SESSIONS } = await import(
+      "./investigationSessionStorage"
+    );
+    const sessionEnvelope = {
+      schemaVersion: 1,
+      updatedAt: nowMs,
+      sessions: [{ id: "vera5-inv-keep", title: "Keep me" }],
+      activeSessionId: "vera5-inv-keep",
+    };
+    localStore[STORAGE_KEY_INVESTIGATION_SESSIONS] = sessionEnvelope;
+    await replaceStoredRelationshipEdges([sampleEdge()], {
+      updatedAt: nowMs,
+      retentionDays: 90,
+    });
+
+    await clearStoredRelationshipEdges({ updatedAt: nowMs + 1 });
+
+    expect(localStore[STORAGE_KEY_INVESTIGATION_SESSIONS]).toEqual(sessionEnvelope);
+    expect(
+      (localStore[STORAGE_KEY_RELATIONSHIP_EDGES] as { edges: unknown[] }).edges
+    ).toEqual([]);
   });
 
   it("migrates unversioned legacy envelopes on read and rewrites storage", async () => {
@@ -163,10 +197,12 @@ describe("relationshipEdgeStorage", () => {
     expect(store.schemaVersion).toBe(RELATIONSHIP_EDGES_STORE_SCHEMA_VERSION);
     expect(store.updatedAt).toBe(42);
     expect(store.edges).toEqual([edge]);
+    expect(store.retentionDays).toBe(DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS);
     expect(localStore[STORAGE_KEY_RELATIONSHIP_EDGES]).toEqual(
       expect.objectContaining({
         schemaVersion: RELATIONSHIP_EDGES_STORE_SCHEMA_VERSION,
         edges: [edge],
+        retentionDays: DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS,
       })
     );
   });
@@ -180,6 +216,7 @@ describe("relationshipEdgeStorage", () => {
       edges: [],
       minCoOccurrenceCount: DEFAULT_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT,
       knownGoodPolicy: DEFAULT_RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY,
+      retentionDays: DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS,
     });
 
     const edge = sampleEdge();
@@ -197,9 +234,11 @@ describe("relationshipEdgeStorage", () => {
       edges: [edge],
       minCoOccurrenceCount: 2,
       knownGoodPolicy: "off",
+      retentionDays: 30,
     });
     expect(current.migrated).toBe(false);
     expect(current.fromSchemaVersion).toBe(1);
+    expect(current.store.retentionDays).toBe(30);
 
     const newer = migrateRelationshipEdgesStore({
       schemaVersion: 99,
@@ -242,6 +281,76 @@ describe("relationshipEdgeStorage", () => {
       RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY.DOWN_RANK
     );
     expect(await persistRelationshipEdgesStore(withPolicy)).toBe(true);
+  });
+
+  it("truncates edge list to MAX_STORED_RELATIONSHIP_EDGES after co-occurrence sort", () => {
+    const edges = Array.from(
+      { length: MAX_STORED_RELATIONSHIP_EDGES + 8 },
+      (_, index) =>
+        createRelationshipEdge({
+          entityA: "ipv4:1.1.1.1",
+          entityB: `domain:host-${index}.example`,
+          relationship: RELATIONSHIP_TYPE.CO_SEEN,
+          sessionIds: ["vera5-inv-a", "vera5-inv-b"],
+          firstSeen: nowMs - index,
+          lastSeen: nowMs - index,
+          weight: 2,
+        })
+    );
+    const normalized = normalizeRelationshipEdgesStore({
+      schemaVersion: RELATIONSHIP_EDGES_STORE_SCHEMA_VERSION,
+      updatedAt: 1,
+      edges,
+      minCoOccurrenceCount: DEFAULT_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT,
+      knownGoodPolicy: DEFAULT_RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY,
+    });
+    expect(normalized.edges).toHaveLength(MAX_STORED_RELATIONSHIP_EDGES);
+    expect(normalized.retentionDays).toBe(DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS);
+  });
+
+  it("prunes edges older than the retention window on read", async () => {
+    const fresh = sampleEdge();
+    const stale = createRelationshipEdge({
+      entityA: "ipv4:1.1.1.1",
+      entityB: "domain:old.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["vera5-inv-c", "vera5-inv-d"],
+      firstSeen: nowMs - 120 * RELATIONSHIP_EDGE_MS_PER_DAY,
+      lastSeen: nowMs - 100 * RELATIONSHIP_EDGE_MS_PER_DAY,
+      weight: 2,
+    });
+
+    await replaceStoredRelationshipEdges([fresh, stale], {
+      updatedAt: nowMs,
+      retentionDays: 90,
+    });
+
+    const loaded = await getRelationshipEdgesStore();
+    expect(loaded.edges.map((edge) => edge.edgeId)).toEqual([fresh.edgeId]);
+    expect(loaded.retentionDays).toBe(90);
+    expect(
+      (localStore[STORAGE_KEY_RELATIONSHIP_EDGES] as { edges: unknown[] }).edges
+    ).toHaveLength(1);
+  });
+
+  it("setRelationshipEdgeRetentionDays updates the window and prunes", async () => {
+    const mid = createRelationshipEdge({
+      entityA: "ipv4:9.9.9.9",
+      entityB: "domain:mid.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["vera5-inv-e", "vera5-inv-f"],
+      firstSeen: nowMs - 20 * RELATIONSHIP_EDGE_MS_PER_DAY,
+      lastSeen: nowMs - 10 * RELATIONSHIP_EDGE_MS_PER_DAY,
+      weight: 2,
+    });
+    await replaceStoredRelationshipEdges([mid], {
+      updatedAt: nowMs,
+      retentionDays: 90,
+    });
+
+    const shortened = await setRelationshipEdgeRetentionDays(5);
+    expect(shortened.retentionDays).toBe(5);
+    expect(shortened.edges).toEqual([]);
   });
 
   it("does not call network APIs while persisting", async () => {

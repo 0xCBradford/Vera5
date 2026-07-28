@@ -19,6 +19,16 @@ import {
   setCorrelationClusterRetentionDays,
 } from "../lib/correlationClusterStorage";
 import {
+  DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS,
+  MAX_RELATIONSHIP_EDGE_RETENTION_DAYS,
+  MIN_RELATIONSHIP_EDGE_RETENTION_DAYS,
+} from "../lib/relationshipEdge";
+import {
+  clearStoredRelationshipEdges,
+  getRelationshipEdgesStore,
+  setRelationshipEdgeRetentionDays,
+} from "../lib/relationshipEdgeStorage";
+import {
   buildNoiseRuleDetailView,
   filterNoiseRulesBySearch,
   HIDE_SUPPRESSED_FROM_SCAN_DEFAULT,
@@ -395,6 +405,7 @@ const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "operator-macros", label: "Operator Macros" },
   { id: "cache", label: "Enrichment Cache" },
   { id: "correlation", label: "Cross-session correlation" },
+  { id: "relationship-memory", label: "Relationship memory" },
   { id: "noise-rules", label: "Noise rules" },
   { id: "known-good", label: "Known-good lists" },
   { id: "backup", label: "Settings Backup" },
@@ -1669,6 +1680,7 @@ export function Options() {
     "operator-macros": true,
     cache: true,
     correlation: true,
+    "relationship-memory": true,
     "noise-rules": true,
     "known-good": true,
     backup: true,
@@ -1764,6 +1776,13 @@ export function Options() {
   );
   const [correlationClusterCount, setCorrelationClusterCount] = useState(0);
   const [clearCorrelationClustersState, setClearCorrelationClustersState] = useState<
+    "idle" | "clearing" | "cleared" | "error"
+  >("idle");
+  const [relationshipRetentionDays, setRelationshipRetentionDays] = useState(
+    String(DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS)
+  );
+  const [relationshipEdgeCount, setRelationshipEdgeCount] = useState(0);
+  const [clearRelationshipEdgesState, setClearRelationshipEdgesState] = useState<
     "idle" | "clearing" | "cleared" | "error"
   >("idle");
   const [noiseRules, setNoiseRules] = useState<NoiseRule[]>([]);
@@ -1925,6 +1944,18 @@ export function Options() {
         setCorrelationRetentionDays(String(DEFAULT_CORRELATION_CLUSTER_RETENTION_DAYS));
         setCorrelationOverlapMode("off");
         setCorrelationClusterCount(0);
+      });
+  }, [settingsReloadToken]);
+
+  useEffect(() => {
+    void getRelationshipEdgesStore()
+      .then((store) => {
+        setRelationshipRetentionDays(String(store.retentionDays));
+        setRelationshipEdgeCount(store.edges.length);
+      })
+      .catch(() => {
+        setRelationshipRetentionDays(String(DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS));
+        setRelationshipEdgeCount(0);
       });
   }, [settingsReloadToken]);
 
@@ -2908,6 +2939,43 @@ export function Options() {
     void setCorrelationClusterRetentionDays(normalized).then((store) => {
       setCorrelationClusterCount(store.clusters.length);
     });
+  };
+
+  const handleRelationshipRetentionBlur = (
+    event: React.FocusEvent<HTMLInputElement>
+  ) => {
+    const parsed = Number(event.currentTarget.value);
+    const normalized = Number.isFinite(parsed)
+      ? Math.min(
+          MAX_RELATIONSHIP_EDGE_RETENTION_DAYS,
+          Math.max(MIN_RELATIONSHIP_EDGE_RETENTION_DAYS, Math.trunc(parsed))
+        )
+      : DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS;
+    setRelationshipRetentionDays(String(normalized));
+    void setRelationshipEdgeRetentionDays(normalized).then((store) => {
+      setRelationshipEdgeCount(store.edges.length);
+    });
+  };
+
+  const handleClearRelationshipEdges = () => {
+    const confirmed =
+      typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm(
+            "Clear all relationship memory? This removes Previously appeared with edges from this browser profile. Investigation sessions are not deleted. Retention and policy settings are kept."
+          )
+        : true;
+    if (!confirmed) {
+      return;
+    }
+    setClearRelationshipEdgesState("clearing");
+    void clearStoredRelationshipEdges()
+      .then((store) => {
+        setRelationshipEdgeCount(store.edges.length);
+        setClearRelationshipEdgesState("cleared");
+      })
+      .catch(() => {
+        setClearRelationshipEdgesState("error");
+      });
   };
 
   const persistCorrelationOverlapDraft = (
@@ -5291,6 +5359,89 @@ export function Options() {
                 {clearCorrelationClustersState === "error" ? (
                   <span className="v5-status v5-status--error" role="status">
                     Could not clear correlation clusters. Try again.
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <section
+            id="relationship-memory"
+            className="v5-card"
+            aria-labelledby="relationship-memory-heading"
+          >
+            <div className="v5-card__head">
+              <h2 id="relationship-memory-heading" className="v5-card__title">
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections["relationship-memory"]}
+                  aria-controls="relationship-memory-body"
+                  onClick={() => toggleSection("relationship-memory")}
+                >
+                  <span className="v5-card__toggle-text">Relationship memory</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
+              </h2>
+              <p className="v5-card__desc">
+                Local Previously appeared with entity relationships. Correlation ≠ causation;
+                co-occurrence is not a detection verdict. Clearing relationship memory does not
+                delete investigation session history.
+              </p>
+            </div>
+            <div
+              id="relationship-memory-body"
+              className="v5-card__body"
+              hidden={collapsedSections["relationship-memory"]}
+            >
+              <div className="v5-field">
+                <label className="v5-field__label" htmlFor="relationship-retention-days">
+                  Retention window (days)
+                </label>
+                <input
+                  id="relationship-retention-days"
+                  type="number"
+                  min={MIN_RELATIONSHIP_EDGE_RETENTION_DAYS}
+                  max={MAX_RELATIONSHIP_EDGE_RETENTION_DAYS}
+                  className="v5-input v5-input--sm"
+                  value={relationshipRetentionDays}
+                  disabled={!ready}
+                  onChange={(event) => setRelationshipRetentionDays(event.target.value)}
+                  onBlur={handleRelationshipRetentionBlur}
+                  aria-label="Relationship memory retention window in days"
+                />
+                <span className="v5-status v5-status--muted">
+                  Default {DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS} days. Edges whose last seen
+                  timestamp is older than this window are pruned from local storage.
+                </span>
+              </div>
+              <div className="v5-actions">
+                <button
+                  type="button"
+                  className="v5-btn v5-btn--danger"
+                  disabled={!ready || clearRelationshipEdgesState === "clearing"}
+                  onClick={handleClearRelationshipEdges}
+                  aria-label="Clear all relationship memory"
+                >
+                  {clearRelationshipEdgesState === "clearing"
+                    ? "Clearing…"
+                    : "Clear all relationship memory"}
+                </button>
+                <span className="v5-status v5-status--muted">
+                  {relationshipEdgeCount} stored edge
+                  {relationshipEdgeCount === 1 ? "" : "s"}. Clears relationship
+                  edges only—investigation sessions stay. Combined wipe of edges
+                  and sessions is not offered on this control.
+                </span>
+                {clearRelationshipEdgesState === "cleared" ? (
+                  <span className="v5-status v5-status--success" role="status">
+                    <CheckIcon />
+                    Relationship memory cleared.
+                  </span>
+                ) : null}
+                {clearRelationshipEdgesState === "error" ? (
+                  <span className="v5-status v5-status--error" role="status">
+                    Could not clear relationship memory. Try again.
                   </span>
                 ) : null}
               </div>

@@ -2515,6 +2515,159 @@ describe("Options cross-session correlation controls", () => {
     ).not.toBeNull();
   });
 
+  it("renders relationship memory retention control", async () => {
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mounted.container.textContent).toContain("Relationship memory");
+    expect(
+      mounted.container.querySelector(
+        'input[aria-label="Relationship memory retention window in days"]'
+      )
+    ).not.toBeNull();
+    expect(
+      mounted.container.querySelector('button[aria-label="Clear all relationship memory"]')
+    ).not.toBeNull();
+  });
+
+  it("loads stored relationship retention window into Options", async () => {
+    const { STORAGE_KEY_RELATIONSHIP_EDGES } = await import("../lib/relationshipEdgeStorage");
+    store[STORAGE_KEY_RELATIONSHIP_EDGES] = {
+      schemaVersion: 1,
+      updatedAt: Date.now(),
+      edges: [],
+      minCoOccurrenceCount: 2,
+      knownGoodPolicy: "off",
+      retentionDays: 45,
+    };
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const input = mounted.container.querySelector(
+      'input[aria-label="Relationship memory retention window in days"]'
+    ) as HTMLInputElement;
+    expect(input.value).toBe("45");
+  });
+
+  it("clears relationship memory after confirmation and preserves retention", async () => {
+    const { STORAGE_KEY_RELATIONSHIP_EDGES } = await import("../lib/relationshipEdgeStorage");
+    const { createRelationshipEdge, RELATIONSHIP_TYPE } = await import(
+      "../lib/relationshipEdge"
+    );
+    const nowMs = Date.UTC(2026, 6, 22);
+    const edge = createRelationshipEdge({
+      entityA: "ipv4:8.8.8.8",
+      entityB: "domain:example.com",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["a", "b"],
+      firstSeen: nowMs - 1_000,
+      lastSeen: nowMs - 500,
+      weight: 2,
+    });
+    store[STORAGE_KEY_RELATIONSHIP_EDGES] = {
+      schemaVersion: 1,
+      updatedAt: nowMs,
+      edges: [edge],
+      minCoOccurrenceCount: 3,
+      knownGoodPolicy: "exclude",
+      retentionDays: 45,
+    };
+
+    const confirmSpy = vi.fn(() => true);
+    Object.defineProperty(window, "confirm", {
+      configurable: true,
+      writable: true,
+      value: confirmSpy,
+    });
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const clearButton = mounted.container.querySelector(
+      'button[aria-label="Clear all relationship memory"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      clearButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(confirmSpy).toHaveBeenCalled();
+    const afterClear = store[STORAGE_KEY_RELATIONSHIP_EDGES] as {
+      edges: unknown[];
+      retentionDays: number;
+      minCoOccurrenceCount: number;
+      knownGoodPolicy: string;
+    };
+    expect(afterClear.edges).toEqual([]);
+    expect(afterClear.retentionDays).toBe(45);
+    expect(afterClear.minCoOccurrenceCount).toBe(3);
+    expect(afterClear.knownGoodPolicy).toBe("exclude");
+    expect(mounted.container.textContent).toContain("Relationship memory cleared");
+  });
+
+  it("does not clear relationship memory when confirmation is cancelled", async () => {
+    const { STORAGE_KEY_RELATIONSHIP_EDGES } = await import("../lib/relationshipEdgeStorage");
+    const { createRelationshipEdge, RELATIONSHIP_TYPE } = await import(
+      "../lib/relationshipEdge"
+    );
+    const nowMs = Date.UTC(2026, 6, 22);
+    const edge = createRelationshipEdge({
+      entityA: "ipv4:1.1.1.1",
+      entityB: "domain:keep.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["a", "b"],
+      firstSeen: nowMs - 1_000,
+      lastSeen: nowMs - 500,
+      weight: 2,
+    });
+    store[STORAGE_KEY_RELATIONSHIP_EDGES] = {
+      schemaVersion: 1,
+      updatedAt: nowMs,
+      edges: [edge],
+      minCoOccurrenceCount: 2,
+      knownGoodPolicy: "off",
+      retentionDays: 90,
+    };
+
+    Object.defineProperty(window, "confirm", {
+      configurable: true,
+      writable: true,
+      value: vi.fn(() => false),
+    });
+
+    mounted = renderOptions();
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const clearButton = mounted.container.querySelector(
+      'button[aria-label="Clear all relationship memory"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      clearButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const afterCancel = store[STORAGE_KEY_RELATIONSHIP_EDGES] as {
+      edges: unknown[];
+    };
+    expect(afterCancel.edges).toHaveLength(1);
+    expect(mounted.container.textContent).not.toContain("Relationship memory cleared");
+  });
+
   it("persists retention window and clears stored clusters", async () => {
     const { STORAGE_KEY_CORRELATION_CLUSTERS } = await import(
       "../lib/correlationClusterStorage"

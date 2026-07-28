@@ -27,6 +27,7 @@ import {
   normalizePageContextType,
   resolveActivePageContextDisplay,
   resolvePageContextSourceStatusLabel,
+  type PageContextSiteModeOverridesRecord,
   type PageContextSource,
   type PageContextType,
 } from "../lib/pageContext";
@@ -70,11 +71,52 @@ import {
   handleCoOccurrenceListItemKeyDown,
   shouldShowTrayCoOccurrenceExpander,
 } from "../lib/hoverCardCoOccurrence";
+import {
+  buildHoverCardRelationshipPanelView,
+  buildRelationshipEntryDisplay,
+  buildRelationshipNotebookFragmentLinksForEntry,
+  buildRelationshipPriorSessionDrilldownsForEntry,
+  buildTrayRelationshipDetailsElementId,
+  formatRelationshipCorrelationClusterLinkAriaLabel,
+  formatRelationshipEntryAccessibleLabel,
+  formatRelationshipNotebookFragmentLinkAriaLabel,
+  formatRelationshipPriorSessionDrilldownLine,
+  formatRelationshipPriorSessionOpenAriaLabel,
+  formatRelationshipPriorSessionPageContextLine,
+  formatRelationshipPriorSessionReplayAriaLabel,
+  formatTrayRelationshipExpanderSummary,
+  listRelatedEntityKeysFromRelationshipPanelView,
+  RELATIONSHIP_CORRELATION_CLUSTER_LINK_LABEL,
+  RELATIONSHIP_HOVER_UI_LAYOUT,
+  RELATIONSHIP_MEMORY_DISCLAIMER_TEXT,
+  RELATIONSHIP_NOTEBOOK_FRAGMENTS_LABEL,
+  RELATIONSHIP_PRIOR_SESSION_REPLAY_LINK_LABEL,
+  RELATIONSHIP_PRIOR_SESSIONS_LABEL,
+  RELATIONSHIP_TRAY_DISCLAIMER_CLASS,
+  RELATIONSHIP_TRAY_NOTEBOOK_LINK_CLASS,
+  RELATIONSHIP_TRAY_NOTEBOOK_LINKS_CLASS,
+  RELATIONSHIP_TRAY_PRIOR_SESSION_CLASS,
+  RELATIONSHIP_TRAY_PRIOR_SESSION_PAGE_CONTEXT_CLASS,
+  RELATIONSHIP_TRAY_PRIOR_SESSION_REPLAY_CLASS,
+  RELATIONSHIP_TRAY_PRIOR_SESSIONS_LIST_CLASS,
+  relationshipEntitiesOverlapCorrelationClusters,
+  shouldShowRelationshipCorrelationClusterLink,
+  shouldShowRelationshipNotebookLinks,
+  shouldShowRelationshipPriorSessionReplayLink,
+  shouldShowTrayRelationshipExpander,
+  type RelationshipNotebookFragmentLink,
+  type RelationshipSessionLookup,
+} from "../lib/hoverCardRelationship";
+import {
+  getRelationshipEdgesStore,
+  type RelationshipEdgesStore,
+} from "../lib/relationshipEdgeStorage";
 import { getPageIocCoOccurrenceIndexForSession } from "../lib/iocCoOccurrenceStorage";
 import type { PageIocCoOccurrenceIndex } from "../lib/iocCoOccurrence";
 import {
   buildCorrelationClusterTrayPanelView,
   buildTrayCoOccurrenceDetailsElementId,
+  buildTrayCorrelationClusterDetailsElementId,
   CORRELATION_CLUSTER_DISCLAIMER_TEXT,
   CORRELATION_CLUSTER_SAME_PAGE_CO_OCCURRENCE_LINK_LABEL,
   CORRELATION_CLUSTER_TRAY_EMPTY_STATE_TEXT,
@@ -85,6 +127,7 @@ import {
   formatCorrelationClusterTraySessionDrilldownAriaLabel,
   formatCorrelationClusterTraySessionDrilldownLine,
   isCorrelationClusterTrayPanelEmpty,
+  openTrayCorrelationClusterDetails,
   openTraySamePageCoOccurrenceDetails,
   shouldShowCorrelationClusterSamePageCoOccurrenceLink,
   shouldShowTrayCorrelationClusterExpander,
@@ -219,7 +262,11 @@ import {
   loadPopupSessionNotebookFragmentTimeline,
   type PopupSessionNotebookTimelineRow,
 } from "../lib/hoverCardNotebook";
-import { STORAGE_KEY_NOTEBOOK_FRAGMENTS } from "../lib/notebookFragmentStorage";
+import {
+  STORAGE_KEY_NOTEBOOK_FRAGMENTS,
+  getNotebookFragmentsStore,
+  type NotebookFragmentsStore,
+} from "../lib/notebookFragmentStorage";
 import {
   appendNotebookFragmentMarkdownLite,
   type NotebookFragmentType,
@@ -2073,7 +2120,7 @@ function InvestigationSessionNotebookTimelinePanel({
   };
 
   return (
-    <div style={{ marginTop: 10, marginBottom: 10 }}>
+    <div id="popup-session-notebook" style={{ marginTop: 10, marginBottom: 10 }}>
       <h3
         style={{
           fontSize: 12,
@@ -2469,7 +2516,7 @@ export function InvestigationReplayPanel({
   };
 
   return (
-    <div style={{ marginTop: 10, marginBottom: 10 }}>
+    <div id="popup-investigation-replay" style={{ marginTop: 10, marginBottom: 10 }}>
       <h3
         style={{
           fontSize: 12,
@@ -3374,6 +3421,291 @@ function CoOccurrenceTrayDetails({
   );
 }
 
+function RelationshipTrayDetails({
+  entry,
+  store,
+  knownGoodEntries,
+  clusters,
+  activeSessionId,
+  sessionsById,
+  notebookStore,
+  siteModeOverrides,
+  onOpenPriorSession,
+  onOpenPriorSessionReplay,
+  onOpenNotebookLink,
+}: {
+  entry: TabScanSummaryEntry;
+  store: RelationshipEdgesStore | null;
+  knownGoodEntries: readonly KnownGoodEntry[];
+  clusters: readonly CorrelationCluster[];
+  activeSessionId: string | null;
+  sessionsById: ReadonlyMap<string, RelationshipSessionLookup>;
+  notebookStore: NotebookFragmentsStore | null;
+  siteModeOverrides: PageContextSiteModeOverridesRecord;
+  onOpenPriorSession: (sessionId: string) => void;
+  onOpenPriorSessionReplay: (sessionId: string) => void;
+  onOpenNotebookLink: (link: RelationshipNotebookFragmentLink) => void;
+}) {
+  if (!store) {
+    return null;
+  }
+
+  const view = buildHoverCardRelationshipPanelView({
+    iocType: entry.type,
+    value: entry.value,
+    edges: store.edges,
+    knownGoodPolicy: store.knownGoodPolicy,
+    knownGoodEntries,
+    minCoOccurrenceCount: store.minCoOccurrenceCount,
+  });
+  if (!shouldShowTrayRelationshipExpander(view)) {
+    return null;
+  }
+
+  const hasOverlappingCorrelationCluster =
+    relationshipEntitiesOverlapCorrelationClusters({
+      focusEntityKey: view.focusEntityKey,
+      relatedEntityKeys: listRelatedEntityKeysFromRelationshipPanelView(view),
+      clusters,
+    });
+  const showCorrelationLink = shouldShowRelationshipCorrelationClusterLink({
+    hasRelationshipEntries: view.entries.length > 0,
+    hasOverlappingCorrelationCluster,
+  });
+  const correlationDetailsId = buildTrayCorrelationClusterDetailsElementId(
+    entry.anchorId
+  );
+
+  return (
+    <details
+      id={buildTrayRelationshipDetailsElementId(entry.anchorId)}
+      className="vera5-tray-relationship"
+      data-vera5-relationship-layout={RELATIONSHIP_HOVER_UI_LAYOUT}
+      style={trayWhyDetectedDetailsStyle()}
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <summary
+        style={{
+          cursor: "pointer",
+          color: POPUP_THEME.muted,
+          fontWeight: 600,
+        }}
+      >
+        {formatTrayRelationshipExpanderSummary(view.entries.length)}
+      </summary>
+      <div style={{ marginTop: 4 }}>
+        <ul
+          className="vera5-tray-relationship-list"
+          style={{ margin: 0, paddingLeft: 16, listStyle: "disc" }}
+        >
+          {view.entries.map((relationshipEntry) => {
+            const display = buildRelationshipEntryDisplay(relationshipEntry);
+            const priorSessions = buildRelationshipPriorSessionDrilldownsForEntry({
+              entry: relationshipEntry,
+              sessionsById,
+              activeSessionId,
+              siteModeOverrides,
+            });
+            const notebookLinks = buildRelationshipNotebookFragmentLinksForEntry({
+              entry: relationshipEntry,
+              notebookStore,
+              activeSessionId,
+              sessionsById,
+            });
+            const showNotebookLinks =
+              shouldShowRelationshipNotebookLinks(notebookLinks);
+            return (
+              <li
+                key={relationshipEntry.edgeId}
+                className="vera5-tray-relationship-item"
+                aria-label={formatRelationshipEntryAccessibleLabel(display)}
+                title={
+                  display.displayValue !== display.fullValue
+                    ? display.fullValue
+                    : undefined
+                }
+              >
+                {display.lineText}
+                {priorSessions.length > 0 ? (
+                  <ul
+                    className={RELATIONSHIP_TRAY_PRIOR_SESSIONS_LIST_CLASS}
+                    aria-label={RELATIONSHIP_PRIOR_SESSIONS_LABEL}
+                    style={{
+                      margin: "4px 0 0",
+                      paddingLeft: 16,
+                      listStyle: "circle",
+                    }}
+                  >
+                    {priorSessions.map((session) => (
+                      <li key={session.sessionId}>
+                        <button
+                          type="button"
+                          className={RELATIONSHIP_TRAY_PRIOR_SESSION_CLASS}
+                          aria-label={formatRelationshipPriorSessionOpenAriaLabel(
+                            session
+                          )}
+                          title={session.pageUrl || undefined}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenPriorSession(session.sessionId);
+                          }}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            background: "transparent",
+                            border: "none",
+                            padding: 0,
+                            color: POPUP_THEME.accent,
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                          }}
+                        >
+                          <div style={{ color: POPUP_THEME.text, fontWeight: 600 }}>
+                            {session.title}
+                          </div>
+                          <div
+                            className={RELATIONSHIP_TRAY_PRIOR_SESSION_PAGE_CONTEXT_CLASS}
+                            style={{
+                              color: POPUP_THEME.muted,
+                              fontSize: 12,
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {formatRelationshipPriorSessionPageContextLine(session)}
+                          </div>
+                          <div
+                            style={{
+                              color: POPUP_THEME.muted,
+                              fontSize: 12,
+                              lineHeight: 1.4,
+                            }}
+                          >
+                            {formatRelationshipPriorSessionDrilldownLine(session)}
+                          </div>
+                        </button>
+                        {shouldShowRelationshipPriorSessionReplayLink(session) ? (
+                          <p style={{ margin: "4px 0 0" }}>
+                            <button
+                              type="button"
+                              className={RELATIONSHIP_TRAY_PRIOR_SESSION_REPLAY_CLASS}
+                              aria-label={formatRelationshipPriorSessionReplayAriaLabel(
+                                session
+                              )}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onOpenPriorSessionReplay(session.sessionId);
+                              }}
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                padding: 0,
+                                color: POPUP_THEME.accent,
+                                cursor: "pointer",
+                                textAlign: "left",
+                                font: "inherit",
+                                fontSize: 12,
+                                textDecoration: "underline",
+                              }}
+                            >
+                              {RELATIONSHIP_PRIOR_SESSION_REPLAY_LINK_LABEL}
+                            </button>
+                          </p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {showNotebookLinks ? (
+                  <ul
+                    className={RELATIONSHIP_TRAY_NOTEBOOK_LINKS_CLASS}
+                    aria-label={RELATIONSHIP_NOTEBOOK_FRAGMENTS_LABEL}
+                    style={{
+                      margin: "4px 0 0",
+                      paddingLeft: 16,
+                      listStyle: "circle",
+                    }}
+                  >
+                    {notebookLinks.map((link) => (
+                      <li key={link.fragmentId}>
+                        <button
+                          type="button"
+                          className={RELATIONSHIP_TRAY_NOTEBOOK_LINK_CLASS}
+                          aria-label={formatRelationshipNotebookFragmentLinkAriaLabel(
+                            link
+                          )}
+                          title={link.bodyPreview}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onOpenNotebookLink(link);
+                          }}
+                          style={{
+                            display: "block",
+                            width: "100%",
+                            background: "transparent",
+                            border: "none",
+                            padding: 0,
+                            color: POPUP_THEME.accent,
+                            cursor: "pointer",
+                            textAlign: "left",
+                            font: "inherit",
+                            fontSize: 12,
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {link.lineText}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+        {showCorrelationLink ? (
+          <p style={{ margin: "8px 0 0" }}>
+            <button
+              type="button"
+              className="vera5-tray-relationship-correlation-link"
+              aria-controls={correlationDetailsId}
+              aria-label={formatRelationshipCorrelationClusterLinkAriaLabel()}
+              onClick={(event) => {
+                event.stopPropagation();
+                openTrayCorrelationClusterDetails(event.currentTarget);
+              }}
+              style={{
+                background: "transparent",
+                border: "none",
+                padding: 0,
+                color: POPUP_THEME.accent,
+                cursor: "pointer",
+                textAlign: "left",
+                font: "inherit",
+              }}
+            >
+              {RELATIONSHIP_CORRELATION_CLUSTER_LINK_LABEL}
+            </button>
+          </p>
+        ) : null}
+        <p
+          className={RELATIONSHIP_TRAY_DISCLAIMER_CLASS}
+          style={{
+            ...trayStatusStyle(),
+            margin: "8px 0 0",
+            fontSize: 11,
+            lineHeight: 1.4,
+          }}
+          role="note"
+        >
+          {RELATIONSHIP_MEMORY_DISCLAIMER_TEXT}
+        </p>
+      </div>
+    </details>
+  );
+}
+
 function CorrelationClusterTrayDetails({
   entry,
   clusters,
@@ -3416,6 +3748,7 @@ function CorrelationClusterTrayDetails({
 
   return (
     <details
+      id={buildTrayCorrelationClusterDetailsElementId(entry.anchorId)}
       className="vera5-tray-correlation-clusters"
       data-vera5-correlation-layout={view.layout}
       data-vera5-correlation-empty={isEmpty ? "true" : "false"}
@@ -3924,6 +4257,8 @@ export function Popup() {
   const [activePageContextPageOrigin, setActivePageContextPageOrigin] = useState<string | null>(
     null
   );
+  const [pageContextSiteModeOverrides, setPageContextSiteModeOverrides] =
+    useState<PageContextSiteModeOverridesRecord>({});
   const [typeFilter, setTypeFilter] = useState<IocTypeFilter>("all");
   const [trayFilterReady, setTrayFilterReady] = useState(false);
   const [trayNavigationMessage, setTrayNavigationMessage] = useState<string | null>(null);
@@ -3981,9 +4316,13 @@ export function Popup() {
     CorrelationCluster[]
   >([]);
   const [trayCorrelationSessions, setTrayCorrelationSessions] = useState<
-    CorrelationClusterSessionLookup[]
+    InvestigationSession[]
   >([]);
   const [trayCorrelationReady, setTrayCorrelationReady] = useState(false);
+  const [trayRelationshipStore, setTrayRelationshipStore] =
+    useState<RelationshipEdgesStore | null>(null);
+  const [trayNotebookStore, setTrayNotebookStore] =
+    useState<NotebookFragmentsStore | null>(null);
   const [noiseRules, setNoiseRules] = useState<NoiseRule[]>([]);
   const [knownGoodEntries, setKnownGoodEntries] = useState<KnownGoodEntry[]>([]);
 
@@ -4001,6 +4340,7 @@ export function Popup() {
       siteModeOverrides: overrides,
       pageOrigin: normalizedOrigin,
     });
+    setPageContextSiteModeOverrides(overrides);
     setActivePageContextType(display.pageContextType);
     setActivePageContextSource(display.source);
     setActivePageContextPageOrigin(normalizedOrigin);
@@ -4318,6 +4658,30 @@ export function Popup() {
   }, [activeSession?.id, scanSummary?.pageUrl, scanSummary?.scannedAt]);
 
   useEffect(() => {
+    if (!scanSummary) {
+      setTrayRelationshipStore(null);
+      setTrayNotebookStore(null);
+      return;
+    }
+
+    let cancelled = false;
+    void getRelationshipEdgesStore().then((store) => {
+      if (!cancelled) {
+        setTrayRelationshipStore(store);
+      }
+    });
+    void getNotebookFragmentsStore().then((store) => {
+      if (!cancelled) {
+        setTrayNotebookStore(store);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSession?.id, scanSummary?.pageUrl, scanSummary?.scannedAt]);
+
+  useEffect(() => {
     if (!scanSummary || !trayFilterReady) {
       return;
     }
@@ -4421,6 +4785,20 @@ export function Popup() {
 
   const trayCorrelationSessionsById = useMemo(() => {
     const byId = new Map<string, CorrelationClusterSessionLookup>();
+    for (const session of trayCorrelationSessions) {
+      byId.set(session.id, session);
+    }
+    for (const session of recentSessions) {
+      byId.set(session.id, session);
+    }
+    if (activeSession) {
+      byId.set(activeSession.id, activeSession);
+    }
+    return byId;
+  }, [trayCorrelationSessions, recentSessions, activeSession]);
+
+  const trayRelationshipSessionsById = useMemo(() => {
+    const byId = new Map<string, RelationshipSessionLookup>();
     for (const session of trayCorrelationSessions) {
       byId.set(session.id, session);
     }
@@ -4607,6 +4985,26 @@ export function Popup() {
     })();
   };
 
+  const handleOpenRelationshipPriorSession = (sessionId: string) => {
+    setInvestigationCollapsed(false);
+    handleReopenSession(sessionId);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("popup-investigation-session")
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  };
+
+  const handleOpenRelationshipPriorSessionReplay = (sessionId: string) => {
+    setInvestigationCollapsed(false);
+    handleReopenSession(sessionId);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("popup-investigation-replay")
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+  };
+
   const handleStartRenameSession = (session: InvestigationSession) => {
     setRenamingSessionId(session.id);
     setRenameDraft(session.title);
@@ -4782,6 +5180,42 @@ export function Popup() {
           })
         );
       }
+    });
+  };
+
+  const handleOpenRelationshipNotebookLink = (
+    link: RelationshipNotebookFragmentLink
+  ) => {
+    const action = link.action;
+    if (action.kind === "open_session_notebook") {
+      setInvestigationCollapsed(false);
+      handleReopenSession(action.sessionId);
+      window.requestAnimationFrame(() => {
+        document
+          .getElementById("popup-session-notebook")
+          ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      });
+      return;
+    }
+
+    const relatedEntry = scanSummary?.entries.find(
+      (candidate) =>
+        candidate.type === action.iocType && candidate.value === action.value
+    );
+    if (relatedEntry) {
+      sendNavigateToIocAnchor({
+        anchorId: relatedEntry.anchorId,
+        value: relatedEntry.value,
+        iocType: relatedEntry.type,
+      });
+      return;
+    }
+
+    setInvestigationCollapsed(false);
+    window.requestAnimationFrame(() => {
+      document
+        .getElementById("popup-session-notebook")
+        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     });
   };
 
@@ -5218,6 +5652,19 @@ export function Popup() {
           pageIndex={trayPageCoOccurrenceIndex}
           onNavigateToRelated={sendNavigateToIocAnchor}
         />
+        <RelationshipTrayDetails
+          entry={entry}
+          store={trayRelationshipStore}
+          knownGoodEntries={knownGoodEntries}
+          clusters={trayCorrelationClusters}
+          activeSessionId={activeSession?.id ?? null}
+          sessionsById={trayRelationshipSessionsById}
+          notebookStore={trayNotebookStore}
+          siteModeOverrides={pageContextSiteModeOverrides}
+          onOpenPriorSession={handleOpenRelationshipPriorSession}
+          onOpenPriorSessionReplay={handleOpenRelationshipPriorSessionReplay}
+          onOpenNotebookLink={handleOpenRelationshipNotebookLink}
+        />
         <CorrelationClusterTrayDetails
           entry={entry}
           clusters={trayCorrelationClusters}
@@ -5519,6 +5966,7 @@ export function Popup() {
         </button>
       </div>
       <section
+        id="popup-investigation-session"
         aria-label="Investigation session"
         style={{
           marginTop: 14,

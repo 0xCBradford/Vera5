@@ -24,8 +24,10 @@ import * as hoverCardCoOccurrence from "../lib/hoverCardCoOccurrence";
 import * as hoverCardRelationship from "../lib/hoverCardRelationship";
 import * as hoverCardNotebook from "../lib/hoverCardNotebook";
 import {
+  HOVER_CARD_RELATIONSHIP_DISCLAIMER_CLASS,
   HOVER_CARD_RELATIONSHIP_LABEL,
   HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL,
+  RELATIONSHIP_MEMORY_DISCLAIMER_TEXT,
 } from "../lib/hoverCardRelationship";
 import {
   HOVER_CARD_NOTEBOOK_SECTION_ARIA_LABEL,
@@ -674,6 +676,7 @@ describe("relationship panel", () => {
           value: "evil.example",
           lastSeen: Date.UTC(2026, 6, 28),
           sessionCount: 2,
+          sessionIds: ["vera5-inv-a", "vera5-inv-b"],
         },
       ],
     });
@@ -696,6 +699,14 @@ describe("relationship panel", () => {
       expect(section?.textContent).toContain("Last seen:");
       expect(section?.textContent).toContain("2 sessions");
     });
+
+    const disclaimer = section?.querySelector(
+      `.${HOVER_CARD_RELATIONSHIP_DISCLAIMER_CLASS}`
+    );
+    expect(disclaimer).not.toBeNull();
+    expect(disclaimer?.getAttribute("role")).toBe("note");
+    expect(disclaimer?.textContent).toBe(RELATIONSHIP_MEMORY_DISCLAIMER_TEXT);
+    expect(disclaimer?.textContent).toContain("Correlation ≠ causation");
   });
 });
 

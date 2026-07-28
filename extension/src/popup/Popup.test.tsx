@@ -26,7 +26,22 @@ import * as iocCoOccurrenceStorage from "../lib/iocCoOccurrenceStorage";
 import { buildIocCoOccurrenceMemberKey, buildPageIocCoOccurrenceIndexFromSnapshot } from "../lib/iocCoOccurrence";
 import * as correlationClusterStorage from "../lib/correlationClusterStorage";
 import { createCorrelationCluster } from "../lib/correlationCluster";
+import * as relationshipEdgeStorage from "../lib/relationshipEdgeStorage";
+import {
+  createEmptyRelationshipEdgesStore,
+} from "../lib/relationshipEdgeStorage";
+import {
+  RELATIONSHIP_TYPE,
+  createRelationshipEdge,
+} from "../lib/relationshipEdge";
 import * as investigationSessionStorage from "../lib/investigationSessionStorage";
+import * as investigationSessionClient from "../lib/investigationSessionClient";
+import * as notebookFragmentStorage from "../lib/notebookFragmentStorage";
+import { createEmptyNotebookFragmentsStore } from "../lib/notebookFragmentStorage";
+import {
+  createNotebookFragment,
+  NOTEBOOK_FRAGMENT_TYPE,
+} from "../lib/notebookFragment";
 import { createIocCollection } from "../lib/iocCollection";
 import * as iocCollectionExport from "../lib/iocCollectionExport";
 import { MESSAGE } from "../lib/messages";
@@ -1967,6 +1982,432 @@ describe("Popup IOC tray", () => {
     expect(expander?.textContent).toContain("IP · 192.0.2.1");
     expect(expander?.textContent).toContain("CVE · CVE-2021-44228");
     expect(expander?.textContent).toContain("Same page scan");
+  });
+
+  it("shows compact appeared with N others expander on tray rows", async () => {
+    const edge = createRelationshipEdge({
+      entityA: "ipv4:8.8.8.8",
+      entityB: "domain:evil.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["vera5-inv-a", "vera5-inv-b"],
+      firstSeen: 100,
+      lastSeen: 200,
+      weight: 2,
+    });
+    const second = createRelationshipEdge({
+      entityA: "ipv4:8.8.8.8",
+      entityB: "md5:0123456789abcdef0123456789abcdef",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["vera5-inv-a", "vera5-inv-b"],
+      firstSeen: 100,
+      lastSeen: 200,
+      weight: 2,
+    });
+    vi.spyOn(relationshipEdgeStorage, "getRelationshipEdgesStore").mockResolvedValue({
+      ...createEmptyRelationshipEdgesStore(1),
+      edges: [edge, second],
+      minCoOccurrenceCount: 2,
+    });
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared with 2 others");
+    });
+
+    const expander = mounted!.container.querySelector(".vera5-tray-relationship");
+    expect(expander).not.toBeNull();
+    expect(expander?.getAttribute("data-vera5-relationship-layout")).toBe("list");
+    expect(expander?.textContent).toContain("DOM · evil.example");
+    expect(expander?.textContent).toContain("Last seen:");
+    expect(expander?.textContent).toContain("2 sessions");
+    expect(expander?.querySelector("ul.vera5-tray-relationship-list")).not.toBeNull();
+    expect(expander?.querySelector("canvas")).toBeNull();
+    expect(expander?.querySelector("svg")).toBeNull();
+    expect(
+      expander?.querySelector(".vera5-tray-relationship-disclaimer")?.textContent
+    ).toContain("Correlation ≠ causation");
+    expect(
+      expander?.querySelector(".vera5-tray-relationship-disclaimer")?.textContent
+    ).toContain("not a detection verdict");
+  });
+
+  it("opens investigation session summary from relationship prior-session drill-down", async () => {
+    const priorSession = createInvestigationSession({
+      id: "vera5-inv-prior-summary",
+      title: "Prior co-occurrence session",
+      pageUrl: "https://example.com/alerts/prior-summary.html",
+      createdAt: 50,
+      updatedAt: 200,
+      totalIocCount: 4,
+      iocCountByType: {
+        [IOC_TYPE.IPV4]: 2,
+        [IOC_TYPE.DOMAIN]: 2,
+      },
+    });
+    const edge = createRelationshipEdge({
+      entityA: "ipv4:8.8.8.8",
+      entityB: "domain:evil.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: [sampleActiveSession.id, priorSession.id],
+      firstSeen: 50,
+      lastSeen: 200,
+      weight: 2,
+    });
+    vi.spyOn(relationshipEdgeStorage, "getRelationshipEdgesStore").mockResolvedValue({
+      ...createEmptyRelationshipEdgesStore(1),
+      edges: [edge],
+      minCoOccurrenceCount: 2,
+    });
+    vi.spyOn(investigationSessionStorage, "listStoredInvestigationSessions").mockResolvedValue([
+      sampleActiveSession,
+      priorSession,
+    ]);
+    const reopenSpy = vi
+      .spyOn(investigationSessionClient, "requestReopenInvestigationSession")
+      .mockResolvedValue(priorSession);
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+      recentSessions: [sampleActiveSession, priorSession],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared with 1 other");
+      expect(mounted?.container.textContent).toContain("Prior co-occurrence session");
+    });
+
+    const priorButton = mounted!.container.querySelector<HTMLButtonElement>(
+      ".vera5-tray-relationship-prior-session"
+    );
+    expect(priorButton).not.toBeNull();
+    expect(priorButton?.getAttribute("aria-label")).toContain(
+      "Open investigation session summary"
+    );
+    expect(priorButton?.textContent).toContain("4 indicators");
+
+    const investigationToggle = mounted!.container.querySelector<HTMLButtonElement>(
+      'button[aria-controls="popup-investigation-body"]'
+    );
+    expect(investigationToggle?.getAttribute("aria-expanded")).toBe("false");
+
+    priorButton?.click();
+
+    expect(reopenSpy).toHaveBeenCalledWith(priorSession.id);
+    await vi.waitFor(() => {
+      expect(
+        mounted!.container
+          .querySelector('button[aria-controls="popup-investigation-body"]')
+          ?.getAttribute("aria-expanded")
+      ).toBe("true");
+    });
+    expect(
+      mounted!.container.querySelector("#popup-investigation-session")
+    ).not.toBeNull();
+  });
+
+  it("shows truncated page-context origin on relationship prior-session rows", async () => {
+    const priorSession = createInvestigationSession({
+      id: "vera5-inv-prior-origin",
+      title: "Prior origin session",
+      pageUrl:
+        "https://example.com/alerts/prior-long-path/investigation-report.html?q=1",
+      createdAt: 50,
+      updatedAt: 200,
+      totalIocCount: 2,
+      iocCountByType: {
+        [IOC_TYPE.DOMAIN]: 2,
+      },
+    });
+    const edge = createRelationshipEdge({
+      entityA: "ipv4:8.8.8.8",
+      entityB: "domain:evil.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: [sampleActiveSession.id, priorSession!.id],
+      firstSeen: 50,
+      lastSeen: 200,
+      weight: 2,
+    });
+    vi.spyOn(relationshipEdgeStorage, "getRelationshipEdgesStore").mockResolvedValue({
+      ...createEmptyRelationshipEdgesStore(1),
+      edges: [edge],
+      minCoOccurrenceCount: 2,
+    });
+    vi.spyOn(investigationSessionStorage, "listStoredInvestigationSessions").mockResolvedValue([
+      sampleActiveSession,
+      priorSession!,
+    ]);
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+      recentSessions: [sampleActiveSession, priorSession!],
+      localStore: {
+        [STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]: {
+          "example.com": PAGE_CONTEXT_TYPE.CASE_TICKET,
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared with 1 other");
+      expect(mounted?.container.textContent).toContain("Prior origin session");
+    });
+
+    const pageContext = mounted!.container.querySelector(
+      ".vera5-tray-relationship-prior-session-page-context"
+    );
+    expect(pageContext).not.toBeNull();
+    expect(pageContext?.textContent).toContain("https://example.com");
+    expect(pageContext?.textContent).not.toContain("prior-long-path");
+    await vi.waitFor(() => {
+      expect(pageContext?.textContent).toContain("Case / ticket");
+    });
+  });
+
+  it("offers optional investigation replay from prior session rows with replay steps", async () => {
+    const priorSession = createInvestigationSession({
+      id: "vera5-inv-prior-replay",
+      title: "Prior replay session",
+      pageUrl: "https://example.com/alerts/prior-replay.html",
+      createdAt: 50,
+      updatedAt: 200,
+      totalIocCount: 2,
+      iocCountByType: {
+        [IOC_TYPE.IPV4]: 1,
+        [IOC_TYPE.DOMAIN]: 1,
+      },
+      timelineEvents: [
+        createTimelineEvent({
+          type: TIMELINE_EVENT_TYPE.SCAN,
+          sessionId: "vera5-inv-prior-replay",
+          iocKey: "8.8.8.8",
+          timestamp: 100,
+        }),
+        createTimelineEvent({
+          type: TIMELINE_EVENT_TYPE.ENRICH,
+          sessionId: "vera5-inv-prior-replay",
+          iocKey: "8.8.8.8",
+          timestamp: 150,
+          sourceAttributionSummary: "Source: AbuseIPDB · live",
+        }),
+      ],
+    });
+    const edge = createRelationshipEdge({
+      entityA: "ipv4:8.8.8.8",
+      entityB: "domain:evil.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: [sampleActiveSession.id, priorSession!.id],
+      firstSeen: 50,
+      lastSeen: 200,
+      weight: 2,
+    });
+    vi.spyOn(relationshipEdgeStorage, "getRelationshipEdgesStore").mockResolvedValue({
+      ...createEmptyRelationshipEdgesStore(1),
+      edges: [edge],
+      minCoOccurrenceCount: 2,
+    });
+    vi.spyOn(investigationSessionStorage, "listStoredInvestigationSessions").mockResolvedValue([
+      sampleActiveSession,
+      priorSession!,
+    ]);
+    const reopenSpy = vi
+      .spyOn(investigationSessionClient, "requestReopenInvestigationSession")
+      .mockResolvedValue(priorSession!);
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+      recentSessions: [sampleActiveSession, priorSession!],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared with 1 other");
+      expect(mounted?.container.textContent).toContain("Prior replay session");
+    });
+
+    const replayLink = mounted!.container.querySelector<HTMLButtonElement>(
+      ".vera5-tray-relationship-prior-session-replay"
+    );
+    expect(replayLink).not.toBeNull();
+    expect(replayLink?.textContent).toBe("Investigation replay");
+    expect(replayLink?.getAttribute("aria-label")).toContain(
+      "Investigation replay"
+    );
+
+    replayLink?.click();
+    expect(reopenSpy).toHaveBeenCalledWith(priorSession!.id);
+    await vi.waitFor(() => {
+      expect(
+        mounted!.container
+          .querySelector('button[aria-controls="popup-investigation-body"]')
+          ?.getAttribute("aria-expanded")
+      ).toBe("true");
+    });
+    expect(
+      mounted!.container.querySelector("#popup-investigation-replay")
+    ).not.toBeNull();
+  });
+
+  it("links relationship rows to notebook fragments on related IOC or prior session", async () => {
+    const priorSession = createInvestigationSession({
+      id: "vera5-inv-prior-notebook",
+      title: "Prior notebook session",
+      pageUrl: "https://example.com/alerts/prior-notebook.html",
+      createdAt: 50,
+      updatedAt: 200,
+      totalIocCount: 2,
+      iocCountByType: {
+        [IOC_TYPE.DOMAIN]: 2,
+      },
+    });
+    const edge = createRelationshipEdge({
+      entityA: "ipv4:8.8.8.8",
+      entityB: "domain:evil.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: [sampleActiveSession.id, priorSession.id],
+      firstSeen: 50,
+      lastSeen: 200,
+      weight: 2,
+    });
+    const sessionFragment = createNotebookFragment({
+      id: "nf-tray-session",
+      type: NOTEBOOK_FRAGMENT_TYPE.CONCLUSION,
+      body: "Prior session notebook conclusion.",
+      createdAt: 100,
+      updatedAt: 100,
+    });
+    const iocFragment = createNotebookFragment({
+      id: "nf-tray-ioc",
+      type: NOTEBOOK_FRAGMENT_TYPE.OBSERVATION,
+      body: "Related indicator observation.",
+      createdAt: 110,
+      updatedAt: 110,
+    });
+    vi.spyOn(relationshipEdgeStorage, "getRelationshipEdgesStore").mockResolvedValue({
+      ...createEmptyRelationshipEdgesStore(1),
+      edges: [edge],
+      minCoOccurrenceCount: 2,
+    });
+    vi.spyOn(investigationSessionStorage, "listStoredInvestigationSessions").mockResolvedValue([
+      sampleActiveSession,
+      priorSession,
+    ]);
+    vi.spyOn(notebookFragmentStorage, "getNotebookFragmentsStore").mockResolvedValue({
+      ...createEmptyNotebookFragmentsStore(),
+      fragments: [sessionFragment, iocFragment],
+      sessionAttachments: {
+        [priorSession.id]: [sessionFragment.id],
+      },
+      iocAttachments: {
+        "domain:evil.example": [iocFragment.id],
+      },
+    });
+    const reopenSpy = vi
+      .spyOn(investigationSessionClient, "requestReopenInvestigationSession")
+      .mockResolvedValue(priorSession);
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+      recentSessions: [sampleActiveSession, priorSession],
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared with 1 other");
+      expect(mounted?.container.textContent).toContain("Conclusion");
+      expect(mounted?.container.textContent).toContain("Observation");
+    });
+
+    const sessionNotebookLink = Array.from(
+      mounted!.container.querySelectorAll<HTMLButtonElement>(
+        ".vera5-tray-relationship-notebook-link"
+      )
+    ).find((button) => button.textContent?.includes("Conclusion"));
+    expect(sessionNotebookLink).not.toBeUndefined();
+    sessionNotebookLink?.click();
+
+    expect(reopenSpy).toHaveBeenCalledWith(priorSession.id);
+    await vi.waitFor(() => {
+      expect(
+        mounted!.container
+          .querySelector('button[aria-controls="popup-investigation-body"]')
+          ?.getAttribute("aria-expanded")
+      ).toBe("true");
+    });
+    expect(mounted!.container.querySelector("#popup-session-notebook")).not.toBeNull();
+  });
+
+  it("links relationship expander to overlapping correlation clusters", async () => {
+    const priorSession = createInvestigationSession({
+      id: "vera5-inv-prior-rel",
+      title: "Prior relationship session",
+      pageUrl: "https://example.com/alerts/prior-rel.html",
+      createdAt: 50,
+      updatedAt: 200,
+    });
+    const edge = createRelationshipEdge({
+      entityA: "ipv4:8.8.8.8",
+      entityB: "domain:example.com",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: [sampleActiveSession.id, priorSession.id],
+      firstSeen: 50,
+      lastSeen: 200,
+      weight: 2,
+    });
+    vi.spyOn(relationshipEdgeStorage, "getRelationshipEdgesStore").mockResolvedValue({
+      ...createEmptyRelationshipEdgesStore(1),
+      edges: [edge],
+      minCoOccurrenceCount: 2,
+    });
+    vi.spyOn(
+      correlationClusterStorage,
+      "buildStoredCorrelationClustersFromInvestigationMemory"
+    ).mockResolvedValue([
+      createCorrelationCluster({
+        memberIocKeys: [
+          buildIocCoOccurrenceMemberKey(IOC_TYPE.IPV4, "8.8.8.8"),
+          buildIocCoOccurrenceMemberKey(IOC_TYPE.DOMAIN, "example.com"),
+        ],
+        sessionIds: [sampleActiveSession.id, priorSession.id],
+        firstSeenAt: 50,
+        lastSeenAt: 200,
+        coOccurrenceCount: 2,
+      }),
+    ]);
+    vi.spyOn(investigationSessionStorage, "listStoredInvestigationSessions").mockResolvedValue([
+      sampleActiveSession,
+      priorSession,
+    ]);
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Appeared with 1 other");
+      expect(mounted?.container.textContent).toContain("Appeared across sessions");
+    });
+
+    const relationship = mounted!.container.querySelector(".vera5-tray-relationship");
+    const link = relationship?.querySelector<HTMLButtonElement>(
+      ".vera5-tray-relationship-correlation-link"
+    );
+    expect(link).not.toBeNull();
+    expect(link?.textContent).toContain("Appeared across sessions");
+
+    const correlation = mounted!.container.querySelector<HTMLDetailsElement>(
+      ".vera5-tray-correlation-clusters"
+    );
+    expect(correlation).not.toBeNull();
+    expect(correlation?.open).toBe(false);
+    link?.click();
+    expect(correlation?.open).toBe(true);
   });
 
   it("shows cross-session correlation clusters for the active IOC in tray expanders", async () => {

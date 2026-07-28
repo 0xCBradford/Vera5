@@ -425,7 +425,7 @@ Timelines, correlation clusters, relationship edges, and notebook fragments that
 - no upload endpoint to Vera5
 - export/copy actions are user-initiated
 
-Clear-all controls for correlation or relationship memory do not delete investigation sessions unless you explicitly choose combined wipe (documented in Settings).
+Clear-all for **relationship memory** or **cross-session correlation** removes only those local stores. It does **not** delete investigation sessions. A combined wipe (memory edges/clusters **and** sessions together) is not offered on those clear controls—session deletion remains a separate operator action. See [Clear relationship memory vs investigation sessions](analyst-workflows.md#clear-relationship-memory-vs-investigation-sessions) in analyst workflows.
 
 ## Portable profiles, settings packs, and third-party JSON
 

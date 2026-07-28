@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_MAX_RELATED_ENTITIES_PER_IOC,
   DEFAULT_RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY,
   DEFAULT_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT,
+  DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS,
   DEFAULT_RELATIONSHIP_EDGE_WEIGHT,
+  MAX_MAX_RELATED_ENTITIES_PER_IOC,
   RELATIONSHIP_EDGE_FIELD_KEYS,
   RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY,
+  RELATIONSHIP_EDGE_MS_PER_DAY,
   RELATIONSHIP_EDGE_SCHEMA_VERSION,
   RELATIONSHIP_TYPE,
   RELATIONSHIP_TYPES,
@@ -16,6 +20,7 @@ import {
   buildResolvedFromRelationshipEdgesFromEnrichPivots,
   buildResolvedFromRelationshipEdgesFromSessionScanUrls,
   canonicalizeRelationshipEdgeEntities,
+  capRelatedEntitiesPerIoc,
   createRelationshipEdge,
   extractRelationshipHostEntityKeyFromUrlValue,
   filterRelationshipEligibleEntityKeys,
@@ -24,10 +29,13 @@ import {
   isRelationshipType,
   mergeRelationshipEdgePair,
   mergeRelationshipEdgesAcrossSessions,
+  normalizeMaxRelatedEntitiesPerIoc,
   normalizeRelationshipEdge,
   normalizeRelationshipEdgeKnownGoodPolicy,
   normalizeRelationshipEdgeMinCoOccurrenceCount,
+  normalizeRelationshipEdgeRetentionDays,
   normalizeRelationshipEdgeSessionIds,
+  pruneRelationshipEdgesOlderThan,
   normalizeRelationshipEntityKey,
   parseRelationshipEntityKey,
   relationshipEdgeCoOccurrenceCount,
@@ -434,6 +442,22 @@ describe("RelationshipEdge builders from session scan / enrich", () => {
 });
 
 describe("RelationshipEdge merge across sessions", () => {
+  it("normalizes max related entities per IOC and caps ranked lists", () => {
+    expect(normalizeMaxRelatedEntitiesPerIoc(undefined)).toBe(
+      DEFAULT_MAX_RELATED_ENTITIES_PER_IOC
+    );
+    expect(normalizeMaxRelatedEntitiesPerIoc(32)).toBe(32);
+    expect(normalizeMaxRelatedEntitiesPerIoc(0)).toBe(1);
+    expect(normalizeMaxRelatedEntitiesPerIoc(Number.NaN)).toBe(
+      DEFAULT_MAX_RELATED_ENTITIES_PER_IOC
+    );
+    expect(normalizeMaxRelatedEntitiesPerIoc(10_000)).toBe(
+      MAX_MAX_RELATED_ENTITIES_PER_IOC
+    );
+    expect(capRelatedEntitiesPerIoc([1, 2, 3], 2)).toEqual([1, 2]);
+    expect(capRelatedEntitiesPerIoc([1, 2], 64)).toEqual([1, 2]);
+  });
+
   it("normalizes configurable min co-occurrence count", () => {
     expect(normalizeRelationshipEdgeMinCoOccurrenceCount(undefined)).toBe(
       DEFAULT_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT
@@ -748,5 +772,222 @@ describe("RelationshipEdge known-good policy", () => {
         knownGoodEntries: [],
       })
     ).toEqual(edges);
+  });
+
+  it("excludes and down-ranks when enabled for IP–domain edges", () => {
+    const resultExclude = applyRelationshipEdgeKnownGoodPolicy(
+      [investigationEdge, knownGoodEdge, mixedEdge],
+      {
+        policy: RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY.EXCLUDE,
+        knownGoodEntries: [cdnIp],
+      }
+    );
+    expect(resultExclude.map((edge) => edge.edgeId)).toEqual([
+      investigationEdge.edgeId,
+    ]);
+
+    const resultDownRank = applyRelationshipEdgeKnownGoodPolicy(
+      [knownGoodEdge, mixedEdge, investigationEdge],
+      {
+        policy: RELATIONSHIP_EDGE_KNOWN_GOOD_POLICY.DOWN_RANK,
+        knownGoodEntries: [cdnIp, saasDomain],
+      }
+    );
+    expect(resultDownRank.map((edge) => edge.edgeId)).toEqual([
+      investigationEdge.edgeId,
+      knownGoodEdge.edgeId,
+      mixedEdge.edgeId,
+    ]);
+  });
+});
+
+describe("RelationshipEdge retention prune", () => {
+  it("defaults retention to 90 days and prunes older lastSeen edges", () => {
+    expect(normalizeRelationshipEdgeRetentionDays(undefined)).toBe(
+      DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS
+    );
+    expect(DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS).toBe(90);
+
+    const nowMs = Date.UTC(2026, 6, 22);
+    const fresh = createRelationshipEdge({
+      entityA: "ipv4:8.8.8.8",
+      entityB: "domain:example.com",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["a", "b"],
+      firstSeen: nowMs - 1_000,
+      lastSeen: nowMs - 1_000,
+      weight: 2,
+    });
+    const stale = createRelationshipEdge({
+      entityA: "ipv4:1.1.1.1",
+      entityB: "domain:old.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["c", "d"],
+      firstSeen: nowMs - 200 * RELATIONSHIP_EDGE_MS_PER_DAY,
+      lastSeen: nowMs - 100 * RELATIONSHIP_EDGE_MS_PER_DAY,
+      weight: 2,
+    });
+
+    const pruned = pruneRelationshipEdgesOlderThan([fresh, stale], {
+      retentionDays: 90,
+      nowMs,
+    });
+    expect(pruned).toEqual([fresh]);
+  });
+
+  it("keeps edges at the inclusive retention cutoff and drops empty or all-stale lists", () => {
+    const nowMs = Date.UTC(2026, 6, 22);
+    const cutoff = nowMs - 90 * RELATIONSHIP_EDGE_MS_PER_DAY;
+    const onCutoff = createRelationshipEdge({
+      entityA: "ipv4:2.2.2.2",
+      entityB: "domain:on-cutoff.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["e", "f"],
+      firstSeen: cutoff,
+      lastSeen: cutoff,
+      weight: 2,
+    });
+    const justOlder = createRelationshipEdge({
+      entityA: "ipv4:3.3.3.3",
+      entityB: "domain:just-older.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["g", "h"],
+      firstSeen: cutoff - 1,
+      lastSeen: cutoff - 1,
+      weight: 2,
+    });
+
+    expect(
+      pruneRelationshipEdgesOlderThan([onCutoff, justOlder], {
+        retentionDays: 90,
+        nowMs,
+      })
+    ).toEqual([onCutoff]);
+    expect(pruneRelationshipEdgesOlderThan([], { retentionDays: 90, nowMs })).toEqual([]);
+    expect(
+      pruneRelationshipEdgesOlderThan([justOlder], { retentionDays: 90, nowMs })
+    ).toEqual([]);
+  });
+});
+
+describe("RelationshipEdge merge, IP-to-domain rollup, and retention prune", () => {
+  it("merges undirected IP–domain co_seen edges across sessions", () => {
+    const sessionA = createRelationshipEdge({
+      entityA: "ipv4:203.0.113.50",
+      entityB: "domain:rollup.example",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["vera5-inv-a"],
+      firstSeen: 100,
+      lastSeen: 110,
+      weight: 1,
+    });
+    const sessionB = createRelationshipEdge({
+      entityA: "domain:rollup.example",
+      entityB: "ipv4:203.0.113.50",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["vera5-inv-b"],
+      firstSeen: 200,
+      lastSeen: 220,
+      weight: 1,
+    });
+
+    const merged = mergeRelationshipEdgesAcrossSessions([sessionA, sessionB]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({
+      entityA: "domain:rollup.example",
+      entityB: "ipv4:203.0.113.50",
+      relationship: RELATIONSHIP_TYPE.CO_SEEN,
+      sessionIds: ["vera5-inv-a", "vera5-inv-b"],
+      firstSeen: 100,
+      lastSeen: 220,
+      weight: 2,
+    });
+  });
+
+  it("rolls up IP→domain resolved_from enrich pivots across sessions", () => {
+    const sessionA = buildResolvedFromRelationshipEdgesFromEnrichPivots([
+      {
+        sessionId: "vera5-inv-dns-a",
+        subjectEntityKey: "ipv4:198.51.100.77",
+        relatedEntityKeys: ["domain:resolved.example"],
+        seenAt: 1_000,
+      },
+    ]);
+    const sessionB = buildResolvedFromRelationshipEdgesFromEnrichPivots([
+      {
+        sessionId: "vera5-inv-dns-b",
+        subjectEntityKey: "ipv4:198.51.100.77",
+        relatedEntityKeys: ["domain:resolved.example"],
+        seenAt: 2_000,
+      },
+    ]);
+
+    const rolledUp = mergeRelationshipEdgesAcrossSessions([...sessionA, ...sessionB]);
+    expect(rolledUp).toHaveLength(1);
+    expect(rolledUp[0]).toMatchObject({
+      entityA: "ipv4:198.51.100.77",
+      entityB: "domain:resolved.example",
+      relationship: RELATIONSHIP_TYPE.RESOLVED_FROM,
+      sessionIds: ["vera5-inv-dns-a", "vera5-inv-dns-b"],
+      firstSeen: 1_000,
+      lastSeen: 2_000,
+      weight: 2,
+    });
+  });
+
+  it("applies retention prune after IP→domain rollup merge", () => {
+    const nowMs = Date.UTC(2026, 6, 22);
+    const freshA = buildResolvedFromRelationshipEdgesFromEnrichPivots([
+      {
+        sessionId: "vera5-inv-fresh-a",
+        subjectEntityKey: "ipv4:192.0.2.10",
+        relatedEntityKeys: ["domain:fresh.example"],
+        seenAt: nowMs - 2 * RELATIONSHIP_EDGE_MS_PER_DAY,
+      },
+    ]);
+    const freshB = buildResolvedFromRelationshipEdgesFromEnrichPivots([
+      {
+        sessionId: "vera5-inv-fresh-b",
+        subjectEntityKey: "ipv4:192.0.2.10",
+        relatedEntityKeys: ["domain:fresh.example"],
+        seenAt: nowMs - RELATIONSHIP_EDGE_MS_PER_DAY,
+      },
+    ]);
+    const staleA = buildResolvedFromRelationshipEdgesFromEnrichPivots([
+      {
+        sessionId: "vera5-inv-stale-a",
+        subjectEntityKey: "ipv4:192.0.2.99",
+        relatedEntityKeys: ["domain:stale.example"],
+        seenAt: nowMs - 200 * RELATIONSHIP_EDGE_MS_PER_DAY,
+      },
+    ]);
+    const staleB = buildResolvedFromRelationshipEdgesFromEnrichPivots([
+      {
+        sessionId: "vera5-inv-stale-b",
+        subjectEntityKey: "ipv4:192.0.2.99",
+        relatedEntityKeys: ["domain:stale.example"],
+        seenAt: nowMs - 150 * RELATIONSHIP_EDGE_MS_PER_DAY,
+      },
+    ]);
+
+    const rolledUp = mergeRelationshipEdgesAcrossSessions([
+      ...freshA,
+      ...freshB,
+      ...staleA,
+      ...staleB,
+    ]);
+    expect(rolledUp).toHaveLength(2);
+
+    const retained = pruneRelationshipEdgesOlderThan(rolledUp, {
+      retentionDays: 90,
+      nowMs,
+    });
+    expect(retained).toHaveLength(1);
+    expect(retained[0]).toMatchObject({
+      entityA: "ipv4:192.0.2.10",
+      entityB: "domain:fresh.example",
+      relationship: RELATIONSHIP_TYPE.RESOLVED_FROM,
+      weight: 2,
+    });
   });
 });

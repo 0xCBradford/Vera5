@@ -66,6 +66,27 @@ export const MIN_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT = 1;
 export const MAX_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT = 1024;
 
 /**
+ * Default max related entities returned per focus IOC in list/adjacency views
+ * (hover card and tray). Ranked by session count then last seen; lower-ranked
+ * partners beyond the cap are omitted.
+ */
+export const DEFAULT_MAX_RELATED_ENTITIES_PER_IOC = 64;
+
+export const MIN_MAX_RELATED_ENTITIES_PER_IOC = 1;
+export const MAX_MAX_RELATED_ENTITIES_PER_IOC = 256;
+
+/**
+ * Default retention window for persisted relationship edges (days).
+ * Edges whose lastSeen is older than the window are pruned on store read.
+ */
+export const DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS = 90;
+
+export const MIN_RELATIONSHIP_EDGE_RETENTION_DAYS = 1;
+export const MAX_RELATIONSHIP_EDGE_RETENTION_DAYS = 3650;
+
+export const RELATIONSHIP_EDGE_MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/**
  * Known-good edge policy (default off). When enabled, edges that involve a
  * known-good list match on either endpoint are excluded or sorted after
  * non-matching edges. Informational only — not a silent safe verdict.
@@ -496,6 +517,77 @@ export function normalizeRelationshipEdgeMinCoOccurrenceCount(
     MAX_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT,
     Math.max(MIN_RELATIONSHIP_EDGE_MIN_CO_OCCURRENCE_COUNT, value)
   );
+}
+
+/**
+ * Max related entities per focus IOC for list/adjacency consumers.
+ * Invalid values fall back to the default (64). Clamped to 1–256.
+ */
+export function normalizeMaxRelatedEntitiesPerIoc(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+    return DEFAULT_MAX_RELATED_ENTITIES_PER_IOC;
+  }
+  return Math.min(
+    MAX_MAX_RELATED_ENTITIES_PER_IOC,
+    Math.max(MIN_MAX_RELATED_ENTITIES_PER_IOC, value)
+  );
+}
+
+/**
+ * Truncate a ranked related-entity list to the per-IOC cap (keeps leading items).
+ */
+export function capRelatedEntitiesPerIoc<T>(
+  entries: readonly T[],
+  maxRelatedEntitiesPerIoc?: unknown
+): T[] {
+  const limit = normalizeMaxRelatedEntitiesPerIoc(maxRelatedEntitiesPerIoc);
+  if (entries.length <= limit) {
+    return [...entries];
+  }
+  return entries.slice(0, limit);
+}
+
+/**
+ * Retention window in days for persisted relationship edges.
+ * Invalid values fall back to the default (90). Clamped to 1–3650.
+ */
+export function normalizeRelationshipEdgeRetentionDays(value?: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || !Number.isInteger(value)) {
+    return DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS;
+  }
+  return Math.min(
+    MAX_RELATIONSHIP_EDGE_RETENTION_DAYS,
+    Math.max(MIN_RELATIONSHIP_EDGE_RETENTION_DAYS, value)
+  );
+}
+
+export function resolveRelationshipEdgeRetentionCutoffMs(
+  retentionDays: number = DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS,
+  nowMs: number = Date.now()
+): number {
+  const days = normalizeRelationshipEdgeRetentionDays(retentionDays);
+  return nowMs - days * RELATIONSHIP_EDGE_MS_PER_DAY;
+}
+
+/**
+ * Keeps edges whose lastSeen is within the retention window (inclusive of the
+ * cutoff). Older edges are pruned. Retention days are configurable; default is
+ * DEFAULT_RELATIONSHIP_EDGE_RETENTION_DAYS.
+ */
+export function pruneRelationshipEdgesOlderThan(
+  edges: readonly RelationshipEdge[],
+  options?: {
+    retentionDays?: number | null;
+    nowMs?: number;
+  }
+): RelationshipEdge[] {
+  const retentionDays = normalizeRelationshipEdgeRetentionDays(options?.retentionDays);
+  const nowMs =
+    typeof options?.nowMs === "number" && Number.isFinite(options.nowMs)
+      ? options.nowMs
+      : Date.now();
+  const cutoffMs = resolveRelationshipEdgeRetentionCutoffMs(retentionDays, nowMs);
+  return edges.filter((edge) => edge.lastSeen >= cutoffMs);
 }
 
 /**

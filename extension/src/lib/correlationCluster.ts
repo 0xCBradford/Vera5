@@ -1130,6 +1130,44 @@ export function openTraySamePageCoOccurrenceDetails(fromElement: HTMLElement): b
   return true;
 }
 
+/** CSS class on the tray cross-session correlation `<details>` element. */
+export const CORRELATION_CLUSTER_TRAY_DETAILS_CLASS =
+  "vera5-tray-correlation-clusters";
+
+export function buildTrayCorrelationClusterDetailsElementId(
+  anchorId: string
+): string {
+  const trimmed = anchorId.trim();
+  return trimmed.length > 0
+    ? `vera5-tray-correlation-clusters-${trimmed}`
+    : "vera5-tray-correlation-clusters";
+}
+
+/**
+ * Opens the sibling cross-session correlation `<details>` in the same tray row.
+ * Returns false when the panel is not present.
+ */
+export function openTrayCorrelationClusterDetails(
+  fromElement: HTMLElement
+): boolean {
+  const row = fromElement.closest("li");
+  if (!row) {
+    return false;
+  }
+  const details = row.querySelector(
+    `details.${CORRELATION_CLUSTER_TRAY_DETAILS_CLASS}`
+  );
+  if (!(details instanceof HTMLDetailsElement)) {
+    return false;
+  }
+  details.open = true;
+  const summary = details.querySelector("summary");
+  if (summary instanceof HTMLElement) {
+    summary.focus();
+  }
+  return true;
+}
+
 /** Only supported correlation UI layout: ordered list / adjacency rows. */
 export const CORRELATION_CLUSTER_UI_LAYOUT = "list" as const;
 
