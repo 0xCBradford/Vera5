@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildEnrichmentCacheKey } from "./cache";
 import * as copyText from "./copyText";
 import { buildNormalizedEnrichmentRecord, ENRICHMENT_EXPORT_NO_ENRICHMENT_DETAIL } from "./enrichmentExport";
@@ -38,6 +38,7 @@ import {
   normalizeWorkspaceSnapshotTrayIoc,
   parseWorkspaceSnapshotJson,
   parseWorkspaceSnapshotImportJson,
+  redactWorkspaceSnapshotNotebookFragmentsForIocOnlyExport,
   serializeWorkspaceSnapshot,
   serializeWorkspaceSnapshotExportJson,
   validateWorkspaceSnapshotImportDocument,
@@ -82,10 +83,13 @@ import {
   WORKSPACE_SNAPSHOT_OBSIDIAN_LINK_FORMAT_DOCS,
   WORKSPACE_SNAPSHOT_OBSIDIAN_TIMELINE_NOTE_BASENAME,
   buildInvestigationSessionFromSnapshotMetadata,
+  buildCurrentWorkspaceSnapshot,
   confirmWorkspaceSnapshotImport,
   downloadWorkspaceSnapshotMarkdownExportFile,
   importWorkspaceSnapshotJson,
   importWorkspaceSnapshotWithConfirmation,
+  loadWorkspaceSnapshotNotebookFragmentsFromStorage,
+  mapNotebookFragmentsStoreToWorkspaceSnapshotFragments,
   mergeImportedWorkspaceSnapshot,
   mergeWorkspaceSnapshotTrayIocs,
   replaceImportedWorkspaceSnapshot,
@@ -98,6 +102,21 @@ import {
   STORAGE_KEY_INVESTIGATION_SESSIONS,
 } from "./investigationSessionStorage";
 import { IOC_TYPE } from "./iocRegex";
+import {
+  NOTEBOOK_FRAGMENT_TYPE,
+  buildNotebookFragmentIocKey,
+  buildNotebookFragmentPageScopeKeyFromPageUrl,
+  createNotebookFragment,
+} from "./notebookFragment";
+import {
+  NOTEBOOK_FRAGMENTS_STORE_SCHEMA_VERSION,
+  STORAGE_KEY_NOTEBOOK_FRAGMENTS,
+  attachStoredNotebookFragmentToIoc,
+  attachStoredNotebookFragmentToPage,
+  attachStoredNotebookFragmentToSession,
+  createEmptyNotebookFragmentsStore,
+  upsertStoredNotebookFragment,
+} from "./notebookFragmentStorage";
 import { tabScanSnapshotStorageKey } from "./tabScanSnapshot";
 import { TEST_FIXTURE_ABUSEIPDB_API_KEY } from "./fixtureSecrets";
 import { STORAGE_KEY_API_KEYS, STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID } from "./storage";
@@ -1754,5 +1773,304 @@ describe("workspaceSnapshot obsidian export", () => {
         })
       )
     ).toBeNull();
+  });
+});
+
+describe("workspaceSnapshot notebook fragments from local notebook storage", () => {
+  let localStore: Record<string, unknown>;
+
+  beforeEach(() => {
+    localStore = {};
+    stubWorkspaceSnapshotStorage(localStore);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("maps typed notebook store fragments into snapshot notebook rows", () => {
+    const sessionId = "vera5-inv-abc";
+    const observation = createNotebookFragment({
+      id: "nf-obs-1",
+      type: NOTEBOOK_FRAGMENT_TYPE.OBSERVATION,
+      body: "Saw repeated DNS lookups",
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_100,
+    });
+
+    const store = createEmptyNotebookFragmentsStore(1_700_000_000_200);
+    store.fragments = [observation];
+    store.sessionAttachments = { [sessionId]: [observation.id] };
+
+    expect(
+      mapNotebookFragmentsStoreToWorkspaceSnapshotFragments(store, {
+        preferSessionId: sessionId,
+      })
+    ).toEqual([
+      {
+        schemaVersion: WORKSPACE_SNAPSHOT_NOTEBOOK_FRAGMENT_SCHEMA_VERSION,
+        id: observation.id,
+        scope: "session",
+        scopeRef: sessionId,
+        content: "Saw repeated DNS lookups",
+        updatedAt: observation.updatedAt,
+        type: NOTEBOOK_FRAGMENT_TYPE.OBSERVATION,
+      },
+    ]);
+  });
+
+  it("includes a notebookFragments JSON block in workspace snapshot export", () => {
+    const snapshot = createWorkspaceSnapshot({
+      exportedAt: "2026-07-26T15:00:00.000Z",
+      session: sampleSessionMetadata,
+      trayIocs: [sampleTrayIoc],
+      notebookFragments: [sampleNotebookFragment],
+    });
+    const json = serializeWorkspaceSnapshotExportJson(snapshot);
+    const parsed = JSON.parse(json) as {
+      notebookFragments?: Array<Record<string, unknown>>;
+    };
+
+    expect(Object.keys(JSON.parse(json) as Record<string, unknown>)).toEqual(
+      expect.arrayContaining(["schemaVersion", "exportedAt", "notebookFragments"])
+    );
+    expect(Array.isArray(parsed.notebookFragments)).toBe(true);
+    expect(parsed.notebookFragments).toHaveLength(1);
+    expect(parsed.notebookFragments?.[0]).toEqual({
+      schemaVersion: WORKSPACE_SNAPSHOT_NOTEBOOK_FRAGMENT_SCHEMA_VERSION,
+      id: sampleNotebookFragment.id,
+      scope: sampleNotebookFragment.scope,
+      scopeRef: sampleNotebookFragment.scopeRef,
+      content: sampleNotebookFragment.content,
+      updatedAt: sampleNotebookFragment.updatedAt,
+    });
+    expect(json).toMatch(/"notebookFragments"\s*:\s*\[/);
+  });
+
+  it("prefers session scope, then IOC, then page when choosing snapshot scope", () => {
+    const sessionId = "vera5-inv-abc";
+    const iocKey = buildNotebookFragmentIocKey(IOC_TYPE.IPV4, "8.8.8.8");
+    const pageKey = buildNotebookFragmentPageScopeKeyFromPageUrl(
+      "https://portal.example.com/cases/1"
+    );
+    expect(pageKey).not.toBeNull();
+
+    const fragment = createNotebookFragment({
+      id: "nf-multi-1",
+      type: NOTEBOOK_FRAGMENT_TYPE.HYPOTHESIS,
+      body: "Possible C2",
+      createdAt: 1,
+      updatedAt: 2,
+    });
+
+    const store = createEmptyNotebookFragmentsStore(3);
+    store.fragments = [fragment];
+    store.sessionAttachments = { [sessionId]: [fragment.id] };
+    store.iocAttachments = { [iocKey]: [fragment.id] };
+    store.pageAttachments = { [pageKey!]: [fragment.id] };
+
+    expect(
+      mapNotebookFragmentsStoreToWorkspaceSnapshotFragments(store, {
+        preferSessionId: sessionId,
+      })[0]
+    ).toMatchObject({
+      scope: "session",
+      scopeRef: sessionId,
+      type: NOTEBOOK_FRAGMENT_TYPE.HYPOTHESIS,
+    });
+
+    delete store.sessionAttachments[sessionId];
+    expect(mapNotebookFragmentsStoreToWorkspaceSnapshotFragments(store)[0]).toMatchObject({
+      scope: "ioc",
+      scopeRef: iocKey,
+    });
+
+    delete store.iocAttachments[iocKey];
+    expect(mapNotebookFragmentsStoreToWorkspaceSnapshotFragments(store)[0]).toMatchObject({
+      scope: "page",
+      scopeRef: pageKey!,
+    });
+  });
+
+  it("normalizes optional fragment type and rejects invalid types", () => {
+    expect(
+      normalizeWorkspaceSnapshotNotebookFragment({
+        ...sampleNotebookFragment,
+        type: NOTEBOOK_FRAGMENT_TYPE.CONCLUSION,
+      })
+    ).toMatchObject({ type: NOTEBOOK_FRAGMENT_TYPE.CONCLUSION });
+
+    expect(() =>
+      normalizeWorkspaceSnapshotNotebookFragment({
+        ...sampleNotebookFragment,
+        type: "verdict",
+      })
+    ).toThrow(WorkspaceSnapshotSchemaError);
+  });
+
+  it("includes live notebook fragments in buildCurrentWorkspaceSnapshot JSON block", async () => {
+    const session = createInvestigationSession({
+      id: "vera5-inv-live-nb",
+      title: "Live notebook session",
+      pageUrl: "https://example.com/case",
+      createdAt: 1_700_000_000_000,
+      updatedAt: 1_700_000_000_500,
+    });
+    expect(session).not.toBeNull();
+
+    localStore[STORAGE_KEY_INVESTIGATION_SESSIONS] = {
+      schemaVersion: INVESTIGATION_SESSIONS_SCHEMA_VERSION,
+      sessions: [session],
+      activeSessionId: session!.id,
+    };
+    localStore[STORAGE_KEY_WORKSPACE_SNAPSHOT_STATE] = {
+      schemaVersion: WORKSPACE_SNAPSHOT_SCHEMA_VERSION,
+      enrichmentCacheRefs: [],
+      notebookFragments: [],
+    };
+
+    const fragment = await upsertStoredNotebookFragment(
+      createNotebookFragment({
+        id: "nf-live-1",
+        type: NOTEBOOK_FRAGMENT_TYPE.TAG,
+        body: "phish-kit",
+        createdAt: 1_700_000_000_100,
+        updatedAt: 1_700_000_000_200,
+      })
+    );
+    await attachStoredNotebookFragmentToSession({
+      fragmentId: fragment.id,
+      sessionId: session!.id,
+    });
+
+    const snapshot = await buildCurrentWorkspaceSnapshot({
+      exportedAt: "2026-07-26T12:00:00.000Z",
+    });
+    const json = serializeWorkspaceSnapshotExportJson(snapshot);
+    const parsed = parseWorkspaceSnapshotJson(json);
+
+    expect(parsed.notebookFragments).toEqual([
+      {
+        schemaVersion: WORKSPACE_SNAPSHOT_NOTEBOOK_FRAGMENT_SCHEMA_VERSION,
+        id: fragment.id,
+        scope: "session",
+        scopeRef: session!.id,
+        content: "phish-kit",
+        updatedAt: fragment.updatedAt,
+        type: NOTEBOOK_FRAGMENT_TYPE.TAG,
+      },
+    ]);
+    expect(json).toContain('"notebookFragments"');
+    expect(json).toContain("phish-kit");
+  });
+
+  it("merges live notebook store over workspace snapshot state mirror", async () => {
+    localStore[STORAGE_KEY_WORKSPACE_SNAPSHOT_STATE] = {
+      schemaVersion: WORKSPACE_SNAPSHOT_SCHEMA_VERSION,
+      enrichmentCacheRefs: [],
+      notebookFragments: [
+        {
+          ...sampleNotebookFragment,
+          id: "note-stale",
+          content: "From snapshot state only",
+          updatedAt: 1_000,
+        },
+      ],
+    };
+
+    const live = createNotebookFragment({
+      id: "nf-live-2",
+      type: NOTEBOOK_FRAGMENT_TYPE.OBSERVATION,
+      body: "From notebook store",
+      createdAt: 2_000,
+      updatedAt: 3_000,
+    });
+    await upsertStoredNotebookFragment(live);
+    await attachStoredNotebookFragmentToIoc({
+      fragmentId: live.id,
+      iocType: IOC_TYPE.DOMAIN,
+      value: "evil.example",
+    });
+
+    const snapshot = await buildCurrentWorkspaceSnapshot({
+      exportedAt: "2026-07-26T12:00:00.000Z",
+    });
+
+    expect(snapshot.notebookFragments).toHaveLength(2);
+    expect(snapshot.notebookFragments.find((entry) => entry.id === "note-stale")).toMatchObject({
+      content: "From snapshot state only",
+    });
+    expect(snapshot.notebookFragments.find((entry) => entry.id === live.id)).toMatchObject({
+      content: "From notebook store",
+      scope: "ioc",
+      type: NOTEBOOK_FRAGMENT_TYPE.OBSERVATION,
+    });
+  });
+
+  it("loads notebook fragments from storage for export consumers", async () => {
+    const pageKey = buildNotebookFragmentPageScopeKeyFromPageUrl(
+      "https://portal.example.com/alerts"
+    );
+    expect(pageKey).not.toBeNull();
+
+    const fragment = await upsertStoredNotebookFragment(
+      createNotebookFragment({
+        id: "nf-page-1",
+        type: NOTEBOOK_FRAGMENT_TYPE.CONCLUSION,
+        body: "Portal-only finding",
+        createdAt: 4_000,
+        updatedAt: 5_000,
+      })
+    );
+    await attachStoredNotebookFragmentToPage({
+      fragmentId: fragment.id,
+      pageUrl: "https://portal.example.com/alerts",
+    });
+
+    await expect(loadWorkspaceSnapshotNotebookFragmentsFromStorage()).resolves.toEqual([
+      {
+        schemaVersion: WORKSPACE_SNAPSHOT_NOTEBOOK_FRAGMENT_SCHEMA_VERSION,
+        id: fragment.id,
+        scope: "page",
+        scopeRef: pageKey!,
+        content: "Portal-only finding",
+        updatedAt: fragment.updatedAt,
+        type: NOTEBOOK_FRAGMENT_TYPE.CONCLUSION,
+      },
+    ]);
+    expect(localStore[STORAGE_KEY_NOTEBOOK_FRAGMENTS]).toMatchObject({
+      schemaVersion: NOTEBOOK_FRAGMENTS_STORE_SCHEMA_VERSION,
+    });
+  });
+
+  it("redacts notebook fragments for IOC-only workspace exports", () => {
+    const withNotebook = createWorkspaceSnapshot({
+      exportedAt: "2026-07-26T12:00:00.000Z",
+      notebookFragments: [sampleNotebookFragment],
+      trayIocs: [sampleTrayIoc],
+    });
+    expect(withNotebook.notebookFragments).toHaveLength(1);
+
+    const redacted = redactWorkspaceSnapshotNotebookFragmentsForIocOnlyExport(withNotebook);
+    expect(redacted.notebookFragments).toEqual([]);
+    expect(redacted.trayIocs).toEqual([sampleTrayIoc]);
+
+    const createdIocOnly = createWorkspaceSnapshot({
+      exportedAt: "2026-07-26T12:00:00.000Z",
+      notebookFragments: [sampleNotebookFragment],
+      trayIocs: [sampleTrayIoc],
+      iocOnlyExport: true,
+    });
+    expect(createdIocOnly.notebookFragments).toEqual([]);
+    expect(createdIocOnly.trayIocs).toEqual([sampleTrayIoc]);
+
+    const markdown = buildWorkspaceSnapshotMarkdownExport({
+      snapshot: withNotebook,
+      records: [],
+      exportedAt: "2026-07-26T12:00:00.000Z",
+      iocOnlyExport: true,
+    });
+    expect(markdown).toContain("**Notebook fragments:** 0");
+    expect(markdown).not.toContain(sampleNotebookFragment.content);
   });
 });

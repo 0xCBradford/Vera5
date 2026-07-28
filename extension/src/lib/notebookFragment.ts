@@ -602,3 +602,250 @@ export function normalizeNotebookFragmentPageScopeKey(
   }
   return buildNotebookFragmentPageScopeKey(parsed.origin, parsed.pathname);
 }
+
+/** Inline nodes for markdown-lite body rendering (bold / code / text only). */
+export type NotebookFragmentMarkdownLiteInline =
+  | { kind: "text"; value: string }
+  | { kind: "bold"; value: string }
+  | { kind: "code"; value: string };
+
+/** Block nodes for markdown-lite body rendering. */
+export type NotebookFragmentMarkdownLiteBlock =
+  | { kind: "paragraph"; inlines: NotebookFragmentMarkdownLiteInline[] }
+  | { kind: "ul"; items: NotebookFragmentMarkdownLiteInline[][] }
+  | { kind: "ol"; items: NotebookFragmentMarkdownLiteInline[][] }
+  | { kind: "codeblock"; value: string };
+
+export const NOTEBOOK_FRAGMENT_MARKDOWN_LITE_HINT =
+  "Supports **bold**, lists (- or 1.), and `code` — HTML is shown as text.";
+
+const UNORDERED_LIST_LINE = /^[-*][ \t]+(.*)$/;
+const ORDERED_LIST_LINE = /^\d+\.[ \t]+(.*)$/;
+
+/**
+ * Parses a notebook fragment body into markdown-lite blocks.
+ * Only **bold**, unordered/ordered lists, inline `code`, and fenced code
+ * blocks are structured; raw HTML is kept as plain text (never executed).
+ */
+export function parseNotebookFragmentMarkdownLite(
+  body: string
+): NotebookFragmentMarkdownLiteBlock[] {
+  const source = typeof body === "string" ? body.replace(/\r\n/g, "\n") : "";
+  if (source.length === 0) {
+    return [];
+  }
+
+  const lines = source.split("\n");
+  const blocks: NotebookFragmentMarkdownLiteBlock[] = [];
+  let index = 0;
+
+  while (index < lines.length) {
+    const line = lines[index] ?? "";
+
+    if (line.trim().startsWith("```")) {
+      index += 1;
+      const codeLines: string[] = [];
+      while (index < lines.length) {
+        const codeLine = lines[index] ?? "";
+        if (codeLine.trim().startsWith("```")) {
+          index += 1;
+          break;
+        }
+        codeLines.push(codeLine);
+        index += 1;
+      }
+      blocks.push({ kind: "codeblock", value: codeLines.join("\n") });
+      continue;
+    }
+
+    const unordered = line.match(UNORDERED_LIST_LINE);
+    if (unordered) {
+      const items: NotebookFragmentMarkdownLiteInline[][] = [];
+      while (index < lines.length) {
+        const listLine = lines[index] ?? "";
+        const match = listLine.match(UNORDERED_LIST_LINE);
+        if (!match) {
+          break;
+        }
+        items.push(parseNotebookFragmentMarkdownLiteInlines(match[1] ?? ""));
+        index += 1;
+      }
+      blocks.push({ kind: "ul", items });
+      continue;
+    }
+
+    const ordered = line.match(ORDERED_LIST_LINE);
+    if (ordered) {
+      const items: NotebookFragmentMarkdownLiteInline[][] = [];
+      while (index < lines.length) {
+        const listLine = lines[index] ?? "";
+        const match = listLine.match(ORDERED_LIST_LINE);
+        if (!match) {
+          break;
+        }
+        items.push(parseNotebookFragmentMarkdownLiteInlines(match[1] ?? ""));
+        index += 1;
+      }
+      blocks.push({ kind: "ol", items });
+      continue;
+    }
+
+    if (line.trim().length === 0) {
+      index += 1;
+      continue;
+    }
+
+    const paragraphLines: string[] = [line];
+    index += 1;
+    while (index < lines.length) {
+      const next = lines[index] ?? "";
+      if (
+        next.trim().length === 0 ||
+        UNORDERED_LIST_LINE.test(next) ||
+        ORDERED_LIST_LINE.test(next) ||
+        next.trim().startsWith("```")
+      ) {
+        break;
+      }
+      paragraphLines.push(next);
+      index += 1;
+    }
+    blocks.push({
+      kind: "paragraph",
+      inlines: parseNotebookFragmentMarkdownLiteInlines(
+        paragraphLines.join("\n")
+      ),
+    });
+  }
+
+  return blocks;
+}
+
+/**
+ * Inline parse: `code`, **bold**, __bold__. HTML tags remain ordinary text.
+ */
+export function parseNotebookFragmentMarkdownLiteInlines(
+  text: string
+): NotebookFragmentMarkdownLiteInline[] {
+  const source = typeof text === "string" ? text : "";
+  if (source.length === 0) {
+    return [];
+  }
+
+  const nodes: NotebookFragmentMarkdownLiteInline[] = [];
+  let cursor = 0;
+
+  const pushText = (value: string): void => {
+    if (value.length === 0) {
+      return;
+    }
+    const last = nodes[nodes.length - 1];
+    if (last?.kind === "text") {
+      last.value += value;
+      return;
+    }
+    nodes.push({ kind: "text", value });
+  };
+
+  while (cursor < source.length) {
+    const rest = source.slice(cursor);
+    const codeMatch = rest.match(/^`([^`\n]+)`/);
+    if (codeMatch) {
+      nodes.push({ kind: "code", value: codeMatch[1] ?? "" });
+      cursor += codeMatch[0].length;
+      continue;
+    }
+
+    const boldStar = rest.match(/^\*\*([^*]+)\*\*/);
+    if (boldStar) {
+      nodes.push({ kind: "bold", value: boldStar[1] ?? "" });
+      cursor += boldStar[0].length;
+      continue;
+    }
+
+    const boldUnder = rest.match(/^__([^_]+)__/);
+    if (boldUnder) {
+      nodes.push({ kind: "bold", value: boldUnder[1] ?? "" });
+      cursor += boldUnder[0].length;
+      continue;
+    }
+
+    pushText(source[cursor] ?? "");
+    cursor += 1;
+  }
+
+  return nodes;
+}
+
+function appendMarkdownLiteInlines(
+  parent: HTMLElement,
+  inlines: readonly NotebookFragmentMarkdownLiteInline[],
+  doc: Document
+): void {
+  for (const node of inlines) {
+    if (node.kind === "text") {
+      parent.appendChild(doc.createTextNode(node.value));
+      continue;
+    }
+    if (node.kind === "bold") {
+      const strong = doc.createElement("strong");
+      strong.textContent = node.value;
+      parent.appendChild(strong);
+      continue;
+    }
+    const code = doc.createElement("code");
+    code.textContent = node.value;
+    parent.appendChild(code);
+  }
+}
+
+/**
+ * Renders markdown-lite into `container` using element + textContent only.
+ * Never assigns `innerHTML` from fragment body content.
+ */
+export function appendNotebookFragmentMarkdownLite(
+  container: HTMLElement,
+  body: string,
+  doc: Document = container.ownerDocument
+): void {
+  container.replaceChildren();
+  const blocks = parseNotebookFragmentMarkdownLite(body);
+
+  for (const block of blocks) {
+    if (block.kind === "paragraph") {
+      const paragraph = doc.createElement("p");
+      paragraph.className = "vera5-notebook-md-paragraph";
+      appendMarkdownLiteInlines(paragraph, block.inlines, doc);
+      container.appendChild(paragraph);
+      continue;
+    }
+
+    if (block.kind === "codeblock") {
+      const pre = doc.createElement("pre");
+      pre.className = "vera5-notebook-md-codeblock";
+      const code = doc.createElement("code");
+      code.textContent = block.value;
+      pre.appendChild(code);
+      container.appendChild(pre);
+      continue;
+    }
+
+    const list = doc.createElement(block.kind === "ul" ? "ul" : "ol");
+    list.className =
+      block.kind === "ul" ? "vera5-notebook-md-ul" : "vera5-notebook-md-ol";
+    for (const item of block.items) {
+      const li = doc.createElement("li");
+      appendMarkdownLiteInlines(li, item, doc);
+      list.appendChild(li);
+    }
+    container.appendChild(list);
+  }
+}
+
+/**
+ * True when body contains raw HTML-looking markup that must remain inert text
+ * (never interpreted as DOM). Used by tests asserting XSS safety.
+ */
+export function notebookFragmentBodyContainsRawHtmlMarkup(body: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(body);
+}

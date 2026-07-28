@@ -1,22 +1,39 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   HOVER_CARD_NOTEBOOK_EMPTY_IOC_TEXT,
   HOVER_CARD_NOTEBOOK_EMPTY_PAGE_TEXT,
   HOVER_CARD_NOTEBOOK_EMPTY_SESSION_UNAVAILABLE_TEXT,
   HOVER_CARD_NOTEBOOK_TAB_IOC_LABEL,
+  NOTEBOOK_FORBIDDEN_SCREENSHOT_UI_LABELS,
   NOTEBOOK_FRAGMENT_AUTHORING_UNAVAILABLE_SESSION_TEXT,
+  NOTEBOOK_FRAGMENT_TEXT_ONLY_EMPTY_HINT,
   POPUP_SESSION_NOTEBOOK_EMPTY_TEXT,
+  POPUP_SESSION_NOTEBOOK_SEARCH_NO_MATCHES_TEXT,
   addNotebookFragmentForScope,
   addNotebookFragmentForSession,
+  assertNotebookSurfacesOmitScreenshotCaptureUi,
   buildHoverCardNotebookFragmentRow,
   buildHoverCardNotebookPanelView,
+  buildNotebookFragmentEmptyStateView,
   buildPopupSessionNotebookTimelineView,
   canAuthorNotebookFragmentsForScope,
   deleteNotebookFragment,
   editNotebookFragment,
+  filterNotebookFragmentsBySearchText,
+  filterPopupSessionNotebookTimelineRowsBySearchText,
+  findNotebookForbiddenCaptureApiCallInSource,
+  findNotebookForbiddenScreenshotUiLabel,
   formatNotebookTabLabel,
   loadHoverCardNotebookPanelView,
   loadPopupSessionNotebookFragmentTimeline,
+  migrateLegacyAnalystNoteToObservationFragmentOnRead,
+  notebookFragmentMatchesSearchText,
+  resolveNotebookHoverEmptyText,
+  shouldMigrateLegacyAnalystNoteToObservationFragment,
+  buildObservationFragmentFromLegacyAnalystNote,
   sortNotebookFragmentsChronologically,
   truncateNotebookFragmentBodyPreview,
 } from "./hoverCardNotebook";
@@ -29,8 +46,18 @@ import {
   attachStoredNotebookFragmentToPage,
   attachStoredNotebookFragmentToSession,
   clearStoredNotebookFragments,
+  listStoredNotebookFragmentsForIoc,
   upsertStoredNotebookFragment,
 } from "./notebookFragmentStorage";
+import {
+  clearSessionAnalystNotes,
+  getSessionAnalystNote,
+  setSessionAnalystNote,
+} from "./analystNotesSession";
+import {
+  getStoredAnalystNote,
+  STORAGE_KEY_ANALYST_NOTES,
+} from "./analystNotesStorage";
 import { INVESTIGATION_SESSION_ID_PREFIX } from "./investigationSession";
 import * as investigationSessionStorage from "./investigationSessionStorage";
 import { IOC_TYPE } from "./iocRegex";
@@ -83,6 +110,7 @@ describe("hoverCardNotebook", () => {
 
   afterEach(async () => {
     await clearStoredNotebookFragments();
+    clearSessionAnalystNotes();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -121,7 +149,11 @@ describe("hoverCardNotebook", () => {
         sessionId: null,
         pageScopeKey: null,
       }).emptyText
-    ).toBe(HOVER_CARD_NOTEBOOK_EMPTY_IOC_TEXT);
+    ).toBe(
+      buildNotebookFragmentEmptyStateView({
+        primaryText: HOVER_CARD_NOTEBOOK_EMPTY_IOC_TEXT,
+      }).composedText
+    );
     expect(
       buildHoverCardNotebookPanelView({
         activeTab: "session",
@@ -131,7 +163,17 @@ describe("hoverCardNotebook", () => {
         sessionId: null,
         pageScopeKey: null,
       }).emptyText
-    ).toBe(HOVER_CARD_NOTEBOOK_EMPTY_SESSION_UNAVAILABLE_TEXT);
+    ).toBe(
+      buildNotebookFragmentEmptyStateView({
+        primaryText: HOVER_CARD_NOTEBOOK_EMPTY_SESSION_UNAVAILABLE_TEXT,
+      }).composedText
+    );
+    expect(resolveNotebookHoverEmptyText({
+      activeTab: "ioc",
+      sessionId: null,
+      pageScopeKey: null,
+    })).toContain(NOTEBOOK_FRAGMENT_TEXT_ONLY_EMPTY_HINT);
+    expect(POPUP_SESSION_NOTEBOOK_EMPTY_TEXT).toContain("Add a text fragment");
   });
 
   it("sorts session notebook fragments chronologically for popup timeline", () => {
@@ -172,7 +214,11 @@ describe("hoverCardNotebook", () => {
       sessionId: `${INVESTIGATION_SESSION_ID_PREFIX}timeline`,
       fragments: [later, earlier, middle],
     });
-    expect(view.emptyText).toBe(POPUP_SESSION_NOTEBOOK_EMPTY_TEXT);
+    expect(view.emptyText).toBe(
+      buildNotebookFragmentEmptyStateView({
+        primaryText: POPUP_SESSION_NOTEBOOK_EMPTY_TEXT,
+      }).composedText
+    );
     expect(view.fragments.map((row) => row.fragmentId)).toEqual([
       "nf-earlier",
       "nf-middle",
@@ -181,6 +227,71 @@ describe("hoverCardNotebook", () => {
     expect(view.fragments[1]?.typeLabel).toBe("Hypothesis");
     expect(view.fragments[1]?.showStatusBadge).toBe(true);
     expect(view.fragments[1]?.statusBadgeLabel).toBe("Unverified");
+  });
+
+  it("filters session notebook fragments by search text", () => {
+    const fragments = [
+      createNotebookFragment({
+        id: "nf-a",
+        type: NOTEBOOK_FRAGMENT_TYPE.OBSERVATION,
+        body: "Beacon to staging host",
+        createdAt: 1,
+        updatedAt: 1,
+        authorLabel: "alice",
+      }),
+      createNotebookFragment({
+        id: "nf-b",
+        type: NOTEBOOK_FRAGMENT_TYPE.HYPOTHESIS,
+        body: "Possible phishing lure",
+        createdAt: 2,
+        updatedAt: 2,
+      }),
+      createNotebookFragment({
+        id: "nf-c",
+        type: NOTEBOOK_FRAGMENT_TYPE.TAG,
+        body: "infra",
+        createdAt: 3,
+        updatedAt: 3,
+      }),
+    ];
+
+    expect(filterNotebookFragmentsBySearchText(fragments, "").map((f) => f.id)).toEqual([
+      "nf-a",
+      "nf-b",
+      "nf-c",
+    ]);
+    expect(
+      filterNotebookFragmentsBySearchText(fragments, "STAGING").map((f) => f.id)
+    ).toEqual(["nf-a"]);
+    expect(
+      filterNotebookFragmentsBySearchText(fragments, "hypothesis").map((f) => f.id)
+    ).toEqual(["nf-b"]);
+    expect(
+      filterNotebookFragmentsBySearchText(fragments, "alice").map((f) => f.id)
+    ).toEqual(["nf-a"]);
+    expect(
+      notebookFragmentMatchesSearchText(fragments[1]!, "Unverified")
+    ).toBe(false);
+
+    const view = buildPopupSessionNotebookTimelineView({
+      sessionId: `${INVESTIGATION_SESSION_ID_PREFIX}search`,
+      fragments,
+    });
+    expect(
+      filterPopupSessionNotebookTimelineRowsBySearchText(
+        view.fragments,
+        "phishing"
+      ).map((row) => row.fragmentId)
+    ).toEqual(["nf-b"]);
+    expect(
+      filterPopupSessionNotebookTimelineRowsBySearchText(
+        view.fragments,
+        "unverified"
+      ).map((row) => row.fragmentId)
+    ).toEqual(["nf-b"]);
+    expect(POPUP_SESSION_NOTEBOOK_SEARCH_NO_MATCHES_TEXT.length).toBeGreaterThan(
+      0
+    );
   });
 
   it("loads session notebook fragment timeline from storage", async () => {
@@ -317,7 +428,11 @@ describe("hoverCardNotebook", () => {
         sessionId: pageView.sessionId,
         pageScopeKey: pageView.pageScopeKey,
       }).emptyText
-    ).toBe(HOVER_CARD_NOTEBOOK_EMPTY_PAGE_TEXT);
+    ).toBe(
+      buildNotebookFragmentEmptyStateView({
+        primaryText: HOVER_CARD_NOTEBOOK_EMPTY_PAGE_TEXT,
+      }).composedText
+    );
   });
 
   it("adds, edits, and deletes notebook fragments for scopes", async () => {
@@ -419,5 +534,139 @@ describe("hoverCardNotebook", () => {
       allowed: false,
       reason: NOTEBOOK_FRAGMENT_AUTHORING_UNAVAILABLE_SESSION_TEXT,
     });
+  });
+
+  it("exposes explicit empty states and forbids screenshot capture UI in notebook MVP", () => {
+    expect(NOTEBOOK_FORBIDDEN_SCREENSHOT_UI_LABELS).toEqual([
+      "Screenshot",
+      "Capture screenshot",
+      "Take screenshot",
+      "Screen capture",
+      "Capture screen",
+      "Attach image",
+      "Upload image",
+    ]);
+    expect(findNotebookForbiddenScreenshotUiLabel("Add fragment")).toBeNull();
+    expect(findNotebookForbiddenScreenshotUiLabel("Take Screenshot now")).toBe(
+      "Take screenshot"
+    );
+    expect(() =>
+      assertNotebookSurfacesOmitScreenshotCaptureUi("Notebook fragments")
+    ).not.toThrow();
+    expect(() =>
+      assertNotebookSurfacesOmitScreenshotCaptureUi("Capture screenshot")
+    ).toThrow(/forbids screenshot capture UI/i);
+
+    expect(
+      findNotebookForbiddenCaptureApiCallInSource(
+        "await navigator.mediaDevices.getDisplayMedia({ video: true });"
+      )?.source
+    ).toMatch(/getDisplayMedia/);
+    expect(
+      findNotebookForbiddenCaptureApiCallInSource("const x = 1;")
+    ).toBeNull();
+
+    const here = dirname(fileURLToPath(import.meta.url));
+    const notebookSources = [
+      readFileSync(join(here, "hoverCardNotebook.ts"), "utf8"),
+      readFileSync(join(here, "../content/hoverCardOverlay.ts"), "utf8"),
+      readFileSync(join(here, "../popup/Popup.tsx"), "utf8"),
+    ];
+    for (const source of notebookSources) {
+      expect(findNotebookForbiddenCaptureApiCallInSource(source)).toBeNull();
+    }
+
+    const empty = buildNotebookFragmentEmptyStateView({
+      primaryText: HOVER_CARD_NOTEBOOK_EMPTY_IOC_TEXT,
+    });
+    expect(empty.composedText).toContain("Add a text fragment");
+    expect(empty.composedText).toContain(NOTEBOOK_FRAGMENT_TEXT_ONLY_EMPTY_HINT);
+    expect(empty.composedText.toLowerCase()).not.toContain("take screenshot");
+  });
+
+  it("decides when a legacy analyst note should migrate to an observation fragment", () => {
+    const existing = createNotebookFragment({
+      type: NOTEBOOK_FRAGMENT_TYPE.TAG,
+      body: "already-migrated",
+      createdAt: 1,
+      updatedAt: 1,
+    });
+
+    expect(
+      shouldMigrateLegacyAnalystNoteToObservationFragment({
+        existingIocFragments: [],
+        legacyNote: "  Review DNS logs.  ",
+      })
+    ).toBe(true);
+    expect(
+      shouldMigrateLegacyAnalystNoteToObservationFragment({
+        existingIocFragments: [existing],
+        legacyNote: "Review DNS logs.",
+      })
+    ).toBe(false);
+    expect(
+      shouldMigrateLegacyAnalystNoteToObservationFragment({
+        existingIocFragments: [],
+        legacyNote: "   ",
+      })
+    ).toBe(false);
+
+    const observation = buildObservationFragmentFromLegacyAnalystNote(
+      "  Host contacted C2.  "
+    );
+    expect(observation.type).toBe(NOTEBOOK_FRAGMENT_TYPE.OBSERVATION);
+    expect(observation.body).toBe("Host contacted C2.");
+  });
+
+  it("migrates a legacy Week 9 analyst note to an observation fragment on read", async () => {
+    store[STORAGE_KEY_ANALYST_NOTES] = {
+      "8.8.8.8": "Legacy free-text note from card.",
+    };
+
+    const migrated = await migrateLegacyAnalystNoteToObservationFragmentOnRead({
+      iocType: IOC_TYPE.IPV4,
+      value: "8.8.8.8",
+    });
+
+    expect(migrated).not.toBeNull();
+    expect(migrated?.type).toBe(NOTEBOOK_FRAGMENT_TYPE.OBSERVATION);
+    expect(migrated?.body).toBe("Legacy free-text note from card.");
+    expect(
+      await listStoredNotebookFragmentsForIoc(IOC_TYPE.IPV4, "8.8.8.8")
+    ).toEqual([
+      expect.objectContaining({
+        id: migrated!.id,
+        type: NOTEBOOK_FRAGMENT_TYPE.OBSERVATION,
+        body: "Legacy free-text note from card.",
+      }),
+    ]);
+    expect(await getStoredAnalystNote("8.8.8.8")).toBe("");
+    expect(getSessionAnalystNote("8.8.8.8")).toBe("");
+
+    const again = await migrateLegacyAnalystNoteToObservationFragmentOnRead({
+      iocType: IOC_TYPE.IPV4,
+      value: "8.8.8.8",
+    });
+    expect(again).toBeNull();
+    expect(
+      await listStoredNotebookFragmentsForIoc(IOC_TYPE.IPV4, "8.8.8.8")
+    ).toHaveLength(1);
+  });
+
+  it("loads notebook panel with legacy note migrated into the IOC observation tab", async () => {
+    setSessionAnalystNote("evil.example", "Session-cached legacy note.");
+
+    const view = await loadHoverCardNotebookPanelView({
+      iocType: IOC_TYPE.DOMAIN,
+      value: "evil.example",
+      pageUrl: "https://portal.example.com/case",
+      activeTab: "ioc",
+    });
+
+    expect(view.iocCount).toBe(1);
+    expect(view.fragments).toHaveLength(1);
+    expect(view.fragments[0]?.type).toBe(NOTEBOOK_FRAGMENT_TYPE.OBSERVATION);
+    expect(view.fragments[0]?.fullBody).toBe("Session-cached legacy note.");
+    expect(getSessionAnalystNote("evil.example")).toBe("");
   });
 });

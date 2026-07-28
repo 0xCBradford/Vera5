@@ -10,9 +10,9 @@ Everything below assumes the **production on-page overlay** (content script on t
 
 | Surface | When you use it |
 |---------|-----------------|
-| **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. Assign **Label**, **Pin**, and read **Session timeline** on the card when an investigation session is active. Use **Save to collection…** to add an indicator to a persistent collection. |
+| **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. Assign **Label**, **Pin**, and read **Session timeline** on the card when an investigation session is active. Use **Notebook** for typed investigation fragments (**Observation**, **Tag**, **Conclusion**, **Hypothesis**) on Indicator / Session / Page scopes, and free-text **Analyst notes** when you still use the legacy note field. Use **Save to collection…** to add an indicator to a persistent collection. |
 | **Command palette** | Keyboard-driven actions on the active tab: scan, enrich selection, open history, source health, tray export, clear highlights, and settings. See [Operator UX: command palette and quick actions](#operator-ux-command-palette-and-quick-actions). |
-| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page** / **Scan selection** / **Enrich selection**, manage the **Investigation session** (title, rollups, export, recent sessions, **Promote session to collection…**), review **Investigation history**, **Detected indicators** (**Save to collection…**, **Add filtered to collection…**), manage **IOC collections**, and read **Source operations** (cache, cooldown, per-source status, vendor quota hints). |
+| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page** / **Scan selection** / **Enrich selection**, manage the **Investigation session** (title, rollups, **Notebook fragments**, export, recent sessions, **Promote session to collection…**), review **Investigation history**, **Detected indicators** (**Save to collection…**, **Add filtered to collection…**), manage **IOC collections**, and read **Source operations** (cache, cooldown, per-source status, vendor quota hints). |
 | **Workspace sidebar** | Optional on-page tray from **Open sidebar** in the popup: filter indicators, **Save to collection…**, **Add filtered to collection…**, **Run macro…** on a row, **Run macro on filtered…** for the active type filter, copy subsets, and export templates while staying on the alert page. Pinned session indicators sort to the top. |
 | **Context menu** | Right-click selected text → **Enrich selection with Vera5** when the selection contains a detectable indicator. Uses the same trust gates and enrich pipeline as palette **Enrich selection**. |
 | **Settings (options) page** | Configure API keys, enable sources, set manual-only and auto-scan, clear the enrichment cache, export or import settings. Source health details live in the popup **Source operations** section—not a duplicate panel here. |
@@ -376,7 +376,8 @@ Sessions track:
 | **IOC rollups** | Total indicator count and per-type breakdown (domains, IPv4, URLs, hashes, CVEs, and so on). |
 | **Activity counts** | How many enrich and export actions ran while the session was active. |
 | **Per-IOC memory** | Optional **Label**, **Pin**, and **Session timeline** (first seen, enrich events, export events) on the hover card. |
-| **Session export** | One-click **Markdown**, **JSON**, or **CSV** case artifacts with enrichment snippets and source attribution. |
+| **Investigation notebook** | Typed text fragments attached to an indicator, the active session, or the page—see [Investigation notebook](#investigation-notebook). |
+| **Session export** | One-click **Markdown**, **JSON**, or **CSV** case artifacts with enrichment snippets and source attribution (Markdown can include a **Session notebook** section). |
 
 ### Starting and naming a session
 
@@ -415,7 +416,7 @@ flowchart TD
 6. **Enrich** high-value IOCs (landing domains, redirect URLs, sender-related IPs, attachment hashes) using **›** on highlights or the hover card.
 7. **Label** indicators on the hover card (**Benign**, **Internal**, **Suppress false positive**, **Case important**) to record triage decisions locally. For Benign / Internal / Suppress false positive, confirm the learn dialog when offered if you want a lasting local **noise rule** (see [Noise rule lifecycle](#noise-rule-lifecycle)).
 8. **Pin** priority IOCs with the **Pin** control on the hover card; pinned rows rise to the top of the workspace sidebar list.
-9. **Export the session** (**Copy Markdown**, **Copy JSON**, **Download CSV**, and so on) for case notes, handoff, or ticket paste. Exports redact API keys and raw vendor secrets; they include session summary, indicator rows, enrichment snippets, and source attribution.
+9. **Export the session** (**Copy Markdown**, **Copy JSON**, **Download CSV**, and so on) for case notes, handoff, or ticket paste. Exports redact API keys and raw vendor secrets; they include session summary, indicator rows, enrichment snippets, and source attribution. When you authored **Session**-scoped notebook fragments, full **Copy Markdown** / **Download Markdown** also appends a **Session notebook** section—see [Investigation notebook](#investigation-notebook).
 
 Practice locally with [examples/sample-alert.html](../examples/sample-alert.html), which mixes IPv4, domain, URL, hash, and CVE-style indicators in alert prose.
 
@@ -447,9 +448,11 @@ When an active session exists, the popup **Export session** group offers:
 
 | Format | Best for |
 |--------|----------|
-| **Markdown** | Case notes, wiki pages, ticket comments—with summary header, indicator table, enrichment sections, and attribution. |
+| **Markdown** | Case notes, wiki pages, ticket comments—with summary header, indicator table, enrichment sections, attribution, and (when session-attached fragments exist) a **Session notebook** section. |
 | **JSON** | Automation, downstream parsers, or archival (`schemaVersion`, session metadata, IOC array with enrichments). |
 | **CSV** | Spreadsheets and SOAR ingest—one row per IOC using the same CSV row contract as tray subset export. |
+
+Optional **IOC export only** (checkbox under **Export session**) keeps indicators and enrichment while **omitting** notebook fragments from the export.
 
 Use **Copy** for clipboard paste or **Download** for a file. Session exports **never include API keys** or `rawVendorJson` secrets; vendor JSON in notes or summaries is redacted when detected.
 
@@ -464,6 +467,63 @@ The popup **Source operations** section summarizes enrichment health: global rat
 | Team or cloud case sync | Export Markdown/JSON and share through your existing case tools. |
 | Cross-tab “seen elsewhere” alerts | Re-scan or reopen the session on the relevant tab. |
 | Full hosted case management | Local session + export only. |
+
+## Investigation notebook
+
+Vera5’s **Investigation notebook** is a text-first layer for case writing: typed fragments you attach to an **indicator**, the active **investigation session**, or the **page** you are reviewing. Fragments stay in **local extension storage** on your profile. There is no cloud notebook sync, shared team notebook, or full document-management product in the current release.
+
+Bodies are plain text or a small markdown subset (**bold**, lists, inline and fenced `code`). The overlay renders that subset with safe DOM text—raw HTML tags stay inert. The notebook is **text-only**: there is no screenshot or screen-capture control on notebook surfaces.
+
+### Fragment types
+
+| Type | Use when |
+|------|----------|
+| **Observation** | A logged finding from the investigation (what you saw on the page, in logs, or from enrichment). |
+| **Tag** | A lightweight label for triage grouping. |
+| **Conclusion** | Your judgment for this investigation (disposition-style prose). |
+| **Hypothesis** | A working theory that is not confirmed. Hypothesis rows show an **Unverified** badge—treat them as unverified until you validate them. |
+
+### Scopes
+
+On the hover card **Notebook** section, choose a scope tab before you add or edit:
+
+| Scope | Attaches to | Authoring gate |
+|-------|-------------|----------------|
+| **Indicator** | The IOC open on the overlay | Always available for that highlight. |
+| **Session** | The active investigation session | Requires an active session; otherwise the empty state tells you to start one. |
+| **Page** | The current page URL scope | Available when Vera5 can build a page scope key for the tab URL. |
+
+The extension workspace lists **Notebook fragments** for the **active session** (session-attached rows) with search-by-text across body, type, and related labels.
+
+### Authoring
+
+1. Open a highlight on the overlay (or focus a highlight and press **Enter** / **Space**).
+2. Open **Notebook**, pick **Indicator**, **Session**, or **Page**.
+3. Choose a fragment type, enter a short body, and save with **Add fragment**.
+4. Use **Edit** / **Delete** on an existing row when you need to revise.
+
+Free-text **Analyst notes** remain on the overlay as a separate field. When an IOC has **no** notebook fragments yet and still has a non-empty free-text note, Vera5 migrates that note to an **Observation** fragment on read and clears the legacy note for that IOC.
+
+### Export paths
+
+| Path | What operators get today |
+|------|--------------------------|
+| **Session export → Markdown** (full scope) | Appends a **`## Session notebook`** section built from **session-attached** fragments (chronological). Indicator-only or page-only attachments do not appear in that section unless they are also attached to the session. |
+| **Session export → IOC export only** | Omits notebook fragments while keeping session metadata, indicators, and enrichment snippets. |
+| **Session export → JSON / CSV** | Indicator and enrichment handoff; notebook content for case paste is intended via **Markdown** **Session notebook**. |
+| **Workspace snapshot JSON** (library) | Snapshot builders can include a `notebookFragments` block from local notebook storage. There is **no** **Export workspace snapshot** control in the extension workspace UI today—use **Session export** for operator handoff. |
+| **Ticket / tray template appendix** (library) | An Obsidian-friendly notebook appendix helper exists on the template export library path when callers supply fragments. There is no separate overlay toggle that always appends it. |
+
+Per-indicator overlay markdown/JSON can still include a legacy **Analyst notes** section when a free-text note remains for that IOC. Typed notebook fragments for case notes should go through **Session export** Markdown (session-attached) or your own paste from the overlay list. Artifact contracts for enrichment exports: [export-artifacts.md](export-artifacts.md).
+
+### What Investigation notebook does not do
+
+| Not in scope | What to use instead |
+|--------------|---------------------|
+| Cloud or shared team notebooks | Export **Session notebook** Markdown and paste into your case tool. |
+| Full document management (folders, multi-page docs) | Keep fragments short; use your wiki or ticket system for long-form write-ups. |
+| Screenshots or screen capture in fragments | Text bodies only; capture images outside Vera5 if needed. |
+| Replacing free-text **Analyst notes** entirely | Both surfaces ship today; migration applies only when an IOC has no fragments yet. |
 
 ## Investigation timeline event schema
 
@@ -1365,3 +1425,5 @@ Full control table and trust expectations: [security-model.md — Portable profi
 - [Known-good lists vs noise rules vs composite score](#known-good-lists-vs-noise-rules-vs-composite-score) — how the three triage mechanisms differ
 - [architecture.md](architecture.md) — supported indicator types and connector scope
 - [export-artifacts.md](export-artifacts.md) — per-indicator markdown and JSON export contract
+- [Investigation notebook](#investigation-notebook) — fragment types (**Observation**, **Tag**, **Conclusion**, **Hypothesis**) and session / snapshot export paths
+- [README.md](../README.md) — install, BYOK/BYOA, and shipped capability summary

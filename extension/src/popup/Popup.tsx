@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   navigateToIocAnchorMessage,
   enrichIocMessage,
@@ -158,6 +158,9 @@ import {
   buildInvestigationSessionExportInput,
   copyInvestigationSessionExportToClipboard,
   downloadInvestigationSessionExportFile,
+  INVESTIGATION_SESSION_EXPORT_IOC_ONLY_DESCRIPTION,
+  INVESTIGATION_SESSION_EXPORT_IOC_ONLY_LABEL,
+  INVESTIGATION_SESSION_EXPORT_SCOPE,
   type InvestigationSessionExportFormat,
 } from "../lib/investigationSessionExport";
 import {
@@ -198,20 +201,29 @@ import {
   NOTEBOOK_FRAGMENT_EDIT_LABEL,
   NOTEBOOK_FRAGMENT_SAVE_LABEL,
   NOTEBOOK_FRAGMENT_SAVED_FEEDBACK,
+  NOTEBOOK_FRAGMENT_TEXT_ONLY_EMPTY_HINT,
   NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL,
   POPUP_SESSION_NOTEBOOK_EMPTY_TEXT,
   POPUP_SESSION_NOTEBOOK_LIST_ARIA_LABEL,
+  POPUP_SESSION_NOTEBOOK_SEARCH_LABEL,
+  POPUP_SESSION_NOTEBOOK_SEARCH_NO_MATCHES_TEXT,
+  POPUP_SESSION_NOTEBOOK_SEARCH_PLACEHOLDER,
   POPUP_SESSION_NOTEBOOK_SECTION_LABEL,
   addNotebookFragmentForSession,
+  buildNotebookFragmentEmptyStateView,
   defaultNotebookFragmentType,
   deleteNotebookFragment,
   editNotebookFragment,
+  filterPopupSessionNotebookTimelineRowsBySearchText,
   listNotebookFragmentTypeOptions,
   loadPopupSessionNotebookFragmentTimeline,
   type PopupSessionNotebookTimelineRow,
 } from "../lib/hoverCardNotebook";
 import { STORAGE_KEY_NOTEBOOK_FRAGMENTS } from "../lib/notebookFragmentStorage";
-import type { NotebookFragmentType } from "../lib/notebookFragment";
+import {
+  appendNotebookFragmentMarkdownLite,
+  type NotebookFragmentType,
+} from "../lib/notebookFragment";
 import {
   buildTimelineEventNavigationAriaLabel,
   buildTimelineEventRowAriaLabel,
@@ -1856,6 +1868,37 @@ function InvestigationSessionTimelinePanel({
   );
 }
 
+function NotebookFragmentMarkdownBody({
+  body,
+  title,
+}: {
+  body: string;
+  title?: string;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    appendNotebookFragmentMarkdownLite(container, body, document);
+  }, [body]);
+
+  return (
+    <div
+      ref={containerRef}
+      title={title}
+      style={{
+        color: POPUP_THEME.text,
+        wordBreak: "break-word",
+        fontSize: 12,
+        lineHeight: 1.45,
+      }}
+    />
+  );
+}
+
 function InvestigationSessionNotebookTimelinePanel({
   sessionId,
 }: {
@@ -1874,6 +1917,11 @@ function InvestigationSessionNotebookTimelinePanel({
   const [editBody, setEditBody] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  useEffect(() => {
+    setSearchQuery("");
+  }, [sessionId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2006,6 +2054,11 @@ function InvestigationSessionNotebookTimelinePanel({
   };
 
   const typeOptions = listNotebookFragmentTypeOptions();
+  const filteredRows = filterPopupSessionNotebookTimelineRowsBySearchText(
+    rows,
+    searchQuery
+  );
+  const searchActive = searchQuery.trim().length > 0;
   const filterFieldStyle: CSSProperties = {
     display: "block",
     width: "100%",
@@ -2031,9 +2084,52 @@ function InvestigationSessionNotebookTimelinePanel({
       >
         {POPUP_SESSION_NOTEBOOK_SECTION_LABEL}
       </h3>
+      {loaded && rows.length > 0 ? (
+        <label
+          style={{
+            display: "block",
+            fontSize: 12,
+            color: POPUP_THEME.text,
+            marginBottom: 8,
+          }}
+        >
+          {POPUP_SESSION_NOTEBOOK_SEARCH_LABEL}
+          <input
+            type="search"
+            value={searchQuery}
+            placeholder={POPUP_SESSION_NOTEBOOK_SEARCH_PLACEHOLDER}
+            aria-label={POPUP_SESSION_NOTEBOOK_SEARCH_LABEL}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            style={filterFieldStyle}
+          />
+        </label>
+      ) : null}
       {!loaded ? null : rows.length === 0 ? (
-        <p style={{ ...trayStatusStyle(), margin: 0 }} aria-live="polite">
-          {POPUP_SESSION_NOTEBOOK_EMPTY_TEXT}
+        <div
+          role="status"
+          data-vera5-notebook-empty="true"
+          aria-live="polite"
+          style={{ margin: 0 }}
+        >
+          <p style={{ ...trayStatusStyle(), margin: 0 }}>
+            {POPUP_SESSION_NOTEBOOK_EMPTY_TEXT}
+          </p>
+          <p style={{ ...trayStatusStyle(), margin: "4px 0 0" }}>
+            {NOTEBOOK_FRAGMENT_TEXT_ONLY_EMPTY_HINT}
+          </p>
+        </div>
+      ) : filteredRows.length === 0 ? (
+        <p
+          role="status"
+          data-vera5-notebook-empty={searchActive ? "search" : "true"}
+          style={{ ...trayStatusStyle(), margin: 0 }}
+          aria-live="polite"
+        >
+          {searchActive
+            ? POPUP_SESSION_NOTEBOOK_SEARCH_NO_MATCHES_TEXT
+            : buildNotebookFragmentEmptyStateView({
+                primaryText: POPUP_SESSION_NOTEBOOK_EMPTY_TEXT,
+              }).composedText}
         </p>
       ) : (
         <ol
@@ -2049,7 +2145,7 @@ function InvestigationSessionNotebookTimelinePanel({
             overflowY: "auto",
           }}
         >
-          {rows.map((row) => (
+          {filteredRows.map((row) => (
             <li
               key={row.fragmentId}
               title={row.hint}
@@ -2140,15 +2236,10 @@ function InvestigationSessionNotebookTimelinePanel({
                       </span>
                     ) : null}
                   </span>
-                  <span
-                    style={{
-                      color: POPUP_THEME.text,
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {row.bodyPreview}
-                  </span>
+                  <NotebookFragmentMarkdownBody
+                    body={row.fullBody}
+                    title={row.fullBody}
+                  />
                   {row.authorLabel ? (
                     <span style={{ color: POPUP_THEME.muted }}>
                       {row.authorLabel}
@@ -3856,6 +3947,7 @@ export function Popup() {
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [sessionExportMessage, setSessionExportMessage] = useState<string | null>(null);
+  const [sessionExportIocOnly, setSessionExportIocOnly] = useState(false);
   const [sourceOps, setSourceOps] = useState<EnrichmentSourceOpsSnapshot | null>(null);
   const [sourceOpsReady, setSourceOpsReady] = useState(false);
   const [sourceOpsCollapsed, setSourceOpsCollapsed] = useState(true);
@@ -4404,6 +4496,9 @@ export function Popup() {
     return buildInvestigationSessionExportInput({
       session: activeSession,
       entries: scanSummary?.entries ?? [],
+      exportScope: sessionExportIocOnly
+        ? INVESTIGATION_SESSION_EXPORT_SCOPE.IOC_ONLY
+        : INVESTIGATION_SESSION_EXPORT_SCOPE.FULL,
     });
   };
 
@@ -5612,6 +5707,44 @@ export function Popup() {
               >
                 Export session
               </h3>
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: 8,
+                  marginBottom: 8,
+                  fontSize: 12,
+                  color: POPUP_THEME.text,
+                  cursor: ready && sessionTitleReady ? "pointer" : "not-allowed",
+                  opacity: ready && sessionTitleReady ? 1 : 0.65,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={sessionExportIocOnly}
+                  disabled={!ready || !sessionTitleReady}
+                  onChange={(event) => {
+                    setSessionExportIocOnly(event.target.checked);
+                  }}
+                  aria-label={INVESTIGATION_SESSION_EXPORT_IOC_ONLY_LABEL}
+                  style={{ marginTop: 2 }}
+                />
+                <span>
+                  <span style={{ fontWeight: 600 }}>
+                    {INVESTIGATION_SESSION_EXPORT_IOC_ONLY_LABEL}
+                  </span>
+                  <span
+                    style={{
+                      display: "block",
+                      marginTop: 2,
+                      color: POPUP_THEME.muted,
+                      fontWeight: 400,
+                    }}
+                  >
+                    {INVESTIGATION_SESSION_EXPORT_IOC_ONLY_DESCRIPTION}
+                  </span>
+                </span>
+              </label>
               <div
                 role="group"
                 aria-label="Copy session export"

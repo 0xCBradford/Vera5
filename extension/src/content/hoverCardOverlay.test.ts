@@ -21,7 +21,12 @@ import {
   HOVER_CARD_SOURCE_METADATA_INFORMATIONAL_TOOLTIP,
 } from "../lib/hoverCardEnrichment";
 import * as hoverCardCoOccurrence from "../lib/hoverCardCoOccurrence";
+import * as hoverCardRelationship from "../lib/hoverCardRelationship";
 import * as hoverCardNotebook from "../lib/hoverCardNotebook";
+import {
+  HOVER_CARD_RELATIONSHIP_LABEL,
+  HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL,
+} from "../lib/hoverCardRelationship";
 import {
   HOVER_CARD_NOTEBOOK_SECTION_ARIA_LABEL,
 } from "../lib/hoverCardNotebook";
@@ -54,6 +59,7 @@ import {
   hideHoverCard,
   HOVER_CARD_COPY_BUTTON_CLASS,
   HOVER_CARD_CO_OCCURRENCE_CLASS,
+  HOVER_CARD_RELATIONSHIP_CLASS,
   HOVER_CARD_NOTEBOOK_CLASS,
   HOVER_CARD_NOTEBOOK_TAB_CLASS,
   HOVER_CARD_NOTEBOOK_TAB_ACTIVE_CLASS,
@@ -634,6 +640,61 @@ describe("co-occurrence panel", () => {
       expect(
         panel.querySelector(".vera5-hover-card-co-occurrence-feedback")?.textContent
       ).toBe("Could not find example.com on the page. Scan again to refresh the list.");
+    });
+  });
+});
+
+describe("relationship panel", () => {
+  beforeEach(() => {
+    document.body.replaceChildren();
+    document.getElementById(HOVER_CARD_HOST_ID)?.remove();
+  });
+
+  afterEach(() => {
+    setAutoEnrichmentFetcherForTests(null);
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    document.body.replaceChildren();
+    document.getElementById(HOVER_CARD_HOST_ID)?.remove();
+  });
+
+  it("renders previously appeared with list rows (type, truncated value, last seen, session count)", async () => {
+    vi.spyOn(
+      hoverCardRelationship,
+      "loadHoverCardRelationshipPanelView"
+    ).mockResolvedValue({
+      layout: "list",
+      focusEntityKey: "ipv4:185.220.101.1",
+      entries: [
+        {
+          edgeId: "re-test",
+          relationship: "co_seen",
+          relatedEntityKey: "domain:evil.example",
+          iocType: IOC_TYPE.DOMAIN,
+          value: "evil.example",
+          lastSeen: Date.UTC(2026, 6, 28),
+          sessionCount: 2,
+        },
+      ],
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "185.220.101.1",
+      type: IOC_TYPE.IPV4,
+    });
+
+    const section = panel.querySelector(`.${HOVER_CARD_RELATIONSHIP_CLASS}`);
+    expect(section).not.toBeNull();
+    expect(section?.getAttribute("aria-label")).toBe(
+      HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL
+    );
+    expect(section?.getAttribute("data-vera5-relationship-layout")).toBe("list");
+    expect(section?.textContent).toContain(HOVER_CARD_RELATIONSHIP_LABEL);
+
+    await vi.waitFor(() => {
+      expect(section?.textContent).toContain("DOM · evil.example");
+      expect(section?.textContent).toContain("Last seen:");
+      expect(section?.textContent).toContain("2 sessions");
     });
   });
 });

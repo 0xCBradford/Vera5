@@ -666,6 +666,13 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("Export session");
     });
+    expect(mounted?.container.textContent).toContain("IOC export only");
+    expect(mounted?.container.textContent).toContain(
+      "Omit notebook fragments from the export"
+    );
+    expect(
+      mounted?.container.querySelector('[aria-label="IOC export only"]')
+    ).not.toBeNull();
     expect(mounted?.container.textContent).toContain("Copy Markdown");
     expect(mounted?.container.textContent).toContain("Copy JSON");
     expect(mounted?.container.textContent).toContain("Copy CSV");
@@ -710,13 +717,25 @@ describe("Popup IOC tray", () => {
 
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain(
-        "No notebook fragments for this session."
+        "No notebook fragments for this session yet."
       );
     });
     expect(mounted?.container.textContent).toContain("Notebook fragments");
+    expect(mounted?.container.textContent).toContain(
+      "Text-only notebook — screenshot capture is not available."
+    );
+    expect(
+      mounted?.container.querySelector('[data-vera5-notebook-empty="true"]')
+    ).not.toBeNull();
     expect(
       mounted?.container.querySelector('[aria-label="Session notebook fragments"]')
     ).toBeNull();
+    expect(mounted?.container.textContent?.toLowerCase()).not.toContain(
+      "take screenshot"
+    );
+    expect(mounted?.container.textContent?.toLowerCase()).not.toMatch(
+      /capture screenshot|screen capture|attach image/
+    );
   });
 
   it("shows session notebook fragments in chronological order", async () => {
@@ -765,18 +784,17 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(
-        mounted?.container.querySelector(
-          '[aria-label="Session notebook fragments"]'
-        )
-      ).not.toBeNull();
+      const list = mounted?.container.querySelector(
+        '[aria-label="Session notebook fragments"]'
+      );
+      expect(list).not.toBeNull();
+      expect(list?.textContent).toMatch(
+        /Earlier session observation[\s\S]*Middle session hypothesis[\s\S]*Later session conclusion/
+      );
     });
 
     const notebookList = mounted?.container.querySelector(
       '[aria-label="Session notebook fragments"]'
-    );
-    expect(notebookList?.textContent).toMatch(
-      /Earlier session observation[\s\S]*Middle session hypothesis[\s\S]*Later session conclusion/
     );
     const rows = notebookList?.querySelectorAll("li") ?? [];
     expect(rows.length).toBe(3);
@@ -789,6 +807,101 @@ describe("Popup IOC tray", () => {
       mounted?.container.querySelector('button[aria-label="Edit Observation"]')
     ).not.toBeNull();
     expect(mounted?.container.textContent).toContain("Add fragment");
+  });
+
+  it("searches session notebook fragments by text in the popup", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      activeSession: sampleActiveSession,
+      localStore: {
+        notebookFragments: {
+          schemaVersion: 4,
+          updatedAt: 500,
+          fragments: [
+            {
+              id: "nf-popup-later",
+              type: "conclusion",
+              body: "Later session conclusion",
+              createdAt: 400,
+              updatedAt: 400,
+            },
+            {
+              id: "nf-popup-earlier",
+              type: "observation",
+              body: "Earlier session observation",
+              createdAt: 150,
+              updatedAt: 150,
+            },
+            {
+              id: "nf-popup-hyp",
+              type: "hypothesis",
+              body: "Middle session hypothesis",
+              createdAt: 275,
+              updatedAt: 275,
+            },
+          ],
+          iocAttachments: {},
+          sessionAttachments: {
+            "vera5-inv-popup-test": [
+              "nf-popup-later",
+              "nf-popup-earlier",
+              "nf-popup-hyp",
+            ],
+          },
+          pageAttachments: {},
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector('input[aria-label="Search fragments"]')
+      ).not.toBeNull();
+    });
+
+    const searchInput = mounted?.container.querySelector(
+      'input[aria-label="Search fragments"]'
+    ) as HTMLInputElement | null;
+    expect(searchInput).not.toBeNull();
+
+    flushSync(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(searchInput!, "hypothesis");
+      searchInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      const list = mounted?.container.querySelector(
+        '[aria-label="Session notebook fragments"]'
+      );
+      expect(list?.querySelectorAll("li").length).toBe(1);
+      expect(list?.textContent).toContain("Middle session hypothesis");
+      expect(list?.textContent).not.toContain("Earlier session observation");
+    });
+
+    flushSync(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      )?.set;
+      setter?.call(searchInput!, "zzzz-no-match");
+      searchInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain(
+        "No fragments match this search. Clear the search or try different text."
+      );
+      expect(
+        mounted?.container.querySelector(
+          '[aria-label="Session notebook fragments"]'
+        )
+      ).toBeNull();
+    });
   });
 
   it("adds and edits a session notebook fragment from the popup", async () => {

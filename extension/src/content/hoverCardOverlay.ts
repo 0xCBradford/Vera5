@@ -129,6 +129,18 @@ import {
   loadHoverCardCoOccurrencePanelView,
 } from "../lib/hoverCardCoOccurrence";
 import {
+  HOVER_CARD_RELATIONSHIP_EMPTY_TEXT,
+  HOVER_CARD_RELATIONSHIP_LABEL,
+  HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL,
+  RELATIONSHIP_HOVER_UI_LAYOUT,
+  buildRelationshipEntryDisplaysForView,
+  formatRelationshipEntryAccessibleLabel,
+  loadHoverCardRelationshipPanelView,
+} from "../lib/hoverCardRelationship";
+import {
+  appendNotebookFragmentMarkdownLite,
+} from "../lib/notebookFragment";
+import {
   HOVER_CARD_NOTEBOOK_LABEL,
   HOVER_CARD_NOTEBOOK_SECTION_ARIA_LABEL,
   NOTEBOOK_FRAGMENT_ADD_FORM_ARIA_LABEL,
@@ -374,6 +386,13 @@ export const HOVER_CARD_CO_OCCURRENCE_ITEM_BUTTON_CLASS =
   "vera5-hover-card-co-occurrence-item-button";
 export const HOVER_CARD_CO_OCCURRENCE_FEEDBACK_CLASS =
   "vera5-hover-card-co-occurrence-feedback";
+export const HOVER_CARD_RELATIONSHIP_CLASS = "vera5-hover-card-relationship";
+export const HOVER_CARD_RELATIONSHIP_LABEL_CLASS =
+  "vera5-hover-card-relationship-label";
+export const HOVER_CARD_RELATIONSHIP_LIST_CLASS =
+  "vera5-hover-card-relationship-list";
+export const HOVER_CARD_RELATIONSHIP_ITEM_CLASS =
+  "vera5-hover-card-relationship-item";
 export const HOVER_CARD_NOTEBOOK_CLASS = "vera5-hover-card-notebook";
 export const HOVER_CARD_NOTEBOOK_LABEL_CLASS = "vera5-hover-card-notebook-label";
 export const HOVER_CARD_NOTEBOOK_TABS_CLASS = "vera5-hover-card-notebook-tabs";
@@ -2209,6 +2228,62 @@ function createCoOccurrenceSection(
   return section;
 }
 
+function createRelationshipSection(
+  payload: Pick<HoverCardOverlayPayload, "type" | "value">,
+  doc: Document
+): HTMLElement {
+  const section = doc.createElement("section");
+  section.className = HOVER_CARD_RELATIONSHIP_CLASS;
+  section.setAttribute("aria-label", HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL);
+  section.dataset.vera5RelationshipLayout = RELATIONSHIP_HOVER_UI_LAYOUT;
+
+  const heading = createSectionHeading(HOVER_CARD_RELATIONSHIP_LABEL, doc);
+  heading.id = "vera5-relationship-heading";
+  heading.className = HOVER_CARD_RELATIONSHIP_LABEL_CLASS;
+
+  const list = doc.createElement("ul");
+  list.className = HOVER_CARD_RELATIONSHIP_LIST_CLASS;
+  list.setAttribute("aria-labelledby", heading.id);
+
+  const emptyItem = doc.createElement("li");
+  emptyItem.className = HOVER_CARD_RELATIONSHIP_ITEM_CLASS;
+  emptyItem.textContent = HOVER_CARD_RELATIONSHIP_EMPTY_TEXT;
+  list.appendChild(emptyItem);
+
+  section.appendChild(heading);
+  section.appendChild(list);
+
+  void loadHoverCardRelationshipPanelView({
+    iocType: payload.type,
+    value: payload.value,
+  }).then((view) => {
+    list.replaceChildren();
+    if (view.entries.length === 0) {
+      const item = doc.createElement("li");
+      item.className = HOVER_CARD_RELATIONSHIP_ITEM_CLASS;
+      item.textContent = HOVER_CARD_RELATIONSHIP_EMPTY_TEXT;
+      list.appendChild(item);
+      return;
+    }
+
+    for (const display of buildRelationshipEntryDisplaysForView(view)) {
+      const item = doc.createElement("li");
+      item.className = HOVER_CARD_RELATIONSHIP_ITEM_CLASS;
+      item.textContent = display.lineText;
+      item.setAttribute(
+        "aria-label",
+        formatRelationshipEntryAccessibleLabel(display)
+      );
+      if (display.displayValue !== display.fullValue) {
+        item.title = display.fullValue;
+      }
+      list.appendChild(item);
+    }
+  });
+
+  return section;
+}
+
 function resetHoverCardSaveToCollectionState(): void {
   hoverCardSaveToCollectionOpen = false;
   hoverCardSaveToCollectionFeedback = null;
@@ -2544,12 +2619,16 @@ function renderNotebookFragmentList(
   if (view.fragments.length === 0) {
     empty.textContent = view.emptyText;
     empty.hidden = false;
+    empty.setAttribute("role", "status");
+    empty.dataset.vera5NotebookEmpty = "true";
     list.hidden = true;
     return;
   }
 
   empty.hidden = true;
   empty.textContent = "";
+  empty.removeAttribute("role");
+  delete empty.dataset.vera5NotebookEmpty;
   list.hidden = false;
 
   for (const row of view.fragments) {
@@ -2638,12 +2717,10 @@ function renderNotebookFragmentList(
       item.appendChild(badge);
     }
 
-    const body = doc.createElement("p");
+    const body = doc.createElement("div");
     body.className = HOVER_CARD_NOTEBOOK_ITEM_BODY_CLASS;
-    body.textContent = row.bodyPreview;
-    if (row.bodyPreview !== row.fullBody) {
-      body.title = row.fullBody;
-    }
+    appendNotebookFragmentMarkdownLite(body, row.fullBody, doc);
+    body.title = row.fullBody;
     item.appendChild(body);
 
     const actions = doc.createElement("div");
@@ -3208,6 +3285,7 @@ export function buildHoverCardPanel(
   );
   const iocTimelineSection = createIocTimelineSection(payload.value, doc);
   const coOccurrenceSection = createCoOccurrenceSection(payload, doc);
+  const relationshipSection = createRelationshipSection(payload, doc);
   const notebookSection = createNotebookSection(payload, doc);
   const saveToCollectionSection = createSaveToCollectionSection(payload, doc);
   const exportSection = createExportSection(payload, doc);
@@ -3363,6 +3441,8 @@ export function buildHoverCardPanel(
   panel.appendChild(iocLabelSection);
   coOccurrenceSection.style.marginBottom = showFooter ? "8px" : "0";
   panel.appendChild(coOccurrenceSection);
+  relationshipSection.style.marginBottom = showFooter ? "8px" : "0";
+  panel.appendChild(relationshipSection);
   notebookSection.style.marginBottom = showFooter ? "8px" : "0";
   panel.appendChild(notebookSection);
   iocTimelineSection.style.marginBottom = showFooter ? "8px" : "0";

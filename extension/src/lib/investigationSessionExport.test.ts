@@ -12,6 +12,8 @@ import {
   buildInvestigationSessionExportFilename,
   buildInvestigationSessionExportInput,
   buildInvestigationSessionExportMarkdown,
+  buildInvestigationSessionNotebookMarkdownSection,
+  appendInvestigationSessionNotebookMarkdownSection,
   copyInvestigationSessionExportToClipboard,
   containsInvestigationSessionExportSecrets,
   downloadInvestigationSessionExportFile,
@@ -20,8 +22,13 @@ import {
   INVESTIGATION_SESSION_EXPORT_ENRICHMENT_HEADING,
   INVESTIGATION_SESSION_EXPORT_HEADING,
   INVESTIGATION_SESSION_EXPORT_IOC_TABLE_HEADING,
+  INVESTIGATION_SESSION_EXPORT_IOC_ONLY_LABEL,
+  INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING,
+  INVESTIGATION_SESSION_EXPORT_NOTEBOOK_EMPTY_TEXT,
   INVESTIGATION_SESSION_EXPORT_SCHEMA_VERSION,
+  INVESTIGATION_SESSION_EXPORT_SCOPE,
   INVESTIGATION_SESSION_EXPORT_SUMMARY_HEADING,
+  resolveNotebookFragmentsForSessionExport,
   serializeInvestigationSessionExportJson,
 } from "./investigationSessionExport";
 import { renderTraySubsetExportTemplate } from "./exportTemplates";
@@ -30,6 +37,15 @@ import { REDACTED_VALUE_PLACEHOLDER } from "./enrichmentRawResponse";
 import * as copyText from "./copyText";
 import * as tabScanSummary from "./tabScanSummary";
 import { IOC_TYPE } from "./iocRegex";
+import {
+  NOTEBOOK_FRAGMENT_HYPOTHESIS_UNVERIFIED_BADGE,
+  NOTEBOOK_FRAGMENT_TYPE,
+  createNotebookFragment,
+} from "./notebookFragment";
+import {
+  attachStoredNotebookFragmentToSession,
+  upsertStoredNotebookFragment,
+} from "./notebookFragmentStorage";
 
 const EXPORTED_AT = "2026-06-10T12:00:00.000Z";
 
@@ -335,6 +351,263 @@ describe("investigationSessionExport redaction", () => {
         serializeInvestigationSessionExportJson(exportInput)
       )
     ).toBe(false);
+  });
+});
+
+describe("investigationSessionExport session notebook markdown", () => {
+  const observation = createNotebookFragment({
+    id: "nf-export-obs",
+    type: NOTEBOOK_FRAGMENT_TYPE.OBSERVATION,
+    body: "Repeated beaconing to example.com",
+    createdAt: 1_700_000_000_000,
+    updatedAt: 1_700_000_000_100,
+    authorLabel: "analyst-a",
+  });
+  const hypothesis = createNotebookFragment({
+    id: "nf-export-hyp",
+    type: NOTEBOOK_FRAGMENT_TYPE.HYPOTHESIS,
+    body: "Possible phishing kit hosting",
+    createdAt: 1_700_000_000_200,
+    updatedAt: 1_700_000_000_300,
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it("builds a chronological session notebook markdown section", () => {
+    const section = buildInvestigationSessionNotebookMarkdownSection([
+      hypothesis,
+      observation,
+    ]);
+
+    expect(section).toContain(`## ${INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING}`);
+    expect(section).toContain("### Observation");
+    expect(section).toContain("Repeated beaconing to example.com");
+    expect(section).toContain("analyst-a");
+    expect(section).toContain(
+      `### Hypothesis (${NOTEBOOK_FRAGMENT_HYPOTHESIS_UNVERIFIED_BADGE})`
+    );
+    expect(section.indexOf("Repeated beaconing")).toBeLessThan(
+      section.indexOf("Possible phishing kit")
+    );
+  });
+
+  it("builds an empty notebook section for append consumers", () => {
+    expect(buildInvestigationSessionNotebookMarkdownSection([])).toContain(
+      INVESTIGATION_SESSION_EXPORT_NOTEBOOK_EMPTY_TEXT
+    );
+  });
+
+  it("appends the notebook section to existing session export markdown", () => {
+    const base = buildInvestigationSessionExportMarkdown({
+      session: sampleSession,
+      records: [plainDomainRecord],
+      exportedAt: EXPORTED_AT,
+    });
+    expect(base).not.toContain(INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING);
+
+    const withNotebook = appendInvestigationSessionNotebookMarkdownSection(base, [
+      observation,
+    ]);
+
+    expect(withNotebook).toContain(`## ${INVESTIGATION_SESSION_EXPORT_ATTRIBUTION_HEADING}`);
+    expect(withNotebook).toContain(`## ${INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING}`);
+    expect(withNotebook.indexOf(INVESTIGATION_SESSION_EXPORT_ATTRIBUTION_HEADING)).toBeLessThan(
+      withNotebook.indexOf(INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING)
+    );
+    expect(withNotebook).toContain("Repeated beaconing to example.com");
+  });
+
+  it("includes notebook fragments in session markdown when provided on input", () => {
+    const markdown = buildInvestigationSessionExportMarkdown({
+      session: sampleSession,
+      records: [enrichedIpv4Record],
+      exportedAt: EXPORTED_AT,
+      notebookFragments: [observation, hypothesis],
+    });
+
+    expect(markdown).toContain(`## ${INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING}`);
+    expect(markdown).toContain("Repeated beaconing to example.com");
+    expect(markdown).toContain("Possible phishing kit hosting");
+  });
+
+  it("orders markdown export sections with Session notebook after attribution", () => {
+    const markdown = buildInvestigationSessionExportMarkdown({
+      session: sampleSession,
+      records: [enrichedIpv4Record, plainDomainRecord],
+      exportedAt: EXPORTED_AT,
+      notebookFragments: [observation],
+    });
+
+    const heading = markdown.indexOf(`# ${INVESTIGATION_SESSION_EXPORT_HEADING}`);
+    const summary = markdown.indexOf(`## ${INVESTIGATION_SESSION_EXPORT_SUMMARY_HEADING}`);
+    const indicators = markdown.indexOf(
+      `## ${INVESTIGATION_SESSION_EXPORT_IOC_TABLE_HEADING}`
+    );
+    const enrichment = markdown.indexOf(
+      `## ${INVESTIGATION_SESSION_EXPORT_ENRICHMENT_HEADING}`
+    );
+    const attribution = markdown.indexOf(
+      `## ${INVESTIGATION_SESSION_EXPORT_ATTRIBUTION_HEADING}`
+    );
+    const notebook = markdown.indexOf(
+      `## ${INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING}`
+    );
+
+    expect(heading).toBeGreaterThanOrEqual(0);
+    expect(summary).toBeGreaterThan(heading);
+    expect(indicators).toBeGreaterThan(summary);
+    expect(enrichment).toBeGreaterThan(indicators);
+    expect(attribution).toBeGreaterThan(enrichment);
+    expect(notebook).toBeGreaterThan(attribution);
+    expect(markdown).toContain("Repeated beaconing to example.com");
+  });
+
+  it("redacts notebook fragments when export scope is IOC export only", () => {
+    expect(
+      resolveNotebookFragmentsForSessionExport([observation], INVESTIGATION_SESSION_EXPORT_SCOPE.IOC_ONLY)
+    ).toBeUndefined();
+    expect(
+      resolveNotebookFragmentsForSessionExport([observation], INVESTIGATION_SESSION_EXPORT_SCOPE.FULL)
+    ).toEqual([observation]);
+
+    const markdown = buildInvestigationSessionExportMarkdown({
+      session: sampleSession,
+      records: [enrichedIpv4Record],
+      exportedAt: EXPORTED_AT,
+      notebookFragments: [observation, hypothesis],
+      exportScope: INVESTIGATION_SESSION_EXPORT_SCOPE.IOC_ONLY,
+    });
+
+    expect(markdown).toContain(`## ${INVESTIGATION_SESSION_EXPORT_IOC_TABLE_HEADING}`);
+    expect(markdown).toContain("185.220.101.4");
+    expect(markdown).not.toContain(INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING);
+    expect(markdown).not.toContain("Repeated beaconing to example.com");
+    expect(INVESTIGATION_SESSION_EXPORT_IOC_ONLY_LABEL).toBe("IOC export only");
+
+    const appended = appendInvestigationSessionNotebookMarkdownSection(
+      markdown,
+      [observation],
+      { exportScope: INVESTIGATION_SESSION_EXPORT_SCOPE.IOC_ONLY }
+    );
+    expect(appended).toBe(markdown);
+  });
+
+  it("loads session-attached notebook fragments into export input", async () => {
+    const store: Record<string, unknown> = {};
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+      runtime: { id: "test-extension-id" },
+    });
+
+    vi.spyOn(tabScanSummary, "buildTraySubsetEnrichmentRecords").mockResolvedValue([]);
+
+    const fragment = await upsertStoredNotebookFragment(observation);
+    await attachStoredNotebookFragmentToSession({
+      fragmentId: fragment.id,
+      sessionId: sampleSession.id,
+    });
+
+    const input = await buildInvestigationSessionExportInput({
+      session: sampleSession,
+      entries: [],
+      exportedAt: EXPORTED_AT,
+    });
+
+    expect(input.notebookFragments).toEqual([fragment]);
+    expect(buildInvestigationSessionExportMarkdown(input)).toContain(
+      "Repeated beaconing to example.com"
+    );
+  });
+
+  it("omits stored notebook fragments from export input when IOC export only", async () => {
+    const store: Record<string, unknown> = {};
+    vi.stubGlobal("chrome", {
+      storage: {
+        local: {
+          get: (keys: string | string[] | Record<string, unknown>) => {
+            const keyList = Array.isArray(keys)
+              ? keys
+              : typeof keys === "string"
+                ? [keys]
+                : Object.keys(keys);
+            const result: Record<string, unknown> = {};
+            for (const key of keyList) {
+              if (key in store) {
+                result[key] = store[key];
+              }
+            }
+            return Promise.resolve(result);
+          },
+          set: (items: Record<string, unknown>) => {
+            Object.assign(store, items);
+            return Promise.resolve();
+          },
+          remove: (keys: string | string[]) => {
+            const keyList = Array.isArray(keys) ? keys : [keys];
+            for (const key of keyList) {
+              delete store[key];
+            }
+            return Promise.resolve();
+          },
+        },
+      },
+      runtime: { id: "test-extension-id" },
+    });
+
+    vi.spyOn(tabScanSummary, "buildTraySubsetEnrichmentRecords").mockResolvedValue([
+      enrichedIpv4Record,
+    ]);
+
+    const fragment = await upsertStoredNotebookFragment(observation);
+    await attachStoredNotebookFragmentToSession({
+      fragmentId: fragment.id,
+      sessionId: sampleSession.id,
+    });
+
+    const input = await buildInvestigationSessionExportInput({
+      session: sampleSession,
+      entries: [],
+      exportedAt: EXPORTED_AT,
+      exportScope: INVESTIGATION_SESSION_EXPORT_SCOPE.IOC_ONLY,
+    });
+
+    expect(input.exportScope).toBe(INVESTIGATION_SESSION_EXPORT_SCOPE.IOC_ONLY);
+    expect(input.notebookFragments).toBeUndefined();
+    expect(input.records).toEqual([enrichedIpv4Record]);
+    expect(buildInvestigationSessionExportMarkdown(input)).not.toContain(
+      "Repeated beaconing to example.com"
+    );
   });
 });
 

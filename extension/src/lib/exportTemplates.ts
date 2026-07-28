@@ -14,6 +14,13 @@ import {
   type NormalizedEnrichmentRecord,
 } from "./enrichmentExport";
 import { buildDisabledSourcePlaceholders } from "./hoverCardEnrichment";
+import { sortNotebookFragmentsChronologically } from "./hoverCardNotebook";
+import {
+  NOTEBOOK_FRAGMENT_HYPOTHESIS_UNVERIFIED_BADGE,
+  NOTEBOOK_FRAGMENT_TYPE,
+  NOTEBOOK_FRAGMENT_TYPE_LABEL,
+  type NotebookFragment,
+} from "./notebookFragment";
 import { RISK_SCORE_UNAVAILABLE_HEADLINE } from "./scoring";
 
 export const EXPORT_TEMPLATE_IDS = [
@@ -42,6 +49,26 @@ export const TRAY_SUBSET_TEMPLATE_SEPARATOR = "\n\n---\n\n";
 export const EXPORT_TEMPLATE_CORRELATION_PACK_APPENDIX_LABEL =
   "Include correlation pack appendix";
 
+/** Operator-facing label for optionally appending notebook fragments to template exports. */
+export const EXPORT_TEMPLATE_NOTEBOOK_FRAGMENTS_APPENDIX_LABEL =
+  "Include notebook fragments appendix";
+
+export const NOTEBOOK_FRAGMENTS_OBSIDIAN_APPENDIX_HEADING = "Session notebook";
+export const NOTEBOOK_FRAGMENTS_OBSIDIAN_ARTIFACT = "session-notebook-fragments";
+export const NOTEBOOK_FRAGMENTS_OBSIDIAN_EMPTY_TEXT =
+  "_No session notebook fragments are included in this export._";
+
+/**
+ * Optional notebook fragments for Obsidian-friendly appendix export via the
+ * tray/template engine hook.
+ */
+export type NotebookFragmentsAppendixExportInput = {
+  fragments: readonly NotebookFragment[];
+  sessionTitle?: string;
+  pageUrl?: string;
+  exportedAt?: string;
+};
+
 /**
  * Optional correlation pack appendix for tray/template exports.
  * When omitted, template output is unchanged (backward compatible).
@@ -50,6 +77,12 @@ export type RenderTraySubsetExportTemplateOptions = {
   /** Explicit on/off. When omitted, appendix appends if `correlationPack` has clusters. */
   includeCorrelationPackAppendix?: boolean;
   correlationPack?: CorrelationPackExportInput;
+  /**
+   * Explicit on/off for notebook fragments appendix. When omitted, appendix
+   * appends if `notebookFragments.fragments` is non-empty.
+   */
+  includeNotebookFragmentsAppendix?: boolean;
+  notebookFragments?: NotebookFragmentsAppendixExportInput;
 };
 
 export type ExportTemplateFieldContext = {
@@ -363,6 +396,113 @@ export function appendCorrelationPackAppendixBlock(
   return `${trimmedBody}${TRAY_SUBSET_TEMPLATE_SEPARATOR}${appendix}`;
 }
 
+/**
+ * Obsidian-friendly notebook fragments appendix (YAML frontmatter + markdown).
+ * Suitable to paste into a vault or append after Obsidian/tray template exports.
+ */
+export function buildNotebookFragmentsObsidianAppendixMarkdown(
+  input: NotebookFragmentsAppendixExportInput
+): string {
+  const exportedAt = input.exportedAt ?? new Date().toISOString();
+  const sessionTitle =
+    typeof input.sessionTitle === "string" && input.sessionTitle.trim().length > 0
+      ? input.sessionTitle.trim()
+      : "investigation";
+  const pageUrl =
+    typeof input.pageUrl === "string" ? input.pageUrl.trim() : "";
+  const ordered = sortNotebookFragmentsChronologically(input.fragments);
+
+  const lines = [
+    "---",
+    `session: ${sessionTitle}`,
+    `page_url: ${pageUrl}`,
+    `exported_at: ${exportedAt}`,
+    "source: Vera5",
+    `artifact: ${NOTEBOOK_FRAGMENTS_OBSIDIAN_ARTIFACT}`,
+    "---",
+    "",
+    `# ${NOTEBOOK_FRAGMENTS_OBSIDIAN_APPENDIX_HEADING}`,
+    "",
+  ];
+
+  if (ordered.length === 0) {
+    lines.push(NOTEBOOK_FRAGMENTS_OBSIDIAN_EMPTY_TEXT, "");
+    return lines.join("\n");
+  }
+
+  for (const fragment of ordered) {
+    const typeLabel = NOTEBOOK_FRAGMENT_TYPE_LABEL[fragment.type];
+    const statusSuffix =
+      fragment.type === NOTEBOOK_FRAGMENT_TYPE.HYPOTHESIS
+        ? ` (${NOTEBOOK_FRAGMENT_HYPOTHESIS_UNVERIFIED_BADGE})`
+        : "";
+    const author =
+      typeof fragment.authorLabel === "string" && fragment.authorLabel.trim().length > 0
+        ? ` · ${fragment.authorLabel.trim()}`
+        : "";
+
+    lines.push(`### ${typeLabel}${statusSuffix}`, "", fragment.body, "");
+    lines.push(
+      `_Updated: ${new Date(fragment.updatedAt).toISOString()}${author}_`,
+      ""
+    );
+  }
+
+  return lines.join("\n");
+}
+
+/**
+ * Whether a notebook fragments appendix should be appended after the template body.
+ * CSV exports never take a markdown appendix block.
+ */
+export function shouldAppendNotebookFragmentsAppendix(
+  templateId: ExportTemplateId,
+  options?: RenderTraySubsetExportTemplateOptions
+): boolean {
+  if (templateId === "csv-row") {
+    return false;
+  }
+  if (!options?.notebookFragments) {
+    return false;
+  }
+  if (options.includeNotebookFragmentsAppendix === false) {
+    return false;
+  }
+  if (options.includeNotebookFragmentsAppendix === true) {
+    return true;
+  }
+  return options.notebookFragments.fragments.length > 0;
+}
+
+/**
+ * Appends an Obsidian-friendly notebook fragments appendix after a rendered
+ * template body when opted in. Returns the body unchanged when skipped.
+ */
+export function appendNotebookFragmentsAppendixBlock(
+  body: string,
+  templateId: ExportTemplateId,
+  options?: RenderTraySubsetExportTemplateOptions
+): string {
+  if (
+    !shouldAppendNotebookFragmentsAppendix(templateId, options) ||
+    !options?.notebookFragments
+  ) {
+    return body;
+  }
+
+  const appendix = buildNotebookFragmentsObsidianAppendixMarkdown(
+    options.notebookFragments
+  ).trim();
+  if (appendix.length === 0) {
+    return body;
+  }
+  const trimmedBody = body.trim();
+  if (trimmedBody.length === 0) {
+    return appendix;
+  }
+  return `${trimmedBody}${TRAY_SUBSET_TEMPLATE_SEPARATOR}${appendix}`;
+}
+
 export function renderTraySubsetExportTemplate(
   templateId: ExportTemplateId,
   records: readonly NormalizedEnrichmentRecord[],
@@ -381,7 +521,8 @@ export function renderTraySubsetExportTemplate(
     }
   }
 
-  return appendCorrelationPackAppendixBlock(body, templateId, options);
+  body = appendCorrelationPackAppendixBlock(body, templateId, options);
+  return appendNotebookFragmentsAppendixBlock(body, templateId, options);
 }
 
 export function resolveExportTemplateMimeType(templateId: ExportTemplateId): string {

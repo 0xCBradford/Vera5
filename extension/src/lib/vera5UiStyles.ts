@@ -871,6 +871,29 @@ export function buildVera5UiStylesCss(): string {
   text-decoration: underline;
   outline: none;
 }
+.vera5-hover-card-relationship {
+  margin-top: 8px;
+}
+.vera5-hover-card-relationship-label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--vera5-muted-label);
+}
+.vera5-hover-card-relationship-list {
+  margin: 0;
+  padding-left: 16px;
+  color: #a7b0ba;
+  font-size: 12px;
+  line-height: 1.5;
+  list-style: disc;
+}
+.vera5-hover-card-relationship-item {
+  margin: 0;
+}
 .vera5-hover-card-notebook {
   margin-top: 8px;
 }
@@ -946,7 +969,41 @@ export function buildVera5UiStylesCss(): string {
   color: #a7b0ba;
   font-size: 12px;
   line-height: 1.4;
+  white-space: normal;
+  word-break: break-word;
+}
+.vera5-hover-card-notebook-item-body .vera5-notebook-md-paragraph {
+  margin: 0 0 4px;
   white-space: pre-wrap;
+}
+.vera5-hover-card-notebook-item-body .vera5-notebook-md-paragraph:last-child {
+  margin-bottom: 0;
+}
+.vera5-hover-card-notebook-item-body .vera5-notebook-md-ul,
+.vera5-hover-card-notebook-item-body .vera5-notebook-md-ol {
+  margin: 0 0 4px;
+  padding-left: 1.25em;
+}
+.vera5-hover-card-notebook-item-body .vera5-notebook-md-codeblock {
+  margin: 0 0 4px;
+  padding: 4px 6px;
+  border-radius: 3px;
+  background: #141a22;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  white-space: pre;
+}
+.vera5-hover-card-notebook-item-body code {
+  padding: 0 3px;
+  border-radius: 3px;
+  background: #141a22;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+}
+.vera5-hover-card-notebook-item-body strong {
+  color: #e8eef5;
+  font-weight: 700;
 }
 .vera5-hover-card-notebook-form {
   display: flex;

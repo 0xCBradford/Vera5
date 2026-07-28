@@ -17,6 +17,14 @@ import {
   saveStoredInvestigationSession,
 } from "./investigationSessionStorage";
 import {
+  NOTEBOOK_FRAGMENT_TYPES,
+  type NotebookFragmentType,
+} from "./notebookFragment";
+import {
+  getNotebookFragmentsStore,
+  type NotebookFragmentsStore,
+} from "./notebookFragmentStorage";
+import {
   ENRICHMENT_EXPORT_NO_ENRICHMENT_DETAIL,
   formatEnrichmentExportTypeLabel,
   type NormalizedEnrichmentRecord,
@@ -83,6 +91,8 @@ export type WorkspaceSnapshotNotebookFragment = {
   scopeRef: string;
   content: string;
   updatedAt: number;
+  /** Present when exported from typed notebook storage; omitted on legacy snapshots. */
+  type?: NotebookFragmentType;
 };
 
 export type WorkspaceSnapshot = {
@@ -104,6 +114,11 @@ export type CreateWorkspaceSnapshotInput = {
   timelineEvents?: readonly TimelineEvent[];
   notebookFragments?: readonly WorkspaceSnapshotNotebookFragment[];
   settingsProfileRef?: string;
+  /**
+   * When true, notebook fragments are omitted from the exported snapshot
+   * (IOC export only).
+   */
+  iocOnlyExport?: boolean;
 };
 
 export type WorkspaceSnapshotSecretsExclusionEntry = {
@@ -254,7 +269,8 @@ export const WORKSPACE_SNAPSHOT_SCHEMA_SECTION_DOCS: readonly WorkspaceSnapshotS
     },
     {
       field: "notebookFragments",
-      summary: "Structured analyst notebook fragments scoped to session, IOC, or page.",
+      summary:
+        "Structured analyst notebook fragments from local notebook storage, scoped to session, IOC, or page (optional type when present).",
     },
     {
       field: "settingsProfileRef",
@@ -282,6 +298,10 @@ export class WorkspaceSnapshotSchemaError extends Error {
 }
 
 const IOC_TYPES = new Set<string>(Object.values(IOC_TYPE));
+
+const WORKSPACE_SNAPSHOT_NOTEBOOK_FRAGMENT_TYPE_SET = new Set<string>(
+  NOTEBOOK_FRAGMENT_TYPES
+);
 
 const NOTEBOOK_FRAGMENT_SCOPES = new Set<WorkspaceSnapshotNotebookFragmentScope>([
   "session",
@@ -523,6 +543,17 @@ export function normalizeWorkspaceSnapshotNotebookFragment(
     throw new WorkspaceSnapshotSchemaError("Workspace snapshot notebook fragment is invalid.");
   }
 
+  let type: NotebookFragmentType | undefined;
+  if (value.type !== undefined) {
+    if (
+      typeof value.type !== "string" ||
+      !WORKSPACE_SNAPSHOT_NOTEBOOK_FRAGMENT_TYPE_SET.has(value.type)
+    ) {
+      throw new WorkspaceSnapshotSchemaError("Workspace snapshot notebook fragment is invalid.");
+    }
+    type = value.type as NotebookFragmentType;
+  }
+
   return {
     schemaVersion: WORKSPACE_SNAPSHOT_NOTEBOOK_FRAGMENT_SCHEMA_VERSION,
     id,
@@ -530,6 +561,7 @@ export function normalizeWorkspaceSnapshotNotebookFragment(
     scopeRef,
     content: typeof value.content === "string" ? value.content : "",
     updatedAt,
+    ...(type ? { type } : {}),
   };
 }
 
@@ -610,6 +642,10 @@ export function isWorkspaceSnapshotRecord(value: unknown): value is WorkspaceSna
 export function createWorkspaceSnapshot(
   input: CreateWorkspaceSnapshotInput = {}
 ): WorkspaceSnapshot {
+  const notebookFragments = input.iocOnlyExport
+    ? []
+    : [...(input.notebookFragments ?? [])];
+
   const snapshot: WorkspaceSnapshot = {
     schemaVersion: WORKSPACE_SNAPSHOT_SCHEMA_VERSION,
     exportedAt: input.exportedAt ?? new Date().toISOString(),
@@ -617,7 +653,7 @@ export function createWorkspaceSnapshot(
     trayIocs: [...(input.trayIocs ?? [])],
     enrichmentCacheRefs: [...(input.enrichmentCacheRefs ?? [])],
     timelineEvents: [...(input.timelineEvents ?? [])],
-    notebookFragments: [...(input.notebookFragments ?? [])],
+    notebookFragments,
   };
 
   const settingsProfileRef = normalizeWorkspaceSnapshotSettingsProfileRef(
@@ -628,6 +664,27 @@ export function createWorkspaceSnapshot(
   }
 
   return snapshot;
+}
+
+/**
+ * Clears notebook fragments for IOC-only workspace exports. Other sections unchanged.
+ */
+export function redactWorkspaceSnapshotNotebookFragmentsForIocOnlyExport(
+  snapshot: WorkspaceSnapshot
+): WorkspaceSnapshot {
+  if (snapshot.notebookFragments.length === 0) {
+    return snapshot;
+  }
+  return createWorkspaceSnapshot({
+    exportedAt: snapshot.exportedAt,
+    session: snapshot.session,
+    trayIocs: snapshot.trayIocs,
+    enrichmentCacheRefs: snapshot.enrichmentCacheRefs,
+    timelineEvents: snapshot.timelineEvents,
+    notebookFragments: [],
+    settingsProfileRef: snapshot.settingsProfileRef,
+    iocOnlyExport: true,
+  });
 }
 
 export function normalizeWorkspaceSnapshot(value: unknown): WorkspaceSnapshot {
@@ -1089,6 +1146,15 @@ export async function buildCurrentWorkspaceSnapshot(input?: {
     trayIocs = tabSnapshot?.entries ?? [];
   }
 
+  const liveNotebookFragments =
+    await loadWorkspaceSnapshotNotebookFragmentsFromStorage({
+      preferSessionId: activeSession?.id ?? null,
+    });
+  const notebookFragments = mergeWorkspaceSnapshotNotebookFragments(
+    storedState.notebookFragments,
+    liveNotebookFragments
+  );
+
   return createWorkspaceSnapshot({
     exportedAt: input?.exportedAt ?? new Date().toISOString(),
     session: activeSession
@@ -1097,9 +1163,139 @@ export async function buildCurrentWorkspaceSnapshot(input?: {
     trayIocs,
     enrichmentCacheRefs: [...storedState.enrichmentCacheRefs],
     timelineEvents: activeSession?.timelineEvents ?? [],
-    notebookFragments: [...storedState.notebookFragments],
+    notebookFragments,
     settingsProfileRef: storedState.settingsProfileRef,
   });
+}
+
+type NotebookFragmentAttachmentRef = {
+  scope: WorkspaceSnapshotNotebookFragmentScope;
+  scopeRef: string;
+};
+
+function collectNotebookFragmentAttachmentRefs(
+  store: NotebookFragmentsStore
+): Map<string, NotebookFragmentAttachmentRef[]> {
+  const byFragmentId = new Map<string, NotebookFragmentAttachmentRef[]>();
+
+  const push = (
+    fragmentId: string,
+    ref: NotebookFragmentAttachmentRef
+  ): void => {
+    const existing = byFragmentId.get(fragmentId);
+    if (existing) {
+      existing.push(ref);
+    } else {
+      byFragmentId.set(fragmentId, [ref]);
+    }
+  };
+
+  for (const [scopeRef, fragmentIds] of Object.entries(store.sessionAttachments)) {
+    for (const fragmentId of fragmentIds) {
+      push(fragmentId, { scope: "session", scopeRef });
+    }
+  }
+  for (const [scopeRef, fragmentIds] of Object.entries(store.iocAttachments)) {
+    for (const fragmentId of fragmentIds) {
+      push(fragmentId, { scope: "ioc", scopeRef });
+    }
+  }
+  for (const [scopeRef, fragmentIds] of Object.entries(store.pageAttachments)) {
+    for (const fragmentId of fragmentIds) {
+      push(fragmentId, { scope: "page", scopeRef });
+    }
+  }
+
+  return byFragmentId;
+}
+
+function pickNotebookFragmentSnapshotScope(
+  refs: readonly NotebookFragmentAttachmentRef[],
+  preferSessionId?: string | null
+): NotebookFragmentAttachmentRef | null {
+  if (refs.length === 0) {
+    return null;
+  }
+
+  const preferred =
+    typeof preferSessionId === "string" && preferSessionId.trim().length > 0
+      ? preferSessionId.trim()
+      : null;
+  if (preferred) {
+    const sessionMatch = refs.find(
+      (ref) => ref.scope === "session" && ref.scopeRef === preferred
+    );
+    if (sessionMatch) {
+      return sessionMatch;
+    }
+  }
+
+  const session = refs.find((ref) => ref.scope === "session");
+  if (session) {
+    return session;
+  }
+  const ioc = refs.find((ref) => ref.scope === "ioc");
+  if (ioc) {
+    return ioc;
+  }
+  return refs.find((ref) => ref.scope === "page") ?? null;
+}
+
+/**
+ * Maps the local notebook fragment store into workspace snapshot notebook rows
+ * for JSON export. Prefer session scope (active session when provided), then IOC,
+ * then page. Unattached fragments are included under the preferred session when set.
+ */
+export function mapNotebookFragmentsStoreToWorkspaceSnapshotFragments(
+  store: NotebookFragmentsStore,
+  options?: { preferSessionId?: string | null }
+): WorkspaceSnapshotNotebookFragment[] {
+  const attachmentsById = collectNotebookFragmentAttachmentRefs(store);
+  const preferSessionId = options?.preferSessionId ?? null;
+  const mapped: WorkspaceSnapshotNotebookFragment[] = [];
+
+  for (const fragment of store.fragments) {
+    const refs = attachmentsById.get(fragment.id) ?? [];
+    let scope = pickNotebookFragmentSnapshotScope(refs, preferSessionId);
+    if (!scope) {
+      if (
+        typeof preferSessionId === "string" &&
+        preferSessionId.trim().length > 0
+      ) {
+        scope = {
+          scope: "session",
+          scopeRef: preferSessionId.trim(),
+        };
+      } else {
+        continue;
+      }
+    }
+
+    mapped.push({
+      schemaVersion: WORKSPACE_SNAPSHOT_NOTEBOOK_FRAGMENT_SCHEMA_VERSION,
+      id: fragment.id,
+      scope: scope.scope,
+      scopeRef: scope.scopeRef,
+      content: fragment.body,
+      updatedAt: fragment.updatedAt,
+      type: fragment.type,
+    });
+  }
+
+  mapped.sort((left, right) => {
+    if (left.updatedAt !== right.updatedAt) {
+      return left.updatedAt - right.updatedAt;
+    }
+    return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+  });
+  return mapped;
+}
+
+export async function loadWorkspaceSnapshotNotebookFragmentsFromStorage(options?: {
+  preferSessionId?: string | null;
+}): Promise<WorkspaceSnapshotNotebookFragment[]> {
+  const store = await getNotebookFragmentsStore();
+  return mapNotebookFragmentsStoreToWorkspaceSnapshotFragments(store, options);
 }
 
 export function mergeWorkspaceSnapshotTrayIocs(
@@ -1471,6 +1667,8 @@ export type WorkspaceSnapshotMarkdownExportInput = {
   records: readonly NormalizedEnrichmentRecord[];
   exportedAt?: string;
   templateId?: InvestigationTimelineMarkdownTemplateId;
+  /** When true, notebook fragments are cleared before markdown export. */
+  iocOnlyExport?: boolean;
 };
 
 function escapeWorkspaceSnapshotMarkdownTableCell(value: string): string {
@@ -1662,7 +1860,10 @@ export function buildWorkspaceSnapshotTimelineAppendixMarkdown(
 export function buildWorkspaceSnapshotMarkdownExport(
   input: WorkspaceSnapshotMarkdownExportInput
 ): string {
-  const snapshot = normalizeWorkspaceSnapshot(input.snapshot);
+  const baseSnapshot = normalizeWorkspaceSnapshot(input.snapshot);
+  const snapshot = input.iocOnlyExport
+    ? redactWorkspaceSnapshotNotebookFragmentsForIocOnlyExport(baseSnapshot)
+    : baseSnapshot;
   const exportedAt = input.exportedAt ?? snapshot.exportedAt;
   const templateId = normalizeWorkspaceSnapshotMarkdownTemplateId(input.templateId);
   const sanitizedRecords = input.records.map(sanitizeInvestigationSessionExportRecord);

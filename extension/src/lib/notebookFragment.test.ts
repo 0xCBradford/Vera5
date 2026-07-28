@@ -1,3 +1,6 @@
+/**
+ * @vitest-environment happy-dom
+ */
 import { describe, expect, it } from "vitest";
 import {
   MAX_NOTEBOOK_FRAGMENT_BODY_LENGTH,
@@ -8,6 +11,7 @@ import {
   NOTEBOOK_FRAGMENT_TYPES,
   NOTEBOOK_FRAGMENT_TYPE_HINT,
   NOTEBOOK_FRAGMENT_TYPE_LABEL,
+  appendNotebookFragmentMarkdownLite,
   buildNotebookFragmentId,
   buildNotebookFragmentUiHintView,
   createNotebookFragment,
@@ -17,8 +21,11 @@ import {
   normalizeNotebookFragmentAuthorLabel,
   normalizeNotebookFragmentBody,
   notebookFragmentBodyContainsEmbeddedBinaryOrScreenshot,
+  notebookFragmentBodyContainsRawHtmlMarkup,
   notebookFragmentBodyExceedsMaxLength,
   notebookFragmentHasOnlyAllowlistedFields,
+  parseNotebookFragmentMarkdownLite,
+  parseNotebookFragmentMarkdownLiteInlines,
   resolveNotebookFragmentTypeUiHint,
 } from "./notebookFragment";
 
@@ -298,5 +305,84 @@ describe("NotebookFragment schema", () => {
     expect(buildNotebookFragmentUiHintView(observation).showStatusBadge).toBe(
       false
     );
+  });
+});
+
+describe("notebook fragment markdown-lite", () => {
+  it("parses bold, lists, and inline code", () => {
+    const blocks = parseNotebookFragmentMarkdownLite(
+      [
+        "Seen **C2** on `8.8.8.8`",
+        "",
+        "- first",
+        "- second **hit**",
+        "1. ordered",
+        "```",
+        "raw <b>block</b>",
+        "```",
+      ].join("\n")
+    );
+
+    expect(blocks[0]).toEqual({
+      kind: "paragraph",
+      inlines: [
+        { kind: "text", value: "Seen " },
+        { kind: "bold", value: "C2" },
+        { kind: "text", value: " on " },
+        { kind: "code", value: "8.8.8.8" },
+      ],
+    });
+    expect(blocks[1]).toEqual({
+      kind: "ul",
+      items: [
+        [{ kind: "text", value: "first" }],
+        [
+          { kind: "text", value: "second " },
+          { kind: "bold", value: "hit" },
+        ],
+      ],
+    });
+    expect(blocks[2]).toEqual({
+      kind: "ol",
+      items: [[{ kind: "text", value: "ordered" }]],
+    });
+    expect(blocks[3]).toEqual({
+      kind: "codeblock",
+      value: "raw <b>block</b>",
+    });
+  });
+
+  it("keeps HTML markup as plain text inlines", () => {
+    const payload = '<img src=x onerror="alert(1)"><script>evil()</script>';
+    expect(notebookFragmentBodyContainsRawHtmlMarkup(payload)).toBe(true);
+    expect(parseNotebookFragmentMarkdownLiteInlines(payload)).toEqual([
+      { kind: "text", value: payload },
+    ]);
+  });
+
+  it("renders with textContent only and does not inject HTML", () => {
+    const host = document.createElement("div");
+    appendNotebookFragmentMarkdownLite(
+      host,
+      [
+        "**safe** and `code`",
+        "- item",
+        '<img src=x onerror="alert(1)">',
+        "```",
+        "<script>document.write(1)</script>",
+        "```",
+      ].join("\n"),
+      document
+    );
+
+    expect(host.querySelector("strong")?.textContent).toBe("safe");
+    expect(host.querySelector("code")?.textContent).toBe("code");
+    expect(host.querySelector("ul")?.textContent).toContain("item");
+    expect(host.querySelectorAll("img").length).toBe(0);
+    expect(host.querySelectorAll("script").length).toBe(0);
+    expect(host.innerHTML).toContain("&lt;img");
+    expect(host.innerHTML).toContain("&lt;script&gt;");
+    expect(host.innerHTML).not.toContain("<img src");
+    expect(host.innerHTML).not.toContain("<script>");
   });
 });

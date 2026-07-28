@@ -10,6 +10,7 @@ import {
 } from "./enrichmentExport";
 import { buildDisabledSourcePlaceholders } from "./hoverCardEnrichment";
 import { copyTextToClipboard } from "./copyText";
+import { sortNotebookFragmentsChronologically } from "./hoverCardNotebook";
 import {
   buildTraySubsetEnrichmentRecords,
   type TabScanSummaryEntry,
@@ -24,6 +25,14 @@ import { renderTraySubsetExportTemplate } from "./exportTemplates";
 import {
   redactEnrichmentVendorPayload,
 } from "./enrichmentRawResponse";
+import {
+  NOTEBOOK_FRAGMENT_HYPOTHESIS_UNVERIFIED_BADGE,
+  NOTEBOOK_FRAGMENT_TYPE,
+  NOTEBOOK_FRAGMENT_TYPE_LABEL,
+  type NotebookFragment,
+} from "./notebookFragment";
+import { listStoredNotebookFragmentsForSession } from "./notebookFragmentStorage";
+import type { IocType } from "./iocRegex";
 
 export const INVESTIGATION_SESSION_EXPORT_SCHEMA_VERSION = 1;
 export const INVESTIGATION_SESSION_EXPORT_CSV_HEADER =
@@ -34,11 +43,30 @@ export const INVESTIGATION_SESSION_EXPORT_SUMMARY_HEADING = "Session summary";
 export const INVESTIGATION_SESSION_EXPORT_IOC_TABLE_HEADING = "Indicators";
 export const INVESTIGATION_SESSION_EXPORT_ENRICHMENT_HEADING = "Enrichment details";
 export const INVESTIGATION_SESSION_EXPORT_ATTRIBUTION_HEADING = "Source attribution";
+export const INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING = "Session notebook";
+export const INVESTIGATION_SESSION_EXPORT_NOTEBOOK_EMPTY_TEXT =
+  "_No session notebook fragments are included in this export._";
+
+export const INVESTIGATION_SESSION_EXPORT_SCOPE = {
+  FULL: "full",
+  IOC_ONLY: "ioc-only",
+} as const;
+
+export type InvestigationSessionExportScope =
+  (typeof INVESTIGATION_SESSION_EXPORT_SCOPE)[keyof typeof INVESTIGATION_SESSION_EXPORT_SCOPE];
+
+export const INVESTIGATION_SESSION_EXPORT_IOC_ONLY_LABEL = "IOC export only";
+export const INVESTIGATION_SESSION_EXPORT_IOC_ONLY_DESCRIPTION =
+  "Omit notebook fragments from the export. Indicators and enrichment stay included.";
 
 export type InvestigationSessionExportInput = {
   session: InvestigationSession;
   records: readonly NormalizedEnrichmentRecord[];
   exportedAt?: string;
+  /** Session-attached notebook fragments for the markdown notebook section. */
+  notebookFragments?: readonly NotebookFragment[];
+  /** When `ioc-only`, notebook fragments are omitted from export output. */
+  exportScope?: InvestigationSessionExportScope;
 };
 
 export type InvestigationSessionExportMetadata = {
@@ -161,11 +189,69 @@ export function sanitizeInvestigationSessionExportInput(
     notes: sanitizeInvestigationSessionExportText(input.session.notes),
   };
 
-  return {
+  const exportScope = normalizeInvestigationSessionExportScope(input.exportScope);
+  const notebookFragments = resolveNotebookFragmentsForSessionExport(
+    input.notebookFragments?.map((fragment) => {
+      const authorLabel = sanitizeInvestigationSessionExportText(fragment.authorLabel);
+      return {
+        ...fragment,
+        body: sanitizeInvestigationSessionExportText(fragment.body) ?? fragment.body,
+        ...(authorLabel ? { authorLabel } : { authorLabel: undefined }),
+      };
+    }),
+    exportScope
+  );
+
+  const sanitized: InvestigationSessionExportInput = {
     ...input,
     session,
     records: input.records.map(sanitizeInvestigationSessionExportRecord),
   };
+
+  if (exportScope) {
+    sanitized.exportScope = exportScope;
+  } else {
+    delete sanitized.exportScope;
+  }
+
+  if (notebookFragments && notebookFragments.length > 0) {
+    sanitized.notebookFragments = notebookFragments;
+  } else {
+    delete sanitized.notebookFragments;
+  }
+
+  return sanitized;
+}
+
+export function normalizeInvestigationSessionExportScope(
+  value: unknown
+): InvestigationSessionExportScope | undefined {
+  if (
+    value === INVESTIGATION_SESSION_EXPORT_SCOPE.FULL ||
+    value === INVESTIGATION_SESSION_EXPORT_SCOPE.IOC_ONLY
+  ) {
+    return value;
+  }
+  return undefined;
+}
+
+export function isInvestigationSessionIocOnlyExport(
+  scope?: InvestigationSessionExportScope | null
+): boolean {
+  return scope === INVESTIGATION_SESSION_EXPORT_SCOPE.IOC_ONLY;
+}
+
+/**
+ * Returns notebook fragments for export, or omits them when scope is IOC export only.
+ */
+export function resolveNotebookFragmentsForSessionExport(
+  fragments: readonly NotebookFragment[] | undefined,
+  scope?: InvestigationSessionExportScope | null
+): readonly NotebookFragment[] | undefined {
+  if (isInvestigationSessionIocOnlyExport(scope)) {
+    return undefined;
+  }
+  return fragments;
 }
 
 export function containsInvestigationSessionExportSecrets(payload: string): boolean {
@@ -429,6 +515,74 @@ export function buildInvestigationSessionExportSourceAttributionLines(
   ];
 }
 
+/**
+ * Markdown section lines for session-attached notebook fragments (chronological).
+ * Suitable to append after investigation session export markdown.
+ */
+export function buildInvestigationSessionNotebookMarkdownSectionLines(
+  fragments: readonly NotebookFragment[]
+): string[] {
+  const ordered = sortNotebookFragmentsChronologically(fragments);
+  const lines = [
+    "",
+    `## ${INVESTIGATION_SESSION_EXPORT_NOTEBOOK_HEADING}`,
+    "",
+  ];
+
+  if (ordered.length === 0) {
+    lines.push(INVESTIGATION_SESSION_EXPORT_NOTEBOOK_EMPTY_TEXT, "");
+    return lines;
+  }
+
+  for (const fragment of ordered) {
+    const typeLabel = NOTEBOOK_FRAGMENT_TYPE_LABEL[fragment.type];
+    const statusSuffix =
+      fragment.type === NOTEBOOK_FRAGMENT_TYPE.HYPOTHESIS
+        ? ` (${NOTEBOOK_FRAGMENT_HYPOTHESIS_UNVERIFIED_BADGE})`
+        : "";
+    const body =
+      sanitizeInvestigationSessionExportText(fragment.body) ?? fragment.body;
+    const author =
+      typeof fragment.authorLabel === "string" && fragment.authorLabel.trim().length > 0
+        ? ` · ${fragment.authorLabel.trim()}`
+        : "";
+
+    lines.push(`### ${typeLabel}${statusSuffix}`, "", body, "");
+    lines.push(
+      `_Updated: ${formatInvestigationSessionExportTimestamp(fragment.updatedAt)}${author}_`,
+      ""
+    );
+  }
+
+  return lines;
+}
+
+export function buildInvestigationSessionNotebookMarkdownSection(
+  fragments: readonly NotebookFragment[]
+): string {
+  return buildInvestigationSessionNotebookMarkdownSectionLines(fragments).join("\n");
+}
+
+/**
+ * Appends the session notebook markdown section to existing session export markdown.
+ * No-op when export scope is IOC export only.
+ */
+export function appendInvestigationSessionNotebookMarkdownSection(
+  markdown: string,
+  fragments: readonly NotebookFragment[],
+  options?: { exportScope?: InvestigationSessionExportScope }
+): string {
+  if (isInvestigationSessionIocOnlyExport(options?.exportScope)) {
+    return markdown;
+  }
+  const section = buildInvestigationSessionNotebookMarkdownSection(fragments);
+  const trimmedBody = markdown.replace(/\s+$/u, "");
+  if (trimmedBody.length === 0) {
+    return section.startsWith("\n") ? section.slice(1) : section;
+  }
+  return `${trimmedBody}${section}`;
+}
+
 export function buildInvestigationSessionExportMarkdown(
   input: InvestigationSessionExportInput
 ): string {
@@ -439,8 +593,21 @@ export function buildInvestigationSessionExportMarkdown(
     ...buildInvestigationSessionExportIocTableLines(sanitized.records),
     ...buildInvestigationSessionExportEnrichmentSectionLines(sanitized.records),
     ...buildInvestigationSessionExportSourceAttributionLines(sanitized.records),
-    "",
   ];
+
+  const notebookFragments = resolveNotebookFragmentsForSessionExport(
+    sanitized.notebookFragments,
+    sanitized.exportScope
+  );
+
+  if ((notebookFragments?.length ?? 0) > 0) {
+    lines.push(
+      ...buildInvestigationSessionNotebookMarkdownSectionLines(notebookFragments ?? [])
+    );
+  } else {
+    lines.push("");
+  }
+
   return lines.join("\n");
 }
 
@@ -465,12 +632,19 @@ export async function buildInvestigationSessionExportInput(input: {
   session: InvestigationSession;
   entries: ReadonlyArray<TabScanSummaryEntry>;
   exportedAt?: string;
+  exportScope?: InvestigationSessionExportScope;
 }): Promise<InvestigationSessionExportInput> {
+  const exportScope = normalizeInvestigationSessionExportScope(input.exportScope);
   const records = await buildTraySubsetEnrichmentRecords(input.entries);
+  const notebookFragments = isInvestigationSessionIocOnlyExport(exportScope)
+    ? []
+    : await listStoredNotebookFragmentsForSession(input.session.id);
   return {
     session: input.session,
     records,
     exportedAt: input.exportedAt ?? new Date().toISOString(),
+    ...(exportScope ? { exportScope } : {}),
+    ...(notebookFragments.length > 0 ? { notebookFragments } : {}),
   };
 }
 

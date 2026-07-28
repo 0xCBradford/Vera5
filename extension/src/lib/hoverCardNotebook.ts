@@ -22,6 +22,11 @@ import {
   updateStoredNotebookFragment,
   upsertStoredNotebookFragment,
 } from "./notebookFragmentStorage";
+import {
+  getSessionAnalystNote,
+  setSessionAnalystNote,
+} from "./analystNotesSession";
+import { getStoredAnalystNote, setStoredAnalystNote } from "./analystNotesStorage";
 import { getActiveInvestigationSession } from "./investigationSessionStorage";
 import type { IocType } from "./iocRegex";
 import { formatTimelineEventTimestamp } from "./timelineEvent";
@@ -32,21 +37,114 @@ export const HOVER_CARD_NOTEBOOK_TAB_IOC_LABEL = "Indicator";
 export const HOVER_CARD_NOTEBOOK_TAB_SESSION_LABEL = "Session";
 export const HOVER_CARD_NOTEBOOK_TAB_PAGE_LABEL = "Page";
 export const HOVER_CARD_NOTEBOOK_EMPTY_IOC_TEXT =
-  "No notebook fragments for this indicator.";
+  "No notebook fragments for this indicator yet. Add a text fragment below.";
 export const HOVER_CARD_NOTEBOOK_EMPTY_SESSION_TEXT =
-  "No notebook fragments for this session.";
+  "No notebook fragments for this session yet. Add a text fragment below.";
 export const HOVER_CARD_NOTEBOOK_EMPTY_SESSION_UNAVAILABLE_TEXT =
-  "No active investigation session.";
+  "No active investigation session. Start a session to attach notebook fragments.";
 export const HOVER_CARD_NOTEBOOK_EMPTY_PAGE_TEXT =
-  "No notebook fragments for this page.";
+  "No notebook fragments for this page yet. Add a text fragment below.";
 export const HOVER_CARD_NOTEBOOK_EMPTY_PAGE_UNAVAILABLE_TEXT =
-  "Page scope is unavailable for this URL.";
+  "Page scope is unavailable for this URL, so page notebook fragments cannot be listed.";
+
+export const NOTEBOOK_FRAGMENT_TEXT_ONLY_EMPTY_HINT =
+  "Text-only notebook — screenshot capture is not available.";
 
 export const POPUP_SESSION_NOTEBOOK_SECTION_LABEL = "Notebook fragments";
 export const POPUP_SESSION_NOTEBOOK_LIST_ARIA_LABEL =
   "Session notebook fragments";
 export const POPUP_SESSION_NOTEBOOK_EMPTY_TEXT =
   HOVER_CARD_NOTEBOOK_EMPTY_SESSION_TEXT;
+export const POPUP_SESSION_NOTEBOOK_SEARCH_LABEL = "Search fragments";
+export const POPUP_SESSION_NOTEBOOK_SEARCH_PLACEHOLDER =
+  "Search by text in this session…";
+export const POPUP_SESSION_NOTEBOOK_SEARCH_NO_MATCHES_TEXT =
+  "No fragments match this search. Clear the search or try different text.";
+
+/**
+ * UI label / control tokens that notebook MVP must never expose. Notebook
+ * fragments are text-only — no screenshot or screen-capture authoring.
+ */
+export const NOTEBOOK_FORBIDDEN_SCREENSHOT_UI_LABELS = [
+  "Screenshot",
+  "Capture screenshot",
+  "Take screenshot",
+  "Screen capture",
+  "Capture screen",
+  "Attach image",
+  "Upload image",
+] as const;
+
+export type NotebookForbiddenScreenshotUiLabel =
+  (typeof NOTEBOOK_FORBIDDEN_SCREENSHOT_UI_LABELS)[number];
+
+/** Capture API call-sites that notebook authoring surfaces must never invoke. */
+export const NOTEBOOK_FORBIDDEN_CAPTURE_API_CALL_PATTERNS: readonly RegExp[] = [
+  /\.getDisplayMedia\s*\(/,
+  /\bgetDisplayMedia\s*\(/,
+  /\bchrome\.desktopCapture\b/,
+  /\bdesktopCapture\s*\./,
+  /\bchrome\.tabCapture\b/,
+  /\btabCapture\s*\./,
+  /\.captureStream\s*\(/,
+];
+
+export function buildNotebookFragmentEmptyStateView(input: {
+  primaryText: string;
+  includeTextOnlyHint?: boolean;
+}): { primaryText: string; hintText: string | null; composedText: string } {
+  const primaryText = input.primaryText.trim();
+  const includeHint = input.includeTextOnlyHint !== false;
+  const hintText = includeHint ? NOTEBOOK_FRAGMENT_TEXT_ONLY_EMPTY_HINT : null;
+  return {
+    primaryText,
+    hintText,
+    composedText: hintText ? `${primaryText} ${hintText}` : primaryText,
+  };
+}
+
+export function findNotebookForbiddenScreenshotUiLabel(
+  text: string
+): NotebookForbiddenScreenshotUiLabel | null {
+  const haystack = typeof text === "string" ? text.toLowerCase() : "";
+  if (haystack.length === 0) {
+    return null;
+  }
+  const ordered = [...NOTEBOOK_FORBIDDEN_SCREENSHOT_UI_LABELS].sort(
+    (left, right) => right.length - left.length
+  );
+  for (const label of ordered) {
+    if (haystack.includes(label.toLowerCase())) {
+      return label;
+    }
+  }
+  return null;
+}
+
+export function findNotebookForbiddenCaptureApiCallInSource(
+  source: string
+): RegExp | null {
+  if (typeof source !== "string" || source.length === 0) {
+    return null;
+  }
+  for (const pattern of NOTEBOOK_FORBIDDEN_CAPTURE_API_CALL_PATTERNS) {
+    if (pattern.test(source)) {
+      return pattern;
+    }
+  }
+  return null;
+}
+
+export function assertNotebookSurfacesOmitScreenshotCaptureUi(
+  surfaceText: string
+): void {
+  const forbidden = findNotebookForbiddenScreenshotUiLabel(surfaceText);
+  if (forbidden) {
+    throw new Error(
+      `Notebook MVP forbids screenshot capture UI label: ${forbidden}`
+    );
+  }
+}
 
 export const NOTEBOOK_FRAGMENT_ADD_LABEL = "Add fragment";
 export const NOTEBOOK_FRAGMENT_EDIT_LABEL = "Edit";
@@ -56,7 +154,7 @@ export const NOTEBOOK_FRAGMENT_CANCEL_LABEL = "Cancel";
 export const NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL = "Fragment type";
 export const NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL = "Fragment body";
 export const NOTEBOOK_FRAGMENT_BODY_PLACEHOLDER =
-  "Plain-text note for this investigation…";
+  "Plain text or markdown-lite: **bold**, - lists, `code`…";
 export const NOTEBOOK_FRAGMENT_ADD_FORM_ARIA_LABEL = "Add notebook fragment";
 export const NOTEBOOK_FRAGMENT_EDIT_FORM_ARIA_LABEL = "Edit notebook fragment";
 export const NOTEBOOK_FRAGMENT_DELETE_CONFIRM_TEXT =
@@ -118,6 +216,82 @@ export type PopupSessionNotebookTimelineView = {
   fragments: PopupSessionNotebookTimelineRow[];
   emptyText: string;
 };
+
+export function normalizeNotebookFragmentSearchQuery(query: unknown): string {
+  if (typeof query !== "string") {
+    return "";
+  }
+  return query.trim().toLowerCase();
+}
+
+/**
+ * Filters session notebook fragments by case-insensitive substring match on
+ * body, type label, type id, author label, and status badge.
+ */
+export function notebookFragmentMatchesSearchText(
+  fragment: {
+    body?: string;
+    fullBody?: string;
+    bodyPreview?: string;
+    type: string;
+    typeLabel?: string;
+    authorLabel?: string | null;
+    statusBadgeLabel?: string | null;
+  },
+  query: unknown
+): boolean {
+  const normalized = normalizeNotebookFragmentSearchQuery(query);
+  if (normalized.length === 0) {
+    return true;
+  }
+
+  const typeLabel =
+    fragment.typeLabel ??
+    (isNotebookFragmentType(fragment.type)
+      ? NOTEBOOK_FRAGMENT_TYPE_LABEL[fragment.type]
+      : fragment.type);
+
+  const haystacks: string[] = [
+    fragment.body ?? "",
+    fragment.fullBody ?? "",
+    fragment.bodyPreview ?? "",
+    fragment.type,
+    typeLabel,
+    fragment.authorLabel ?? "",
+    fragment.statusBadgeLabel ?? "",
+  ];
+
+  return haystacks.some((value) =>
+    value.toLowerCase().includes(normalized)
+  );
+}
+
+export function filterNotebookFragmentsBySearchText<
+  T extends {
+    body?: string;
+    fullBody?: string;
+    bodyPreview?: string;
+    type: string;
+    typeLabel?: string;
+    authorLabel?: string | null;
+    statusBadgeLabel?: string | null;
+  },
+>(fragments: readonly T[], query: unknown): T[] {
+  const normalized = normalizeNotebookFragmentSearchQuery(query);
+  if (normalized.length === 0) {
+    return [...fragments];
+  }
+  return fragments.filter((fragment) =>
+    notebookFragmentMatchesSearchText(fragment, normalized)
+  );
+}
+
+export function filterPopupSessionNotebookTimelineRowsBySearchText(
+  rows: readonly PopupSessionNotebookTimelineRow[],
+  query: unknown
+): PopupSessionNotebookTimelineRow[] {
+  return filterNotebookFragmentsBySearchText(rows, query);
+}
 
 export type NotebookFragmentAuthoringResult =
   | { ok: true; fragment: NotebookFragment }
@@ -218,7 +392,9 @@ export function buildPopupSessionNotebookTimelineView(input: {
   return {
     sessionId: input.sessionId,
     fragments: ordered.map(buildPopupSessionNotebookTimelineRow),
-    emptyText: POPUP_SESSION_NOTEBOOK_EMPTY_TEXT,
+    emptyText: buildNotebookFragmentEmptyStateView({
+      primaryText: POPUP_SESSION_NOTEBOOK_EMPTY_TEXT,
+    }).composedText,
   };
 }
 
@@ -237,17 +413,19 @@ export function resolveNotebookHoverEmptyText(input: {
   sessionId: string | null;
   pageScopeKey: NotebookFragmentPageScopeKey | null;
 }): string {
+  let primaryText: string;
   if (input.activeTab === "ioc") {
-    return HOVER_CARD_NOTEBOOK_EMPTY_IOC_TEXT;
-  }
-  if (input.activeTab === "session") {
-    return input.sessionId
+    primaryText = HOVER_CARD_NOTEBOOK_EMPTY_IOC_TEXT;
+  } else if (input.activeTab === "session") {
+    primaryText = input.sessionId
       ? HOVER_CARD_NOTEBOOK_EMPTY_SESSION_TEXT
       : HOVER_CARD_NOTEBOOK_EMPTY_SESSION_UNAVAILABLE_TEXT;
+  } else {
+    primaryText = input.pageScopeKey
+      ? HOVER_CARD_NOTEBOOK_EMPTY_PAGE_TEXT
+      : HOVER_CARD_NOTEBOOK_EMPTY_PAGE_UNAVAILABLE_TEXT;
   }
-  return input.pageScopeKey
-    ? HOVER_CARD_NOTEBOOK_EMPTY_PAGE_TEXT
-    : HOVER_CARD_NOTEBOOK_EMPTY_PAGE_UNAVAILABLE_TEXT;
+  return buildNotebookFragmentEmptyStateView({ primaryText }).composedText;
 }
 
 export function canAuthorNotebookFragmentsForScope(input: {
@@ -492,6 +670,76 @@ export function formatNotebookTabLabel(
   return `${base} (${count})`;
 }
 
+/**
+ * True when a legacy free-text analyst note should become an observation
+ * fragment: note is non-empty and the IOC has no notebook fragments yet.
+ */
+export function shouldMigrateLegacyAnalystNoteToObservationFragment(input: {
+  existingIocFragments: readonly NotebookFragment[];
+  legacyNote: string;
+}): boolean {
+  if (input.existingIocFragments.length > 0) {
+    return false;
+  }
+  return input.legacyNote.trim().length > 0;
+}
+
+/**
+ * Builds an observation fragment from a legacy per-IOC analyst note body.
+ */
+export function buildObservationFragmentFromLegacyAnalystNote(
+  legacyNote: string
+): NotebookFragment {
+  const body = legacyNote.trim();
+  if (body.length === 0) {
+    throw new Error("Legacy analyst note body is empty.");
+  }
+  return createNotebookFragment({
+    type: NOTEBOOK_FRAGMENT_TYPE.OBSERVATION,
+    body,
+  });
+}
+
+/**
+ * On read: when an IOC has no notebook fragments but still has a legacy
+ * free-text analyst note, persist that note as an observation fragment attached
+ * to the IOC and clear the legacy note so the notebook supersedes it.
+ */
+export async function migrateLegacyAnalystNoteToObservationFragmentOnRead(input: {
+  iocType: IocType;
+  value: string;
+}): Promise<NotebookFragment | null> {
+  const existing = await listStoredNotebookFragmentsForIoc(
+    input.iocType,
+    input.value
+  );
+  const sessionNote = getSessionAnalystNote(input.value).trim();
+  const storedNote = (await getStoredAnalystNote(input.value)).trim();
+  const legacyNote = sessionNote.length > 0 ? sessionNote : storedNote;
+
+  if (
+    !shouldMigrateLegacyAnalystNoteToObservationFragment({
+      existingIocFragments: existing,
+      legacyNote,
+    })
+  ) {
+    return null;
+  }
+
+  const fragment = buildObservationFragmentFromLegacyAnalystNote(legacyNote);
+  await upsertStoredNotebookFragment(fragment);
+  await attachStoredNotebookFragmentToIoc({
+    fragmentId: fragment.id,
+    iocType: input.iocType,
+    value: input.value,
+  });
+
+  setSessionAnalystNote(input.value, "");
+  await setStoredAnalystNote(input.value, "");
+
+  return fragment;
+}
+
 export async function loadHoverCardNotebookPanelView(input: {
   iocType: IocType;
   value: string;
@@ -505,6 +753,11 @@ export async function loadHoverCardNotebookPanelView(input: {
     input.pageUrl,
     { includePathPrefix: true }
   );
+
+  await migrateLegacyAnalystNoteToObservationFragmentOnRead({
+    iocType: input.iocType,
+    value: input.value,
+  });
 
   const [iocFragments, sessionFragments, pageFragments] = await Promise.all([
     listStoredNotebookFragmentsForIoc(input.iocType, input.value),
