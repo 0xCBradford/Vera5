@@ -335,10 +335,6 @@ export const HOVER_CARD_PIVOTS_HINT = "Redirect to Intel Sites";
 export const HOVER_CARD_MORE_CLASS = "vera5-hover-card-more";
 export const HOVER_CARD_MORE_SUMMARY_CLASS = "vera5-hover-card-more-summary";
 export const HOVER_CARD_MORE_GROUP_CLASS = "vera5-hover-card-more-group";
-/** Secondary analyst context nested under Export / Notes. */
-export const HOVER_CARD_MORE_BUCKET_SUMMARY = "Extra Intel";
-export const HOVER_CARD_MORE_BUCKET_CLASS = "vera5-hover-card-more-bucket";
-export const HOVER_CARD_MORE_BUCKET_BODY_CLASS = "vera5-hover-card-more-bucket-body";
 export const HOVER_CARD_ENRICHMENT_CLASS = "vera5-hover-card-enrichment";
 export const HOVER_CARD_TAGS_CLASS = "vera5-hover-card-tags";
 export const HOVER_CARD_TAG_CLASS = "vera5-hover-card-tag";
@@ -626,25 +622,6 @@ function appendAwaitingHoverCardSection(
   section.hidden = true;
   section.dataset.vera5AwaitingContent = "true";
   parent.appendChild(section);
-}
-
-function createHoverCardMoreBucket(doc: Document): {
-  details: HTMLDetailsElement;
-  body: HTMLElement;
-} {
-  const details = doc.createElement("details");
-  details.className = `${HOVER_CARD_MORE_CLASS} ${HOVER_CARD_MORE_BUCKET_CLASS}`;
-
-  const summary = doc.createElement("summary");
-  summary.className = HOVER_CARD_MORE_SUMMARY_CLASS;
-  summary.textContent = HOVER_CARD_MORE_BUCKET_SUMMARY;
-  details.appendChild(summary);
-
-  const body = doc.createElement("div");
-  body.className = HOVER_CARD_MORE_BUCKET_BODY_CLASS;
-  details.appendChild(body);
-
-  return { details, body };
 }
 
 function createRiskScoreUnavailableSection(
@@ -2200,11 +2177,11 @@ function createCollapsedTemplateExportDetails(
   pinLabel.textContent = "Pin indicator";
   pinRow.append(pinLabel, iocPinButton);
   investigationBody.appendChild(pinRow);
+  investigationBody.appendChild(iocLabelSection);
+  investigationBody.appendChild(createTemplateExportRow(doc, statusEl));
   investigationDetails.append(investigationSummary, investigationBody);
 
   body.appendChild(investigationDetails);
-  body.appendChild(iocLabelSection);
-  body.appendChild(createTemplateExportRow(doc, statusEl));
   details.appendChild(body);
   return details;
 }
@@ -3639,9 +3616,20 @@ export function buildHoverCardPanel(
     sourceTextHint: payload.sourceTextHint,
     ignoredOverlaps: payload.ignoredOverlaps,
   });
-  const whyDetectedSection = whyDetectedView
+  let whyDetectedSection = whyDetectedView
     ? createWhyDetectedSection(whyDetectedView, doc)
     : null;
+  if (!whyDetectedSection) {
+    whyDetectedSection = doc.createElement("section");
+    whyDetectedSection.className = HOVER_CARD_WHY_DETECTED_CLASS;
+    whyDetectedSection.setAttribute(
+      "aria-label",
+      HOVER_CARD_WHY_DETECTED_SECTION_ARIA_LABEL
+    );
+    whyDetectedSection.appendChild(
+      createSectionHeading(HOVER_CARD_WHY_DETECTED_HEADING, doc)
+    );
+  }
   const preQueryDisclosureSection = createPreQueryDisclosureSection(payload, doc);
 
   const panel = doc.createElement("aside");
@@ -3796,53 +3784,30 @@ export function buildHoverCardPanel(
   // Export / Notes owns the analyst controls and nested secondary intelligence.
   const moreGroup = doc.createElement("div");
   moreGroup.className = HOVER_CARD_MORE_GROUP_CLASS;
-  moreGroup.setAttribute("aria-label", "Export, notes, and extra intelligence");
+  moreGroup.setAttribute("aria-label", "Export and analyst notes");
   exportSection.style.marginBottom = showFooter ? "8px" : "0";
   moreGroup.appendChild(exportSection);
 
-  const { details: moreBucket, body: moreBody } = createHoverCardMoreBucket(doc);
-
-  if (whyDetectedSection) {
-    if (enrichmentTagsSection) {
-      whyDetectedSection.appendChild(enrichmentTagsSection);
-    }
-    const whyDetectedDetails = collapseHoverCardSection(
-      whyDetectedSection,
-      HOVER_CARD_WHY_DETECTED_HEADING,
-      doc
-    );
-    whyDetectedDetails.classList.add("vera5-hover-card-casework-details");
-    whyDetectedDetails.dataset.vera5Casework = "why-detected";
-    moreBody.appendChild(whyDetectedDetails);
+  if (enrichmentTagsSection) {
+    whyDetectedSection.appendChild(enrichmentTagsSection);
   }
 
   if (localLlmSummarySection) {
-    moreBody.appendChild(localLlmSummarySection);
+    whyDetectedSection.appendChild(localLlmSummarySection);
   }
 
   if (singleSourceRawJson) {
-    moreBody.appendChild(singleSourceRawJson);
+    whyDetectedSection.appendChild(singleSourceRawJson);
   }
 
   if (singleSourceLastUpdated) {
-    moreBody.appendChild(singleSourceLastUpdated);
+    whyDetectedSection.appendChild(singleSourceLastUpdated);
   }
 
-  if (enrichmentTagsSection && !whyDetectedSection) {
-    moreBody.appendChild(enrichmentTagsSection);
-  }
+  appendAwaitingHoverCardSection(whyDetectedSection, coOccurrenceSection);
+  appendAwaitingHoverCardSection(whyDetectedSection, relationshipSection);
+  appendAwaitingHoverCardSection(whyDetectedSection, iocTimelineSection);
 
-  appendAwaitingHoverCardSection(moreBody, coOccurrenceSection);
-  appendAwaitingHoverCardSection(moreBody, relationshipSection);
-  const notebookDetails = collapseHoverCardSection(
-    notebookSection,
-    HOVER_CARD_NOTEBOOK_LABEL,
-    doc
-  );
-  notebookDetails.classList.add("vera5-hover-card-casework-details");
-  notebookDetails.dataset.vera5Casework = "notebook";
-  moreBody.appendChild(notebookDetails);
-  appendAwaitingHoverCardSection(moreBody, iocTimelineSection);
   const analystNotesDetails = collapseHoverCardSection(
     analystNotesSection,
     HOVER_CARD_ANALYST_NOTES_LABEL,
@@ -3850,12 +3815,47 @@ export function buildHoverCardPanel(
   );
   analystNotesDetails.classList.add("vera5-hover-card-casework-details");
   analystNotesDetails.dataset.vera5Casework = "analyst-notes";
-  moreBody.appendChild(analystNotesDetails);
+
+  const notebookDetails = collapseHoverCardSection(
+    notebookSection,
+    HOVER_CARD_NOTEBOOK_LABEL,
+    doc
+  );
+  notebookDetails.classList.add("vera5-hover-card-casework-details");
+  notebookDetails.dataset.vera5Casework = "notebook";
+
+  const whyDetectedDetails = collapseHoverCardSection(
+    whyDetectedSection,
+    HOVER_CARD_WHY_DETECTED_HEADING,
+    doc
+  );
+  whyDetectedDetails.classList.add("vera5-hover-card-casework-details");
+  whyDetectedDetails.dataset.vera5Casework = "why-detected";
 
   const exportNotesBody = exportSection.querySelector<HTMLElement>(
     ".vera5-hover-card-export-notes-body"
   );
-  exportNotesBody?.appendChild(moreBucket);
+  const investigationDetails = exportSection.querySelector<HTMLDetailsElement>(
+    ".vera5-hover-card-export-investigation"
+  );
+  const investigationBody = investigationDetails?.querySelector<HTMLElement>(
+    ".vera5-hover-card-export-investigation-body"
+  );
+  investigationBody?.appendChild(analystNotesDetails);
+  exportNotesBody?.append(notebookDetails, whyDetectedDetails);
+
+  if (hoverCardSaveToCollectionOpen) {
+    analystNotesDetails.open = true;
+    if (investigationDetails) {
+      investigationDetails.open = true;
+    }
+    const exportNotesDetails = exportSection.querySelector<HTMLDetailsElement>(
+      ".vera5-hover-card-export-templates"
+    );
+    if (exportNotesDetails) {
+      exportNotesDetails.open = true;
+    }
+  }
 
   if (moreGroup.childElementCount > 0) {
     panel.appendChild(moreGroup);

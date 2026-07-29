@@ -85,9 +85,6 @@ import {
   HOVER_CARD_PIVOT_CHIP_MAX,
   HOVER_CARD_MORE_CLASS,
   HOVER_CARD_MORE_GROUP_CLASS,
-  HOVER_CARD_MORE_BUCKET_CLASS,
-  HOVER_CARD_MORE_BUCKET_SUMMARY,
-  HOVER_CARD_MORE_BUCKET_BODY_CLASS,
   HOVER_CARD_RAW_JSON_BODY_CLASS,
   HOVER_CARD_RAW_JSON_CLASS,
   HOVER_CARD_SOURCES_CLASS,
@@ -291,9 +288,8 @@ describe("notebook panel", () => {
       HOVER_CARD_NOTEBOOK_SECTION_ARIA_LABEL
     );
     expect(
-      section?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
-        ?.textContent
-    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
+      section?.closest(".vera5-hover-card-export-templates")
+    ).not.toBeNull();
     const notebookDetails = section?.closest(
       'details[data-vera5-casework="notebook"]'
     ) as HTMLDetailsElement | null;
@@ -455,13 +451,12 @@ describe("co-occurrence panel", () => {
     expect(section?.getAttribute("aria-label")).toBe(
       HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL
     );
+    expect(section?.closest(".vera5-why-detected")).not.toBeNull();
     expect(
-      section?.closest(`.${HOVER_CARD_MORE_BUCKET_BODY_CLASS}`)
-    ).not.toBeNull();
-    expect(
-      section?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
-        ?.textContent
-    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
+      section
+        ?.closest('details[data-vera5-casework="why-detected"]')
+        ?.querySelector(":scope > summary")?.textContent
+    ).toBe("Why detected?");
 
     await vi.waitFor(() => {
       expect(section?.textContent).toContain("DOM · example.com");
@@ -759,10 +754,7 @@ describe("relationship panel", () => {
       HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL
     );
     expect(section?.getAttribute("data-vera5-relationship-layout")).toBe("list");
-    expect(
-      section?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
-        ?.textContent
-    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
+    expect(section?.closest(".vera5-why-detected")).not.toBeNull();
 
     await vi.waitFor(() => {
       expect(section?.textContent).toContain("DOM · evil.example");
@@ -827,7 +819,9 @@ describe("match provenance exposure", () => {
 
     const why = panel.querySelector(".vera5-why-detected");
     expect(why).not.toBeNull();
-    expect(why?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)).not.toBeNull();
+    expect(
+      why?.closest('details[data-vera5-casework="why-detected"]')
+    ).not.toBeNull();
     expect(panel.querySelector(`.${HOVER_CARD_MORE_GROUP_CLASS}`)).not.toBeNull();
     expect(panel.textContent).toContain("Type: Email address");
     expect(panel.textContent).toContain("Matched an email address in visible text.");
@@ -858,9 +852,10 @@ describe("match provenance exposure", () => {
     const section = panel.querySelector(".vera5-why-detected");
     expect(section).not.toBeNull();
     expect(
-      section?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
-        ?.textContent
-    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
+      section
+        ?.closest('details[data-vera5-casework="why-detected"]')
+        ?.querySelector(":scope > summary")?.textContent
+    ).toBe("Why detected?");
     expect(section?.getAttribute("aria-label")).toBe("Why detected?");
     expect(panel.textContent).toContain("Type: URL");
     expect(panel.textContent).toContain(
@@ -2036,6 +2031,9 @@ describe("hover card overlay", () => {
     expect(panel.textContent).toContain("12 abuse confidence");
     const tagsRow = panel.querySelector(`.${HOVER_CARD_TAGS_CLASS}`);
     expect(tagsRow).not.toBeNull();
+    expect(
+      tagsRow?.closest('details[data-vera5-casework="why-detected"]')
+    ).not.toBeNull();
     expect(panel.querySelectorAll(`.${HOVER_CARD_TAG_CLASS}`)).toHaveLength(2);
   });
 
@@ -3573,7 +3571,7 @@ describe("hover card overlay", () => {
     expect(notesInput?.value).toBe("");
   });
 
-  it("keeps Why Detected, Notebook, and Analyst Notes collapsed by default", () => {
+  it("keeps Investigation casework drawers collapsed in the requested order", () => {
     const panel = buildHoverCardPanel({
       value: "8.8.8.8",
       type: IOC_TYPE.IPV4,
@@ -3592,11 +3590,20 @@ describe("hover card overlay", () => {
 
     expect(caseworkDetails).toHaveLength(3);
     expect(caseworkDetails.every((details) => details.open === false)).toBe(true);
-    expect(summaries).toEqual([
-      "Why detected?",
-      "Notebook",
-      "Analyst notes",
-    ]);
+    expect(summaries).toEqual(["Analyst notes", "Notebook", "Why detected?"]);
+    expect(
+      caseworkDetails[0]?.closest(".vera5-hover-card-export-investigation")
+    ).not.toBeNull();
+    expect(
+      caseworkDetails[1]?.parentElement?.classList.contains(
+        "vera5-hover-card-export-notes-body"
+      )
+    ).toBe(true);
+    expect(
+      caseworkDetails[2]?.parentElement?.classList.contains(
+        "vera5-hover-card-export-notes-body"
+      )
+    ).toBe(true);
   });
 
   it("keeps per-IOC analyst notes when the overlay rebuilds", () => {
@@ -3649,17 +3656,23 @@ describe("hover card overlay", () => {
     const headings = [...panel.querySelectorAll(".vera5-hover-card-section-heading")].map(
       (heading) => heading.textContent
     );
-    const moreSummaries = [
-      ...panel.querySelectorAll(
-        `.${HOVER_CARD_MORE_GROUP_CLASS} > .${HOVER_CARD_MORE_CLASS} > summary`
+    const sourceDrawer = [
+      ...panel.querySelectorAll<HTMLDetailsElement>(
+        `:scope > details.${HOVER_CARD_MORE_CLASS}`
       ),
-    ].map((summary) => summary.textContent);
+    ].find(
+      (details) =>
+        details.querySelector(":scope > summary")?.textContent === "Intel Sources"
+    );
+    const exportGroup = panel.querySelector(`.${HOVER_CARD_MORE_GROUP_CLASS}`);
 
     expect(headings).toContain("Intel Summary");
     expect(headings).toContain("Pivots [Redirect to Intel Sites]");
-    expect(moreSummaries).toContain("Intel Sources");
-    expect(moreSummaries).toContain(HOVER_CARD_MORE_BUCKET_SUMMARY);
-    expect(moreSummaries).not.toContain("Analyst notes");
+    expect(sourceDrawer).toBeDefined();
+    expect(panel.textContent).not.toContain("Extra Intel");
+    expect([...panel.children].indexOf(sourceDrawer!)).toBeLessThan(
+      [...panel.children].indexOf(exportGroup!)
+    );
   });
 
   it("renders export and copy dropdown actions on the overlay", () => {
@@ -3679,6 +3692,17 @@ describe("hover card overlay", () => {
     const templates = exportSection?.querySelector(
       ".vera5-hover-card-export-templates"
     ) as HTMLDetailsElement | null;
+    const investigation = templates?.querySelector(
+      ".vera5-hover-card-export-investigation"
+    ) as HTMLDetailsElement | null;
+    const notesBody = templates?.querySelector(
+      ".vera5-hover-card-export-notes-body"
+    );
+    const directDrawerSummaries = Array.from(
+      notesBody?.children ?? []
+    ).map((element) =>
+      element.querySelector(":scope > summary")?.textContent
+    );
 
     expect(exportSection).not.toBeNull();
     expect(dropdowns).toHaveLength(2);
@@ -3696,13 +3720,28 @@ describe("hover card overlay", () => {
       HOVER_CARD_EXPORT_TEMPLATES_SUMMARY
     );
     expect(
-      templates?.querySelector(".vera5-hover-card-export-notes-body .vera5-hover-card-ioc-label")
+      investigation?.querySelector(".vera5-hover-card-ioc-label")
     ).not.toBeNull();
     expect(
       templates?.querySelector(
         `.vera5-hover-card-export-notes-body .${HOVER_CARD_IOC_PIN_BUTTON_CLASS}`
       )
     ).not.toBeNull();
+    expect(investigation?.open).toBe(false);
+    expect(investigation?.querySelector(":scope > summary")?.textContent).toBe(
+      "Investigation"
+    );
+    expect(
+      investigation?.querySelector(
+        'details[data-vera5-casework="analyst-notes"]'
+      )
+    ).not.toBeNull();
+    expect(directDrawerSummaries).toEqual([
+      "Investigation",
+      "Notebook",
+      "Why detected?",
+    ]);
+    expect(templates?.textContent).not.toContain("Extra Intel");
     expect(panel.querySelector(":scope > .vera5-hover-card-ioc-label")).toBeNull();
     const identity = panel.querySelector(".vera5-hover-card-identity");
     expect(identity).not.toBeNull();
@@ -4324,11 +4363,37 @@ describe("hover card save to collection", () => {
       `.${HOVER_CARD_SAVE_TO_COLLECTION_TOGGLE_CLASS}`
     );
     expect(toggle?.textContent).toBe("Save to collection…");
+    const analystNotesDetails = toggle?.closest<HTMLDetailsElement>(
+      'details[data-vera5-casework="analyst-notes"]'
+    );
+    expect(analystNotesDetails).not.toBeNull();
+    expect(analystNotesDetails?.open).toBe(false);
+    const investigationDetails = analystNotesDetails?.closest<HTMLDetailsElement>(
+      ".vera5-hover-card-export-investigation"
+    );
+    expect(investigationDetails).not.toBeNull();
+    investigationDetails!.open = true;
+    analystNotesDetails!.open = true;
     toggle!.click();
 
     await vi.waitFor(() => {
       panel = readPanel();
       expect(panel.textContent).toContain("Qakbot Investigation");
+      expect(
+        panel.querySelector<HTMLDetailsElement>(
+          'details[data-vera5-casework="analyst-notes"]'
+        )?.open
+      ).toBe(true);
+      expect(
+        panel.querySelector<HTMLDetailsElement>(
+          ".vera5-hover-card-export-investigation"
+        )?.open
+      ).toBe(true);
+      expect(
+        panel.querySelector<HTMLDetailsElement>(
+          ".vera5-hover-card-export-templates"
+        )?.open
+      ).toBe(true);
     });
 
     const collectionButton = [...panel.querySelectorAll<HTMLButtonElement>(
@@ -4398,9 +4463,10 @@ describe("local LLM summary controls", () => {
     const button = summarySection?.querySelector("button");
 
     expect(
-      summarySection?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
-        ?.textContent
-    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
+      summarySection
+        ?.closest('details[data-vera5-casework="why-detected"]')
+        ?.querySelector(":scope > summary")?.textContent
+    ).toBe("Why detected?");
     expect(summarySection?.getAttribute("aria-label")).toBe(
       HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING
     );
@@ -4563,9 +4629,9 @@ describe("local LLM summary controls", () => {
       expect(
         currentPanel
           ?.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS}`)
-          ?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)
-          ?.querySelector("summary")?.textContent
-      ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
+          ?.closest('details[data-vera5-casework="why-detected"]')
+          ?.querySelector(":scope > summary")?.textContent
+      ).toBe("Why detected?");
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();

@@ -906,12 +906,6 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
 .vera5-hover-card-more > :not(summary) {
   padding: 8px;
 }
-.vera5-hover-card-more-bucket > .vera5-hover-card-more-bucket-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 10px;
-}
 .vera5-hover-card-casework-details {
   border: 0;
   background:
@@ -939,28 +933,6 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
   margin: 0;
   border: 0;
   background: transparent;
-}
-.vera5-hover-card-more-bucket-body > section {
-  margin: 0;
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 0;
-  background:
-    radial-gradient(
-      70px 40px at 100% 0%,
-      color-mix(in srgb, var(--vera5-accent) 8%, transparent),
-      transparent 76%
-    ),
-    color-mix(in srgb, var(--vera5-button-bg) 74%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.035),
-    0 5px 14px rgba(0, 0, 0, 0.14);
-}
-.vera5-hover-card-more-bucket-body > .vera5-hover-card-section-heading,
-.vera5-hover-card-more-bucket-body .vera5-hover-card-section-heading {
-  margin-top: 0;
-  margin-bottom: 8px;
-  color: var(--vera5-accent);
 }
 .vera5-hover-card-sources {
   margin-bottom: 0;
@@ -1361,6 +1333,8 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
   margin-bottom: 6px;
 }
 .vera5-hover-card-export-investigation > .vera5-hover-card-export-investigation-body {
+  display: flex;
+  flex-direction: column;
   padding: 4px 8px 6px;
 }
 .vera5-hover-card-export-notes-pin-row {
@@ -1368,8 +1342,9 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin: 0;
-  padding: 0;
+  margin: 0 0 8px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--vera5-border) 78%, transparent);
 }
 .vera5-hover-card-export-notes-pin-label {
   font-size: 10px;
@@ -1380,6 +1355,14 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
 }
 .vera5-hover-card-export-notes-pin-row .vera5-hover-card-ioc-pin {
   min-width: 64px;
+}
+.vera5-hover-card-export-investigation-body > .vera5-hover-card-casework-details {
+  width: 100%;
+  margin-top: 8px;
+}
+.vera5-hover-card-export-notes-body > .vera5-hover-card-casework-details {
+  width: 100%;
+  margin-top: 8px;
 }
 .vera5-hover-card-export-footer .vera5-hover-card-export-templates > .vera5-hover-card-export-notes-body {
   padding-top: 4px;
@@ -1832,10 +1815,6 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
 }
 .vera5-hover-card-export-notes-body .vera5-hover-card-scan-export-template-row {
   margin-top: 0;
-}
-.vera5-hover-card-export-notes-body > .vera5-hover-card-more-bucket {
-  width: 100%;
-  margin-top: 8px;
 }
 .vera5-hover-card-export-footer .vera5-hover-card-scan-export-status {
   text-align: center;
