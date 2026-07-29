@@ -21,6 +21,7 @@ export const MESSAGE = {
   SCAN_SELECTION: "SCAN_SELECTION",
   ENRICH_SELECTION: "ENRICH_SELECTION",
   GET_SELECTION_ACTION_STATE: "GET_SELECTION_ACTION_STATE",
+  OPEN_PIVOT_FROM_SELECTION: "OPEN_PIVOT_FROM_SELECTION",
   NAVIGATE_TO_IOC_ANCHOR: "NAVIGATE_TO_IOC_ANCHOR",
   REOPEN_INVESTIGATION_HISTORY: "REOPEN_INVESTIGATION_HISTORY",
   TAB_SCAN_SNAPSHOT: "TAB_SCAN_SNAPSHOT",
@@ -62,6 +63,11 @@ export type ScanSelectionMessage = { type: typeof MESSAGE.SCAN_SELECTION };
 export type EnrichSelectionMessage = {
   type: typeof MESSAGE.ENRICH_SELECTION;
   macroStepType?: string;
+};
+export type OpenPivotFromSelectionMessage = {
+  type: typeof MESSAGE.OPEN_PIVOT_FROM_SELECTION;
+  provider: string;
+  selectionText: string;
 };
 export type GetSelectionActionStateMessage = {
   type: typeof MESSAGE.GET_SELECTION_ACTION_STATE;
@@ -256,6 +262,17 @@ export function enrichSelectionMessage(input?: {
     message.macroStepType = macroStepType;
   }
   return message;
+}
+
+export function openPivotFromSelectionMessage(input: {
+  provider: string;
+  selectionText: string;
+}): OpenPivotFromSelectionMessage {
+  return {
+    type: MESSAGE.OPEN_PIVOT_FROM_SELECTION,
+    provider: input.provider.trim(),
+    selectionText: input.selectionText,
+  };
 }
 
 export function getSelectionActionStateMessage(): GetSelectionActionStateMessage {

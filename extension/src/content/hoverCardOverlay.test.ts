@@ -1206,7 +1206,7 @@ describe("match provenance exposure", () => {
       ".vera5-live-url-warning-confirm"
     );
     expect(warning?.getAttribute("role")).toBe("alertdialog");
-    expect(warning?.textContent).toContain("VERA5 // NAVIGATION GATE");
+    expect(warning?.textContent).toContain("VERA5 | SECURITY GATE");
     expect(warning?.textContent).toContain("Open live indicator?");
     expect(warning?.textContent).toContain("https://example.com/evil");
     expect(open).not.toHaveBeenCalled();

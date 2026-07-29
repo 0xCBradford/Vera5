@@ -1254,6 +1254,125 @@ function createIndicatorCopyActions(
   return fragment;
 }
 
+export function showVera5NavigationGate(
+  doc: Document,
+  options: {
+    destinationUrl: string;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    riskLabel?: string;
+    mountTarget?: HTMLElement | null;
+    focusReturn?: HTMLElement | null;
+    onConfirm: () => void;
+  }
+): void {
+  ensureVera5UiStyles(doc);
+  const existing = doc.querySelector(".vera5-live-url-warning-backdrop");
+  if (existing) {
+    (
+      existing.querySelector(".vera5-live-url-warning-cancel") as
+        | HTMLButtonElement
+        | null
+    )?.focus();
+    return;
+  }
+
+  const backdrop = doc.createElement("div");
+  backdrop.className = "vera5-live-url-warning-backdrop";
+
+  const dialog = doc.createElement("section");
+  dialog.className = "vera5-live-url-warning";
+  dialog.setAttribute("role", "alertdialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "vera5-live-url-warning-title");
+  dialog.setAttribute("aria-describedby", "vera5-live-url-warning-message");
+
+  const signal = doc.createElement("div");
+  signal.className = "vera5-live-url-warning-signal";
+
+  const brand = doc.createElement("span");
+  brand.className = "vera5-live-url-warning-brand";
+  brand.textContent = "VERA5 | SECURITY GATE";
+
+  const risk = doc.createElement("span");
+  risk.className = "vera5-live-url-warning-risk";
+  risk.textContent = options.riskLabel ?? "High-risk redirect";
+  signal.append(brand, risk);
+
+  const title = doc.createElement("h2");
+  title.id = "vera5-live-url-warning-title";
+  title.className = "vera5-live-url-warning-title";
+  title.textContent = options.title;
+
+  const message = doc.createElement("p");
+  message.id = "vera5-live-url-warning-message";
+  message.className = "vera5-live-url-warning-message";
+  message.textContent = options.message;
+
+  const destinationLabel = doc.createElement("p");
+  destinationLabel.className = "vera5-live-url-warning-destination-label";
+  destinationLabel.textContent = "Destination";
+
+  const destination = doc.createElement("code");
+  destination.className = "vera5-live-url-warning-destination";
+  destination.textContent = options.destinationUrl;
+
+  const actions = doc.createElement("div");
+  actions.className = "vera5-live-url-warning-actions";
+
+  const cancel = doc.createElement("button");
+  cancel.type = "button";
+  cancel.className =
+    "vera5-live-url-warning-button vera5-live-url-warning-cancel";
+  cancel.textContent = "Cancel";
+
+  const confirm = doc.createElement("button");
+  confirm.type = "button";
+  confirm.className =
+    "vera5-live-url-warning-button vera5-live-url-warning-confirm";
+  confirm.textContent = options.confirmLabel;
+  actions.append(cancel, confirm);
+
+  dialog.append(
+    signal,
+    title,
+    message,
+    destinationLabel,
+    destination,
+    actions
+  );
+  backdrop.appendChild(dialog);
+
+  const closeWarning = (): void => {
+    backdrop.remove();
+    if (options.focusReturn?.isConnected) {
+      options.focusReturn.focus();
+    }
+  };
+
+  cancel.addEventListener("click", closeWarning);
+  confirm.addEventListener("click", () => {
+    backdrop.remove();
+    options.onConfirm();
+  });
+  backdrop.addEventListener("click", (event) => {
+    if (event.target === backdrop) {
+      closeWarning();
+    }
+  });
+  backdrop.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeWarning();
+    }
+  });
+
+  const mountTarget = options.mountTarget ?? doc.body;
+  mountTarget.appendChild(backdrop);
+  cancel.focus();
+}
+
 export function createOpenLiveUrlButton(
   liveUrl: string,
   doc: Document
@@ -1264,111 +1383,18 @@ export function createOpenLiveUrlButton(
   button.textContent = HOVER_CARD_OPEN_LIVE_URL_LABEL;
   button.setAttribute("aria-label", HOVER_CARD_OPEN_LIVE_URL_LABEL);
   button.addEventListener("click", () => {
-    const existing = doc.querySelector(".vera5-live-url-warning-backdrop");
-    if (existing) {
-      (
-        existing.querySelector(".vera5-live-url-warning-cancel") as
-          | HTMLButtonElement
-          | null
-      )?.focus();
-      return;
-    }
-
     const docView = doc.defaultView ?? window;
-    const backdrop = doc.createElement("div");
-    backdrop.className = "vera5-live-url-warning-backdrop";
-
-    const dialog = doc.createElement("section");
-    dialog.className = "vera5-live-url-warning";
-    dialog.setAttribute("role", "alertdialog");
-    dialog.setAttribute("aria-modal", "true");
-    dialog.setAttribute("aria-labelledby", "vera5-live-url-warning-title");
-    dialog.setAttribute("aria-describedby", "vera5-live-url-warning-message");
-
-    const signal = doc.createElement("div");
-    signal.className = "vera5-live-url-warning-signal";
-
-    const brand = doc.createElement("span");
-    brand.className = "vera5-live-url-warning-brand";
-    brand.textContent = "VERA5 // NAVIGATION GATE";
-
-    const risk = doc.createElement("span");
-    risk.className = "vera5-live-url-warning-risk";
-    risk.textContent = "High-risk redirect";
-    signal.append(brand, risk);
-
-    const title = doc.createElement("h2");
-    title.id = "vera5-live-url-warning-title";
-    title.className = "vera5-live-url-warning-title";
-    title.textContent = "Open live indicator?";
-
-    const message = doc.createElement("p");
-    message.id = "vera5-live-url-warning-message";
-    message.className = "vera5-live-url-warning-message";
-    message.textContent = HOVER_CARD_OPEN_LIVE_URL_CONFIRM_MESSAGE;
-
-    const destinationLabel = doc.createElement("p");
-    destinationLabel.className = "vera5-live-url-warning-destination-label";
-    destinationLabel.textContent = "Destination";
-
-    const destination = doc.createElement("code");
-    destination.className = "vera5-live-url-warning-destination";
-    destination.textContent = liveUrl;
-
-    const actions = doc.createElement("div");
-    actions.className = "vera5-live-url-warning-actions";
-
-    const cancel = doc.createElement("button");
-    cancel.type = "button";
-    cancel.className =
-      "vera5-live-url-warning-button vera5-live-url-warning-cancel";
-    cancel.textContent = "Cancel";
-
-    const confirm = doc.createElement("button");
-    confirm.type = "button";
-    confirm.className =
-      "vera5-live-url-warning-button vera5-live-url-warning-confirm";
-    confirm.textContent = "Yes, open live URL";
-    actions.append(cancel, confirm);
-
-    dialog.append(
-      signal,
-      title,
-      message,
-      destinationLabel,
-      destination,
-      actions
-    );
-    backdrop.appendChild(dialog);
-
-    const closeWarning = (): void => {
-      backdrop.remove();
-      if (button.isConnected) {
-        button.focus();
-      }
-    };
-
-    cancel.addEventListener("click", closeWarning);
-    confirm.addEventListener("click", () => {
-      backdrop.remove();
-      openLiveUrlInNewTab(liveUrl, docView);
+    showVera5NavigationGate(doc, {
+      destinationUrl: liveUrl,
+      title: "Open live indicator?",
+      message: HOVER_CARD_OPEN_LIVE_URL_CONFIRM_MESSAGE,
+      confirmLabel: "Yes, open live URL",
+      mountTarget: button.closest(`.${HOVER_CARD_PANEL_CLASS}`) ?? doc.body,
+      focusReturn: button,
+      onConfirm: () => {
+        openLiveUrlInNewTab(liveUrl, docView);
+      },
     });
-    backdrop.addEventListener("click", (event) => {
-      if (event.target === backdrop) {
-        closeWarning();
-      }
-    });
-    backdrop.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeWarning();
-      }
-    });
-
-    const mountTarget =
-      button.closest(`.${HOVER_CARD_PANEL_CLASS}`) ?? doc.body;
-    mountTarget.appendChild(backdrop);
-    cancel.focus();
   });
   return button;
 }

@@ -3,10 +3,30 @@ import {
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_LABELS,
   ENRICHMENT_SOURCE_ORDER,
+  ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS,
   buildEnrichmentSourcePivotUrl,
+  type EnrichmentPivotUrlMode,
 } from "./enrichmentSourceRegistry";
+import {
+  CONNECTOR_SOURCE_CLASS,
+  getConnectorSourceClassLabel,
+  type ConnectorSourceClass,
+} from "./connectorDefinition";
+import { extractExactIocValue } from "./iocRequestBoundaries";
 import type { IocType } from "./iocRegex";
-import { IOC_TYPE } from "./iocRegex";
+import {
+  findAsnsInText,
+  findCidrsInText,
+  findCvesInText,
+  findDomainsInText,
+  findEmailsInText,
+  findFilepathsInText,
+  findHashesInText,
+  findIpv4InText,
+  findOnionsInText,
+  findUrlsInText,
+  IOC_TYPE,
+} from "./iocRegex";
 
 export const PIVOT_PROVIDER = {
   ABUSEIPDB: ENRICHMENT_SOURCE.ABUSEIPDB,
@@ -70,9 +90,10 @@ function shouldIncludePivotProvider(
 export function buildPivotUrl(
   provider: PivotProvider,
   type: IocType,
-  value: string
+  value: string,
+  mode: EnrichmentPivotUrlMode = "loose"
 ): string | null {
-  return buildEnrichmentSourcePivotUrl(provider, type, value);
+  return buildEnrichmentSourcePivotUrl(provider, type, value, mode);
 }
 
 export function getPivotLinks(
@@ -370,4 +391,224 @@ export function getPivotRecipes(
   }
 
   return orderPivotRecipesByEmphasis(recipes, options?.emphasisProviders);
+}
+
+export const PIVOT_CONTEXT_MENU_PARENT_ID = "vera5-pivots";
+export const PIVOT_CONTEXT_MENU_PARENT_TITLE = "Pivots";
+export const PIVOT_CONTEXT_MENU_CATEGORY_ID_PREFIX = "vera5-pivots:cat:";
+export const PIVOT_CONTEXT_MENU_SITE_ID_PREFIX = "vera5-pivots:site:";
+export const PIVOT_CONTEXT_MENU_OPEN_ALL_ID_PREFIX = "vera5-pivots:open-all:";
+export const PIVOT_CONTEXT_MENU_OPEN_ALL_TITLE = "Open all";
+
+const PIVOT_CONTEXT_MENU_CATEGORY_ORDER: readonly ConnectorSourceClass[] = [
+  CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+  CONNECTOR_SOURCE_CLASS.COMMUNITY,
+];
+
+export type PivotContextMenuCategory = {
+  id: string;
+  sourceClass: ConnectorSourceClass;
+  title: string;
+  providers: PivotProvider[];
+};
+
+export function pivotContextMenuCategoryId(
+  sourceClass: ConnectorSourceClass
+): string {
+  return `${PIVOT_CONTEXT_MENU_CATEGORY_ID_PREFIX}${sourceClass}`;
+}
+
+export function pivotContextMenuSiteId(provider: PivotProvider): string {
+  return `${PIVOT_CONTEXT_MENU_SITE_ID_PREFIX}${provider}`;
+}
+
+export function pivotContextMenuOpenAllId(
+  sourceClass: ConnectorSourceClass
+): string {
+  return `${PIVOT_CONTEXT_MENU_OPEN_ALL_ID_PREFIX}${sourceClass}`;
+}
+
+export function pivotContextMenuSiteTitle(provider: PivotProvider): string {
+  // Slash in "RDAP/WHOIS" can create nested menus on some browsers (Firefox).
+  if (provider === PIVOT_PROVIDER.RDAP_WHOIS) {
+    return "RDAP WHOIS";
+  }
+  return ENRICHMENT_SOURCE_LABELS[provider];
+}
+
+export function parsePivotContextMenuSiteId(
+  menuItemId: string | number
+): PivotProvider | null {
+  const raw = String(menuItemId);
+  if (!raw.startsWith(PIVOT_CONTEXT_MENU_SITE_ID_PREFIX)) {
+    return null;
+  }
+  const provider = raw.slice(PIVOT_CONTEXT_MENU_SITE_ID_PREFIX.length).trim();
+  if (!PIVOT_PROVIDER_ORDER.includes(provider as PivotProvider)) {
+    return null;
+  }
+  return provider as PivotProvider;
+}
+
+export function parsePivotContextMenuOpenAllId(
+  menuItemId: string | number
+): ConnectorSourceClass | null {
+  const raw = String(menuItemId);
+  if (!raw.startsWith(PIVOT_CONTEXT_MENU_OPEN_ALL_ID_PREFIX)) {
+    return null;
+  }
+  const sourceClass = raw
+    .slice(PIVOT_CONTEXT_MENU_OPEN_ALL_ID_PREFIX.length)
+    .trim();
+  if (
+    !PIVOT_CONTEXT_MENU_CATEGORY_ORDER.includes(
+      sourceClass as ConnectorSourceClass
+    )
+  ) {
+    return null;
+  }
+  return sourceClass as ConnectorSourceClass;
+}
+
+export function listPivotContextMenuCategories(): PivotContextMenuCategory[] {
+  const buckets = new Map<ConnectorSourceClass, PivotProvider[]>();
+  for (const sourceClass of PIVOT_CONTEXT_MENU_CATEGORY_ORDER) {
+    buckets.set(sourceClass, []);
+  }
+
+  for (const provider of PIVOT_PROVIDER_ORDER) {
+    const sourceClass =
+      ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[provider]?.sourceClass ??
+      CONNECTOR_SOURCE_CLASS.COMMUNITY;
+    const bucket = buckets.get(sourceClass);
+    if (bucket) {
+      bucket.push(provider);
+      continue;
+    }
+    buckets.set(sourceClass, [provider]);
+  }
+
+  return PIVOT_CONTEXT_MENU_CATEGORY_ORDER.flatMap((sourceClass) => {
+    const providers = buckets.get(sourceClass) ?? [];
+    if (providers.length === 0) {
+      return [];
+    }
+    return [
+      {
+        id: pivotContextMenuCategoryId(sourceClass),
+        sourceClass,
+        title: getConnectorSourceClassLabel(sourceClass),
+        providers,
+      },
+    ];
+  });
+}
+
+export type PivotOpenTarget = {
+  provider: PivotProvider;
+  type: IocType;
+  value: string;
+  href: string;
+};
+
+export function resolveIocFromSelectionText(
+  selectionText: string
+): { type: IocType; value: string } | null {
+  const trimmed = selectionText.trim();
+  if (trimmed.length === 0) {
+    return null;
+  }
+
+  for (const type of Object.values(IOC_TYPE)) {
+    const exact = extractExactIocValue(trimmed, type);
+    if (exact) {
+      return { type, value: exact };
+    }
+  }
+
+  const candidates = [
+    ...findUrlsInText(trimmed),
+    ...findEmailsInText(trimmed),
+    ...findFilepathsInText(trimmed),
+    ...findOnionsInText(trimmed),
+    ...findHashesInText(trimmed),
+    ...findCvesInText(trimmed),
+    ...findCidrsInText(trimmed),
+    ...findIpv4InText(trimmed),
+    ...findAsnsInText(trimmed),
+    ...findDomainsInText(trimmed),
+  ];
+
+  const best = [...candidates].sort(
+    (left, right) => right.value.length - left.value.length
+  )[0];
+  return best ? { type: best.type, value: best.value } : null;
+}
+
+export function resolvePivotOpenTarget(
+  provider: string,
+  selectionText: string,
+  mode: EnrichmentPivotUrlMode = "loose"
+): PivotOpenTarget | { error: string } {
+  const trimmedProvider = provider.trim();
+  if (!PIVOT_PROVIDER_ORDER.includes(trimmedProvider as PivotProvider)) {
+    return { error: "Unknown pivot provider." };
+  }
+  const pivotProvider = trimmedProvider as PivotProvider;
+  const match = resolveIocFromSelectionText(selectionText);
+  if (!match) {
+    return { error: "No indicator found in selection." };
+  }
+  const href = buildPivotUrl(pivotProvider, match.type, match.value, mode);
+  if (!href) {
+    return {
+      error: `${ENRICHMENT_SOURCE_LABELS[pivotProvider]} does not support this indicator type.`,
+    };
+  }
+  return {
+    provider: pivotProvider,
+    type: match.type,
+    value: match.value,
+    href,
+  };
+}
+
+export function resolvePivotOpenTargetsForCategory(
+  sourceClass: ConnectorSourceClass,
+  selectionText: string,
+  mode: EnrichmentPivotUrlMode = "strict"
+): PivotOpenTarget[] {
+  const category = listPivotContextMenuCategories().find(
+    (entry) => entry.sourceClass === sourceClass
+  );
+  if (!category) {
+    return [];
+  }
+
+  const targets: PivotOpenTarget[] = [];
+  for (const provider of category.providers) {
+    const resolved = resolvePivotOpenTarget(provider, selectionText, mode);
+    if ("error" in resolved) {
+      continue;
+    }
+    targets.push(resolved);
+  }
+  return targets;
+}
+
+export function formatPivotOpenAllEmptyMessage(
+  sourceClass: ConnectorSourceClass
+): string {
+  return `Vera5: no ${getConnectorSourceClassLabel(sourceClass)} pivots for this indicator type.`;
+}
+
+export function formatPivotStatusMessage(error: string): string {
+  const trimmed = error.trim();
+  if (trimmed.length === 0) {
+    return "Vera5: unable to open pivot.";
+  }
+  if (trimmed.startsWith("Vera5:")) {
+    return trimmed;
+  }
+  return `Vera5: ${trimmed}`;
 }

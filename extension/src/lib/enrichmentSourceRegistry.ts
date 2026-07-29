@@ -217,10 +217,24 @@ function buildPulsedivePivotUrl(type: IocType, value: string): string | null {
 }
 
 function buildMalwareBazaarPivotUrl(type: IocType, value: string): string | null {
-  if (!FILE_HASH_TYPES.includes(type)) {
-    return null;
+  const trimmed = value.trim().toLowerCase();
+  switch (type) {
+    case IOC_TYPE.MD5:
+      return `https://bazaar.abuse.ch/browse.php?search=md5:${encodeURIComponent(trimmed)}`;
+    case IOC_TYPE.SHA1:
+      return `https://bazaar.abuse.ch/browse.php?search=sha1:${encodeURIComponent(trimmed)}`;
+    case IOC_TYPE.SHA256:
+      return `https://bazaar.abuse.ch/browse.php?search=sha256:${encodeURIComponent(trimmed)}`;
+    default:
+      return null;
   }
-  return `https://bazaar.abuse.ch/browse.php?search=sha256:${encodeURIComponent(value.trim().toLowerCase())}`;
+}
+
+function buildMalwareBazaarPivotUrlLoose(type: IocType, value: string): string | null {
+  return (
+    buildMalwareBazaarPivotUrl(type, value) ??
+    `https://bazaar.abuse.ch/browse.php?search=${encodeURIComponent(value.trim())}`
+  );
 }
 
 function buildCensysPivotUrl(type: IocType, value: string): string | null {
@@ -244,19 +258,51 @@ function buildThreatFoxPivotUrl(type: IocType, value: string): string | null {
 }
 
 function buildUrlHausPivotUrl(type: IocType, value: string): string | null {
-  if (type !== IOC_TYPE.URL && type !== IOC_TYPE.DOMAIN) {
-    return null;
+  const trimmed = value.trim();
+  switch (type) {
+    case IOC_TYPE.URL:
+      return `https://urlhaus.abuse.ch/browse.php?search=${encodeURIComponent(normalizeDefangedUrl(trimmed))}`;
+    case IOC_TYPE.DOMAIN:
+    case IOC_TYPE.IPV4:
+      return `https://urlhaus.abuse.ch/browse.php?search=${encodeURIComponent(trimmed)}`;
+    default:
+      return null;
   }
+}
+
+function buildUrlHausPivotUrlLoose(type: IocType, value: string): string | null {
   const trimmed =
     type === IOC_TYPE.URL ? normalizeDefangedUrl(value.trim()) : value.trim();
-  return `https://urlhaus.abuse.ch/browse.php?search=${encodeURIComponent(trimmed)}`;
+  return (
+    buildUrlHausPivotUrl(type, value) ??
+    `https://urlhaus.abuse.ch/browse.php?search=${encodeURIComponent(trimmed)}`
+  );
 }
 
 function buildRdapWhoisPivotUrl(type: IocType, value: string): string | null {
-  if (type !== IOC_TYPE.DOMAIN) {
-    return null;
+  // Browser pivots must land on HTML WHOIS UIs. rdap.org returns application/rdap+json,
+  // which looks like a failed redirect to analysts.
+  const trimmed = value.trim();
+  switch (type) {
+    case IOC_TYPE.DOMAIN:
+      return `https://www.whois.com/whois/${encodePathSegment(trimmed.toLowerCase())}`;
+    case IOC_TYPE.IPV4:
+    case IOC_TYPE.CIDR:
+      return `https://www.whois.com/whois/${encodePathSegment(trimmed)}`;
+    case IOC_TYPE.ASN: {
+      const asnNumber = trimmed.replace(/^AS/i, "");
+      return `https://www.whois.com/whois/${encodePathSegment(`AS${asnNumber}`)}`;
+    }
+    default:
+      return null;
   }
-  return `https://rdap.org/domain/${encodePathSegment(value.trim().toLowerCase())}`;
+}
+
+function buildRdapWhoisPivotUrlLoose(type: IocType, value: string): string | null {
+  return (
+    buildRdapWhoisPivotUrl(type, value) ??
+    `https://www.whois.com/whois/${encodePathSegment(value.trim())}`
+  );
 }
 
 export type EnrichmentSourceConfidenceMetadataDefaults = {
@@ -451,7 +497,7 @@ export const ENRICHMENT_SOURCE_DEFINITIONS: Record<
     cacheKeyNamespace: "malwarebazaar",
     enabledDefault: false,
     liveConnector: false,
-    buildPivotUrl: buildMalwareBazaarPivotUrl,
+    buildPivotUrl: buildMalwareBazaarPivotUrlLoose,
   },
   [ENRICHMENT_SOURCE.CENSYS]: {
     id: ENRICHMENT_SOURCE.CENSYS,
@@ -489,7 +535,7 @@ export const ENRICHMENT_SOURCE_DEFINITIONS: Record<
     cacheKeyNamespace: "urlhaus",
     enabledDefault: false,
     liveConnector: false,
-    buildPivotUrl: buildUrlHausPivotUrl,
+    buildPivotUrl: buildUrlHausPivotUrlLoose,
   },
   [ENRICHMENT_SOURCE.RDAP_WHOIS]: {
     id: ENRICHMENT_SOURCE.RDAP_WHOIS,
@@ -501,7 +547,7 @@ export const ENRICHMENT_SOURCE_DEFINITIONS: Record<
     cacheKeyNamespace: "rdap_whois",
     enabledDefault: false,
     liveConnector: true,
-    buildPivotUrl: buildRdapWhoisPivotUrl,
+    buildPivotUrl: buildRdapWhoisPivotUrlLoose,
   },
 };
 
@@ -574,21 +620,40 @@ export function formatNotImplementedSourceMessage(displayName: string): string {
   return `${displayName} enrichment is not available yet.`;
 }
 
+export type EnrichmentPivotUrlMode = "strict" | "loose";
+
+const STRICT_PIVOT_URL_BUILDERS: Partial<
+  Record<EnrichmentSourceId, (type: IocType, value: string) => string | null>
+> = {
+  [ENRICHMENT_SOURCE.MALWAREBAZAAR]: buildMalwareBazaarPivotUrl,
+  [ENRICHMENT_SOURCE.URLHAUS]: buildUrlHausPivotUrl,
+  [ENRICHMENT_SOURCE.RDAP_WHOIS]: buildRdapWhoisPivotUrl,
+};
+
 export function buildEnrichmentSourcePivotUrl(
   sourceId: EnrichmentSourceId,
   type: IocType,
-  value: string
+  value: string,
+  mode: EnrichmentPivotUrlMode = "loose"
 ): string | null {
+  if (mode === "strict") {
+    const strictBuilder = STRICT_PIVOT_URL_BUILDERS[sourceId];
+    if (strictBuilder) {
+      return strictBuilder(type, value);
+    }
+  }
   const builder = ENRICHMENT_SOURCE_DEFINITIONS[sourceId].buildPivotUrl;
   return builder ? builder(type, value) : null;
 }
 
 export function listEnrichmentSourcesWithPivotSupport(
   type: IocType,
-  value: string
+  value: string,
+  mode: EnrichmentPivotUrlMode = "loose"
 ): EnrichmentSourceId[] {
   return ENRICHMENT_SOURCE_ORDER.filter(
-    (sourceId) => buildEnrichmentSourcePivotUrl(sourceId, type, value) !== null
+    (sourceId) =>
+      buildEnrichmentSourcePivotUrl(sourceId, type, value, mode) !== null
   );
 }
 

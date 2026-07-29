@@ -34,6 +34,7 @@ import { HOVER_CARD_HOST_ID, HOVER_CARD_PANEL_CLASS } from "./hoverCardOverlay";
 import {
   handleEnrichSelectionRequest,
   handleGetSelectionActionStateRequest,
+  handleOpenPivotFromSelectionRequest,
   resolveHighlightFromSelection,
   resolveIocMatchFromSelectionText,
   resolveSelectionActionState,
@@ -664,5 +665,69 @@ describe("setupEnrichSelectionListener", () => {
       MACRO_ENRICH_QUIET_MODE_ABORT_MESSAGE
     );
     expect(enrichmentBackgroundFetch.runBackgroundEnrichment).not.toHaveBeenCalled();
+  });
+
+  it("resolves OPEN_PIVOT_FROM_SELECTION to a pivot href for the service worker", async () => {
+    const response = await handleOpenPivotFromSelectionRequest({
+      provider: "virustotal",
+      selectionText: "8.8.8.8",
+    });
+
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        provider: "virustotal",
+        value: "8.8.8.8",
+        type: "ipv4",
+        href: "https://www.virustotal.com/gui/ip-address/8.8.8.8",
+      },
+    });
+    expect(document.querySelector(".vera5-live-url-warning")).toBeNull();
+  });
+
+  it("prefers the live page selection over truncated context-menu selectionText", async () => {
+    const fullHash =
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    const paragraph = document.createElement("p");
+    paragraph.textContent = fullHash;
+    document.body.appendChild(paragraph);
+    const range = document.createRange();
+    range.selectNodeContents(paragraph);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+
+    const response = await handleOpenPivotFromSelectionRequest({
+      provider: "virustotal",
+      selectionText: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4...",
+    });
+
+    expect(response).toEqual({
+      ok: true,
+      payload: {
+        provider: "virustotal",
+        value: fullHash,
+        type: "sha256",
+        href: `https://www.virustotal.com/gui/file/${fullHash}`,
+      },
+    });
+  });
+
+  it("rejects unsupported pivot providers and indicator types", async () => {
+    await expect(
+      handleOpenPivotFromSelectionRequest({
+        provider: "not-a-provider",
+        selectionText: "8.8.8.8",
+      })
+    ).resolves.toEqual({ ok: false, error: "Unknown pivot provider." });
+
+    await expect(
+      handleOpenPivotFromSelectionRequest({
+        provider: "abuseipdb",
+        selectionText: "example.com",
+      })
+    ).resolves.toEqual({
+      ok: false,
+      error: "AbuseIPDB does not support this indicator type.",
+    });
   });
 });

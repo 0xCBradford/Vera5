@@ -44,6 +44,7 @@ import {
   showHoverCardNearRange,
   type HoverCardOverlayPayload,
 } from "./hoverCardOverlay";
+import { resolvePivotOpenTarget } from "../lib/pivots";
 import { CONTENT_MESSAGE } from "./constants";
 import { resolveActiveSelectionRange, resolveIocDetectorScanOptions } from "./scanPage";
 
@@ -55,6 +56,25 @@ export function isEnrichSelectionMessage(
     typeof raw === "object" &&
     "type" in raw &&
     (raw as { type: unknown }).type === CONTENT_MESSAGE.ENRICH_SELECTION
+  );
+}
+
+export function isOpenPivotFromSelectionMessage(
+  raw: unknown
+): raw is {
+  type: typeof CONTENT_MESSAGE.OPEN_PIVOT_FROM_SELECTION;
+  provider: string;
+  selectionText: string;
+} {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  return (
+    record.type === CONTENT_MESSAGE.OPEN_PIVOT_FROM_SELECTION &&
+    typeof record.provider === "string" &&
+    record.provider.trim().length > 0 &&
+    typeof record.selectionText === "string"
   );
 }
 
@@ -624,6 +644,15 @@ export function setupEnrichSelectionListener(): void {
       return true;
     }
 
+    if (isOpenPivotFromSelectionMessage(message)) {
+      void handleOpenPivotFromSelectionRequest(message, document)
+        .then(sendResponse)
+        .catch((error) => {
+          logUnlessBenignExtensionError(error);
+        });
+      return true;
+    }
+
     if (!isEnrichSelectionMessage(message)) {
       return false;
     }
@@ -641,4 +670,30 @@ export function setupEnrichSelectionListener(): void {
       });
     return true;
   });
+}
+
+export async function handleOpenPivotFromSelectionRequest(
+  message: {
+    provider: string;
+    selectionText: string;
+  },
+  doc: Document = document
+): Promise<MessageResponse> {
+  const liveSelection = doc.defaultView?.getSelection()?.toString() ?? "";
+  const selectionText =
+    liveSelection.trim().length > 0 ? liveSelection : message.selectionText;
+  const resolved = resolvePivotOpenTarget(message.provider, selectionText);
+  if ("error" in resolved) {
+    return { ok: false, error: resolved.error };
+  }
+
+  return {
+    ok: true,
+    payload: {
+      provider: resolved.provider,
+      value: resolved.value,
+      type: resolved.type,
+      href: resolved.href,
+    },
+  };
 }

@@ -513,7 +513,7 @@ export function HoverCard({
           >
             <div className="vera5-live-url-warning-signal">
               <span className="vera5-live-url-warning-brand">
-                VERA5 // NAVIGATION GATE
+                VERA5 | SECURITY GATE
               </span>
               <span className="vera5-live-url-warning-risk">
                 High-risk redirect

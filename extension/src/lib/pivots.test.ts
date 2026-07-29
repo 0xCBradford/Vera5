@@ -5,10 +5,20 @@ import {
   buildPivotUrl,
   getPivotLinks,
   getPivotRecipes,
+  listPivotContextMenuCategories,
+  parsePivotContextMenuOpenAllId,
+  parsePivotContextMenuSiteId,
+  pivotContextMenuOpenAllId,
+  pivotContextMenuSiteId,
+  pivotContextMenuSiteTitle,
+  resolvePivotOpenTarget,
+  resolvePivotOpenTargetsForCategory,
+  PIVOT_CONTEXT_MENU_OPEN_ALL_TITLE,
   PIVOT_PROVIDER,
   PIVOT_PROVIDER_ORDER,
   type PivotProvider,
 } from "./pivots";
+import { CONNECTOR_SOURCE_CLASS } from "./connectorDefinition";
 
 type PivotExpectation = Partial<Record<PivotProvider, string | null>>;
 
@@ -286,6 +296,37 @@ describe("pivot link templates", () => {
       "https://www.shodan.io/search?query=net%3A203.0.113.0%2F24"
     );
   });
+
+  it("opens RDAP/WHOIS, MalwareBazaar, and URLHaus for IP selections", () => {
+    const ip = "8.8.8.8";
+    expect(buildPivotUrl(PIVOT_PROVIDER.RDAP_WHOIS, IOC_TYPE.IPV4, ip)).toBe(
+      "https://www.whois.com/whois/8.8.8.8"
+    );
+    expect(buildPivotUrl(PIVOT_PROVIDER.MALWAREBAZAAR, IOC_TYPE.IPV4, ip)).toBe(
+      "https://bazaar.abuse.ch/browse.php?search=8.8.8.8"
+    );
+    expect(buildPivotUrl(PIVOT_PROVIDER.URLHAUS, IOC_TYPE.IPV4, ip)).toBe(
+      "https://urlhaus.abuse.ch/browse.php?search=8.8.8.8"
+    );
+  });
+
+  it("uses the correct MalwareBazaar hash keyword and keeps URLHaus/RDAP openable", () => {
+    const md5 = "d41d8cd98f00b204e9800998ecf8427e";
+    expect(buildPivotUrl(PIVOT_PROVIDER.MALWAREBAZAAR, IOC_TYPE.MD5, md5)).toBe(
+      `https://bazaar.abuse.ch/browse.php?search=md5:${md5}`
+    );
+    expect(buildPivotUrl(PIVOT_PROVIDER.URLHAUS, IOC_TYPE.MD5, md5, "loose")).toBe(
+      `https://urlhaus.abuse.ch/browse.php?search=${md5}`
+    );
+    expect(buildPivotUrl(PIVOT_PROVIDER.RDAP_WHOIS, IOC_TYPE.MD5, md5, "loose")).toBe(
+      `https://www.whois.com/whois/${md5}`
+    );
+    expect(buildPivotUrl(PIVOT_PROVIDER.URLHAUS, IOC_TYPE.MD5, md5, "strict")).toBeNull();
+    expect(buildPivotUrl(PIVOT_PROVIDER.RDAP_WHOIS, IOC_TYPE.MD5, md5, "strict")).toBeNull();
+    expect(
+      buildPivotUrl(PIVOT_PROVIDER.MALWAREBAZAAR, IOC_TYPE.IPV4, "8.8.8.8", "strict")
+    ).toBeNull();
+  });
 });
 
 describe("pivot recipes", () => {
@@ -473,4 +514,146 @@ describe("pivot recipe static rules", () => {
       }
     }
   );
+});
+
+describe("pivot context menu catalog", () => {
+  it("groups providers into Authoritative then Community categories", () => {
+    const categories = listPivotContextMenuCategories();
+    expect(categories.map((category) => category.title)).toEqual([
+      "Authoritative",
+      "Community",
+    ]);
+    expect(categories[0]?.providers).toContain(PIVOT_PROVIDER.VIRUSTOTAL);
+    expect(categories[0]?.providers).toContain(PIVOT_PROVIDER.ABUSEIPDB);
+    expect(categories[1]?.providers).toContain(PIVOT_PROVIDER.OTX);
+    expect(categories[1]?.providers).toContain(PIVOT_PROVIDER.PULSEDIVE);
+
+    const allProviders = categories.flatMap((category) => category.providers);
+    expect(new Set(allProviders)).toEqual(new Set(PIVOT_PROVIDER_ORDER));
+    expect(allProviders).toHaveLength(PIVOT_PROVIDER_ORDER.length);
+  });
+
+  it("round-trips site menu ids for every pivot provider", () => {
+    for (const provider of PIVOT_PROVIDER_ORDER) {
+      expect(parsePivotContextMenuSiteId(pivotContextMenuSiteId(provider))).toBe(
+        provider
+      );
+    }
+    expect(parsePivotContextMenuSiteId("vera5-pivots:cat:authoritative")).toBeNull();
+    expect(parsePivotContextMenuSiteId("enrich-with-vera5")).toBeNull();
+  });
+
+  it("uses a slash-free RDAP WHOIS context menu title", () => {
+    expect(pivotContextMenuSiteTitle(PIVOT_PROVIDER.RDAP_WHOIS)).toBe("RDAP WHOIS");
+    expect(pivotContextMenuSiteTitle(PIVOT_PROVIDER.VIRUSTOTAL)).toBe("VirusTotal");
+  });
+
+  it("round-trips Open all menu ids and resolves category targets", () => {
+    expect(PIVOT_CONTEXT_MENU_OPEN_ALL_TITLE).toBe("Open all");
+    expect(
+      parsePivotContextMenuOpenAllId(
+        pivotContextMenuOpenAllId(CONNECTOR_SOURCE_CLASS.AUTHORITATIVE)
+      )
+    ).toBe(CONNECTOR_SOURCE_CLASS.AUTHORITATIVE);
+    expect(parsePivotContextMenuOpenAllId("vera5-pivots:site:virustotal")).toBeNull();
+
+    const authoritative = resolvePivotOpenTargetsForCategory(
+      CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+      "8.8.8.8"
+    );
+    expect(authoritative.length).toBeGreaterThan(1);
+    expect(authoritative.map((target) => target.provider)).toContain(
+      PIVOT_PROVIDER.ABUSEIPDB
+    );
+    expect(authoritative.map((target) => target.provider)).toContain(
+      PIVOT_PROVIDER.RDAP_WHOIS
+    );
+    expect(
+      authoritative.find((target) => target.provider === PIVOT_PROVIDER.RDAP_WHOIS)
+        ?.href
+    ).toBe("https://www.whois.com/whois/8.8.8.8");
+
+    const community = resolvePivotOpenTargetsForCategory(
+      CONNECTOR_SOURCE_CLASS.COMMUNITY,
+      "8.8.8.8"
+    );
+    expect(community.map((target) => target.provider)).toContain(
+      PIVOT_PROVIDER.OTX
+    );
+    expect(community.map((target) => target.provider)).toContain(
+      PIVOT_PROVIDER.URLHAUS
+    );
+    expect(community.map((target) => target.provider)).not.toContain(
+      PIVOT_PROVIDER.MALWAREBAZAAR
+    );
+  });
+
+  it("Phase B: Open all strict mode skips loose-only fallbacks", () => {
+    const md5 = "d41d8cd98f00b204e9800998ecf8427e";
+    const communityStrict = resolvePivotOpenTargetsForCategory(
+      CONNECTOR_SOURCE_CLASS.COMMUNITY,
+      md5,
+      "strict"
+    );
+    expect(communityStrict.map((target) => target.provider)).toContain(
+      PIVOT_PROVIDER.MALWAREBAZAAR
+    );
+    expect(communityStrict.map((target) => target.provider)).not.toContain(
+      PIVOT_PROVIDER.URLHAUS
+    );
+
+    const authoritativeStrict = resolvePivotOpenTargetsForCategory(
+      CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+      md5,
+      "strict"
+    );
+    expect(authoritativeStrict.map((target) => target.provider)).not.toContain(
+      PIVOT_PROVIDER.RDAP_WHOIS
+    );
+    expect(authoritativeStrict.map((target) => target.provider)).toContain(
+      PIVOT_PROVIDER.VIRUSTOTAL
+    );
+
+    expect(resolvePivotOpenTarget(PIVOT_PROVIDER.RDAP_WHOIS, md5, "loose")).toEqual(
+      expect.objectContaining({
+        href: `https://www.whois.com/whois/${md5}`,
+      })
+    );
+    expect(resolvePivotOpenTarget(PIVOT_PROVIDER.RDAP_WHOIS, md5, "strict")).toEqual({
+      error: "RDAP/WHOIS does not support this indicator type.",
+    });
+  });
+
+  it("resolves pivot open targets from selection text", () => {
+    expect(resolvePivotOpenTarget("virustotal", "8.8.8.8")).toEqual({
+      provider: "virustotal",
+      type: IOC_TYPE.IPV4,
+      value: "8.8.8.8",
+      href: "https://www.virustotal.com/gui/ip-address/8.8.8.8",
+    });
+    expect(resolvePivotOpenTarget("abuseipdb", "example.com")).toEqual({
+      error: "AbuseIPDB does not support this indicator type.",
+    });
+  });
+
+  it("Phase A: every registered pivot site opens for at least one common IOC", () => {
+    const fixtures = [
+      "8.8.8.8",
+      "example.com",
+      "https://evil.example/path",
+      "d41d8cd98f00b204e9800998ecf8427e",
+      "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    ] as const;
+
+    for (const provider of PIVOT_PROVIDER_ORDER) {
+      const opened = fixtures.some((fixture) => {
+        const resolved = resolvePivotOpenTarget(provider, fixture);
+        return !("error" in resolved);
+      });
+      expect(opened, `${provider} should open for at least one fixture`).toBe(
+        true
+      );
+    }
+  });
 });

@@ -132,6 +132,11 @@ exports[`golden: investigation session export JSON snapshots > full session expo
           "href": "https://pulsedive.com/explore?q=185.220.101.4"
         },
         {
+          "provider": "malwarebazaar",
+          "label": "MalwareBazaar",
+          "href": "https://bazaar.abuse.ch/browse.php?search=185.220.101.4"
+        },
+        {
           "provider": "censys",
           "label": "Censys",
           "href": "https://search.censys.io/hosts/185.220.101.4"
@@ -140,6 +145,16 @@ exports[`golden: investigation session export JSON snapshots > full session expo
           "provider": "threatfox",
           "label": "ThreatFox",
           "href": "https://threatfox.abuse.ch/browse.php?search=ioc:185.220.101.4"
+        },
+        {
+          "provider": "urlhaus",
+          "label": "URLHaus",
+          "href": "https://urlhaus.abuse.ch/browse.php?search=185.220.101.4"
+        },
+        {
+          "provider": "rdap_whois",
+          "label": "RDAP/WHOIS",
+          "href": "https://www.whois.com/whois/185.220.101.4"
         }
       ]
     },
@@ -186,6 +201,11 @@ exports[`golden: investigation session export JSON snapshots > full session expo
           "href": "https://pulsedive.com/explore?q=example.com"
         },
         {
+          "provider": "malwarebazaar",
+          "label": "MalwareBazaar",
+          "href": "https://bazaar.abuse.ch/browse.php?search=example.com"
+        },
+        {
           "provider": "censys",
           "label": "Censys",
           "href": "https://search.censys.io/domains/example.com"
@@ -203,7 +223,7 @@ exports[`golden: investigation session export JSON snapshots > full session expo
         {
           "provider": "rdap_whois",
           "label": "RDAP/WHOIS",
-          "href": "https://rdap.org/domain/example.com"
+          "href": "https://www.whois.com/whois/example.com"
         }
       ]
     }

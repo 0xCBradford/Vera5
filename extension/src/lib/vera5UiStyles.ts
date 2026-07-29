@@ -608,10 +608,10 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
   position: relative;
   overflow: hidden;
   box-sizing: border-box;
-  width: min(430px, 100%);
-  padding: 0 18px 18px;
+  width: min(540px, 100%);
+  padding: 0 24px 24px;
   border: 0;
-  border-radius: 12px 5px 12px 5px;
+  border-radius: 14px 6px 14px 6px;
   background:
     linear-gradient(
       145deg,
@@ -620,17 +620,17 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
     );
   box-shadow:
     inset 0 18px 40px -34px rgba(255, 77, 90, 0.8),
-    0 24px 70px rgba(0, 0, 0, 0.62);
+    0 28px 80px rgba(0, 0, 0, 0.66);
   color: var(--vera5-text, #f5f7fa);
   font-family: var(--vera5-font-ui);
 }
 .vera5-live-url-warning::after {
   content: "";
   position: absolute;
-  top: 46px;
+  top: 52px;
   right: -18px;
-  width: 118px;
-  height: 76px;
+  width: 132px;
+  height: 86px;
   opacity: 0.11;
   background-image: radial-gradient(
     circle,
@@ -645,20 +645,20 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin: 0 -18px 6px;
-  padding: 9px 14px 9px 18px;
+  gap: 12px;
+  margin: 0 -24px 14px;
+  padding: 12px 18px 12px 24px;
   background: rgba(5, 7, 10, 0.58);
 }
 .vera5-live-url-warning-brand {
   font-family: var(--vera5-font-wordmark, var(--vera5-font-ui));
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.1em;
   color: var(--vera5-accent, #ffb224);
 }
 .vera5-live-url-warning-risk {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -667,22 +667,24 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
 .vera5-live-url-warning-title {
   position: relative;
   z-index: 1;
-  margin: 0 0 8px;
-  font-size: 20px;
+  margin: 0 0 10px;
+  font-size: 24px;
   line-height: 1.25;
+  text-align: center;
   color: var(--vera5-text, #f5f7fa);
 }
 .vera5-live-url-warning-message {
   position: relative;
   z-index: 1;
-  margin: 0 0 14px;
-  font-size: 12px;
+  margin: 0 0 18px;
+  font-size: 14px;
   line-height: 1.55;
+  text-align: center;
   color: var(--vera5-muted-label, #a7b0ba);
 }
 .vera5-live-url-warning-destination-label {
-  margin: 0 0 5px;
-  font-size: 9px;
+  margin: 0 0 6px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -692,54 +694,81 @@ ${VERA5_CONTENT_UI_TOKEN_ROOTS} {
   display: block;
   box-sizing: border-box;
   width: 100%;
-  max-height: 86px;
+  max-height: 96px;
   overflow: auto;
-  padding: 10px 12px;
-  border-radius: 6px;
+  padding: 12px 14px;
+  border-radius: 8px;
   background: #293541;
   color: #f5f7fa;
   font-family: var(--vera5-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 .vera5-live-url-warning-actions {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr);
-  gap: 8px;
-  margin-top: 16px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+  gap: 12px;
+  margin-top: 20px;
 }
 .vera5-live-url-warning-button {
-  min-height: 36px;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 6px;
-  font: 700 11px/1.2 var(--vera5-font-ui);
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid color-mix(in srgb, var(--vera5-accent) 62%, transparent);
+  border-radius: 8px;
+  font: 700 13px/1.2 var(--vera5-font-ui);
   cursor: pointer;
-}
-.vera5-live-url-warning-cancel {
-  background: var(--vera5-button-bg, #19202a);
-  color: var(--vera5-text, #f5f7fa);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vera5-border) 80%, transparent);
-}
-.vera5-live-url-warning-confirm {
+  color: var(--vera5-on-accent, #0b0e11);
   background-image:
     linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.16),
-      rgba(255, 255, 255, 0.01)
+      rgba(255, 255, 255, 0.22) 0%,
+      rgba(255, 255, 255, 0.05) 42%,
+      rgba(0, 0, 0, 0.14) 100%
     ),
-    linear-gradient(135deg, #ff6b74, var(--vera5-danger, #ff4d5a));
+    linear-gradient(
+      135deg,
+      var(--vera5-accent-strong, #ffc24d),
+      var(--vera5-accent, #ffb224)
+    );
+  background-color: var(--vera5-accent, #ffb224);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    0 4px 14px rgba(255, 77, 90, 0.22);
-  color: #0b0e11;
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 3px 0 color-mix(in srgb, var(--vera5-accent, #ffb224) 55%, #8a5a00),
+    0 6px 16px rgba(255, 178, 36, 0.22);
+  transition: filter 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease,
+    transform 0.12s ease;
+}
+.vera5-live-url-warning-cancel {
+  /* Shares yellow glass treatment with confirm; slightly quieter depth. */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    0 2px 0 color-mix(in srgb, var(--vera5-accent, #ffb224) 50%, #8a5a00),
+    0 4px 12px rgba(255, 178, 36, 0.16);
+}
+.vera5-live-url-warning-confirm {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.14),
+    0 4px 0 color-mix(in srgb, var(--vera5-accent, #ffb224) 48%, #7a4f00),
+    0 8px 20px rgba(255, 178, 36, 0.3);
 }
 .vera5-live-url-warning-button:hover,
 .vera5-live-url-warning-button:focus-visible {
-  filter: brightness(1.08);
+  filter: brightness(1.06);
+  border-color: var(--vera5-accent-strong, #ffc24d);
   outline: 2px solid var(--vera5-accent, #ffb224);
   outline-offset: 2px;
+}
+.vera5-live-url-warning-button:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.16),
+    0 1px 0 color-mix(in srgb, var(--vera5-accent, #ffb224) 45%, #8a5a00),
+    0 3px 10px rgba(255, 178, 36, 0.18);
 }
 .vera5-hover-card-retry-hint {
   margin: 0;

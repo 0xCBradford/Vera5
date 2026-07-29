@@ -37,6 +37,12 @@ const ensureBuiltInOperatorMacros = vi.fn(async () => undefined);
 
 const listStoredOperatorMacros = vi.fn(async () => [] as const);
 
+const listStoredIocCollections = vi.fn(async () => [] as const);
+const toggleActiveInvestigationSessionIocPin = vi.fn(async () => null);
+const setStoredIocLabel = vi.fn(async () => undefined);
+const addStoredIocCollectionMembers = vi.fn(async () => null);
+const isInvestigationSessionIocPinned = vi.fn(() => false);
+
 vi.mock("../lib/operatorMacroStorage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/operatorMacroStorage")>();
   return {
@@ -44,6 +50,45 @@ vi.mock("../lib/operatorMacroStorage", async (importOriginal) => {
     ensureBuiltInOperatorMacros: () => ensureBuiltInOperatorMacros(),
     listStoredOperatorMacros: (...args: unknown[]) =>
       listStoredOperatorMacros(...args),
+  };
+});
+
+vi.mock("../lib/iocCollectionStorage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/iocCollectionStorage")>();
+  return {
+    ...actual,
+    listStoredIocCollections: (...args: unknown[]) =>
+      listStoredIocCollections(...args),
+    addStoredIocCollectionMembers: (...args: unknown[]) =>
+      addStoredIocCollectionMembers(...args),
+  };
+});
+
+vi.mock("../lib/investigationSessionStorage", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../lib/investigationSessionStorage")>();
+  return {
+    ...actual,
+    toggleActiveInvestigationSessionIocPin: (...args: unknown[]) =>
+      toggleActiveInvestigationSessionIocPin(...args),
+  };
+});
+
+vi.mock("../lib/investigationSession", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../lib/investigationSession")>();
+  return {
+    ...actual,
+    isInvestigationSessionIocPinned: (...args: unknown[]) =>
+      isInvestigationSessionIocPinned(...args),
+  };
+});
+
+vi.mock("../lib/iocLabelStorage", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/iocLabelStorage")>();
+  return {
+    ...actual,
+    setStoredIocLabel: (...args: unknown[]) => setStoredIocLabel(...args),
   };
 });
 
@@ -206,10 +251,15 @@ describe("service worker scan-page command routing", () => {
     | ((details: { reason: string }) => void)
     | undefined;
   let onContextMenuClickedCallback:
-    | ((info: { menuItemId: string | number }, tab: { id?: number }) => void)
+    | ((
+        info: { menuItemId: string | number; selectionText?: string },
+        tab: { id?: number }
+      ) => void)
     | undefined;
   const tabsQuery = vi.fn();
   const tabsSendMessage = vi.fn();
+  const tabsCreate = vi.fn(async () => ({ id: 99 }));
+  const scriptingExecuteScript = vi.fn(async () => [{ result: "" }]);
   const contextMenusCreate = vi.fn();
   const contextMenusRemoveAll = vi.fn((callback?: () => void) => {
     callback?.();
@@ -229,6 +279,8 @@ describe("service worker scan-page command routing", () => {
     onContextMenuClickedCallback = undefined;
     tabsQuery.mockReset();
     tabsSendMessage.mockReset();
+    tabsCreate.mockReset();
+    scriptingExecuteScript.mockReset();
     contextMenusCreate.mockReset();
     contextMenusRemoveAll.mockReset();
     contextMenusRemoveAll.mockImplementation((callback?: () => void) => {
@@ -239,6 +291,16 @@ describe("service worker scan-page command routing", () => {
     ensureBuiltInOperatorMacros.mockReset();
     listStoredOperatorMacros.mockReset();
     listStoredOperatorMacros.mockResolvedValue([]);
+    listStoredIocCollections.mockReset();
+    listStoredIocCollections.mockResolvedValue([]);
+    toggleActiveInvestigationSessionIocPin.mockReset();
+    toggleActiveInvestigationSessionIocPin.mockResolvedValue(null);
+    setStoredIocLabel.mockReset();
+    setStoredIocLabel.mockResolvedValue(undefined);
+    addStoredIocCollectionMembers.mockReset();
+    addStoredIocCollectionMembers.mockResolvedValue(null);
+    isInvestigationSessionIocPinned.mockReset();
+    isInvestigationSessionIocPinned.mockReturnValue(false);
     emitInvestigationSessionMacroRunTimelineEvent.mockReset();
     runStorageMigrationOnExtensionUpdate.mockResolvedValue({
       migrated: false,
@@ -247,6 +309,8 @@ describe("service worker scan-page command routing", () => {
     });
     tabsQuery.mockResolvedValue([{ id: 42 }]);
     tabsSendMessage.mockResolvedValue({ ok: true, payload: { count: 2 } });
+    tabsCreate.mockResolvedValue({ id: 99 });
+    scriptingExecuteScript.mockResolvedValue([{ result: "" }]);
     storageOnChangedListeners.length = 0;
 
     vi.stubGlobal("chrome", {
@@ -272,7 +336,7 @@ describe("service worker scan-page command routing", () => {
         onClicked: {
           addListener: (
             callback: (
-              info: { menuItemId: string | number },
+              info: { menuItemId: string | number; selectionText?: string },
               tab: { id?: number }
             ) => void
           ) => {
@@ -280,9 +344,13 @@ describe("service worker scan-page command routing", () => {
           },
         },
       },
+      scripting: {
+        executeScript: scriptingExecuteScript,
+      },
       tabs: {
         query: tabsQuery,
         sendMessage: tabsSendMessage,
+        create: tabsCreate,
         onRemoved: { addListener: vi.fn() },
       },
       storage: {
@@ -365,6 +433,89 @@ describe("service worker scan-page command routing", () => {
         contexts: ["selection"],
       });
       expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots",
+        title: "Pivots",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots:cat:authoritative",
+        parentId: "vera5-pivots",
+        title: "Authoritative",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots:open-all:authoritative",
+        parentId: "vera5-pivots:cat:authoritative",
+        title: "Open all",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots:cat:authoritative:separator",
+        parentId: "vera5-pivots:cat:authoritative",
+        type: "separator",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots:site:virustotal",
+        parentId: "vera5-pivots:cat:authoritative",
+        title: "VirusTotal",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots:site:rdap_whois",
+        parentId: "vera5-pivots:cat:authoritative",
+        title: "RDAP WHOIS",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots:open-all:community",
+        parentId: "vera5-pivots:cat:community",
+        title: "Open all",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-case",
+        title: "Case",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-case:open-lens",
+        parentId: "vera5-case",
+        title: "Open Analyst Lens",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-case:pin",
+        parentId: "vera5-case",
+        title: "Pin indicator",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-case:label",
+        parentId: "vera5-case",
+        title: "Label",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-case:label:case-important",
+        parentId: "vera5-case:label",
+        title: "Case important",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-case:save",
+        parentId: "vera5-case",
+        title: "Save to collection",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-case:save:empty",
+        parentId: "vera5-case:save",
+        title: "No collections yet",
+        contexts: ["selection"],
+        enabled: false,
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
         id: "vera5-run-macro-on-selection",
         title: "Run macro on selection",
         contexts: ["selection"],
@@ -415,6 +566,286 @@ describe("service worker scan-page command routing", () => {
       stepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
     });
     expect(enrichSelectionMessage().type).toBe(MESSAGE.ENRICH_SELECTION);
+  });
+
+  it("opens a pivot tab from nested pivot site clicks", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    tabsSendMessage.mockClear();
+    tabsCreate.mockClear();
+    scriptingExecuteScript.mockResolvedValue([{ result: "8.8.8.8" }]);
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-pivots:site:virustotal",
+        selectionText: "truncated",
+      },
+      { id: 88 }
+    );
+
+    await vi.waitFor(() => {
+      expect(scriptingExecuteScript).toHaveBeenCalled();
+      expect(tabsSendMessage).not.toHaveBeenCalled();
+      expect(tabsCreate).toHaveBeenCalledWith({
+        url: "https://www.virustotal.com/gui/ip-address/8.8.8.8",
+        active: true,
+      });
+    });
+  });
+
+  it("opens RDAP WHOIS to an HTML whois destination", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    scriptingExecuteScript.mockResolvedValue([{ result: "8.8.8.8" }]);
+    tabsCreate.mockClear();
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-pivots:site:rdap_whois",
+        selectionText: "8.8.8.8",
+      },
+      { id: 89 }
+    );
+
+    await vi.waitFor(() => {
+      expect(tabsCreate).toHaveBeenCalledWith({
+        url: "https://www.whois.com/whois/8.8.8.8",
+        active: true,
+      });
+    });
+  });
+
+  it("uses context-menu selectionText when live selection is empty", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    scriptingExecuteScript.mockResolvedValue([{ result: "" }]);
+    tabsCreate.mockClear();
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-pivots:site:virustotal",
+        selectionText: "8.8.8.8",
+      },
+      { id: 88 }
+    );
+
+    await vi.waitFor(() => {
+      expect(tabsCreate).toHaveBeenCalledWith({
+        url: "https://www.virustotal.com/gui/ip-address/8.8.8.8",
+        active: true,
+      });
+    });
+  });
+
+  it("opens all category pivot tabs from Open all clicks", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    scriptingExecuteScript.mockResolvedValue([{ result: "8.8.8.8" }]);
+    tabsCreate.mockClear();
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-pivots:open-all:authoritative",
+        selectionText: "8.8.8.8",
+      },
+      { id: 91 }
+    );
+
+    await vi.waitFor(() => {
+      expect(tabsCreate.mock.calls.length).toBeGreaterThan(1);
+      expect(tabsCreate.mock.calls[0]?.[0]).toEqual({
+        url: expect.any(String),
+        active: true,
+      });
+      expect(tabsCreate.mock.calls[1]?.[0]).toEqual({
+        url: expect.any(String),
+        active: false,
+      });
+      expect(tabsCreate).toHaveBeenCalledWith({
+        url: "https://www.abuseipdb.com/check/8.8.8.8",
+        active: expect.any(Boolean),
+      });
+      expect(tabsCreate).toHaveBeenCalledWith({
+        url: "https://www.whois.com/whois/8.8.8.8",
+        active: expect.any(Boolean),
+      });
+    });
+  });
+
+  it("Open all uses strict pivots and skips hash-irrelevant sites", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    const md5 = "d41d8cd98f00b204e9800998ecf8427e";
+    scriptingExecuteScript.mockResolvedValue([{ result: md5 }]);
+    tabsCreate.mockClear();
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-pivots:open-all:authoritative",
+        selectionText: md5,
+      },
+      { id: 93 }
+    );
+
+    await vi.waitFor(() => {
+      expect(tabsCreate).toHaveBeenCalled();
+      expect(tabsCreate).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: `https://www.whois.com/whois/${md5}`,
+        })
+      );
+      expect(tabsCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: `https://www.virustotal.com/gui/file/${md5}`,
+        })
+      );
+    });
+  });
+
+  it("shows status feedback when a single pivot does not support the IOC type", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    scriptingExecuteScript.mockResolvedValue([{ result: "example.com" }]);
+    tabsCreate.mockClear();
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-pivots:site:abuseipdb",
+        selectionText: "example.com",
+      },
+      { id: 94 }
+    );
+
+    await vi.waitFor(() => {
+      expect(tabsCreate).not.toHaveBeenCalled();
+      expect(scriptingExecuteScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ["Vera5: AbuseIPDB does not support this indicator type."],
+        })
+      );
+    });
+  });
+
+  it("opens community Open all pivots for an IP selection", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    scriptingExecuteScript.mockResolvedValue([{ result: "8.8.8.8" }]);
+    tabsCreate.mockClear();
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-pivots:open-all:community",
+        selectionText: "8.8.8.8",
+      },
+      { id: 92 }
+    );
+
+    await vi.waitFor(() => {
+      expect(tabsCreate).toHaveBeenCalledWith({
+        url: "https://otx.alienvault.com/indicator/ip/8.8.8.8",
+        active: true,
+      });
+      expect(tabsCreate).toHaveBeenCalledWith({
+        url: "https://urlhaus.abuse.ch/browse.php?search=8.8.8.8",
+        active: expect.any(Boolean),
+      });
+    });
+  });
+
+  it("opens Analyst Lens from Case menu via enrich selection path", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    tabsSendMessage.mockClear();
+
+    onContextMenuClickedCallback!(
+      { menuItemId: "vera5-case:open-lens" },
+      { id: 95 }
+    );
+
+    await vi.waitFor(() => {
+      expect(tabsSendMessage).toHaveBeenCalledWith(
+        95,
+        enrichSelectionMessage({
+          macroStepType: MACRO_STEP_TYPE_OPEN_FROM_SELECTION,
+        })
+      );
+    });
+  });
+
+  it("pins the selected IOC into the active investigation session", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    scriptingExecuteScript.mockResolvedValue([{ result: "8.8.8.8" }]);
+    toggleActiveInvestigationSessionIocPin.mockResolvedValue({
+      id: "sess-1",
+      pinnedIocs: { "8.8.8.8": { pinnedAt: 1 } },
+    });
+    isInvestigationSessionIocPinned.mockReturnValue(true);
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-case:pin",
+        selectionText: "8.8.8.8",
+      },
+      { id: 96 }
+    );
+
+    await vi.waitFor(() => {
+      expect(toggleActiveInvestigationSessionIocPin).toHaveBeenCalledWith({
+        iocValue: "8.8.8.8",
+        iocType: "ipv4",
+      });
+      expect(scriptingExecuteScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ["Vera5: Pinned to active investigation."],
+        })
+      );
+    });
+  });
+
+  it("labels the selected IOC from the Case Label submenu", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    scriptingExecuteScript.mockResolvedValue([{ result: "8.8.8.8" }]);
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-case:label:case-important",
+        selectionText: "8.8.8.8",
+      },
+      { id: 97 }
+    );
+
+    await vi.waitFor(() => {
+      expect(setStoredIocLabel).toHaveBeenCalledWith("8.8.8.8", "case-important");
+      expect(scriptingExecuteScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ["Vera5: Labeled Case important."],
+        })
+      );
+    });
+  });
+
+  it("saves the selected IOC into a collection from Case menu", async () => {
+    expect(onContextMenuClickedCallback).toBeDefined();
+    scriptingExecuteScript.mockResolvedValue([{ result: "8.8.8.8" }]);
+    addStoredIocCollectionMembers.mockResolvedValue({
+      id: "vera5-col-1",
+      name: "Watchlist A",
+      createdAt: 1,
+      updatedAt: 1,
+      members: [],
+    });
+
+    onContextMenuClickedCallback!(
+      {
+        menuItemId: "vera5-case:save:vera5-col-1",
+        selectionText: "8.8.8.8",
+      },
+      { id: 98 }
+    );
+
+    await vi.waitFor(() => {
+      expect(addStoredIocCollectionMembers).toHaveBeenCalledWith({
+        collectionId: "vera5-col-1",
+        members: [{ iocType: "ipv4", value: "8.8.8.8" }],
+      });
+      expect(scriptingExecuteScript).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ["Vera5: Saved to Watchlist A."],
+        })
+      );
+    });
   });
 
   it("sends RUN_OPERATOR_MACRO activeSelection through the shared runner path", async () => {
