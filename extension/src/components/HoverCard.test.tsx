@@ -510,14 +510,8 @@ describe("HoverCard", () => {
     copy.mockRestore();
   });
 
-  it("confirms before opening a live URL from the hover card", async () => {
-    const confirm = vi.fn(() => true);
+  it("requires the VERA5 navigation gate before opening a live URL", async () => {
     const open = vi.fn(() => null);
-    Object.defineProperty(window, "confirm", {
-      configurable: true,
-      writable: true,
-      value: confirm,
-    });
     Object.defineProperty(window, "open", {
       configurable: true,
       writable: true,
@@ -538,12 +532,27 @@ describe("HoverCard", () => {
       openButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(confirm).toHaveBeenCalledTimes(1);
+    const warning = mounted.container.querySelector(".vera5-live-url-warning");
+    const confirmButton = mounted.container.querySelector<HTMLButtonElement>(
+      ".vera5-live-url-warning-confirm"
+    );
+    expect(warning?.getAttribute("role")).toBe("alertdialog");
+    expect(warning?.textContent).toContain("VERA5 // NAVIGATION GATE");
+    expect(warning?.textContent).toContain("https://example.com/evil");
+    expect(open).not.toHaveBeenCalled();
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
     expect(open).toHaveBeenCalledWith(
       "https://example.com/evil",
       "_blank",
       "noopener,noreferrer"
     );
+    expect(
+      mounted.container.querySelector(".vera5-live-url-warning")
+    ).toBeNull();
   });
 });
 

@@ -42,12 +42,12 @@ import {
 export type HoverCardEnrichmentState = "empty" | "loading" | "error" | "ready";
 
 export const DEFAULT_HOVER_CARD_SUMMARY =
-  "Threat intelligence summary is not available yet.";
+  "Threat intelligence summary is not available yet. Enrich this indicator from the side panel to load vendor context.";
 
 export const HOVER_CARD_LOADING_SUMMARY = "Loading threat intelligence…";
 
 export const HOVER_CARD_ERROR_SUMMARY =
-  "Threat intelligence could not be loaded.";
+  "Threat intelligence could not be loaded. Retry enrich from the side panel, or open Settings if an API key is missing.";
 
 export type EnrichmentDisplay = {
   text: string;
@@ -105,13 +105,13 @@ export const HOVER_CARD_IOC_TIMELINE_LABEL = "Session timeline";
 export const HOVER_CARD_IOC_TIMELINE_SECTION_ARIA_LABEL =
   "Session timeline for this indicator";
 export const HOVER_CARD_IOC_TIMELINE_EMPTY_TEXT =
-  "No session timeline for this indicator yet.";
+  "No session timeline for this indicator yet. Start an investigation session, then scan or enrich to record activity.";
 
 export const HOVER_CARD_CO_OCCURRENCE_LABEL = "Appeared alongside";
 export const HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL =
   "Indicators that appeared alongside this one on the same page scan";
 export const HOVER_CARD_CO_OCCURRENCE_EMPTY_TEXT =
-  "No other indicators on this page scan.";
+  "No other indicators on this page scan. Scan a page with multiple indicators to link them here.";
 
 export const HOVER_CARD_IOC_PIN_LABEL = "Pin";
 export const HOVER_CARD_IOC_PINNED_LABEL = "Pinned";

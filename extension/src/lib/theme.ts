@@ -110,3 +110,121 @@ export const VERA5_THEME = {
 } as const;
 
 export type Vera5Theme = typeof VERA5_THEME;
+
+function resolveBundledFontUrl(fileName: string): string {
+  try {
+    const getURL = (
+      globalThis as {
+        chrome?: { runtime?: { getURL?: (path: string) => string } };
+      }
+    ).chrome?.runtime?.getURL;
+    if (typeof getURL === "function") {
+      return getURL(`fonts/${fileName}`);
+    }
+  } catch {
+    // Unit tests / non-extension hosts fall back to extension-page paths.
+  }
+  return `/fonts/${fileName}`;
+}
+
+/**
+ * Local @font-face rules for injected content UI (web_accessible fonts).
+ * Extension pages already load the same faces via `styles/tokens.css`.
+ */
+export function buildVera5ContentFontFaceCss(): string {
+  const interRegular = resolveBundledFontUrl("Inter-Regular.woff2");
+  const interMedium = resolveBundledFontUrl("Inter-Medium.woff2");
+  const interSemiBold = resolveBundledFontUrl("Inter-SemiBold.woff2");
+  const interBold = resolveBundledFontUrl("Inter-Bold.woff2");
+  const mono = resolveBundledFontUrl("JetBrainsMono-Medium.woff2");
+  const wordmark = resolveBundledFontUrl("SpaceGrotesk-Bold.woff2");
+  return `
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("${interRegular}") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("${interMedium}") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("${interSemiBold}") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("${interBold}") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("${mono}") format("woff2");
+}
+@font-face {
+  font-family: "Space Grotesk";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("${wordmark}") format("woff2");
+}
+`.trim();
+}
+
+/**
+ * `--vera5-*` custom properties for injected UI roots.
+ * Values mirror `styles/tokens.css` / `VERA5_*` so overlay, workspace, and
+ * extension pages share one brand palette.
+ */
+export function buildVera5ContentUiTokenDeclarations(): string {
+  const c = VERA5_COLOR;
+  const r = VERA5_RADIUS;
+  const s = VERA5_SHADOW;
+  const f = VERA5_FONT;
+  return `
+  --vera5-page: ${c.bg};
+  --vera5-surface: ${c.surface};
+  --vera5-surface-raised: ${c.surfaceRaised};
+  --vera5-text: ${c.text};
+  --vera5-border: ${c.borderHard};
+  --vera5-border-soft: ${c.border};
+  --vera5-accent: ${c.accent};
+  --vera5-accent-hover: ${c.accentHover};
+  --vera5-accent-strong: ${c.accentStrong};
+  --vera5-accent-text: ${c.accentText};
+  --vera5-on-accent: ${c.onAccent};
+  --vera5-muted: ${c.textMuted};
+  --vera5-muted-label: ${c.textMuted};
+  --vera5-text-low: ${c.textLow};
+  --vera5-error: ${c.danger};
+  --vera5-ready: ${c.text};
+  --vera5-success: ${c.success};
+  --vera5-violet: ${c.violet};
+  --vera5-button-bg: ${c.surfaceSunken};
+  --vera5-copy-success-bg: color-mix(in srgb, ${c.success} 16%, ${c.surface});
+  --vera5-shadow: ${s.md};
+  --vera5-shadow-low: ${s.sm};
+  --vera5-radius-sm: ${r.sm}px;
+  --vera5-radius-md: ${r.md}px;
+  --vera5-radius-lg: ${r.lg}px;
+  --vera5-font-ui: ${f.sans};
+  --vera5-font-mono: ${f.mono};
+  --vera5-font-wordmark: ${f.wordmark};
+  --vera5-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --vera5-t-hover: ${VERA5_TRANSITION.fast};
+  --vera5-t-card: ${VERA5_TRANSITION.base};
+`.trim();
+}

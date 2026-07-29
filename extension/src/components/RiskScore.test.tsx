@@ -81,14 +81,14 @@ describe("RiskScore", () => {
     expect(mounted.container.textContent).toContain("Unknown risk");
     expect(
       mounted.container.querySelector(".vera5-hover-card-risk-score-insufficient")
-    ).not.toBeNull();
-    expect(mounted.container.textContent).toContain("How this score was computed");
+        ?.textContent
+    ).toBe("Need two sources to blend.");
+    expect(mounted.container.textContent).not.toContain(
+      "How this score was computed"
+    );
     expect(
       mounted.container.querySelector(".vera5-hover-card-risk-reasoning-empty")
-    ).not.toBeNull();
-    expect(mounted.container.textContent).toContain(
-      "Blended score steps are not available"
-    );
+    ).toBeNull();
     expect(
       mounted.container.querySelector(".vera5-hover-card-risk-reasoning-chain")
     ).toBeNull();
@@ -266,14 +266,18 @@ describe("reasoning chain presentation paths", () => {
     expect(callout?.textContent).toBe(COMPOSITE_SCORE_DISAGREEMENT_NOTICE);
   });
 
-  it("shows the empty reasoning state instead of a chain when blend evidence is insufficient", () => {
+  it("omits reasoning when blend evidence is insufficient", () => {
     mounted = renderRiskScore({ sourceResults: insufficientSourceResults });
 
     expect(
+      mounted.container.querySelector(".vera5-hover-card-risk-score-insufficient")
+        ?.textContent
+    ).toBe("Need two sources to blend.");
+    expect(
       mounted.container.querySelector(".vera5-hover-card-risk-reasoning-empty")
-    ).not.toBeNull();
-    expect(mounted.container.textContent).toContain(
-      "Blended score steps are not available"
+    ).toBeNull();
+    expect(mounted.container.textContent).not.toContain(
+      "How this score was computed"
     );
     expect(
       mounted.container.querySelector(".vera5-hover-card-risk-reasoning-chain")

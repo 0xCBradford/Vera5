@@ -166,7 +166,7 @@ export const HOVER_CARD_RELATIONSHIP_LABEL = "Previously appeared with";
 export const HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL =
   "Related entities from local relationship memory";
 export const HOVER_CARD_RELATIONSHIP_EMPTY_TEXT =
-  "No related entities in local relationship memory yet.";
+  "No related entities in local relationship memory yet. Keep scanning during an investigation session; open Appeared with in the side panel when edges exist.";
 
 /**
  * Operator notice for relationship memory — same co-occurrence / correlation

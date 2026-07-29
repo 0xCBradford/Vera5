@@ -165,12 +165,18 @@ import {
 import {
   getExtensionEnabled,
   getHighlightEnabled,
+  getManualOnlyMode,
   getPageContextSiteModeOverrides,
   getQuietMode,
   POPUP_QUIET_MODE_STATUS_LABEL,
+  POPUP_STATUS_AUTO_ENRICH_LABEL,
+  POPUP_STATUS_MANUAL_ENRICH_LABEL,
+  POPUP_STATUS_SESSION_ACTIVE_LABEL,
+  POPUP_STATUS_STRIP_ARIA_LABEL,
   removePageContextSiteModeOverrideForOrigin,
   setExtensionEnabled,
   setHighlightEnabled,
+  STORAGE_KEY_MANUAL_ONLY_MODE,
   STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_QUIET_MODE,
 } from "../lib/storage";
@@ -422,7 +428,7 @@ import {
   type EnrichmentSourceOpsSnapshot,
 } from "../lib/enrichmentSourceOps";
 import { clearPopupPanelFocus, POPUP_PANEL, readPopupPanelFocus } from "../lib/popupPanelFocus";
-import { VERA5_COLOR, VERA5_FONT } from "../lib/theme";
+import { VERA5_COLOR, VERA5_FONT, VERA5_RADIUS, VERA5_SPACE } from "../lib/theme";
 import {
   resolveWorkspaceTrayView,
   resolveCollectionMemberOpenFeedback,
@@ -2979,12 +2985,12 @@ function CollectionsManagerPanel() {
     <section
       aria-label={IOC_COLLECTION_MANAGER_SECTION_LABEL}
       style={{
-        marginTop: 14,
+        marginTop: 10,
         borderTop: `1px solid ${POPUP_THEME.border}`,
-        paddingTop: 12,
+        paddingTop: 10,
       }}
     >
-      <h2 style={{ margin: "0 0 8px" }}>
+      <h2 style={{ margin: "0 0 6px" }}>
         <button
           type="button"
           onClick={() => setCollectionsCollapsed((value) => !value)}
@@ -2999,9 +3005,9 @@ function CollectionsManagerPanel() {
             padding: 0,
             border: "none",
             background: "transparent",
-            color: POPUP_THEME.accentText,
+            color: POPUP_THEME.text,
             fontFamily: "inherit",
-            fontSize: 15,
+            fontSize: 13,
             fontWeight: 600,
             textAlign: "left",
             cursor: "pointer",
@@ -4058,15 +4064,34 @@ const POPUP_THEME = {
   success: VERA5_COLOR.successText,
 };
 
-/** Primary action — solid electric amber with dark text. */
+/** Batch collection/macro controls — collapsed so filters stay primary. */
+export const POPUP_TRAY_CASE_TOOLS_SUMMARY = "Collections & macros";
+/** Per-row Save/Run macro — collapsed so Why detected / Appeared stay primary. */
+export const POPUP_TRAY_ROW_ACTIONS_SUMMARY = "Actions";
+
+function trayDemotedDetailsSummaryStyle(): CSSProperties {
+  return {
+    cursor: "pointer",
+    fontSize: 12,
+    fontWeight: 600,
+    color: POPUP_THEME.muted,
+    listStylePosition: "outside",
+  };
+}
+
+/** Primary action — amber gradient glass, square corners. */
 const primaryButtonStyle = {
   width: "100%",
-  padding: "8px 12px",
-  borderRadius: 10,
-  border: "1px solid transparent",
+  padding: `${VERA5_SPACE.sm}px ${VERA5_SPACE.md}px`,
+  borderRadius: VERA5_RADIUS.sm,
+  border: "1px solid rgba(255, 194, 77, 0.55)",
+  backgroundImage:
+    "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 42%, rgba(0,0,0,0.12) 100%), linear-gradient(135deg, #FFC24D, #FFB224)",
   backgroundColor: POPUP_THEME.accent,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.28), 0 2px 8px rgba(255, 178, 36, 0.18)",
   color: POPUP_THEME.onAccent,
-  fontWeight: 600 as const,
+  fontWeight: 700 as const,
   cursor: "pointer" as const,
   margin: 0,
   boxSizing: "border-box" as const,
@@ -4075,8 +4100,8 @@ const primaryButtonStyle = {
 /** Secondary / neutral action — surface fill, no accent. */
 const buttonStyle = {
   width: "100%",
-  padding: "8px 12px",
-  borderRadius: 10,
+  padding: `${VERA5_SPACE.sm}px ${VERA5_SPACE.md}px`,
+  borderRadius: VERA5_RADIUS.md,
   border: `1px solid ${POPUP_THEME.border}`,
   backgroundColor: POPUP_THEME.secondaryBg,
   color: POPUP_THEME.text,
@@ -4089,7 +4114,7 @@ const buttonStyle = {
 const actionButtonGroupStyle = {
   display: "flex",
   flexDirection: "column" as const,
-  gap: 8,
+  gap: VERA5_SPACE.sm,
 };
 
 type SelectionActionState = {
@@ -4248,6 +4273,7 @@ export function Popup() {
   const [enabled, setEnabled] = useState(true);
   const [highlightEnabled, setHighlightEnabledState] = useState(true);
   const [quietModeActive, setQuietModeActive] = useState(false);
+  const [manualOnlyMode, setManualOnlyMode] = useState(true);
   const [ready, setReady] = useState(false);
   const [scanState, setScanState] = useState<"idle" | "scanning" | "done" | "error">("idle");
   const [scanSummary, setScanSummary] = useState<TabScanSummary | null>(null);
@@ -4286,6 +4312,7 @@ export function Popup() {
   const [sourceOps, setSourceOps] = useState<EnrichmentSourceOpsSnapshot | null>(null);
   const [sourceOpsReady, setSourceOpsReady] = useState(false);
   const [sourceOpsCollapsed, setSourceOpsCollapsed] = useState(true);
+  const [advancedCollapsed, setAdvancedCollapsed] = useState(true);
   const [clearingSourceCacheId, setClearingSourceCacheId] = useState<string | null>(null);
   const [sourceOpsClearFeedback, setSourceOpsClearFeedback] = useState<string | null>(null);
   const [investigationCollapsed, setInvestigationCollapsed] = useState(true);
@@ -4384,14 +4411,18 @@ export function Popup() {
   };
 
   useEffect(() => {
-    void Promise.all([getExtensionEnabled(), getHighlightEnabled(), getQuietMode()]).then(
-      ([extensionValue, highlightValue, quietModeValue]) => {
-        setEnabled(extensionValue);
-        setHighlightEnabledState(highlightValue);
-        setQuietModeActive(quietModeValue);
-        setReady(true);
-      }
-    );
+    void Promise.all([
+      getExtensionEnabled(),
+      getHighlightEnabled(),
+      getQuietMode(),
+      getManualOnlyMode(),
+    ]).then(([extensionValue, highlightValue, quietModeValue, manualOnlyValue]) => {
+      setEnabled(extensionValue);
+      setHighlightEnabledState(highlightValue);
+      setQuietModeActive(quietModeValue);
+      setManualOnlyMode(manualOnlyValue);
+      setReady(true);
+    });
     void requestTabScanSummaryForActiveTab().then((summary) => {
       if (summary) {
         setScanSummary(summary);
@@ -4424,8 +4455,10 @@ export function Popup() {
       });
     void readPopupPanelFocus().then((panel) => {
       if (panel === POPUP_PANEL.INVESTIGATION_HISTORY) {
+        setAdvancedCollapsed(false);
         setHistoryCollapsed(false);
       } else if (panel === POPUP_PANEL.SOURCE_OPERATIONS) {
+        setAdvancedCollapsed(false);
         setSourceOpsCollapsed(false);
       }
       if (panel) {
@@ -4449,6 +4482,9 @@ export function Popup() {
       const change = changes[STORAGE_KEY_QUIET_MODE];
       if (change) {
         setQuietModeActive(Boolean(change.newValue));
+      }
+      if (changes[STORAGE_KEY_MANUAL_ONLY_MODE]) {
+        setManualOnlyMode(Boolean(changes[STORAGE_KEY_MANUAL_ONLY_MODE]?.newValue));
       }
       if (changes[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]) {
         void refreshActivePageContext();
@@ -5620,32 +5656,53 @@ export function Popup() {
             Matched: {knownGoodBadge.entrySummary}
           </p>
         ) : null}
-        <SaveToCollectionTrayPanel
-          entry={entry}
-          open={saveToCollectionAnchorId === entry.anchorId}
-          feedback={
-            saveToCollectionAnchorId === entry.anchorId ? saveToCollectionFeedback : null
-          }
-          onFeedback={setSaveToCollectionFeedback}
-          onToggle={() => {
-            setSaveToCollectionFeedback(null);
-            setSaveToCollectionAnchorId((current) =>
-              current === entry.anchorId ? null : entry.anchorId
-            );
-          }}
-        />
-        <RunMacroTrayPanel
-          entry={entry}
-          open={runMacroTrayAnchorId === entry.anchorId}
-          feedback={runMacroTrayAnchorId === entry.anchorId ? runMacroTrayFeedback : null}
-          onFeedback={setRunMacroTrayFeedback}
-          onToggle={() => {
-            setRunMacroTrayFeedback(null);
-            setRunMacroTrayAnchorId((current) =>
-              current === entry.anchorId ? null : entry.anchorId
-            );
-          }}
-        />
+        <details
+          className="vera5-tray-row-actions"
+          style={{ width: "100%", margin: 0 }}
+        >
+          <summary style={trayDemotedDetailsSummaryStyle()}>
+            {POPUP_TRAY_ROW_ACTIONS_SUMMARY}
+          </summary>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 6,
+              marginTop: 6,
+            }}
+          >
+            <SaveToCollectionTrayPanel
+              entry={entry}
+              open={saveToCollectionAnchorId === entry.anchorId}
+              feedback={
+                saveToCollectionAnchorId === entry.anchorId
+                  ? saveToCollectionFeedback
+                  : null
+              }
+              onFeedback={setSaveToCollectionFeedback}
+              onToggle={() => {
+                setSaveToCollectionFeedback(null);
+                setSaveToCollectionAnchorId((current) =>
+                  current === entry.anchorId ? null : entry.anchorId
+                );
+              }}
+            />
+            <RunMacroTrayPanel
+              entry={entry}
+              open={runMacroTrayAnchorId === entry.anchorId}
+              feedback={
+                runMacroTrayAnchorId === entry.anchorId ? runMacroTrayFeedback : null
+              }
+              onFeedback={setRunMacroTrayFeedback}
+              onToggle={() => {
+                setRunMacroTrayFeedback(null);
+                setRunMacroTrayAnchorId((current) =>
+                  current === entry.anchorId ? null : entry.anchorId
+                );
+              }}
+            />
+          </div>
+        </details>
         <WhyDetectedTrayDetails entry={entry} />
         <CoOccurrenceTrayDetails
           entry={entry}
@@ -5684,7 +5741,7 @@ export function Popup() {
       style={{
         minWidth: 280,
         maxWidth: 360,
-        padding: 14,
+        padding: VERA5_SPACE.lg,
         fontFamily: VERA5_FONT.sans,
         backgroundColor: POPUP_THEME.page,
         color: POPUP_THEME.text,
@@ -5694,13 +5751,13 @@ export function Popup() {
         style={{
           display: "flex",
           alignItems: "center",
-          gap: 8,
+          gap: VERA5_SPACE.sm,
           fontFamily: VERA5_FONT.wordmark,
           fontSize: 22,
           fontWeight: 700,
           letterSpacing: "-0.03em",
           color: POPUP_THEME.text,
-          margin: "0 0 14px",
+          margin: `0 0 ${VERA5_SPACE.sm}px`,
         }}
       >
         <img
@@ -5720,30 +5777,6 @@ export function Popup() {
             5
           </span>
         </span>
-        {quietModeActive ? (
-          <span
-            role="status"
-            aria-label="Quiet mode active. Live vendor enrichment is blocked."
-            style={{
-              marginLeft: 8,
-              display: "inline-flex",
-              alignItems: "center",
-              padding: "3px 8px",
-              borderRadius: 999,
-              border: `1px solid ${POPUP_THEME.accent}`,
-              background: "rgba(255, 178, 36, 0.12)",
-              color: POPUP_THEME.accent,
-              fontFamily: VERA5_FONT.sans,
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-              textTransform: "uppercase",
-              lineHeight: 1.2,
-            }}
-          >
-            {POPUP_QUIET_MODE_STATUS_LABEL}
-          </span>
-        ) : null}
         <a
           href="https://www.vera5.io/how-to"
           target="_blank"
@@ -5784,6 +5817,90 @@ export function Popup() {
           How-To
         </a>
       </h1>
+      <div
+        role="status"
+        aria-label={POPUP_STATUS_STRIP_ARIA_LABEL}
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: 6,
+          margin: `0 0 ${VERA5_SPACE.md}px`,
+        }}
+      >
+        {quietModeActive ? (
+          <span
+            aria-label="Quiet mode active. Live vendor enrichment is blocked."
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "3px 8px",
+              borderRadius: 999,
+              border: `1px solid ${POPUP_THEME.accent}`,
+              background: "rgba(255, 178, 36, 0.12)",
+              color: POPUP_THEME.accent,
+              fontFamily: VERA5_FONT.sans,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              lineHeight: 1.2,
+            }}
+          >
+            {POPUP_QUIET_MODE_STATUS_LABEL}
+          </span>
+        ) : null}
+        <span
+          aria-label={
+            manualOnlyMode
+              ? "Manual-only enrichment. Indicators enrich when you ask."
+              : "Auto enrich is on. Eligible indicators may enrich after scan."
+          }
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            padding: "3px 8px",
+            borderRadius: 999,
+            border: `1px solid ${POPUP_THEME.border}`,
+            background: POPUP_THEME.secondaryBg,
+            color: POPUP_THEME.muted,
+            fontFamily: VERA5_FONT.sans,
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: "0.04em",
+            textTransform: "uppercase",
+            lineHeight: 1.2,
+          }}
+        >
+          {manualOnlyMode
+            ? POPUP_STATUS_MANUAL_ENRICH_LABEL
+            : POPUP_STATUS_AUTO_ENRICH_LABEL}
+        </span>
+        {activeSession ? (
+          <span
+            aria-label={`Investigation session active: ${activeSession.title}`}
+            title={activeSession.title}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "3px 8px",
+              borderRadius: 999,
+              border: `1px solid ${POPUP_THEME.border}`,
+              background: POPUP_THEME.secondaryBg,
+              color: POPUP_THEME.text,
+              fontFamily: VERA5_FONT.sans,
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              lineHeight: 1.2,
+              maxWidth: "100%",
+            }}
+          >
+            {POPUP_STATUS_SESSION_ACTIVE_LABEL}
+          </span>
+        ) : null}
+      </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <button
           type="button"
@@ -6418,8 +6535,298 @@ export function Popup() {
           )}
         </div>
       </section>
+      {scanState === "error" ? (
+        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
+          Scan failed. Reload the tab and try again.
+        </p>
+      ) : null}
+      {selectionEnrichMessage ? (
+        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
+          {selectionEnrichMessage}
+        </p>
+      ) : null}
+      {trayView ? (
+        <section
+          aria-label="Detected indicators"
+          style={{ marginTop: 14, borderTop: `1px solid ${POPUP_THEME.border}`, paddingTop: 12 }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              marginBottom: 8,
+            }}
+          >
+            <h2
+              style={{
+                fontSize: 15,
+                fontWeight: 600,
+                margin: 0,
+                color: POPUP_THEME.accentText,
+              }}
+            >
+              Detected indicators
+            </h2>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+                flexWrap: "wrap",
+                gap: 6,
+                maxWidth: "62%",
+              }}
+            >
+              <span
+                aria-label={`Page profile: ${activePageContextBadgeLabel}. ${activePageContextSourceLabel}.`}
+                title={`Active page profile: ${activePageContextBadgeLabel} (${activePageContextSourceLabel.toLowerCase()})`}
+                style={pageContextBadgeStyle({
+                  isOverride: activePageContextOverrideActive,
+                })}
+              >
+                {activePageContextBadgeLabel}
+              </span>
+              {activePageContextOverrideActive ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: POPUP_THEME.accentText,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Override
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Reset page profile to auto-detect"
+                    title="Reset to auto-detect"
+                    onClick={handleResetActivePageContextOverride}
+                    style={{
+                      padding: 0,
+                      border: "none",
+                      background: "none",
+                      color: POPUP_THEME.accentText,
+                      fontSize: 10,
+                      fontWeight: 600,
+                      textDecoration: "underline",
+                      cursor: "pointer",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Reset to auto-detect
+                  </button>
+                </>
+              ) : (
+                <span
+                  style={{
+                    fontSize: 10,
+                    color: POPUP_THEME.muted,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Auto-detected
+                </span>
+              )}
+            </div>
+          </div>
+          {trayView === "prompt" ? (
+            <p style={trayStatusStyle()}>Scan this page to list detected indicators.</p>
+          ) : null}
+          {trayView === "scanning" ? (
+            <p style={trayStatusStyle()} aria-live="polite">
+              Scanning page…
+            </p>
+          ) : null}
+          {trayView === "empty" ? (
+            <p style={trayStatusStyle()} aria-live="polite">
+              No indicators detected on this page.
+            </p>
+          ) : null}
+          {trayView === "results" && scanSummary ? (
+            <>
+              <p style={{ fontSize: 12, margin: "0 0 10px", color: POPUP_THEME.muted }}>
+                {buildTabScanCountSummaryText(scanSummary, activePageContextType)}
+              </p>
+              <div
+                role="group"
+                aria-label="Filter by indicator type"
+                style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}
+              >
+                <button
+                  type="button"
+                  aria-pressed={typeFilter === "all"}
+                  onClick={() => setTypeFilter("all")}
+                  style={filterChipStyle(typeFilter === "all")}
+                >
+                  All ({scanSummary.totalCount})
+                </button>
+                {listIocTypesPresentInSummaryForPageContext(scanSummary, activePageContextType).map(
+                  (type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      aria-pressed={typeFilter === type}
+                      onClick={() => setTypeFilter(type)}
+                      style={filterChipStyle(typeFilter === type)}
+                    >
+                      {IOC_TYPE_TRAY_LABEL[type]} ({scanSummary.countByType[type] ?? 0})
+                    </button>
+                  )
+                )}
+              </div>
+              <details
+                className="vera5-tray-case-tools"
+                style={{ marginBottom: 10 }}
+              >
+                <summary style={trayDemotedDetailsSummaryStyle()}>
+                  {POPUP_TRAY_CASE_TOOLS_SUMMARY}
+                </summary>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    marginTop: 8,
+                  }}
+                >
+                  <AddFilteredToCollectionPanel
+                    entries={filteredEntries}
+                    open={addFilteredToCollectionOpen}
+                    onToggle={() => {
+                      setAddFilteredToCollectionFeedback(null);
+                      setAddFilteredToCollectionOpen((current) => !current);
+                    }}
+                    feedback={addFilteredToCollectionFeedback}
+                    onFeedback={setAddFilteredToCollectionFeedback}
+                  />
+                  <RunMacroOnFilteredPanel
+                    entries={filteredEntries}
+                    open={runMacroOnFilteredOpen}
+                    onToggle={() => {
+                      setRunMacroOnFilteredFeedback(null);
+                      setRunMacroOnFilteredOpen((current) => !current);
+                    }}
+                    feedback={runMacroOnFilteredFeedback}
+                    onFeedback={setRunMacroOnFilteredFeedback}
+                  />
+                </div>
+              </details>
+              {trayNavigationMessage ? (
+                <p
+                  role="alert"
+                  aria-live="polite"
+                  style={{
+                    fontSize: 12,
+                    margin: "0 0 10px",
+                    color: POPUP_THEME.error,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {trayNavigationMessage}
+                </p>
+              ) : null}
+              {selectedDetailEntry ? (
+                <IndicatorDetailPane
+                  entry={selectedDetailEntry}
+                  enrichmentStatus={trayEnrichmentStatuses[selectedDetailEntry.anchorId]}
+                  note={analystNote}
+                  noteStatus={analystNoteStatus}
+                  enrichState={detailEnrichState}
+                  onNoteChange={handleAnalystNoteChange}
+                  onShowOnPage={() => navigateToTrayEntry(selectedDetailEntry)}
+                  onEnrich={handleEnrichSelectedDetail}
+                  onClear={() => setSelectedDetailEntry(null)}
+                />
+              ) : null}
+              {filteredEntries.length > 0 ? (
+                <>
+                  {activeTrayEntries.length > 0 ? (
+                    <ul
+                      style={{
+                        listStyle: "none",
+                        margin: 0,
+                        padding: 0,
+                        maxHeight: 220,
+                        overflowY: "auto",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 6,
+                      }}
+                    >
+                      {activeTrayEntries.map((entry) => renderTrayEntryRow(entry))}
+                    </ul>
+                  ) : (
+                    <p style={trayStatusStyle()}>
+                      All matching indicators are listed under Suppressed.
+                    </p>
+                  )}
+                  {suppressedTrayEntries.length > 0 ? (
+                    <details
+                      data-vera5-tray-suppressed-section="true"
+                      style={{
+                        marginTop: activeTrayEntries.length > 0 ? 8 : 0,
+                        borderRadius: 6,
+                        border: `1px solid ${POPUP_THEME.border}`,
+                        padding: "6px 8px",
+                        backgroundColor: POPUP_THEME.trayRowBg,
+                      }}
+                    >
+                      <summary
+                        data-vera5-why-still-visible-tooltip="true"
+                        title={whyStillVisibleTooltip}
+                        style={{
+                          cursor: "pointer",
+                          fontSize: 12,
+                          fontWeight: 600,
+                          color: POPUP_THEME.muted,
+                          listStylePosition: "outside",
+                        }}
+                      >
+                        {formatNoiseRulesTraySuppressedSummary(suppressedTrayEntries.length)}
+                      </summary>
+                      <p
+                        style={{
+                          fontSize: 11,
+                          margin: "6px 0 8px",
+                          color: POPUP_THEME.muted,
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {NOISE_RULES_TRAY_SUPPRESSED_SECTION_HINT}
+                      </p>
+                      <ul
+                        style={{
+                          listStyle: "none",
+                          margin: 0,
+                          padding: 0,
+                          maxHeight: 160,
+                          overflowY: "auto",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 6,
+                        }}
+                      >
+                        {suppressedTrayEntries.map(({ entry }) =>
+                          renderTrayEntryRow(entry, { noiseSuppressed: true })
+                        )}
+                      </ul>
+                    </details>
+                  ) : null}
+                </>
+              ) : (
+                <p style={trayStatusStyle()}>No indicators match this filter.</p>
+              )}
+            </>
+          ) : null}
+        </section>
+      ) : null}
       <section
-        aria-label="Investigation history"
+        aria-label="Advanced"
         style={{
           marginTop: 14,
           borderTop: `1px solid ${POPUP_THEME.border}`,
@@ -6427,6 +6834,62 @@ export function Popup() {
         }}
       >
         <h2 style={{ margin: "0 0 8px" }}>
+          <button
+            type="button"
+            onClick={() => setAdvancedCollapsed((value) => !value)}
+            aria-expanded={!advancedCollapsed}
+            aria-controls="popup-advanced-body"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 8,
+              width: "100%",
+              padding: 0,
+              border: "none",
+              background: "transparent",
+              color: POPUP_THEME.accentText,
+              fontFamily: "inherit",
+              fontSize: 15,
+              fontWeight: 600,
+              textAlign: "left",
+              cursor: "pointer",
+            }}
+          >
+            <span>Advanced</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              aria-hidden="true"
+              style={{
+                flex: "0 0 auto",
+                color: POPUP_THEME.muted,
+                transform: advancedCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                transition: "transform 0.15s ease",
+              }}
+            >
+              <path
+                d="M6 9l6 6 6-6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </h2>
+        <div id="popup-advanced-body" hidden={advancedCollapsed}>
+      <section
+        aria-label="Investigation history"
+        style={{
+          marginTop: 0,
+          borderTop: "none",
+          paddingTop: 0,
+        }}
+      >
+        <h2 style={{ margin: "0 0 6px" }}>
           <button
             type="button"
             onClick={() => setHistoryCollapsed((value) => !value)}
@@ -6441,9 +6904,9 @@ export function Popup() {
               padding: 0,
               border: "none",
               background: "transparent",
-              color: POPUP_THEME.accentText,
+              color: POPUP_THEME.text,
               fontFamily: "inherit",
-              fontSize: 15,
+              fontSize: 13,
               fontWeight: 600,
               textAlign: "left",
               cursor: "pointer",
@@ -6651,12 +7114,12 @@ export function Popup() {
       <section
         aria-label={ENRICHMENT_SOURCE_OPS_SECTION_TITLE}
         style={{
-          marginTop: 14,
+          marginTop: 10,
           borderTop: `1px solid ${POPUP_THEME.border}`,
-          paddingTop: 12,
+          paddingTop: 10,
         }}
       >
-        <h2 style={{ margin: "0 0 8px" }}>
+        <h2 style={{ margin: "0 0 6px" }}>
           <button
             type="button"
             onClick={() => setSourceOpsCollapsed((value) => !value)}
@@ -6671,9 +7134,9 @@ export function Popup() {
               padding: 0,
               border: "none",
               background: "transparent",
-              color: POPUP_THEME.accentText,
+              color: POPUP_THEME.text,
               fontFamily: "inherit",
-              fontSize: 15,
+              fontSize: 13,
               fontWeight: 600,
               textAlign: "left",
               cursor: "pointer",
@@ -6875,279 +7338,8 @@ export function Popup() {
           )}
         </div>
       </section>
-      {scanState === "error" ? (
-        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
-          Scan failed. Reload the tab and try again.
-        </p>
-      ) : null}
-      {selectionEnrichMessage ? (
-        <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
-          {selectionEnrichMessage}
-        </p>
-      ) : null}
-      {trayView ? (
-        <section
-          aria-label="Detected indicators"
-          style={{ marginTop: 14, borderTop: `1px solid ${POPUP_THEME.border}`, paddingTop: 12 }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              marginBottom: 8,
-            }}
-          >
-            <h2
-              style={{
-                fontSize: 15,
-                fontWeight: 600,
-                margin: 0,
-                color: POPUP_THEME.accentText,
-              }}
-            >
-              Detected indicators
-            </h2>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "flex-end",
-                flexWrap: "wrap",
-                gap: 6,
-                maxWidth: "62%",
-              }}
-            >
-              <span
-                aria-label={`Page profile: ${activePageContextBadgeLabel}. ${activePageContextSourceLabel}.`}
-                title={`Active page profile: ${activePageContextBadgeLabel} (${activePageContextSourceLabel.toLowerCase()})`}
-                style={pageContextBadgeStyle({
-                  isOverride: activePageContextOverrideActive,
-                })}
-              >
-                {activePageContextBadgeLabel}
-              </span>
-              {activePageContextOverrideActive ? (
-                <>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 600,
-                      color: POPUP_THEME.accentText,
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Override
-                  </span>
-                  <button
-                    type="button"
-                    aria-label="Reset page profile to auto-detect"
-                    title="Reset to auto-detect"
-                    onClick={handleResetActivePageContextOverride}
-                    style={{
-                      padding: 0,
-                      border: "none",
-                      background: "none",
-                      color: POPUP_THEME.accentText,
-                      fontSize: 10,
-                      fontWeight: 600,
-                      textDecoration: "underline",
-                      cursor: "pointer",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    Reset to auto-detect
-                  </button>
-                </>
-              ) : (
-                <span
-                  style={{
-                    fontSize: 10,
-                    color: POPUP_THEME.muted,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Auto-detected
-                </span>
-              )}
-            </div>
-          </div>
-          {trayView === "prompt" ? (
-            <p style={trayStatusStyle()}>Scan this page to list detected indicators.</p>
-          ) : null}
-          {trayView === "scanning" ? (
-            <p style={trayStatusStyle()} aria-live="polite">
-              Scanning page…
-            </p>
-          ) : null}
-          {trayView === "empty" ? (
-            <p style={trayStatusStyle()} aria-live="polite">
-              No indicators detected on this page.
-            </p>
-          ) : null}
-          {trayView === "results" && scanSummary ? (
-            <>
-              <p style={{ fontSize: 12, margin: "0 0 10px", color: POPUP_THEME.muted }}>
-                {buildTabScanCountSummaryText(scanSummary, activePageContextType)}
-              </p>
-              <div
-                role="group"
-                aria-label="Filter by indicator type"
-                style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}
-              >
-                <button
-                  type="button"
-                  aria-pressed={typeFilter === "all"}
-                  onClick={() => setTypeFilter("all")}
-                  style={filterChipStyle(typeFilter === "all")}
-                >
-                  All ({scanSummary.totalCount})
-                </button>
-                {listIocTypesPresentInSummaryForPageContext(scanSummary, activePageContextType).map(
-                  (type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      aria-pressed={typeFilter === type}
-                      onClick={() => setTypeFilter(type)}
-                      style={filterChipStyle(typeFilter === type)}
-                    >
-                      {IOC_TYPE_TRAY_LABEL[type]} ({scanSummary.countByType[type] ?? 0})
-                    </button>
-                  )
-                )}
-              </div>
-              <AddFilteredToCollectionPanel
-                entries={filteredEntries}
-                open={addFilteredToCollectionOpen}
-                onToggle={() => {
-                  setAddFilteredToCollectionFeedback(null);
-                  setAddFilteredToCollectionOpen((current) => !current);
-                }}
-                feedback={addFilteredToCollectionFeedback}
-                onFeedback={setAddFilteredToCollectionFeedback}
-              />
-              <RunMacroOnFilteredPanel
-                entries={filteredEntries}
-                open={runMacroOnFilteredOpen}
-                onToggle={() => {
-                  setRunMacroOnFilteredFeedback(null);
-                  setRunMacroOnFilteredOpen((current) => !current);
-                }}
-                feedback={runMacroOnFilteredFeedback}
-                onFeedback={setRunMacroOnFilteredFeedback}
-              />
-              {trayNavigationMessage ? (
-                <p
-                  role="alert"
-                  aria-live="polite"
-                  style={{
-                    fontSize: 12,
-                    margin: "0 0 10px",
-                    color: POPUP_THEME.error,
-                    lineHeight: 1.5,
-                  }}
-                >
-                  {trayNavigationMessage}
-                </p>
-              ) : null}
-              {selectedDetailEntry ? (
-                <IndicatorDetailPane
-                  entry={selectedDetailEntry}
-                  enrichmentStatus={trayEnrichmentStatuses[selectedDetailEntry.anchorId]}
-                  note={analystNote}
-                  noteStatus={analystNoteStatus}
-                  enrichState={detailEnrichState}
-                  onNoteChange={handleAnalystNoteChange}
-                  onShowOnPage={() => navigateToTrayEntry(selectedDetailEntry)}
-                  onEnrich={handleEnrichSelectedDetail}
-                  onClear={() => setSelectedDetailEntry(null)}
-                />
-              ) : null}
-              {filteredEntries.length > 0 ? (
-                <>
-                  {activeTrayEntries.length > 0 ? (
-                    <ul
-                      style={{
-                        listStyle: "none",
-                        margin: 0,
-                        padding: 0,
-                        maxHeight: 220,
-                        overflowY: "auto",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 6,
-                      }}
-                    >
-                      {activeTrayEntries.map((entry) => renderTrayEntryRow(entry))}
-                    </ul>
-                  ) : (
-                    <p style={trayStatusStyle()}>
-                      All matching indicators are listed under Suppressed.
-                    </p>
-                  )}
-                  {suppressedTrayEntries.length > 0 ? (
-                    <details
-                      data-vera5-tray-suppressed-section="true"
-                      style={{
-                        marginTop: activeTrayEntries.length > 0 ? 8 : 0,
-                        borderRadius: 6,
-                        border: `1px solid ${POPUP_THEME.border}`,
-                        padding: "6px 8px",
-                        backgroundColor: POPUP_THEME.trayRowBg,
-                      }}
-                    >
-                      <summary
-                        data-vera5-why-still-visible-tooltip="true"
-                        title={whyStillVisibleTooltip}
-                        style={{
-                          cursor: "pointer",
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: POPUP_THEME.muted,
-                          listStylePosition: "outside",
-                        }}
-                      >
-                        {formatNoiseRulesTraySuppressedSummary(suppressedTrayEntries.length)}
-                      </summary>
-                      <p
-                        style={{
-                          fontSize: 11,
-                          margin: "6px 0 8px",
-                          color: POPUP_THEME.muted,
-                          lineHeight: 1.4,
-                        }}
-                      >
-                        {NOISE_RULES_TRAY_SUPPRESSED_SECTION_HINT}
-                      </p>
-                      <ul
-                        style={{
-                          listStyle: "none",
-                          margin: 0,
-                          padding: 0,
-                          maxHeight: 160,
-                          overflowY: "auto",
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 6,
-                        }}
-                      >
-                        {suppressedTrayEntries.map(({ entry }) =>
-                          renderTrayEntryRow(entry, { noiseSuppressed: true })
-                        )}
-                      </ul>
-                    </details>
-                  ) : null}
-                </>
-              ) : (
-                <p style={trayStatusStyle()}>No indicators match this filter.</p>
-              )}
-            </>
-          ) : null}
-        </section>
-      ) : null}
+        </div>
+      </section>
     </main>
   );
 }

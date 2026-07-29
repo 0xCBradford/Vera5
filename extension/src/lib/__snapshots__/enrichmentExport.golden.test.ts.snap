@@ -72,7 +72,7 @@ exports[`golden: enrichment export JSON snapshots > Priority-2 multi-source read
     "compositeSignal": null,
     "reasoningLines": [],
     "reasoningEmptyDetail": "Blended score steps are not available until at least two sources return parseable evidence.",
-    "insufficientDetail": "At least two enabled sources must return parseable evidence for a blended composite score. Review per-source details below."
+    "insufficientDetail": "Need two sources to blend."
   },
   "disagreement": false,
   "pivots": [
@@ -488,7 +488,7 @@ exports[`golden: enrichment export JSON snapshots > with analyst notes 1`] = `
     "compositeSignal": null,
     "reasoningLines": [],
     "reasoningEmptyDetail": "Blended score steps are not available until at least two sources return parseable evidence.",
-    "insufficientDetail": "At least two enabled sources must return parseable evidence for a blended composite score. Review per-source details below."
+    "insufficientDetail": "Need two sources to blend."
   },
   "disagreement": false,
   "pivots": [
@@ -554,7 +554,7 @@ Tags: US
 
 Risk score: Unknown risk
 
-At least two enabled sources must return parseable evidence for a blended composite score. Review per-source details below.
+Need two sources to blend.
 
 ### How this score was computed
 
@@ -665,7 +665,7 @@ Summary: 84 abuse confidence
 
 Risk score: Unknown risk
 
-At least two enabled sources must return parseable evidence for a blended composite score. Review per-source details below.
+Need two sources to blend.
 
 ### How this score was computed
 

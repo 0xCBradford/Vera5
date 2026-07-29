@@ -1132,6 +1132,13 @@ export const QUIET_MODE_ACTION_BADGE_BACKGROUND_COLOR = "#6B5A2E";
 
 export const POPUP_QUIET_MODE_STATUS_LABEL = "Quiet mode";
 
+/** Popup/sidepanel “you are here” strip — enrichment policy. */
+export const POPUP_STATUS_MANUAL_ENRICH_LABEL = "Manual enrich";
+export const POPUP_STATUS_AUTO_ENRICH_LABEL = "Auto enrich";
+/** Popup/sidepanel “you are here” strip — investigation session. */
+export const POPUP_STATUS_SESSION_ACTIVE_LABEL = "Session active";
+export const POPUP_STATUS_STRIP_ARIA_LABEL = "Current operator mode";
+
 export const PAGE_QUIET_MODE_BANNER_ARIA_LABEL =
   "Quiet mode active. Live vendor enrichment is blocked.";
 

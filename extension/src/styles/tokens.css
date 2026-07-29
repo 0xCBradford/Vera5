@@ -150,6 +150,39 @@
   --v5-transition-fast: var(--t-hover);
   --v5-transition-base: var(--t-card);
 
+  /* Injected-UI aliases (vera5UiStyles / content roots use --vera5-*). */
+  --vera5-page: var(--surface-page);
+  --vera5-surface: var(--surface-1);
+  --vera5-surface-raised: var(--surface-raised);
+  --vera5-text: var(--text-primary);
+  --vera5-border: var(--border-hard);
+  --vera5-border-soft: var(--border-soft);
+  --vera5-accent: var(--accent);
+  --vera5-accent-hover: var(--accent-hover);
+  --vera5-accent-strong: var(--accent-hover);
+  --vera5-accent-text: var(--text-primary);
+  --vera5-on-accent: var(--on-accent);
+  --vera5-muted: var(--text-secondary);
+  --vera5-muted-label: var(--text-secondary);
+  --vera5-text-low: var(--text-low);
+  --vera5-error: var(--signal-red);
+  --vera5-ready: var(--text-primary);
+  --vera5-success: var(--terminal-teal);
+  --vera5-violet: var(--deep-violet);
+  --vera5-button-bg: var(--surface-2);
+  --vera5-copy-success-bg: color-mix(in srgb, var(--terminal-teal) 16%, var(--surface-1));
+  --vera5-shadow: var(--shadow-med);
+  --vera5-shadow-low: var(--shadow-low);
+  --vera5-radius-sm: var(--r-sm);
+  --vera5-radius-md: var(--r-md);
+  --vera5-radius-lg: var(--r-lg);
+  --vera5-font-ui: var(--font-ui);
+  --vera5-font-mono: var(--font-mono);
+  --vera5-font-wordmark: var(--font-wordmark);
+  --vera5-ease-out: var(--ease-out);
+  --vera5-t-hover: var(--t-hover);
+  --vera5-t-card: var(--t-card);
+
   color-scheme: dark;
 }
 

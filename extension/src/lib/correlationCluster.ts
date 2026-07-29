@@ -1049,7 +1049,7 @@ export const CORRELATION_CLUSTER_TRAY_OTHER_SESSIONS_LABEL = "Other sessions";
  * a clustered IOC set yet.
  */
 export const CORRELATION_CLUSTER_TRAY_EMPTY_STATE_TEXT =
-  "Not enough cross-session data yet. Open this indicator set in another investigation session to see clusters here.";
+  "Not enough cross-session data yet. Reopen this indicator set in another investigation session (History), then return here to see clusters.";
 
 /** Operator notice: shared indicators do not imply cause. */
 export const CORRELATION_CLUSTER_DISCLAIMER_CORRELATION_NE_CAUSATION =

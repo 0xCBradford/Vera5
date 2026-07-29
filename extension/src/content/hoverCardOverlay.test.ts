@@ -25,7 +25,6 @@ import * as hoverCardRelationship from "../lib/hoverCardRelationship";
 import * as hoverCardNotebook from "../lib/hoverCardNotebook";
 import {
   HOVER_CARD_RELATIONSHIP_DISCLAIMER_CLASS,
-  HOVER_CARD_RELATIONSHIP_LABEL,
   HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL,
   RELATIONSHIP_MEMORY_DISCLAIMER_TEXT,
 } from "../lib/hoverCardRelationship";
@@ -73,7 +72,6 @@ import {
   HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS,
   HOVER_CARD_LOCAL_LLM_SUMMARY_DISCLAIMER,
   HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING,
-  HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING_CLASS,
   HOVER_CARD_LOCAL_LLM_SUMMARY_STATUS_CLASS,
   HOVER_CARD_IOC_PIN_BUTTON_CLASS,
   HOVER_CARD_PANEL_CLASS,
@@ -84,6 +82,12 @@ import {
   HOVER_CARD_PIVOT_RECIPE_CLASS,
   HOVER_CARD_PIVOT_RECIPE_GUIDANCE_CLASS,
   HOVER_CARD_PIVOT_RECIPE_SOURCE_CLASS,
+  HOVER_CARD_PIVOT_CHIP_MAX,
+  HOVER_CARD_MORE_CLASS,
+  HOVER_CARD_MORE_GROUP_CLASS,
+  HOVER_CARD_MORE_BUCKET_CLASS,
+  HOVER_CARD_MORE_BUCKET_SUMMARY,
+  HOVER_CARD_MORE_BUCKET_BODY_CLASS,
   HOVER_CARD_RAW_JSON_BODY_CLASS,
   HOVER_CARD_RAW_JSON_CLASS,
   HOVER_CARD_SOURCES_CLASS,
@@ -110,6 +114,7 @@ import {
   HOVER_CARD_EXPORT_DROPDOWN_CLASS,
   HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS,
   HOVER_CARD_EXPORT_SECTION_CLASS,
+  HOVER_CARD_EXPORT_TEMPLATES_SUMMARY,
   HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID,
   buildExportRecordFromPayload,
   focusFirstHoverCardControl,
@@ -176,8 +181,13 @@ function queryOverlayEnrichmentSummary(panel: ParentNode): HTMLElement | null {
 
 function readPivotGuidanceText(panel: ParentNode): string[] {
   return Array.from(
-    panel.querySelectorAll(`.${HOVER_CARD_PIVOT_RECIPE_GUIDANCE_CLASS}`)
-  ).map((node) => node.textContent ?? "");
+    panel.querySelectorAll(`.${HOVER_CARD_PIVOT_LINK_CLASS}`)
+  ).map(
+    (node) =>
+      (node as HTMLElement).dataset.vera5PivotGuidance ??
+      node.getAttribute("title") ??
+      ""
+  );
 }
 
 type PivotRecipePanelRow = {
@@ -190,19 +200,28 @@ type PivotRecipePanelRow = {
 function readPivotRecipePanelRows(panel: ParentNode): PivotRecipePanelRow[] {
   return Array.from(
     panel.querySelectorAll(`.${HOVER_CARD_PIVOT_RECIPE_CLASS}`)
-  ).map((item) => ({
-    sourceLabel:
-      item.querySelector(`.${HOVER_CARD_PIVOT_RECIPE_SOURCE_CLASS}`)
-        ?.textContent ?? "",
-    linkLabel:
-      item.querySelector(`.${HOVER_CARD_PIVOT_LINK_CLASS}`)?.textContent ?? "",
-    href:
-      item.querySelector(`.${HOVER_CARD_PIVOT_LINK_CLASS}`)?.getAttribute("href") ??
-      "",
-    guidance:
-      item.querySelector(`.${HOVER_CARD_PIVOT_RECIPE_GUIDANCE_CLASS}`)
-        ?.textContent ?? "",
-  }));
+  ).map((item) => {
+    const link = item.querySelector(
+      `.${HOVER_CARD_PIVOT_LINK_CLASS}`
+    ) as HTMLAnchorElement | null;
+    return {
+      sourceLabel: link?.textContent ?? "",
+      linkLabel: link?.dataset.vera5PivotLabel ?? "",
+      href: link?.getAttribute("href") ?? "",
+      guidance:
+        link?.dataset.vera5PivotGuidance ?? link?.getAttribute("title") ?? "",
+    };
+  });
+}
+
+function openHoverCardExportTemplates(panel: ParentNode): HTMLDetailsElement | null {
+  const details = panel.querySelector(
+    `.${HOVER_CARD_EXPORT_SECTION_CLASS} .vera5-hover-card-export-templates`
+  ) as HTMLDetailsElement | null;
+  if (details) {
+    details.open = true;
+  }
+  return details;
 }
 
 const PIVOT_PANEL_GOLDEN_CASES: ReadonlyArray<{
@@ -271,7 +290,18 @@ describe("notebook panel", () => {
     expect(section?.getAttribute("aria-label")).toBe(
       HOVER_CARD_NOTEBOOK_SECTION_ARIA_LABEL
     );
-    expect(section?.textContent).toContain("Notebook");
+    expect(
+      section?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
+        ?.textContent
+    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
+    const notebookDetails = section?.closest(
+      'details[data-vera5-casework="notebook"]'
+    ) as HTMLDetailsElement | null;
+    expect(notebookDetails).not.toBeNull();
+    expect(notebookDetails?.open).toBe(false);
+    expect(notebookDetails?.querySelector(":scope > summary")?.textContent).toBe(
+      "Notebook"
+    );
 
     await vi.waitFor(() => {
       expect(section?.textContent).toContain("Hypothesis");
@@ -288,6 +318,11 @@ describe("notebook panel", () => {
       true
     );
     expect(section?.textContent).toContain("Add fragment");
+    expect(
+      Array.from(section?.querySelectorAll("button") ?? []).find(
+        (button) => button.textContent === "Add fragment"
+      )?.classList.contains("vera5-hover-card-notebook-action--primary")
+    ).toBe(true);
     expect(
       section?.querySelector('button[aria-label="Edit Hypothesis"]')
     ).not.toBeNull();
@@ -420,11 +455,43 @@ describe("co-occurrence panel", () => {
     expect(section?.getAttribute("aria-label")).toBe(
       HOVER_CARD_CO_OCCURRENCE_SECTION_ARIA_LABEL
     );
-    expect(section?.textContent).toContain("Appeared alongside");
+    expect(
+      section?.closest(`.${HOVER_CARD_MORE_BUCKET_BODY_CLASS}`)
+    ).not.toBeNull();
+    expect(
+      section?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
+        ?.textContent
+    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
 
     await vi.waitFor(() => {
       expect(section?.textContent).toContain("DOM · example.com");
       expect(section?.textContent).toContain("Same page scan");
+      expect(section?.hidden).toBe(false);
+    });
+  });
+
+  it("omits empty co-occurrence and relationship drawers after load", async () => {
+    vi.spyOn(hoverCardCoOccurrence, "loadHoverCardCoOccurrencePanelView").mockResolvedValue({
+      contextLabel: "",
+      entries: [],
+    });
+    vi.spyOn(
+      hoverCardRelationship,
+      "loadHoverCardRelationshipPanelView"
+    ).mockResolvedValue({
+      layout: "list",
+      focusEntityKey: "ipv4:8.8.8.8",
+      entries: [],
+    });
+
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+    });
+
+    await vi.waitFor(() => {
+      expect(panel.querySelector(`.${HOVER_CARD_CO_OCCURRENCE_CLASS}`)).toBeNull();
+      expect(panel.querySelector(`.${HOVER_CARD_RELATIONSHIP_CLASS}`)).toBeNull();
     });
   });
 
@@ -692,12 +759,16 @@ describe("relationship panel", () => {
       HOVER_CARD_RELATIONSHIP_SECTION_ARIA_LABEL
     );
     expect(section?.getAttribute("data-vera5-relationship-layout")).toBe("list");
-    expect(section?.textContent).toContain(HOVER_CARD_RELATIONSHIP_LABEL);
+    expect(
+      section?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
+        ?.textContent
+    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
 
     await vi.waitFor(() => {
       expect(section?.textContent).toContain("DOM · evil.example");
       expect(section?.textContent).toContain("Last seen:");
       expect(section?.textContent).toContain("2 sessions");
+      expect(section?.hidden).toBe(false);
     });
 
     const disclaimer = section?.querySelector(
@@ -754,7 +825,10 @@ describe("match provenance exposure", () => {
       ],
     });
 
-    expect(panel.querySelector(".vera5-why-detected")).not.toBeNull();
+    const why = panel.querySelector(".vera5-why-detected");
+    expect(why).not.toBeNull();
+    expect(why?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)).not.toBeNull();
+    expect(panel.querySelector(`.${HOVER_CARD_MORE_GROUP_CLASS}`)).not.toBeNull();
     expect(panel.textContent).toContain("Type: Email address");
     expect(panel.textContent).toContain("Matched an email address in visible text.");
     expect(panel.textContent).toContain(
@@ -783,6 +857,10 @@ describe("match provenance exposure", () => {
 
     const section = panel.querySelector(".vera5-why-detected");
     expect(section).not.toBeNull();
+    expect(
+      section?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
+        ?.textContent
+    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
     expect(section?.getAttribute("aria-label")).toBe("Why detected?");
     expect(panel.textContent).toContain("Type: URL");
     expect(panel.textContent).toContain(
@@ -1109,14 +1187,8 @@ describe("match provenance exposure", () => {
     copy.mockRestore();
   });
 
-  it("shows Open live URL for URL indicators and confirms before opening", () => {
-    const confirm = vi.fn(() => true);
+  it("requires the VERA5 navigation gate before opening a live URL", () => {
     const open = vi.fn(() => null);
-    Object.defineProperty(window, "confirm", {
-      configurable: true,
-      writable: true,
-      value: confirm,
-    });
     Object.defineProperty(window, "open", {
       configurable: true,
       writable: true,
@@ -1134,22 +1206,28 @@ describe("match provenance exposure", () => {
     expect(openButton).toBeDefined();
     openButton?.click();
 
-    expect(confirm).toHaveBeenCalledTimes(1);
+    const warning = panel.querySelector(".vera5-live-url-warning");
+    const confirmButton = panel.querySelector<HTMLButtonElement>(
+      ".vera5-live-url-warning-confirm"
+    );
+    expect(warning?.getAttribute("role")).toBe("alertdialog");
+    expect(warning?.textContent).toContain("VERA5 // NAVIGATION GATE");
+    expect(warning?.textContent).toContain("Open live indicator?");
+    expect(warning?.textContent).toContain("https://example.com/evil");
+    expect(open).not.toHaveBeenCalled();
+
+    confirmButton?.click();
+
     expect(open).toHaveBeenCalledWith(
       "https://example.com/evil",
       "_blank",
       "noopener,noreferrer"
     );
+    expect(panel.querySelector(".vera5-live-url-warning")).toBeNull();
   });
 
-  it("does not open a live URL when the confirmation is cancelled", () => {
-    const confirm = vi.fn(() => false);
+  it("does not open a live URL when the VERA5 warning is cancelled", () => {
     const open = vi.fn(() => null);
-    Object.defineProperty(window, "confirm", {
-      configurable: true,
-      writable: true,
-      value: confirm,
-    });
     Object.defineProperty(window, "open", {
       configurable: true,
       writable: true,
@@ -1166,8 +1244,14 @@ describe("match provenance exposure", () => {
     ).find((button) => button.textContent === "Open live URL");
     openButton?.click();
 
-    expect(confirm).toHaveBeenCalledTimes(1);
+    const cancelButton = panel.querySelector<HTMLButtonElement>(
+      ".vera5-live-url-warning-cancel"
+    );
+    expect(cancelButton).not.toBeNull();
+    cancelButton?.click();
+
     expect(open).not.toHaveBeenCalled();
+    expect(panel.querySelector(".vera5-live-url-warning")).toBeNull();
   });
 });
 
@@ -1177,16 +1261,20 @@ describe("pivot recipes panel content", () => {
   });
 
   it.each(PIVOT_PANEL_GOLDEN_CASES)(
-    "renders source badges, links, and guidance from getPivotRecipes for $type",
+    "renders compact pivot chips from getPivotRecipes for $type",
     ({ type, value }) => {
       const panel = buildHoverCardPanel({ value, type });
       const section = panel.querySelector(`.${HOVER_CARD_PIVOT_RECIPES_CLASS}`);
 
       expect(section).not.toBeNull();
       expect(section?.getAttribute("aria-label")).toBe("Recommended next pivots");
-      expect(panel.textContent).toContain("Recommended next pivots");
+      expect(panel.textContent).toContain("Pivots");
+      expect(panel.textContent).toContain("[Redirect to Intel Sites]");
 
-      const expectedRecipes = getPivotRecipes(type, value);
+      const expectedRecipes = getPivotRecipes(type, value).slice(
+        0,
+        HOVER_CARD_PIVOT_CHIP_MAX
+      );
       const rows = readPivotRecipePanelRows(panel);
 
       expect(rows).toHaveLength(expectedRecipes.length);
@@ -1213,10 +1301,18 @@ describe("pivot recipes panel content", () => {
         const link = links.find(
           (anchor) => anchor.getAttribute("href") === recipe.href
         );
-        expect(link?.textContent).toBe(recipe.label);
+        expect(link?.textContent).toBe(recipe.sourceLabel);
+        expect(link?.getAttribute("title")).toBe(recipe.guidance);
         expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
         expect(link?.getAttribute("target")).toBe("_blank");
       }
+
+      expect(
+        panel.querySelectorAll(`.${HOVER_CARD_PIVOT_RECIPE_SOURCE_CLASS}`).length
+      ).toBe(0);
+      expect(
+        panel.querySelectorAll(`.${HOVER_CARD_PIVOT_RECIPE_GUIDANCE_CLASS}`).length
+      ).toBe(0);
     }
   );
 
@@ -1227,8 +1323,12 @@ describe("pivot recipes panel content", () => {
       type: IOC_TYPE.URL,
     });
 
+    const expected = getPivotRecipes(IOC_TYPE.URL, value).slice(
+      0,
+      HOVER_CARD_PIVOT_CHIP_MAX
+    );
     expect(readPivotRecipePanelRows(panel).map((row) => row.sourceLabel)).toEqual(
-      getPivotRecipes(IOC_TYPE.URL, value).map((recipe) => recipe.sourceLabel)
+      expected.map((recipe) => recipe.sourceLabel)
     );
     expect(readPivotRecipePanelRows(panel)[0]?.sourceLabel).toBe("URLScan.io");
   });
@@ -1255,7 +1355,9 @@ describe("pivot recipes panel content", () => {
       expect(guidance).not.toMatch(/\b45\s*\/\s*70\b/);
     }
     expect(readPivotRecipePanelRows(panel).map((row) => row.guidance)).toEqual(
-      getPivotRecipes(IOC_TYPE.IPV4, "8.8.8.8").map((recipe) => recipe.guidance)
+      getPivotRecipes(IOC_TYPE.IPV4, "8.8.8.8")
+        .slice(0, HOVER_CARD_PIVOT_CHIP_MAX)
+        .map((recipe) => recipe.guidance)
     );
   });
 });
@@ -1274,9 +1376,9 @@ describe("hover card overlay shell", () => {
     expect(
       panel.querySelector(`.${HOVER_CARD_PIVOT_RECIPES_CLASS}`)
     ).not.toBeNull();
-    expect(panel.textContent).toContain("Recommended next pivots");
+    expect(panel.textContent).toContain("Pivots");
     expect(
-      panel.querySelectorAll(`.${HOVER_CARD_PIVOT_RECIPE_SOURCE_CLASS}`).length
+      panel.querySelectorAll(`.${HOVER_CARD_PIVOT_LINK_CLASS}`).length
     ).toBeGreaterThan(0);
     const vtLink = panel.querySelector(
       `.${HOVER_CARD_PIVOT_LINK_CLASS}[href="https://www.virustotal.com/gui/ip-address/8.8.8.8"]`
@@ -1288,6 +1390,7 @@ describe("hover card overlay shell", () => {
     expect(abuseLink?.textContent).toBe("AbuseIPDB");
     expect(vtLink?.getAttribute("rel")).toBe("noopener noreferrer");
     expect(vtLink?.getAttribute("target")).toBe("_blank");
+    expect(vtLink?.getAttribute("title")).toBeTruthy();
   });
 
   it.each<
@@ -1698,19 +1801,58 @@ describe("overlay reasoning chain presentation paths", () => {
     expect(callout?.textContent).toBe(COMPOSITE_SCORE_DISAGREEMENT_NOTICE);
   });
 
-  it("shows the empty reasoning state instead of a chain when blend evidence is insufficient", () => {
+  it("shows a short Sources hint instead of empty reasoning when blend evidence is insufficient", () => {
     const panel = buildReadyPanel(insufficientSourceResults);
 
     expect(
+      panel.querySelector(`.${HOVER_CARD_RISK_SCORE_INSUFFICIENT_CLASS}`)?.textContent
+    ).toBe("Need two sources to blend.");
+    expect(
       panel.querySelector(".vera5-hover-card-risk-reasoning-empty")
-    ).not.toBeNull();
-    expect(panel.textContent).toContain("Blended score steps are not available");
+    ).toBeNull();
     expect(
       panel.querySelector(`.${HOVER_CARD_RISK_REASONING_CHAIN_CLASS}`)
     ).toBeNull();
+    expect(panel.textContent).not.toContain("How this score was computed");
     expect(
       panel.querySelector(`.${HOVER_CARD_RISK_DISAGREEMENT_CLASS}`)
     ).toBeNull();
+  });
+
+  it("opens Sources when the insufficient risk notice is activated with multi-source rows", () => {
+    const panel = buildReadyPanel(
+      buildHoverCardSourceEntries([
+        {
+          sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+          sourceLabel: "AbuseIPDB",
+          status: "ok",
+          summary: "12 abuse confidence",
+        },
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          sourceLabel: "OTX",
+          status: "error",
+          summary: "request failed",
+        },
+      ])
+    );
+    const notice = panel.querySelector(
+      `.${HOVER_CARD_RISK_SCORE_INSUFFICIENT_CLASS}`
+    ) as HTMLElement | null;
+    const sourcesDetails = Array.from(panel.querySelectorAll("details")).find(
+      (node) =>
+        Array.from(node.children).some(
+          (child) => child.tagName === "SUMMARY" && child.textContent === "Intel Sources"
+        )
+    ) as HTMLDetailsElement | undefined;
+
+    expect(notice?.textContent).toBe("Need two sources to blend — see Intel Sources.");
+    expect(sourcesDetails).not.toBeUndefined();
+    expect(sourcesDetails?.open).toBe(false);
+
+    notice?.click();
+
+    expect(sourcesDetails?.open).toBe(true);
   });
 });
 
@@ -2550,7 +2692,7 @@ describe("hover card overlay", () => {
     ).not.toBeNull();
   });
 
-  it("shows unknown and empty reasoning chain when composite is unknown due to insufficient blend", () => {
+  it("shows unknown with a short Sources hint when composite blend is insufficient", () => {
     const anchor = document.createElement("span");
     document.body.appendChild(anchor);
     Object.defineProperty(anchor, "getBoundingClientRect", {
@@ -2584,15 +2726,12 @@ describe("hover card overlay", () => {
 
     expect(panel.textContent).toContain("Unknown risk");
     expect(
-      panel.querySelector(`.${HOVER_CARD_RISK_SCORE_INSUFFICIENT_CLASS}`)
-    ).not.toBeNull();
-    expect(panel.textContent).toContain("How this score was computed");
+      panel.querySelector(`.${HOVER_CARD_RISK_SCORE_INSUFFICIENT_CLASS}`)?.textContent
+    ).toBe("Need two sources to blend.");
+    expect(panel.textContent).not.toContain("How this score was computed");
     expect(
       panel.querySelector(".vera5-hover-card-risk-reasoning-empty")
-    ).not.toBeNull();
-    expect(panel.textContent).toContain(
-      "Blended score steps are not available"
-    );
+    ).toBeNull();
     expect(
       panel.querySelector(`.${HOVER_CARD_RISK_REASONING_CHAIN_CLASS}`)
     ).toBeNull();
@@ -2812,7 +2951,7 @@ describe("hover card overlay", () => {
     ).toHaveLength(4);
     expect(panel.querySelector(".vera5-hover-card-attribution")).toBeNull();
     expect(panel.textContent).toContain("Retry after 30 seconds.");
-    expect(panel.textContent).toContain("Sources");
+    expect(panel.textContent).toContain("Intel Sources");
     expect(panel.querySelector(`.${HOVER_CARD_ACTION_CLASS}`)).toBeNull();
     expect(
       panel.querySelector(`p.${HOVER_CARD_RETRY_HINT_CLASS}`)
@@ -3434,6 +3573,32 @@ describe("hover card overlay", () => {
     expect(notesInput?.value).toBe("");
   });
 
+  it("keeps Why Detected, Notebook, and Analyst Notes collapsed by default", () => {
+    const panel = buildHoverCardPanel({
+      value: "8.8.8.8",
+      type: IOC_TYPE.IPV4,
+      ruleId: "ioc.regex.ipv4",
+      sourceTextHint: "Observed 8.8.8.8 in the page.",
+    });
+
+    const caseworkDetails = Array.from(
+      panel.querySelectorAll<HTMLDetailsElement>(
+        "details.vera5-hover-card-casework-details"
+      )
+    );
+    const summaries = caseworkDetails.map(
+      (details) => details.querySelector(":scope > summary")?.textContent
+    );
+
+    expect(caseworkDetails).toHaveLength(3);
+    expect(caseworkDetails.every((details) => details.open === false)).toBe(true);
+    expect(summaries).toEqual([
+      "Why detected?",
+      "Notebook",
+      "Analyst notes",
+    ]);
+  });
+
   it("keeps per-IOC analyst notes when the overlay rebuilds", () => {
     const anchor = document.createElement("span");
     document.body.appendChild(anchor);
@@ -3484,10 +3649,17 @@ describe("hover card overlay", () => {
     const headings = [...panel.querySelectorAll(".vera5-hover-card-section-heading")].map(
       (heading) => heading.textContent
     );
+    const moreSummaries = [
+      ...panel.querySelectorAll(
+        `.${HOVER_CARD_MORE_GROUP_CLASS} > .${HOVER_CARD_MORE_CLASS} > summary`
+      ),
+    ].map((summary) => summary.textContent);
 
     expect(headings).toContain("Intel Summary");
-    expect(headings).toContain("Sources");
-    expect(headings).toContain("Analyst notes");
+    expect(headings).toContain("Pivots [Redirect to Intel Sites]");
+    expect(moreSummaries).toContain("Intel Sources");
+    expect(moreSummaries).toContain(HOVER_CARD_MORE_BUCKET_SUMMARY);
+    expect(moreSummaries).not.toContain("Analyst notes");
   });
 
   it("renders export and copy dropdown actions on the overlay", () => {
@@ -3497,18 +3669,51 @@ describe("hover card overlay", () => {
     });
 
     const exportSection = panel.querySelector(`.${HOVER_CARD_EXPORT_SECTION_CLASS}`);
-    const dropdowns = exportSection?.querySelectorAll(
+    const intelSection = panel.querySelector(`.${HOVER_CARD_INTEL_SUMMARY_CLASS}`);
+    const dropdowns = intelSection?.querySelectorAll(
       `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`
     );
-    const dropdownTriggers = exportSection?.querySelectorAll(
+    const dropdownTriggers = intelSection?.querySelectorAll(
       `.${HOVER_CARD_EXPORT_DROPDOWN_CLASS} .${HOVER_CARD_EXPORT_BUTTON_CLASS}`
     );
+    const templates = exportSection?.querySelector(
+      ".vera5-hover-card-export-templates"
+    ) as HTMLDetailsElement | null;
 
     expect(exportSection).not.toBeNull();
     expect(dropdowns).toHaveLength(2);
     expect(dropdownTriggers).toHaveLength(2);
     expect(dropdownTriggers?.[0]?.textContent).toBe("Export");
     expect(dropdownTriggers?.[1]?.textContent).toBe("Copy");
+    expect(
+      exportSection?.querySelector(`.${HOVER_CARD_EXPORT_DROPDOWN_CLASS}`)
+    ).toBeNull();
+    expect(
+      intelSection?.querySelector(".vera5-hover-card-intel-export-actions")
+    ).not.toBeNull();
+    expect(templates?.open).toBe(false);
+    expect(templates?.querySelector("summary")?.textContent).toBe(
+      HOVER_CARD_EXPORT_TEMPLATES_SUMMARY
+    );
+    expect(
+      templates?.querySelector(".vera5-hover-card-export-notes-body .vera5-hover-card-ioc-label")
+    ).not.toBeNull();
+    expect(
+      templates?.querySelector(
+        `.vera5-hover-card-export-notes-body .${HOVER_CARD_IOC_PIN_BUTTON_CLASS}`
+      )
+    ).not.toBeNull();
+    expect(panel.querySelector(":scope > .vera5-hover-card-ioc-label")).toBeNull();
+    const identity = panel.querySelector(".vera5-hover-card-identity");
+    expect(identity).not.toBeNull();
+    expect(identity?.querySelector(`.${HOVER_CARD_IOC_PIN_BUTTON_CLASS}`)).toBeNull();
+    expect(
+      panel.querySelector(".vera5-hover-card-lens-brand")?.textContent
+    ).toBe("VERA5");
+    expect(
+      panel.querySelector(".vera5-hover-card-lens-label")?.textContent
+    ).toBe("Analyst Lens");
+    expect(panel.querySelector(".vera5-hover-card-lens-trust")).toBeNull();
   });
 
   it("renders scan list copy actions in the copy dropdown and enabled template controls", () => {
@@ -3540,6 +3745,7 @@ describe("hover card overlay", () => {
     const menuLabels = Array.from(
       copyDropdown?.querySelectorAll(`.${HOVER_CARD_EXPORT_DROPDOWN_ITEM_CLASS}`) ?? []
     ).map((item) => item.textContent);
+    openHoverCardExportTemplates(panel);
     const templateSelect = panel.querySelector(
       `#${HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID}`
     ) as HTMLSelectElement | null;
@@ -3562,6 +3768,11 @@ describe("hover card overlay", () => {
     ).toEqual(
       expect.arrayContaining(["Export template", "Copy template"])
     );
+    expect(
+      panel.querySelectorAll(
+        ".vera5-hover-card-scan-export-template-actions .vera5-hover-card-export-button"
+      )
+    ).toHaveLength(2);
   });
 
   it("copies all indicators when Copy all is clicked", async () => {
@@ -3679,6 +3890,7 @@ describe("hover card overlay", () => {
       expect(buildRecords).toHaveBeenCalled();
     });
 
+    openHoverCardExportTemplates(panel);
     const templateSelect = panel.querySelector(
       `#${HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID}`
     ) as HTMLSelectElement | null;
@@ -3790,6 +4002,7 @@ describe("hover card overlay", () => {
       expect(tabScanSummary.buildTraySubsetEnrichmentRecords).toHaveBeenCalled();
     });
 
+    openHoverCardExportTemplates(panel);
     const templateSelect = panel.querySelector(
       `#${HOVER_CARD_SCAN_EXPORT_TEMPLATE_SELECT_ID}`
     ) as HTMLSelectElement | null;
@@ -3941,21 +4154,21 @@ describe("hover card keyboard focus", () => {
     document.body.replaceChildren();
   });
 
-  it("focusFirstHoverCardControl focuses the pin control in the header", () => {
+  it("focusFirstHoverCardControl focuses the visible header copy control", () => {
     const panel = buildHoverCardPanel({
       value: "8.8.8.8",
       type: IOC_TYPE.IPV4,
     });
     document.body.appendChild(panel);
 
-    const pinButton = panel.querySelector<HTMLElement>(
-      `.${HOVER_CARD_IOC_PIN_BUTTON_CLASS}`
+    const copyButton = panel.querySelector<HTMLElement>(
+      `.${HOVER_CARD_COPY_BUTTON_CLASS}`
     );
-    expect(pinButton).not.toBeNull();
+    expect(copyButton).not.toBeNull();
 
     const focused = focusFirstHoverCardControl(panel);
     expect(focused).toBe(true);
-    expect(document.activeElement).toBe(pinButton);
+    expect(document.activeElement).toBe(copyButton);
   });
 
   it("showHoverCardNearAnchor moves focus when moveFocus is set", () => {
@@ -3982,10 +4195,10 @@ describe("hover card keyboard focus", () => {
       { moveFocus: true }
     );
 
-    const pinButton = panel.querySelector<HTMLElement>(
-      `.${HOVER_CARD_IOC_PIN_BUTTON_CLASS}`
+    const copyButton = panel.querySelector<HTMLElement>(
+      `.${HOVER_CARD_COPY_BUTTON_CLASS}`
     );
-    expect(document.activeElement).toBe(pinButton);
+    expect(document.activeElement).toBe(copyButton);
   });
 });
 
@@ -4185,9 +4398,9 @@ describe("local LLM summary controls", () => {
     const button = summarySection?.querySelector("button");
 
     expect(
-      summarySection?.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING_CLASS}`)
+      summarySection?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)?.querySelector("summary")
         ?.textContent
-    ).toBe(HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING);
+    ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
     expect(summarySection?.getAttribute("aria-label")).toBe(
       HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING
     );
@@ -4220,13 +4433,15 @@ describe("local LLM summary controls", () => {
     const summarySection = panel.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS}`);
     const riskScore = panel.querySelector(`.${HOVER_CARD_RISK_SCORE_CLASS}`);
     const reasoning = panel.querySelector(`.${HOVER_CARD_RISK_REASONING_CLASS}`);
+    const moreGroup = panel.querySelector(`.${HOVER_CARD_MORE_GROUP_CLASS}`);
 
     expect(intelSection?.contains(riskScore)).toBe(true);
     expect(intelSection?.contains(reasoning)).toBe(true);
     expect(intelSection?.contains(summarySection)).toBe(false);
+    expect(moreGroup?.contains(summarySection)).toBe(true);
 
     const panelChildren = [...panel.children];
-    expect(panelChildren.indexOf(summarySection!)).toBeGreaterThan(
+    expect(panelChildren.indexOf(moreGroup!)).toBeGreaterThan(
       panelChildren.indexOf(intelSection!)
     );
   });
@@ -4346,9 +4561,11 @@ describe("local LLM summary controls", () => {
         HOVER_CARD_LOCAL_LLM_SUMMARY_DISCLAIMER
       );
       expect(
-        currentPanel?.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING_CLASS}`)
-          ?.textContent
-      ).toBe(HOVER_CARD_LOCAL_LLM_SUMMARY_HEADING);
+        currentPanel
+          ?.querySelector(`.${HOVER_CARD_LOCAL_LLM_SUMMARY_CLASS}`)
+          ?.closest(`.${HOVER_CARD_MORE_BUCKET_CLASS}`)
+          ?.querySelector("summary")?.textContent
+      ).toBe(HOVER_CARD_MORE_BUCKET_SUMMARY);
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();

@@ -54,7 +54,7 @@ import {
   POPUP_PANEL_FOCUS_STORAGE_KEY,
 } from "../lib/popupPanelFocus";
 import { STORAGE_KEY_ANALYST_NOTES } from "../lib/analystNotesStorage";
-import { Popup, InvestigationReplayPanel } from "./Popup";
+import { Popup, InvestigationReplayPanel, POPUP_TRAY_CASE_TOOLS_SUMMARY, POPUP_TRAY_ROW_ACTIONS_SUMMARY } from "./Popup";
 import * as copyText from "../lib/copyText";
 import {
   REPLAY_SEGMENT_ACTION,
@@ -63,6 +63,9 @@ import {
 import * as storage from "../lib/storage";
 import {
   POPUP_QUIET_MODE_STATUS_LABEL,
+  POPUP_STATUS_AUTO_ENRICH_LABEL,
+  POPUP_STATUS_MANUAL_ENRICH_LABEL,
+  POPUP_STATUS_STRIP_ARIA_LABEL,
   STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_QUIET_MODE,
 } from "../lib/storage";
@@ -571,6 +574,22 @@ function renderPopup(): { container: HTMLDivElement; root: Root } {
   return { container, root };
 }
 
+function openTrayDemotedDetails(
+  container: ParentNode,
+  summaryText: string
+): HTMLDetailsElement | null {
+  const details = Array.from(container.querySelectorAll("details")).find((node) => {
+    const summary = Array.from(node.children).find(
+      (child) => child.tagName === "SUMMARY"
+    );
+    return summary?.textContent === summaryText;
+  }) as HTMLDetailsElement | undefined;
+  if (details) {
+    details.open = true;
+  }
+  return details ?? null;
+}
+
 describe("Popup IOC tray", () => {
   let mounted: { container: HTMLDivElement; root: Root } | null = null;
   let writeText: ReturnType<typeof vi.fn>;
@@ -587,6 +606,10 @@ describe("Popup IOC tray", () => {
     writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("navigator", { clipboard: { writeText } });
     vi.spyOn(tabScanSummary, "loadTrayEntryEnrichmentStatuses").mockResolvedValue({});
+    vi.spyOn(storage, "getExtensionEnabled").mockResolvedValue(true);
+    vi.spyOn(storage, "getHighlightEnabled").mockResolvedValue(true);
+    vi.spyOn(storage, "getManualOnlyMode").mockResolvedValue(true);
+    vi.spyOn(storage, "getQuietMode").mockResolvedValue(false);
   });
 
   it("shows the pre-scan empty prompt when no summary exists", async () => {
@@ -649,7 +672,22 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Advanced");
       expect(mounted?.container.textContent).toContain("Source operations");
+    });
+    const advancedToggle = mounted?.container.querySelector(
+      '[aria-controls="popup-advanced-body"]'
+    );
+    expect(advancedToggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
+    ).toBe(true);
+    flushSync(() => {
+      (advancedToggle as HTMLButtonElement | null)?.click();
+    });
+    expect(advancedToggle?.getAttribute("aria-expanded")).toBe("true");
+
+    await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain(
         "HTTP 429 cooldown: 30s remaining"
       );
@@ -669,6 +707,95 @@ describe("Popup IOC tray", () => {
     expect(mounted?.container.textContent).toContain(
       "Vendor quota: Typical free tier: 1,000 checks/day"
     );
+  });
+
+  it("keeps Advanced collapsed by default while scan and tray stay visible", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Detected indicators");
+      expect(mounted?.container.textContent).toContain("Scan page");
+    });
+    const advancedToggle = mounted?.container.querySelector(
+      '[aria-controls="popup-advanced-body"]'
+    );
+    expect(advancedToggle).not.toBeNull();
+    expect(advancedToggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(
+      mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
+    ).toBe(true);
+    expect(mounted?.container.textContent).toContain("Extension enabled");
+  });
+
+  it("nests Advanced subsections under Advanced without peer-level chrome", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Advanced");
+    });
+
+    const advancedToggle = mounted!.container.querySelector(
+      '[aria-controls="popup-advanced-body"]'
+    ) as HTMLButtonElement;
+    advancedToggle.click();
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
+      ).toBe(false);
+    });
+
+    const advancedBody = mounted!.container.querySelector("#popup-advanced-body");
+    expect(advancedBody).not.toBeNull();
+    expect(
+      advancedBody?.querySelector('[aria-label="Investigation history"]')
+    ).not.toBeNull();
+    expect(
+      advancedBody?.querySelector("#popup-collections-body")
+    ).not.toBeNull();
+    expect(
+      advancedBody?.querySelector("#popup-source-ops-body")
+    ).not.toBeNull();
+
+    const historyToggle = advancedBody?.querySelector(
+      '[aria-controls="popup-history-body"]'
+    ) as HTMLButtonElement | null;
+    expect(historyToggle).not.toBeNull();
+    expect(historyToggle?.style.fontSize).toBe("13px");
+    expect(advancedToggle.style.fontSize).toBe("15px");
+  });
+
+  it("collapses tray collection and macro controls by default", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Detected indicators");
+      expect(mounted?.container.textContent).toContain(POPUP_TRAY_CASE_TOOLS_SUMMARY);
+    });
+
+    const caseTools = Array.from(mounted!.container.querySelectorAll("details")).find(
+      (node) =>
+        Array.from(node.children).some(
+          (child) =>
+            child.tagName === "SUMMARY" &&
+            child.textContent === POPUP_TRAY_CASE_TOOLS_SUMMARY
+        )
+    ) as HTMLDetailsElement | undefined;
+    const rowActions = Array.from(mounted!.container.querySelectorAll("details")).find(
+      (node) =>
+        Array.from(node.children).some(
+          (child) =>
+            child.tagName === "SUMMARY" &&
+            child.textContent === POPUP_TRAY_ROW_ACTIONS_SUMMARY
+        )
+    ) as HTMLDetailsElement | undefined;
+
+    expect(caseTools?.open).toBe(false);
+    expect(rowActions?.open).toBe(false);
+    expect(mounted?.container.textContent).toContain("Why detected?");
   });
 
   it("shows session export copy and download actions when a session is active", async () => {
@@ -2086,8 +2213,9 @@ describe("Popup IOC tray", () => {
     );
     expect(priorButton).not.toBeNull();
     expect(priorButton?.getAttribute("aria-label")).toContain(
-      "Open investigation session summary"
+      "Prior co-occurrence session"
     );
+    expect(priorButton?.getAttribute("aria-label")).toContain("4 indicators");
     expect(priorButton?.textContent).toContain("4 indicators");
 
     const investigationToggle = mounted!.container.querySelector<HTMLButtonElement>(
@@ -2966,6 +3094,7 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
+    openTrayDemotedDetails(mounted.container, POPUP_TRAY_ROW_ACTIONS_SUMMARY);
     const saveToggle = Array.from(mounted.container.querySelectorAll("button")).find(
       (button) => button.textContent === "Save to collection…"
     );
@@ -3003,6 +3132,7 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
+    openTrayDemotedDetails(mounted.container, POPUP_TRAY_CASE_TOOLS_SUMMARY);
     const addFilteredButton = Array.from(mounted.container.querySelectorAll("button")).find(
       (button) => button.textContent === "Add filtered to collection… (3)"
     );
@@ -3039,6 +3169,7 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
+    openTrayDemotedDetails(mounted.container, POPUP_TRAY_ROW_ACTIONS_SUMMARY);
     const runToggle = Array.from(mounted.container.querySelectorAll("button")).find(
       (button) =>
         button.getAttribute("aria-label") === "Run macro… for 8.8.8.8"
@@ -3089,6 +3220,7 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
+    openTrayDemotedDetails(mounted.container, POPUP_TRAY_CASE_TOOLS_SUMMARY);
     const runFilteredButton = Array.from(mounted.container.querySelectorAll("button")).find(
       (button) => button.textContent === "Run macro on filtered… (3)"
     );
@@ -3678,12 +3810,19 @@ describe("Popup operator UX surfaces", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
+      const advancedToggle = mounted?.container.querySelector(
+        '[aria-controls="popup-advanced-body"]'
+      );
       const toggle = mounted?.container.querySelector(
         '[aria-controls="popup-source-ops-body"]'
       );
+      expect(advancedToggle?.getAttribute("aria-expanded")).toBe("true");
       expect(toggle?.getAttribute("aria-expanded")).toBe("true");
       expect(mounted?.container.textContent).toContain("Last status: Rate limited");
     });
+    expect(
+      mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
+    ).toBe(false);
     expect(
       mounted?.container.querySelector("#popup-source-ops-body")?.hasAttribute("hidden")
     ).toBe(false);
@@ -3714,12 +3853,19 @@ describe("Popup operator UX surfaces", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
+      const advancedToggle = mounted?.container.querySelector(
+        '[aria-controls="popup-advanced-body"]'
+      );
       const toggle = mounted?.container.querySelector(
         '[aria-controls="popup-history-body"]'
       );
+      expect(advancedToggle?.getAttribute("aria-expanded")).toBe("true");
       expect(toggle?.getAttribute("aria-expanded")).toBe("true");
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
+    expect(
+      mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
+    ).toBe(false);
     expect(
       mounted?.container.querySelector("#popup-history-body")?.hasAttribute("hidden")
     ).toBe(false);
@@ -3745,6 +3891,7 @@ describe("Popup quiet mode header", () => {
 
   it("shows quiet mode status in the popup header when quiet mode is on", async () => {
     vi.spyOn(storage, "getQuietMode").mockResolvedValue(true);
+    vi.spyOn(storage, "getManualOnlyMode").mockResolvedValue(true);
     stubChrome({ initialSummary: null });
     mounted = renderPopup();
 
@@ -3754,17 +3901,25 @@ describe("Popup quiet mode header", () => {
       );
     });
     expect(
-      mounted?.container.querySelector('[role="status"][aria-label*="Quiet mode active"]')
+      mounted?.container.querySelector(
+        `[role="status"][aria-label="${POPUP_STATUS_STRIP_ARIA_LABEL}"]`
+      )
     ).not.toBeNull();
+    expect(
+      mounted?.container.querySelector('[aria-label*="Quiet mode active"]')
+    ).not.toBeNull();
+    expect(mounted?.container.textContent).toContain(POPUP_STATUS_MANUAL_ENRICH_LABEL);
   });
 
   it("hides quiet mode status in the popup header when quiet mode is off", async () => {
     vi.spyOn(storage, "getQuietMode").mockResolvedValue(false);
+    vi.spyOn(storage, "getManualOnlyMode").mockResolvedValue(false);
     stubChrome({ initialSummary: null });
     mounted = renderPopup();
 
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("Extension enabled");
+      expect(mounted?.container.textContent).toContain(POPUP_STATUS_AUTO_ENRICH_LABEL);
     });
     expect(mounted?.container.textContent).not.toContain(
       POPUP_QUIET_MODE_STATUS_LABEL
@@ -3773,6 +3928,7 @@ describe("Popup quiet mode header", () => {
 
   it("updates the header when quiet mode changes in storage", async () => {
     vi.spyOn(storage, "getQuietMode").mockResolvedValue(false);
+    vi.spyOn(storage, "getManualOnlyMode").mockResolvedValue(true);
     stubChrome({ initialSummary: null });
     mounted = renderPopup();
 

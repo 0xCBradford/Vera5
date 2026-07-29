@@ -2,6 +2,7 @@
  * @vitest-environment happy-dom
  */
 import { afterEach, describe, expect, it } from "vitest";
+import { VERA5_COLOR } from "./theme";
 import {
   buildEnrichmentSummaryClassName,
   buildVera5UiStylesCss,
@@ -19,7 +20,11 @@ describe("vera5 UI styles", () => {
     expect(css).toContain("@media (prefers-color-scheme: dark)");
     expect(css).toContain(".vera5-hover-card-panel");
     expect(css).toContain(".vera5-ioc-highlight");
-    expect(css).toContain("--vera5-surface: #12171e");
+    expect(css).toContain(`--vera5-surface: ${VERA5_COLOR.surface}`);
+    expect(css).toContain(`--vera5-accent: ${VERA5_COLOR.accent}`);
+    expect(css).toContain("--vera5-font-ui:");
+    expect(css).toContain("@font-face");
+    expect(css).toContain("vera5-enrich-settle");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toContain("animation: none !important");
     expect(css).toContain("vera5-panel-reveal");

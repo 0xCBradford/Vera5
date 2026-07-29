@@ -60,8 +60,8 @@ import {
   HOVER_CARD_REFANGED_VALUE_LABEL,
   HOVER_CARD_COPY_COPIED_LABEL,
   HOVER_CARD_OPEN_LIVE_URL_LABEL,
+  HOVER_CARD_OPEN_LIVE_URL_CONFIRM_MESSAGE,
   buildWhyDetectedView,
-  confirmOpenLiveUrl,
   openLiveUrlInNewTab,
   resolveEffectiveSourceAttribution,
   resolveHoverCardDisplayView,
@@ -348,6 +348,7 @@ export function HoverCard({
   const [knownGoodMatch, setKnownGoodMatch] = useState<KnownGoodMatchBadgeView | null>(
     null
   );
+  const [liveUrlConfirmOpen, setLiveUrlConfirmOpen] = useState(false);
   const pivotLinks = getPivotLinks(type, value);
   const view = resolveHoverCardDisplayView({
     enrichmentState,
@@ -388,6 +389,10 @@ export function HoverCard({
       setLabel((current) => (current ? current : storedLabel));
     });
   }, [iocLabel, value]);
+
+  useEffect(() => {
+    setLiveUrlConfirmOpen(false);
+  }, [value]);
 
   useEffect(() => {
     void getActiveInvestigationSession().then((session) => {
@@ -443,9 +448,11 @@ export function HoverCard({
   };
 
   const handleOpenLiveUrl = () => {
-    if (!confirmOpenLiveUrl(window)) {
-      return;
-    }
+    setLiveUrlConfirmOpen(true);
+  };
+
+  const handleConfirmOpenLiveUrl = () => {
+    setLiveUrlConfirmOpen(false);
     openLiveUrlInNewTab(value, window);
   };
 
@@ -482,6 +489,72 @@ export function HoverCard({
       data-vera5-rule-id={ruleId}
       data-vera5-source-text-hint={sourceTextHint}
     >
+      {liveUrlConfirmOpen ? (
+        <div
+          className="vera5-live-url-warning-backdrop"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setLiveUrlConfirmOpen(false);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              setLiveUrlConfirmOpen(false);
+            }
+          }}
+        >
+          <section
+            className="vera5-live-url-warning"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="vera5-react-live-url-warning-title"
+            aria-describedby="vera5-react-live-url-warning-message"
+          >
+            <div className="vera5-live-url-warning-signal">
+              <span className="vera5-live-url-warning-brand">
+                VERA5 // NAVIGATION GATE
+              </span>
+              <span className="vera5-live-url-warning-risk">
+                High-risk redirect
+              </span>
+            </div>
+            <h2
+              id="vera5-react-live-url-warning-title"
+              className="vera5-live-url-warning-title"
+            >
+              Open live indicator?
+            </h2>
+            <p
+              id="vera5-react-live-url-warning-message"
+              className="vera5-live-url-warning-message"
+            >
+              {HOVER_CARD_OPEN_LIVE_URL_CONFIRM_MESSAGE}
+            </p>
+            <p className="vera5-live-url-warning-destination-label">
+              Destination
+            </p>
+            <code className="vera5-live-url-warning-destination">{value}</code>
+            <div className="vera5-live-url-warning-actions">
+              <button
+                type="button"
+                className="vera5-live-url-warning-button vera5-live-url-warning-cancel"
+                onClick={() => setLiveUrlConfirmOpen(false)}
+                autoFocus
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="vera5-live-url-warning-button vera5-live-url-warning-confirm"
+                onClick={handleConfirmOpenLiveUrl}
+              >
+                Yes, open live URL
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
       <div className="vera5-hover-card-header">
         <span className="vera5-hover-card-type">{typeLabel}</span>
         {knownGoodMatch ? (

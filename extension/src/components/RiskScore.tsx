@@ -40,23 +40,25 @@ export function RiskScore({
   }
 
   const view = presentation.view;
-  const reasoningPresentation = resolveRiskScoreReasoningPresentation(
-    view,
-    presentation.insufficientCompositeNotice
-  );
+  const insufficient = presentation.insufficientCompositeNotice;
+  const reasoningPresentation = insufficient
+    ? null
+    : resolveRiskScoreReasoningPresentation(view, null);
 
   return (
     <section className="vera5-hover-card-risk-score" aria-label="Risk score">
       <p className="vera5-hover-card-risk-score-label">
         Risk score: <strong>{view.summaryText}</strong>
       </p>
-      {presentation.insufficientCompositeNotice ? (
+      {insufficient ? (
         <p className="vera5-hover-card-risk-score-insufficient" role="note">
-          {presentation.insufficientCompositeNotice}
+          {insufficient}
         </p>
       ) : null}
-      <RiskScoreReasoningChainSection presentation={reasoningPresentation} />
-      {view.chain.showDisagreement ? (
+      {reasoningPresentation ? (
+        <RiskScoreReasoningChainSection presentation={reasoningPresentation} />
+      ) : null}
+      {!insufficient && view.chain.showDisagreement ? (
         <p className="vera5-hover-card-risk-disagreement" role="note">
           {view.chain.disagreementLine}
         </p>

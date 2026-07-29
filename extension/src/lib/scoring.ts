@@ -277,7 +277,11 @@ export const RISK_SCORE_UNAVAILABLE_ALL_SOURCES_DETAIL =
   "Enable at least one enrichment source in settings to compute a local advisory score.";
 
 export const RISK_SCORE_UNAVAILABLE_INSUFFICIENT_DETAIL =
-  "At least two enabled sources must return parseable evidence for a blended composite score. Review per-source details below.";
+  "Need two sources to blend.";
+
+/** Overlay multi-source path: short notice that opens the Sources drawer. */
+export const RISK_SCORE_UNAVAILABLE_INSUFFICIENT_SOURCES_HINT =
+  "Need two sources to blend — see Intel Sources.";
 
 export type HoverCardRiskScoreUnavailablePresentation = {
   mode: "unavailable";
