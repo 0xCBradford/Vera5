@@ -2,10 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  ENRICHMENT_ERROR_CODE,
-  ENRICHMENT_SOURCE_STATUS,
-} from "../lib/enrichment";
+import { ENRICHMENT_ERROR_CODE, ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
 import { STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
 import { enrichIocMessage } from "../lib/messages";
 import * as storage from "../lib/storage";
@@ -26,10 +23,7 @@ import { RDAP_ORG_DOMAIN_BASE_URL } from "../lib/rdapClient";
 import { resetRdapClientRateLimitState } from "../lib/rdapClient";
 import { handleEnrichIocMessage } from "./enrichmentHandler";
 
-const rdapFixturesDir = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "../lib/fixtures"
-);
+const rdapFixturesDir = join(dirname(fileURLToPath(import.meta.url)), "../lib/fixtures");
 
 function loadRdapFixture(relativePath: string): unknown {
   const raw = readFileSync(join(rdapFixturesDir, relativePath), "utf8");
@@ -96,8 +90,7 @@ describe("enrichment handler with mocked fetch", () => {
     vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
       abuseipdb: true,
     });
-    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
-      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     stubChromeStorage(store);
     await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
   });
@@ -155,9 +148,7 @@ describe("enrichment handler with mocked fetch", () => {
       { payload: { summary?: string } }
     >;
     expect(Object.keys(remaining)).toEqual(["8.8.8.8|abuseipdb"]);
-    expect(remaining["8.8.8.8|abuseipdb"]?.payload.summary).toBe(
-      "42 abuse confidence"
-    );
+    expect(remaining["8.8.8.8|abuseipdb"]?.payload.summary).toBe("42 abuse confidence");
   });
 
   it("fetches live data when bypassCache is set despite a valid cache entry", async () => {
@@ -192,8 +183,8 @@ describe("enrichment handler with mocked fetch", () => {
 
     expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source.summary).toBe("42 abuse confidence");
     expect(source.fromCache).toBeUndefined();
   });
@@ -223,8 +214,8 @@ describe("enrichment handler with mocked fetch", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "abuseipdb",
       status: ENRICHMENT_SOURCE_STATUS.OK,
@@ -277,10 +268,12 @@ describe("enrichment handler with mocked fetch", () => {
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(response.ok).toBe(true);
-    const payload = (response as {
-      ok: true;
-      payload: { sources: Record<string, unknown>[] };
-    }).payload;
+    const payload = (
+      response as {
+        ok: true;
+        payload: { sources: Record<string, unknown>[] };
+      }
+    ).payload;
     expect(payload.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -294,9 +287,7 @@ describe("enrichment handler with mocked fetch", () => {
         }),
       ])
     );
-    const abuse = payload.sources.find(
-      (source) => source.sourceId === "abuseipdb"
-    );
+    const abuse = payload.sources.find((source) => source.sourceId === "abuseipdb");
     expect(abuse?.fromCache).toBeUndefined();
   });
 
@@ -331,8 +322,8 @@ describe("enrichment handler with mocked fetch", () => {
 
     expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source.summary).toBe("42 abuse confidence");
     expect(source.fromCache).toBeUndefined();
   });
@@ -405,8 +396,8 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
       errorCode: ENRICHMENT_ERROR_CODE.DISABLED,
@@ -439,8 +430,8 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "otx",
       status: ENRICHMENT_SOURCE_STATUS.OK,
@@ -475,6 +466,12 @@ describe("enrichment handler with mocked fetch", () => {
           status: ENRICHMENT_SOURCE_STATUS.OK,
           summary: "42 abuse confidence",
           tags: ["US", "Fixed Line ISP"],
+          assessment: {
+            kind: "risk",
+            signal: 42,
+            verdict: "Suspicious signal",
+            evidence: ["42 abuse confidence", "US", "Fixed Line ISP"],
+          },
           fetchedAt: expect.any(String),
           rawVendorJson: expect.stringContaining("abuseConfidenceScore"),
         },
@@ -485,6 +482,12 @@ describe("enrichment handler with mocked fetch", () => {
             status: ENRICHMENT_SOURCE_STATUS.OK,
             summary: "42 abuse confidence",
             tags: ["US", "Fixed Line ISP"],
+            assessment: {
+              kind: "risk",
+              signal: 42,
+              verdict: "Suspicious signal",
+              evidence: ["42 abuse confidence", "US", "Fixed Line ISP"],
+            },
             fetchedAt: expect.any(String),
             rawVendorJson: expect.stringContaining("abuseConfidenceScore"),
           },
@@ -520,8 +523,7 @@ describe("enrichment handler with mocked fetch", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(response.ok).toBe(true);
-    const payload = (response as { ok: true; payload: { sources: unknown[] } })
-      .payload;
+    const payload = (response as { ok: true; payload: { sources: unknown[] } }).payload;
     expect(payload.sources).toHaveLength(2);
     expect(payload.sources).toEqual(
       expect.arrayContaining([
@@ -537,8 +539,8 @@ describe("enrichment handler with mocked fetch", () => {
         }),
       ])
     );
-    const primary = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const primary = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(primary.sourceId).toBe("abuseipdb");
   });
 
@@ -553,8 +555,7 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: unknown } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: unknown } }).payload.source;
     expect(source).toMatchObject({
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
       errorCode: ENRICHMENT_ERROR_CODE.UNAUTHORIZED,
@@ -584,9 +585,8 @@ describe("enrichment handler with mocked fetch", () => {
     );
     expect(second.ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledOnce();
-    const source = (
-      second as { ok: true; payload: { source: Record<string, unknown> } }
-    ).payload.source;
+    const source = (second as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source.errorMessage).toBe(
       "Threat intelligence rate limit reached. Back off before retrying."
     );
@@ -604,9 +604,7 @@ describe("enrichment handler with mocked fetch", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    await handleEnrichIocMessage(
-      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
-    );
+    await handleEnrichIocMessage(enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" }));
     expect(fetchMock).toHaveBeenCalledOnce();
 
     await handleEnrichIocMessage(
@@ -636,13 +634,12 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
       errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
-      errorMessage:
-        "AbuseIPDB rate limit reached. Back off before retrying.",
+      errorMessage: "AbuseIPDB rate limit reached. Back off before retrying.",
       retryHint: "Retry after 90 seconds.",
     });
   });
@@ -678,10 +675,12 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const payload = (response as {
-      ok: true;
-      payload: { source: Record<string, unknown>; sources: unknown[] };
-    }).payload;
+    const payload = (
+      response as {
+        ok: true;
+        payload: { source: Record<string, unknown>; sources: unknown[] };
+      }
+    ).payload;
     expect(payload.source).toMatchObject({
       sourceId: "otx",
       status: ENRICHMENT_SOURCE_STATUS.OK,
@@ -690,9 +689,7 @@ describe("enrichment handler with mocked fetch", () => {
     expect(payload.sources).toHaveLength(1);
     expect(vi.mocked(fetch)).toHaveBeenCalledOnce();
     const requestUrl = String(vi.mocked(fetch).mock.calls[0]?.[0]);
-    expect(requestUrl).toBe(
-      "https://otx.alienvault.com/api/v1/indicators/IPv4/8.8.8.8"
-    );
+    expect(requestUrl).toBe("https://otx.alienvault.com/api/v1/indicators/IPv4/8.8.8.8");
   });
 
   it("surfaces mocked fetch abort as timeout", async () => {
@@ -710,8 +707,7 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: unknown } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: unknown } }).payload.source;
     expect(source).toMatchObject({
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
       errorCode: ENRICHMENT_ERROR_CODE.TIMEOUT,
@@ -733,14 +729,13 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "urlscan",
       status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
       errorCode: ENRICHMENT_ERROR_CODE.MISSING_KEY,
-      errorMessage:
-        "Add your URLScan.io API key in Vera5 Settings to load enrichment.",
+      errorMessage: "Add your URLScan.io API key in Vera5 Settings to load enrichment.",
     });
   });
 
@@ -763,8 +758,8 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "urlscan",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
@@ -792,8 +787,8 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "urlscan",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
@@ -827,14 +822,13 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "urlscan",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
       errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
-      errorMessage:
-        "URLScan.io rate limit reached. Back off before retrying.",
+      errorMessage: "URLScan.io rate limit reached. Back off before retrying.",
       retryHint: "Retry after 90 seconds.",
     });
   });
@@ -862,8 +856,8 @@ describe("enrichment handler with mocked fetch", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "urlscan",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
@@ -904,8 +898,8 @@ describe("enrichment handler with mocked fetch", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "urlscan",
       status: ENRICHMENT_SOURCE_STATUS.OK,
@@ -965,10 +959,12 @@ describe("enrichment handler with mocked fetch", () => {
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(response.ok).toBe(true);
-    const payload = (response as {
-      ok: true;
-      payload: { sources: Record<string, unknown>[] };
-    }).payload;
+    const payload = (
+      response as {
+        ok: true;
+        payload: { sources: Record<string, unknown>[] };
+      }
+    ).payload;
     expect(payload.sources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -1032,8 +1028,8 @@ describe("enrichment handler with mocked fetch", () => {
     );
     expect(fetchMock).not.toHaveBeenCalled();
     expect(second.ok).toBe(true);
-    const source = (second as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (second as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "urlscan",
       summary: "2 urlscan results",
@@ -1051,8 +1047,7 @@ describe("enrichment pipeline regression (service worker)", () => {
       abuseipdb: true,
       otx: true,
     });
-    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
-      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     stubChromeStorage(store);
     await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
     await storage.setApiKey("otx", TEST_FIXTURE_OTX_API_KEY);
@@ -1097,12 +1092,9 @@ describe("enrichment pipeline regression (service worker)", () => {
     );
     expect(cached.ok).toBe(true);
     expect(fetchMock.mock.calls.length).toBeLessThan(2);
-    const cachedSources = (
-      cached as { ok: true; payload: { sources: Record<string, unknown>[] } }
-    ).payload.sources;
-    expect(
-      cachedSources.some((source) => source.fromCache === true)
-    ).toBe(true);
+    const cachedSources = (cached as { ok: true; payload: { sources: Record<string, unknown>[] } })
+      .payload.sources;
+    expect(cachedSources.some((source) => source.fromCache === true)).toBe(true);
 
     fetchMock.mockClear();
     const cachedRepeat = await handleEnrichIocMessage(
@@ -1125,9 +1117,7 @@ describe("enrichment pipeline regression (service worker)", () => {
     );
     vi.stubGlobal("fetch", fetchMock429);
 
-    await handleEnrichIocMessage(
-      enrichIocMessage({ value: "9.9.9.9", iocType: "ipv4" })
-    );
+    await handleEnrichIocMessage(enrichIocMessage({ value: "9.9.9.9", iocType: "ipv4" }));
     const fetchCountAfterRateLimit = fetchMock429.mock.calls.length;
     expect(fetchCountAfterRateLimit).toBeGreaterThan(0);
 
@@ -1136,9 +1126,8 @@ describe("enrichment pipeline regression (service worker)", () => {
     );
     expect(blocked.ok).toBe(true);
     expect(fetchMock429.mock.calls.length).toBe(fetchCountAfterRateLimit);
-    const blockedSource = (
-      blocked as { ok: true; payload: { source: Record<string, unknown> } }
-    ).payload.source;
+    const blockedSource = (blocked as { ok: true; payload: { source: Record<string, unknown> } })
+      .payload.source;
     expect(blockedSource.errorMessage).toBe(
       "Threat intelligence rate limit reached. Back off before retrying."
     );
@@ -1173,8 +1162,7 @@ describe("IOC-only vendor request security regression", () => {
     vi.mocked(storage.getEnrichmentSourceEnabled).mockResolvedValue({
       abuseipdb: true,
     });
-    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
-      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     stubChromeStorage(store);
     await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
     clearGlobalEnrichmentCooldown();
@@ -1190,14 +1178,10 @@ describe("IOC-only vendor request security regression", () => {
   });
 
   it("uses GET without a request body and sends only the sanitized IPv4 in the URL", async () => {
-    const fetchMock = vi.fn(async () =>
-      Response.json(successPayload(), { status: 200 })
-    );
+    const fetchMock = vi.fn(async () => Response.json(successPayload(), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
-    await handleEnrichIocMessage(
-      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
-    );
+    await handleEnrichIocMessage(enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" }));
 
     expect(fetchMock).toHaveBeenCalledOnce();
     const requestUrl = new URL(String(fetchMock.mock.calls[0]?.[0]));
@@ -1228,8 +1212,7 @@ describe("disabled source and partial success regression", () => {
 
   beforeEach(async () => {
     vi.mocked(storage.getEnrichmentSourceEnabled).mockReset();
-    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
-      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     stubChromeStorage(store);
     clearGlobalEnrichmentCooldown();
   });
@@ -1262,9 +1245,8 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (
-      response as { ok: true; payload: { source: Record<string, unknown> } }
-    ).payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "abuseipdb",
       status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
@@ -1280,9 +1262,7 @@ describe("disabled source and partial success regression", () => {
       otx: false,
     });
     await storage.setApiKey("abuseipdb", TEST_FIXTURE_GENERIC_API_KEY);
-    const fetchMock = vi.fn(async () =>
-      Response.json(successPayload(), { status: 200 })
-    );
+    const fetchMock = vi.fn(async () => Response.json(successPayload(), { status: 200 }));
     vi.stubGlobal("fetch", fetchMock);
 
     const response = await handleEnrichIocMessage(
@@ -1291,9 +1271,8 @@ describe("disabled source and partial success regression", () => {
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain("abuseipdb.com");
-    const sources = (
-      response as { ok: true; payload: { sources: Record<string, unknown>[] } }
-    ).payload.sources;
+    const sources = (response as { ok: true; payload: { sources: Record<string, unknown>[] } })
+      .payload.sources;
     expect(sources).toHaveLength(1);
     expect(sources[0]).toMatchObject({
       sourceId: "abuseipdb",
@@ -1715,14 +1694,13 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "greynoise",
       status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
       errorCode: ENRICHMENT_ERROR_CODE.MISSING_KEY,
-      errorMessage:
-        "Add your GreyNoise API key in Vera5 Settings to load enrichment.",
+      errorMessage: "Add your GreyNoise API key in Vera5 Settings to load enrichment.",
     });
   });
 
@@ -1745,8 +1723,8 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "greynoise",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
@@ -1774,8 +1752,8 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "greynoise",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
@@ -1809,8 +1787,8 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "greynoise",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
@@ -1843,8 +1821,8 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "greynoise",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
@@ -1914,8 +1892,8 @@ describe("disabled source and partial success regression", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "greynoise",
       status: ENRICHMENT_SOURCE_STATUS.OK,
@@ -1963,8 +1941,8 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "greynoise",
       status: ENRICHMENT_SOURCE_STATUS.OK,
@@ -2014,8 +1992,8 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "greynoise",
       status: ENRICHMENT_SOURCE_STATUS.OK,
@@ -2070,9 +2048,8 @@ describe("disabled source and partial success regression", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(response.ok).toBe(true);
-    const payload = (
-      response as { ok: true; payload: { sources: Record<string, unknown>[] } }
-    ).payload;
+    const payload = (response as { ok: true; payload: { sources: Record<string, unknown>[] } })
+      .payload;
     expect(payload.sources).toHaveLength(3);
     expect(payload.sources.map((source) => source.sourceId)).toEqual([
       "abuseipdb",
@@ -2192,14 +2169,13 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "shodan",
       status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
       errorCode: ENRICHMENT_ERROR_CODE.MISSING_KEY,
-      errorMessage:
-        "Add your Shodan API key in Vera5 Settings to load enrichment.",
+      errorMessage: "Add your Shodan API key in Vera5 Settings to load enrichment.",
     });
   });
 
@@ -2264,8 +2240,8 @@ describe("disabled source and partial success regression", () => {
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "shodan",
       status: ENRICHMENT_SOURCE_STATUS.OK,
@@ -2315,8 +2291,8 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "shodan",
       status: ENRICHMENT_SOURCE_STATUS.OK,
@@ -2386,14 +2362,23 @@ describe("disabled source and partial success regression", () => {
           sourceId: "rdap_whois",
           sourceLabel: "RDAP/WHOIS",
           status: ENRICHMENT_SOURCE_STATUS.OK,
-          summary:
-            "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+          summary: "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
           tags: [
             "client delete prohibited",
             "client transfer prohibited",
             "ns1.example.com",
             "ns2.example.com",
           ],
+          assessment: {
+            kind: "context",
+            verdict: "Registration context",
+            evidence: [
+              "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+              "client delete prohibited",
+              "client transfer prohibited",
+              "ns1.example.com",
+            ],
+          },
           fetchedAt: expect.any(String),
           rawVendorJson: expect.stringContaining("Example Registrar"),
         },
@@ -2402,14 +2387,23 @@ describe("disabled source and partial success regression", () => {
             sourceId: "rdap_whois",
             sourceLabel: "RDAP/WHOIS",
             status: ENRICHMENT_SOURCE_STATUS.OK,
-            summary:
-              "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+            summary: "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
             tags: [
               "client delete prohibited",
               "client transfer prohibited",
               "ns1.example.com",
               "ns2.example.com",
             ],
+            assessment: {
+              kind: "context",
+              verdict: "Registration context",
+              evidence: [
+                "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+                "client delete prohibited",
+                "client transfer prohibited",
+                "ns1.example.com",
+              ],
+            },
             fetchedAt: expect.any(String),
             rawVendorJson: expect.stringContaining("Example Registrar"),
           },
@@ -2441,15 +2435,14 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "rdap_whois",
       sourceLabel: "RDAP/WHOIS",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
       errorCode: ENRICHMENT_ERROR_CODE.VENDOR,
-      errorMessage:
-        "RDAP/WHOIS: no registration record found (NXDOMAIN).",
+      errorMessage: "RDAP/WHOIS: no registration record found (NXDOMAIN).",
       fetchedAt: expect.any(String),
     });
   });
@@ -2483,14 +2476,13 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "rdap_whois",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,
       errorCode: ENRICHMENT_ERROR_CODE.RATE_LIMITED,
-      errorMessage:
-        "RDAP/WHOIS rate limit reached. Back off before retrying.",
+      errorMessage: "RDAP/WHOIS rate limit reached. Back off before retrying.",
       retryHint: "Retry after 45 seconds.",
     });
   });
@@ -2520,8 +2512,8 @@ describe("disabled source and partial success regression", () => {
     );
 
     expect(response.ok).toBe(true);
-    const source = (response as { ok: true; payload: { source: Record<string, unknown> } })
-      .payload.source;
+    const source = (response as { ok: true; payload: { source: Record<string, unknown> } }).payload
+      .source;
     expect(source).toMatchObject({
       sourceId: "rdap_whois",
       status: ENRICHMENT_SOURCE_STATUS.ERROR,

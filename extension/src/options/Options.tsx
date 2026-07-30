@@ -144,7 +144,7 @@ import {
   setStoredKnownGoodCategoryEnabled,
   updateStoredKnownGoodEntry,
 } from "../lib/knownGoodStorage";
-import { ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE } from "../lib/enrichmentSourceOps";
+import { ENRICHMENT_SOURCE_OPS_WORKSPACE_GUIDANCE } from "../lib/enrichmentSourceOps";
 import { prefersReducedMotion } from "../lib/motionPreference";
 import {
   downloadVera5SettingsExport,
@@ -1717,9 +1717,7 @@ export function Options() {
       createDefaultPivotContextMenuCategoryEnabledRecord()
     );
   const [pivotContextMenuSiteEnabled, setPivotContextMenuSiteEnabledState] =
-    useState<PivotContextMenuSiteEnabledRecord>(
-      createDefaultPivotContextMenuSiteEnabledRecord()
-    );
+    useState<PivotContextMenuSiteEnabledRecord>(createDefaultPivotContextMenuSiteEnabledRecord());
   const [iocTypeEnabled, setIocTypeEnabledState] = useState<IocTypeEnabledRecord>(
     createDefaultIocTypeEnabledState()
   );
@@ -1727,8 +1725,9 @@ export function Options() {
   const [hideSuppressedFromScan, setHideSuppressedFromScanState] = useState(
     HIDE_SUPPRESSED_FROM_SCAN_DEFAULT
   );
-  const [skipEnrichOnKnownGoodMatch, setSkipEnrichOnKnownGoodMatchState] =
-    useState(SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_DEFAULT);
+  const [skipEnrichOnKnownGoodMatch, setSkipEnrichOnKnownGoodMatchState] = useState(
+    SKIP_ENRICH_ON_KNOWN_GOOD_MATCH_DEFAULT
+  );
   const [localBackendEnabled, setLocalBackendEnabledState] = useState(false);
   const [localLlmSummaryEnabled, setLocalLlmSummaryEnabledState] = useState(false);
   const [attributeHrefExtractionEnabled, setAttributeHrefExtractionEnabledState] = useState(false);
@@ -1820,9 +1819,7 @@ export function Options() {
   const [noiseRulesImportState, setNoiseRulesImportState] = useState<
     "idle" | "importing" | "imported" | "error"
   >("idle");
-  const [noiseRulesImportStatus, setNoiseRulesImportStatus] = useState<string | null>(
-    null
-  );
+  const [noiseRulesImportStatus, setNoiseRulesImportStatus] = useState<string | null>(null);
   const [noiseRulesImportDraft, setNoiseRulesImportDraft] = useState<{
     raw: string;
     format: NoiseRulesImportFormat;
@@ -1836,9 +1833,7 @@ export function Options() {
     "idle" | "clearing" | "cleared" | "error"
   >("idle");
   const [focusedNoiseRuleId, setFocusedNoiseRuleId] = useState<string | null>(null);
-  const [focusedKnownGoodEntryId, setFocusedKnownGoodEntryId] = useState<string | null>(
-    null
-  );
+  const [focusedKnownGoodEntryId, setFocusedKnownGoodEntryId] = useState<string | null>(null);
   const [noiseRulesSearchQuery, setNoiseRulesSearchQuery] = useState("");
   const [knownGoodEntries, setKnownGoodEntries] = useState<KnownGoodEntry[]>([]);
   const [knownGoodCategoryEnabled, setKnownGoodCategoryEnabled] =
@@ -1846,12 +1841,8 @@ export function Options() {
   const [knownGoodExportState, setKnownGoodExportState] = useState<
     "idle" | "exporting" | "exported" | "error"
   >("idle");
-  const [knownGoodManageStatus, setKnownGoodManageStatus] = useState<string | null>(
-    null
-  );
-  const [editingKnownGoodEntryId, setEditingKnownGoodEntryId] = useState<string | null>(
-    null
-  );
+  const [knownGoodManageStatus, setKnownGoodManageStatus] = useState<string | null>(null);
+  const [editingKnownGoodEntryId, setEditingKnownGoodEntryId] = useState<string | null>(null);
   const [knownGoodEditDraft, setKnownGoodEditDraft] = useState<{
     category: KnownGoodCategory;
     matchType: KnownGoodMatchType;
@@ -1864,14 +1855,10 @@ export function Options() {
     pattern: string;
     sourceAction: NoiseRuleSourceAction;
   } | null>(null);
-  const [noiseRuleManageStatus, setNoiseRuleManageStatus] = useState<string | null>(
-    null
-  );
+  const [noiseRuleManageStatus, setNoiseRuleManageStatus] = useState<string | null>(null);
   const [noiseRuleSampleAlertPreview, setNoiseRuleSampleAlertPreview] =
     useState<NoiseRuleSampleAlertMatchPreview | null>(null);
-  const [lastLearnedNoiseRuleUndo, setLastLearnedNoiseRuleUndo] = useState<NoiseRule | null>(
-    null
-  );
+  const [lastLearnedNoiseRuleUndo, setLastLearnedNoiseRuleUndo] = useState<NoiseRule | null>(null);
   const [exportState, setExportState] = useState<"idle" | "exporting" | "exported" | "error">(
     "idle"
   );
@@ -1886,13 +1873,9 @@ export function Options() {
   >("idle");
   const [threatProfileImportPreview, setThreatProfileImportPreview] =
     useState<ThreatProfileImportPreview | null>(null);
-  const [threatProfileImportRawJson, setThreatProfileImportRawJson] = useState<
-    string | null
-  >(null);
+  const [threatProfileImportRawJson, setThreatProfileImportRawJson] = useState<string | null>(null);
   const [threatProfileImportMergeMode, setThreatProfileImportMergeMode] =
-    useState<ThreatProfileImportMergeMode>(
-      THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT
-    );
+    useState<ThreatProfileImportMergeMode>(THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT);
   const [activeThreatProfileState, setActiveThreatProfileState] =
     useState<ActiveThreatProfileState>(createEmptyActiveThreatProfileState);
   const [settingsPackImportPreview, setSettingsPackImportPreview] =
@@ -2081,13 +2064,12 @@ export function Options() {
   }, [ready, focusedKnownGoodEntryId, knownGoodEntries]);
 
   useEffect(() => {
-    void Promise.all([
-      getPivotContextMenuCategoryEnabled(),
-      getPivotContextMenuSiteEnabled(),
-    ]).then(([categoryEnabledValue, siteEnabledValue]) => {
-      setPivotContextMenuCategoryEnabledState(categoryEnabledValue);
-      setPivotContextMenuSiteEnabledState(siteEnabledValue);
-    });
+    void Promise.all([getPivotContextMenuCategoryEnabled(), getPivotContextMenuSiteEnabled()]).then(
+      ([categoryEnabledValue, siteEnabledValue]) => {
+        setPivotContextMenuCategoryEnabledState(categoryEnabledValue);
+        setPivotContextMenuSiteEnabledState(siteEnabledValue);
+      }
+    );
   }, [settingsReloadToken]);
 
   useEffect(() => {
@@ -2316,10 +2298,7 @@ export function Options() {
     void setPivotContextMenuCategoryEnabled(sourceClass, checked);
   };
 
-  const handlePivotContextMenuSiteToggle = (
-    provider: PivotProvider,
-    checked: boolean
-  ) => {
+  const handlePivotContextMenuSiteToggle = (provider: PivotProvider, checked: boolean) => {
     setPivotContextMenuSiteEnabledState((current) => ({
       ...current,
       [provider]: checked,
@@ -2985,9 +2964,7 @@ export function Options() {
       });
   };
 
-  const handleCorrelationRetentionBlur = (
-    event: React.FocusEvent<HTMLInputElement>
-  ) => {
+  const handleCorrelationRetentionBlur = (event: React.FocusEvent<HTMLInputElement>) => {
     const parsed = Number(event.currentTarget.value);
     const normalized = Number.isFinite(parsed)
       ? Math.min(
@@ -3001,9 +2978,7 @@ export function Options() {
     });
   };
 
-  const handleRelationshipRetentionBlur = (
-    event: React.FocusEvent<HTMLInputElement>
-  ) => {
+  const handleRelationshipRetentionBlur = (event: React.FocusEvent<HTMLInputElement>) => {
     const parsed = Number(event.currentTarget.value);
     const normalized = Number.isFinite(parsed)
       ? Math.min(
@@ -3072,16 +3047,10 @@ export function Options() {
 
   const handleCorrelationOverlapModeChange = (mode: CorrelationOverlapModeDraft) => {
     setCorrelationOverlapMode(mode);
-    persistCorrelationOverlapDraft(
-      mode,
-      correlationJaccardThreshold,
-      correlationMinSharedCount
-    );
+    persistCorrelationOverlapDraft(mode, correlationJaccardThreshold, correlationMinSharedCount);
   };
 
-  const handleCorrelationJaccardThresholdBlur = (
-    event: React.FocusEvent<HTMLInputElement>
-  ) => {
+  const handleCorrelationJaccardThresholdBlur = (event: React.FocusEvent<HTMLInputElement>) => {
     persistCorrelationOverlapDraft(
       correlationOverlapMode,
       event.currentTarget.value,
@@ -3089,9 +3058,7 @@ export function Options() {
     );
   };
 
-  const handleCorrelationMinSharedBlur = (
-    event: React.FocusEvent<HTMLInputElement>
-  ) => {
+  const handleCorrelationMinSharedBlur = (event: React.FocusEvent<HTMLInputElement>) => {
     persistCorrelationOverlapDraft(
       correlationOverlapMode,
       correlationJaccardThreshold,
@@ -3139,10 +3106,7 @@ export function Options() {
       });
   };
 
-  const handleToggleKnownGoodCategory = (
-    category: KnownGoodCategory,
-    enabled: boolean
-  ) => {
+  const handleToggleKnownGoodCategory = (category: KnownGoodCategory, enabled: boolean) => {
     void setStoredKnownGoodCategoryEnabled(category, enabled)
       .then((next) => {
         setKnownGoodCategoryEnabled(next);
@@ -3239,9 +3203,7 @@ export function Options() {
           setKnownGoodManageStatus("Could not delete known-good entry.");
           return;
         }
-        setKnownGoodEntries((current) =>
-          current.filter((item) => item.id !== entry.id)
-        );
+        setKnownGoodEntries((current) => current.filter((item) => item.id !== entry.id));
         if (editingKnownGoodEntryId === entry.id) {
           cancelEditKnownGoodEntry();
         }
@@ -3256,10 +3218,7 @@ export function Options() {
     noiseRulesImportInputRef.current?.click();
   };
 
-  const openNoiseRulesImportReview = (
-    raw: string,
-    format: NoiseRulesImportFormat
-  ) => {
+  const openNoiseRulesImportReview = (raw: string, format: NoiseRulesImportFormat) => {
     setNoiseRulesImportState("idle");
     setNoiseRulesImportStatus(null);
     setNoiseRulesReplaceConfirmed(false);
@@ -3298,9 +3257,7 @@ export function Options() {
       });
   };
 
-  const handleNoiseRulesImportMergeModeChange = (
-    mergeMode: NoiseRulesImportMergeMode
-  ) => {
+  const handleNoiseRulesImportMergeModeChange = (mergeMode: NoiseRulesImportMergeMode) => {
     if (!noiseRulesImportDraft) {
       return;
     }
@@ -3377,9 +3334,7 @@ export function Options() {
       });
   };
 
-  const handleNoiseRulesImportFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleNoiseRulesImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) {
@@ -3389,10 +3344,7 @@ export function Options() {
     const reader = new FileReader();
     reader.onload = () => {
       const raw = typeof reader.result === "string" ? reader.result : "";
-      const format = detectNoiseRulesImportFormat(
-        `${file.name};${file.type}`,
-        raw
-      );
+      const format = detectNoiseRulesImportFormat(`${file.name};${file.type}`, raw);
       try {
         openNoiseRulesImportReview(raw, format);
       } catch (error) {
@@ -3413,10 +3365,7 @@ export function Options() {
 
   const handleImportSocDashboardNoiseStarter = () => {
     try {
-      openNoiseRulesImportReview(
-        serializeSocDashboardNoiseStarterExportJson(),
-        "json"
-      );
+      openNoiseRulesImportReview(serializeSocDashboardNoiseStarterExportJson(), "json");
     } catch (error) {
       setNoiseRulesImportState("error");
       setNoiseRulesImportStatus(
@@ -3510,12 +3459,8 @@ export function Options() {
           setNoiseRuleManageStatus("Could not update noise rule.");
           return;
         }
-        setNoiseRules((current) =>
-          current.map((entry) => (entry.id === saved.id ? saved : entry))
-        );
-        setNoiseRuleManageStatus(
-          enabled ? "Noise rule enabled." : "Noise rule disabled."
-        );
+        setNoiseRules((current) => current.map((entry) => (entry.id === saved.id ? saved : entry)));
+        setNoiseRuleManageStatus(enabled ? "Noise rule enabled." : "Noise rule disabled.");
       })
       .catch(() => {
         setNoiseRuleManageStatus("Could not update noise rule.");
@@ -3643,9 +3588,7 @@ export function Options() {
           rawJson,
           THREAT_PROFILE_IMPORT_MERGE_MODE.APPLY_AS_NEW_ACTIVE
         );
-        setThreatProfileImportMergeMode(
-          THREAT_PROFILE_IMPORT_MERGE_MODE.APPLY_AS_NEW_ACTIVE
-        );
+        setThreatProfileImportMergeMode(THREAT_PROFILE_IMPORT_MERGE_MODE.APPLY_AS_NEW_ACTIVE);
         setThreatProfileImportPreview(preview);
         setThreatProfileImportRawJson(rawJson);
       })
@@ -3658,9 +3601,7 @@ export function Options() {
   const clearThreatProfileImportPreview = () => {
     setThreatProfileImportPreview(null);
     setThreatProfileImportRawJson(null);
-    setThreatProfileImportMergeMode(
-      THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT
-    );
+    setThreatProfileImportMergeMode(THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT);
   };
 
   const handleThreatProfileImportCancel = () => {
@@ -3668,9 +3609,7 @@ export function Options() {
     setThreatProfileImportState("idle");
   };
 
-  const handleThreatProfileImportMergeModeChange = (
-    mergeMode: ThreatProfileImportMergeMode
-  ) => {
+  const handleThreatProfileImportMergeModeChange = (mergeMode: ThreatProfileImportMergeMode) => {
     if (!threatProfileImportRawJson || !threatProfileImportPreview) {
       setThreatProfileImportMergeMode(mergeMode);
       return;
@@ -3697,10 +3636,7 @@ export function Options() {
     }
 
     setThreatProfileImportState("importing");
-    void importThreatProfileJson(
-      threatProfileImportRawJson,
-      threatProfileImportMergeMode
-    )
+    void importThreatProfileJson(threatProfileImportRawJson, threatProfileImportMergeMode)
       .then(() => {
         clearThreatProfileImportPreview();
         setThreatProfileImportState("imported");
@@ -3711,9 +3647,7 @@ export function Options() {
       });
   };
 
-  const handleThreatProfileImportFileChange = (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleThreatProfileImportFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) {
@@ -3731,9 +3665,7 @@ export function Options() {
             rawJson,
             THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT
           );
-          setThreatProfileImportMergeMode(
-            THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT
-          );
+          setThreatProfileImportMergeMode(THREAT_PROFILE_IMPORT_MERGE_MODE.MERGE_INTO_CURRENT);
           setThreatProfileImportPreview(preview);
           setThreatProfileImportRawJson(rawJson);
         })
@@ -4058,10 +3990,11 @@ export function Options() {
                   <p className="v5-card__desc">
                     Vera5 runs locally in your browser—no Vera5-operated telemetry and no full-page
                     upload. Pin the toolbar action, open an <code>http://</code> or{" "}
-                    <code>https://</code> page, and use <strong>Scan page</strong> from the popup or{" "}
-                    <strong>Ctrl+Shift+Y</strong> / <strong>Cmd+Shift+Y</strong>. Detection and
-                    highlighting work without API keys; live enrichment is optional. Serve the
-                    repository <code>examples/</code> folder over HTTP to try fixture pages.
+                    <code>https://</code> page, and use <strong>Scan page</strong> from the
+                    side-panel workspace or <strong>Ctrl+Shift+Y</strong> /{" "}
+                    <strong>Cmd+Shift+Y</strong>. Detection and highlighting work without API keys;
+                    live enrichment is optional. Serve the repository <code>examples/</code> folder
+                    over HTTP to try fixture pages.
                   </p>
                 ) : null}
                 {quickStartStep === 1 ? (
@@ -4325,7 +4258,7 @@ export function Options() {
             <div id="scanning-body" className="v5-card__body" hidden={collapsedSections.scanning}>
               <ToggleRow
                 label="Automatically scan when the page changes"
-                hint="When off, scan only with Scan page in the popup or the keyboard shortcut."
+                hint="When off, scan only with Scan page in the side-panel workspace or the keyboard shortcut."
                 ariaLabel="Automatically scan when the page changes"
                 checked={autoScanEnabled}
                 disabled={!ready}
@@ -4499,7 +4432,7 @@ export function Options() {
                 })}
               </div>
               <p className="v5-status v5-status--muted" style={{ marginTop: 12, marginBottom: 0 }}>
-                {ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE}
+                {ENRICHMENT_SOURCE_OPS_WORKSPACE_GUIDANCE}
               </p>
             </div>
           </section>
@@ -4528,7 +4461,9 @@ export function Options() {
                 label={getConnectorSourceClassLabel(CONNECTOR_SOURCE_CLASS.AUTHORITATIVE)}
                 hint="Show the Authoritative submenu (AbuseIPDB, VirusTotal, RDAP WHOIS, and related sites)."
                 ariaLabel="Show Authoritative pivots category"
-                checked={pivotContextMenuCategoryEnabled[CONNECTOR_SOURCE_CLASS.AUTHORITATIVE] !== false}
+                checked={
+                  pivotContextMenuCategoryEnabled[CONNECTOR_SOURCE_CLASS.AUTHORITATIVE] !== false
+                }
                 disabled={!ready}
                 onChange={(checked) =>
                   handlePivotContextMenuCategoryToggle(
@@ -4541,13 +4476,12 @@ export function Options() {
                 label={getConnectorSourceClassLabel(CONNECTOR_SOURCE_CLASS.COMMUNITY)}
                 hint="Show the Community submenu (OTX, MalwareBazaar, URLHaus, and related sites)."
                 ariaLabel="Show Community pivots category"
-                checked={pivotContextMenuCategoryEnabled[CONNECTOR_SOURCE_CLASS.COMMUNITY] !== false}
+                checked={
+                  pivotContextMenuCategoryEnabled[CONNECTOR_SOURCE_CLASS.COMMUNITY] !== false
+                }
                 disabled={!ready}
                 onChange={(checked) =>
-                  handlePivotContextMenuCategoryToggle(
-                    CONNECTOR_SOURCE_CLASS.COMMUNITY,
-                    checked
-                  )
+                  handlePivotContextMenuCategoryToggle(CONNECTOR_SOURCE_CLASS.COMMUNITY, checked)
                 }
               />
               {listPivotContextMenuCategories().map((category) => (
@@ -5568,9 +5502,9 @@ export function Options() {
                 </button>
                 <span className="v5-status v5-status--muted">
                   {relationshipEdgeCount} stored edge
-                  {relationshipEdgeCount === 1 ? "" : "s"}. Clears relationship
-                  edges only—investigation sessions stay. Combined wipe of edges
-                  and sessions is not offered on this control.
+                  {relationshipEdgeCount === 1 ? "" : "s"}. Clears relationship edges
+                  only—investigation sessions stay. Combined wipe of edges and sessions is not
+                  offered on this control.
                 </span>
                 {clearRelationshipEdgesState === "cleared" ? (
                   <span className="v5-status v5-status--success" role="status">
@@ -5657,9 +5591,7 @@ export function Options() {
                           >
                             <div className="v5-row__text" style={{ flex: 1 }}>
                               <span className="v5-row__label">{detail.summary}</span>
-                              <span className="v5-row__hint">
-                                Status: {detail.enabledLabel}
-                              </span>
+                              <span className="v5-row__hint">Status: {detail.enabledLabel}</span>
                               <span className="v5-row__hint">
                                 Action: {detail.sourceActionLabel}
                               </span>
@@ -5668,9 +5600,7 @@ export function Options() {
                               </span>
                               <span className="v5-row__hint">Pattern: {detail.pattern}</span>
                               <span className="v5-row__hint">Hits: {detail.hitCountLabel}</span>
-                              <span className="v5-row__hint">
-                                Created: {detail.createdAtLabel}
-                              </span>
+                              <span className="v5-row__hint">Created: {detail.createdAtLabel}</span>
                               <span className="v5-row__hint">Id: {detail.id}</span>
                               {editing && noiseRuleEditDraft ? (
                                 <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
@@ -5827,8 +5757,8 @@ export function Options() {
                   aria-label="Sample alert noise rule match preview"
                 >
                   <p className="v5-row__hint">
-                    Offline preview for <code>{noiseRuleSampleAlertPreview.fixturePath}</code>.
-                    Does not open, scan, or change any live page.
+                    Offline preview for <code>{noiseRuleSampleAlertPreview.fixturePath}</code>. Does
+                    not open, scan, or change any live page.
                   </p>
                   {noiseRuleSampleAlertPreview.matched.length === 0 ? (
                     <p className="v5-status v5-status--muted" role="status">
@@ -5840,7 +5770,10 @@ export function Options() {
                       aria-label="Sample alert indicators matching noise rules"
                     >
                       {noiseRuleSampleAlertPreview.matched.map((row) => (
-                        <li key={`${row.matchedRule.id}:${row.value}`} className="v5-domain-list__item">
+                        <li
+                          key={`${row.matchedRule.id}:${row.value}`}
+                          className="v5-domain-list__item"
+                        >
                           <div className="v5-row__text" style={{ flex: 1 }}>
                             <span className="v5-row__label">{row.value}</span>
                             <span className="v5-row__hint">{row.ruleSummary}</span>
@@ -5936,9 +5869,7 @@ export function Options() {
                   type="button"
                   className="v5-btn v5-btn--danger"
                   disabled={
-                    !ready ||
-                    clearNoiseRulesState === "clearing" ||
-                    noiseRules.length === 0
+                    !ready || clearNoiseRulesState === "clearing" || noiseRules.length === 0
                   }
                   onClick={handleClearNoiseRules}
                   aria-label={NOISE_RULES_OPTIONS_CLEAR_LABEL}
@@ -6018,9 +5949,7 @@ export function Options() {
                   aria-controls="known-good-body"
                   onClick={() => toggleSection(KNOWN_GOOD_OPTIONS_SECTION_ID)}
                 >
-                  <span className="v5-card__toggle-text">
-                    {KNOWN_GOOD_OPTIONS_SECTION_TITLE}
-                  </span>
+                  <span className="v5-card__toggle-text">{KNOWN_GOOD_OPTIONS_SECTION_TITLE}</span>
                   <span className="v5-card__chevron" aria-hidden="true" />
                 </button>
               </h2>
@@ -6052,9 +5981,7 @@ export function Options() {
                   ariaLabel={`${KNOWN_GOOD_OPTIONS_ENABLE_CATEGORY_LABEL}: ${formatKnownGoodCategoryDisplay(category)}`}
                   checked={knownGoodCategoryEnabled[category]}
                   disabled={!ready}
-                  onChange={(enabled) =>
-                    handleToggleKnownGoodCategory(category, enabled)
-                  }
+                  onChange={(enabled) => handleToggleKnownGoodCategory(category, enabled)}
                 />
               ))}
               <p className="v5-field__label" style={{ marginTop: 12 }}>
@@ -6082,9 +6009,7 @@ export function Options() {
                           <span className="v5-row__hint">Id: {entry.id}</span>
                           <span className="v5-row__hint">
                             Category matching:{" "}
-                            {knownGoodCategoryEnabled[entry.category]
-                              ? "enabled"
-                              : "disabled"}
+                            {knownGoodCategoryEnabled[entry.category] ? "enabled" : "disabled"}
                           </span>
                           {editing && knownGoodEditDraft ? (
                             <div style={{ display: "grid", gap: 8, marginTop: 8 }}>
@@ -6100,8 +6025,7 @@ export function Options() {
                                       current
                                         ? {
                                             ...current,
-                                            category: event.target
-                                              .value as KnownGoodCategory,
+                                            category: event.target.value as KnownGoodCategory,
                                           }
                                         : current
                                     )
@@ -6126,8 +6050,7 @@ export function Options() {
                                       current
                                         ? {
                                             ...current,
-                                            matchType: event.target
-                                              .value as KnownGoodMatchType,
+                                            matchType: event.target.value as KnownGoodMatchType,
                                           }
                                         : current
                                     )
@@ -6286,25 +6209,20 @@ export function Options() {
               <p className="v5-card__desc">
                 Export your preferences as JSON to move them between profiles or keep a backup.
                 Export a settings pack to share connector toggles, cache TTL, domain policy, and
-                analyst mode without API keys. Export an active threat profile for portable
-                workflow preferences (connectors, analyst mode, export template, quiet mode)
-                without API keys. API keys are excluded from settings packs, threat profiles, and
-                from full settings exports unless you choose to include them.
+                analyst mode without API keys. Export an active threat profile for portable workflow
+                preferences (connectors, analyst mode, export template, quiet mode) without API
+                keys. API keys are excluded from settings packs, threat profiles, and from full
+                settings exports unless you choose to include them.
               </p>
             </div>
             <div id="backup-body" className="v5-card__body" hidden={collapsedSections.backup}>
-              <div
-                className="v5-row"
-                role="status"
-                aria-label="Active threat profile status"
-              >
+              <div className="v5-row" role="status" aria-label="Active threat profile status">
                 <span className="v5-row__text">
                   Active threat profile:{" "}
                   {formatActiveThreatProfileIndicator(activeThreatProfileState)}
                 </span>
                 <span className="v5-row__hint">
-                  Last imported:{" "}
-                  {formatThreatProfileLastImportedAt(activeThreatProfileState)}
+                  Last imported: {formatThreatProfileLastImportedAt(activeThreatProfileState)}
                 </span>
               </div>
               {listShippedBuiltInThreatProfiles().length > 0 ? (
@@ -6704,9 +6622,7 @@ export function Options() {
                     type="checkbox"
                     checked={noiseRulesReplaceConfirmed}
                     disabled={noiseRulesImportState === "importing"}
-                    onChange={(event) =>
-                      setNoiseRulesReplaceConfirmed(event.currentTarget.checked)
-                    }
+                    onChange={(event) => setNoiseRulesReplaceConfirmed(event.currentTarget.checked)}
                     aria-label={NOISE_RULES_IMPORT_REPLACE_CONFIRM_LABEL}
                   />
                   <span className="v5-row__text">
@@ -6729,8 +6645,7 @@ export function Options() {
                 className="v5-btn v5-btn--primary"
                 disabled={
                   noiseRulesImportState === "importing" ||
-                  (noiseRulesImportMergeMode ===
-                    NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL &&
+                  (noiseRulesImportMergeMode === NOISE_RULES_IMPORT_MERGE_MODE.REPLACE_ALL &&
                     !noiseRulesReplaceConfirmed)
                 }
                 onClick={handleNoiseRulesImportConfirm}
@@ -6837,8 +6752,8 @@ export function Options() {
               </p>
               <p>
                 Choose how to apply this profile. Merge updates only fields present in the file.
-                Apply as new active resets overlapping workflow preferences to defaults, then applies
-                the profile. API keys stay unchanged.
+                Apply as new active resets overlapping workflow preferences to defaults, then
+                applies the profile. API keys stay unchanged.
               </p>
               <p>{SETTINGS_PACK_THREAT_PROFILE_PRECEDENCE_NOTE}</p>
               <div className="v5-actions" role="radiogroup" aria-label="Threat profile import mode">

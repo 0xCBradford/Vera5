@@ -1,12 +1,13 @@
 import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
 import type { EnrichmentSourceStatus } from "./enrichment";
 import {
+  ENRICHMENT_ASSESSMENT_KIND,
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
-  areAllEnrichmentSourcesDisabled,
+  type EnrichmentSourceAssessment,
   type EnrichmentSourceId,
-  type HoverCardSourceEntry,
-} from "./hoverCardEnrichment";
+} from "./enrichmentSourceRegistry";
+import { areAllEnrichmentSourcesDisabled, type HoverCardSourceEntry } from "./hoverCardEnrichment";
 
 export const COMPOSITE_RISK_LABEL = {
   UNKNOWN: "unknown",
@@ -16,14 +17,14 @@ export const COMPOSITE_RISK_LABEL = {
   CRITICAL: "critical",
 } as const;
 
-export type CompositeRiskLabel =
-  (typeof COMPOSITE_RISK_LABEL)[keyof typeof COMPOSITE_RISK_LABEL];
+export type CompositeRiskLabel = (typeof COMPOSITE_RISK_LABEL)[keyof typeof COMPOSITE_RISK_LABEL];
 
 export type ScoringSourceInput = {
   sourceId: EnrichmentSourceId;
   sourceLabel: string;
   status: EnrichmentSourceStatus;
   summary?: string;
+  assessment?: EnrichmentSourceAssessment;
 };
 
 export type CompositeScoreSourceContribution = {
@@ -45,9 +46,7 @@ export type CompositeRiskScore = {
 export const COMPOSITE_SCORE_DISAGREEMENT_NOTICE =
   "Sources disagree: compare per-source details before deciding.";
 
-export function formatCompositeRiskLabelDisplay(
-  label: CompositeRiskLabel
-): string {
+export function formatCompositeRiskLabelDisplay(label: CompositeRiskLabel): string {
   if (label === COMPOSITE_RISK_LABEL.UNKNOWN) {
     return "Unknown";
   }
@@ -74,9 +73,7 @@ export function formatCompositeScoreContributionLine(
   return `${contribution.sourceLabel}: ${band} (${score}/100, weight ${contribution.weight.toFixed(2)}).`;
 }
 
-export function formatCompositeRiskScoreSummaryText(
-  score: CompositeRiskScore
-): string {
+export function formatCompositeRiskScoreSummaryText(score: CompositeRiskScore): string {
   const labelText = formatCompositeRiskLabelDisplay(score.label);
   if (score.compositeSignal === null) {
     return `${labelText} risk`;
@@ -90,9 +87,7 @@ export type RiskScoreReasoningChain = {
   disagreementLine: string;
 };
 
-export function buildRiskScoreReasoningChain(
-  score: CompositeRiskScore
-): RiskScoreReasoningChain {
+export function buildRiskScoreReasoningChain(score: CompositeRiskScore): RiskScoreReasoningChain {
   return {
     sourceLines: score.sources.map(formatCompositeScoreContributionLine),
     showDisagreement: score.disagreement,
@@ -106,17 +101,13 @@ export const RISK_SCORE_REASONING_ARIA_LABEL = RISK_SCORE_REASONING_HEADING;
 
 export const RISK_SCORE_REASONING_SECTION_CLASS = "vera5-hover-card-risk-reasoning";
 
-export const RISK_SCORE_REASONING_HEADING_CLASS =
-  "vera5-hover-card-risk-reasoning-heading";
+export const RISK_SCORE_REASONING_HEADING_CLASS = "vera5-hover-card-risk-reasoning-heading";
 
-export const RISK_SCORE_REASONING_CHAIN_CLASS =
-  "vera5-hover-card-risk-reasoning-chain";
+export const RISK_SCORE_REASONING_CHAIN_CLASS = "vera5-hover-card-risk-reasoning-chain";
 
-export const RISK_SCORE_REASONING_STEP_CLASS =
-  "vera5-hover-card-risk-reasoning-step";
+export const RISK_SCORE_REASONING_STEP_CLASS = "vera5-hover-card-risk-reasoning-step";
 
-export const RISK_SCORE_REASONING_EMPTY_CLASS =
-  "vera5-hover-card-risk-reasoning-empty";
+export const RISK_SCORE_REASONING_EMPTY_CLASS = "vera5-hover-card-risk-reasoning-empty";
 
 export const RISK_SCORE_REASONING_EMPTY_DETAIL =
   "Blended score steps are not available until at least two sources return parseable evidence.";
@@ -217,10 +208,7 @@ export function createHoverCardRiskReasoningChainSection(
     );
   }
 
-  return createHoverCardRiskReasoningSection(
-    { mode: "chain", chain, sourceIds: [] },
-    doc
-  );
+  return createHoverCardRiskReasoningSection({ mode: "chain", chain, sourceIds: [] }, doc);
 }
 
 export function formatCompositeScoreContributionTooltip(
@@ -237,6 +225,7 @@ export function hoverCardSourceEntriesToScoringInput(
     sourceLabel: entry.label,
     status: entry.status,
     summary: entry.status === "ok" ? entry.detail : undefined,
+    assessment: entry.assessment,
   }));
 }
 
@@ -244,10 +233,7 @@ export function computeCompositeRiskScoreFromHoverCardSources(
   sourceResults: readonly HoverCardSourceEntry[],
   options: CompositeRiskScoreOptions = {}
 ): CompositeRiskScore {
-  return computeCompositeRiskScore(
-    hoverCardSourceEntriesToScoringInput(sourceResults),
-    options
-  );
+  return computeCompositeRiskScore(hoverCardSourceEntriesToScoringInput(sourceResults), options);
 }
 
 export type HoverCardRiskScoreView = {
@@ -260,10 +246,7 @@ export function buildHoverCardRiskScoreView(
   sourceResults: readonly HoverCardSourceEntry[],
   options: CompositeRiskScoreOptions = {}
 ): HoverCardRiskScoreView {
-  const score = computeCompositeRiskScoreFromHoverCardSources(
-    sourceResults,
-    options
-  );
+  const score = computeCompositeRiskScoreFromHoverCardSources(sourceResults, options);
   return {
     score,
     summaryText: formatCompositeRiskScoreSummaryText(score),
@@ -276,8 +259,7 @@ export const RISK_SCORE_UNAVAILABLE_HEADLINE = "Risk score unavailable";
 export const RISK_SCORE_UNAVAILABLE_ALL_SOURCES_DETAIL =
   "Enable at least one enrichment source in settings to compute a local advisory score.";
 
-export const RISK_SCORE_UNAVAILABLE_INSUFFICIENT_DETAIL =
-  "Need two sources to blend.";
+export const RISK_SCORE_UNAVAILABLE_INSUFFICIENT_DETAIL = "Need two sources to blend.";
 
 /** Overlay multi-source path: short notice that opens the Sources drawer. */
 export const RISK_SCORE_UNAVAILABLE_INSUFFICIENT_SOURCES_HINT =
@@ -299,9 +281,7 @@ export type HoverCardRiskScorePresentation =
   | HoverCardRiskScoreUnavailablePresentation
   | HoverCardRiskScoreAvailablePresentation;
 
-export function hasBlendableCompositeRiskScore(
-  score: CompositeRiskScore
-): boolean {
+export function hasBlendableCompositeRiskScore(score: CompositeRiskScore): boolean {
   return score.compositeSignal !== null;
 }
 
@@ -343,14 +323,13 @@ const GREYNOISE_CLASSIFICATION_SUMMARY_RE = /^(\w+)\s+classification$/;
 const GREYNOISE_NOT_OBSERVED_SUMMARY = "not observed in GreyNoise";
 const GREYNOISE_BENIGN_RIOT_SUMMARY = "benign RIOT service";
 
-export const DEFAULT_SOURCE_SCORE_WEIGHTS: Readonly<
-  Record<EnrichmentSourceId, number>
-> = Object.fromEntries(
-  ENRICHMENT_SOURCE_ORDER.map((sourceId) => [
-    sourceId,
-    sourceId === ENRICHMENT_SOURCE.OTX ? 0.85 : 1,
-  ])
-) as Record<EnrichmentSourceId, number>;
+export const DEFAULT_SOURCE_SCORE_WEIGHTS: Readonly<Record<EnrichmentSourceId, number>> =
+  Object.fromEntries(
+    ENRICHMENT_SOURCE_ORDER.map((sourceId) => [
+      sourceId,
+      sourceId === ENRICHMENT_SOURCE.OTX ? 0.85 : 1,
+    ])
+  ) as Record<EnrichmentSourceId, number>;
 
 export const MIN_REQUIRED_SCORING_SIGNALS = 2;
 
@@ -361,9 +340,7 @@ function clampSignal(value: number): number {
   return Math.min(100, Math.max(0, value));
 }
 
-export function unifiedSummaryToSignalStrength(
-  summary: string | undefined
-): number | null {
+export function unifiedSummaryToSignalStrength(summary: string | undefined): number | null {
   if (!summary) {
     return null;
   }
@@ -480,9 +457,7 @@ function greynoiseClassificationToSignal(classification: string): number {
   return 35;
 }
 
-export function signalStrengthToBand(
-  signal: number | null
-): CompositeRiskLabel | null {
+export function signalStrengthToBand(signal: number | null): CompositeRiskLabel | null {
   if (signal === null || !Number.isFinite(signal)) {
     return null;
   }
@@ -521,17 +496,13 @@ function detectDisagreement(
   if (numericSignals.length < 2) {
     return false;
   }
-  if (
-    Math.max(...numericSignals) - Math.min(...numericSignals) >= 35
-  ) {
+  if (Math.max(...numericSignals) - Math.min(...numericSignals) >= 35) {
     return true;
   }
 
   const bands = contributions
     .map((entry) => entry.bandLabel)
-    .filter(
-      (band): band is Exclude<CompositeRiskLabel, "unknown"> => band !== null
-    );
+    .filter((band): band is Exclude<CompositeRiskLabel, "unknown"> => band !== null);
   if (bands.length < 2) {
     return false;
   }
@@ -539,9 +510,7 @@ function detectDisagreement(
   return Math.max(...ordinal) - Math.min(...ordinal) >= 2;
 }
 
-function bandRiskOrdinal(
-  band: Exclude<CompositeRiskLabel, "unknown">
-): number {
+function bandRiskOrdinal(band: Exclude<CompositeRiskLabel, "unknown">): number {
   switch (band) {
     case COMPOSITE_RISK_LABEL.LOW:
       return 0;
@@ -572,14 +541,20 @@ export function computeCompositeRiskScore(
     let signalStrength: number | null = null;
     let bandLabel: CompositeRiskLabel | null = null;
 
-    if (
-      weight > 0 &&
-      source.status === ENRICHMENT_SOURCE_STATUS.OK &&
-      source.summary
-    ) {
-      signalStrength = unifiedSummaryToSignalStrength(source.summary);
-      bandLabel =
-        signalStrength === null ? null : signalStrengthToBand(signalStrength);
+    if (weight > 0 && source.status === ENRICHMENT_SOURCE_STATUS.OK) {
+      if (
+        source.assessment?.kind === ENRICHMENT_ASSESSMENT_KIND.RISK &&
+        typeof source.assessment.signal === "number"
+      ) {
+        signalStrength = clampSignal(source.assessment.signal);
+      } else if (
+        (source.assessment === undefined ||
+          source.assessment.kind === ENRICHMENT_ASSESSMENT_KIND.RISK) &&
+        source.summary
+      ) {
+        signalStrength = unifiedSummaryToSignalStrength(source.summary);
+      }
+      bandLabel = signalStrength === null ? null : signalStrengthToBand(signalStrength);
       if (signalStrength !== null) {
         weightedSum += signalStrength * weight;
         weightDenominator += weight;
@@ -597,8 +572,7 @@ export function computeCompositeRiskScore(
     });
   }
 
-  const hasSufficientSignals =
-    numericSignals.length >= MIN_REQUIRED_SCORING_SIGNALS;
+  const hasSufficientSignals = numericSignals.length >= MIN_REQUIRED_SCORING_SIGNALS;
 
   let compositeSignal: number | null = null;
   if (weightDenominator > 0 && hasSufficientSignals) {
@@ -610,9 +584,7 @@ export function computeCompositeRiskScore(
       ? signalStrengthToBand(compositeSignal)
       : null;
   const label: CompositeRiskLabel =
-    compositeSignal === null ||
-    weightDenominator === 0 ||
-    blendedLabel === null
+    compositeSignal === null || weightDenominator === 0 || blendedLabel === null
       ? COMPOSITE_RISK_LABEL.UNKNOWN
       : blendedLabel;
 

@@ -1,5 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { contentRegisterMessage, enrichIocMessage, getTabScanSummaryMessage, MESSAGE, openExtensionPopupMessage, pingMessage, tabScanSnapshotMessage } from "../lib/messages";
+import {
+  contentRegisterMessage,
+  enrichIocMessage,
+  getTabScanSummaryMessage,
+  isVera5Message,
+  MESSAGE,
+  openExtensionPopupMessage,
+  openWorkspaceMessage,
+  pingMessage,
+  tabScanSnapshotMessage,
+} from "../lib/messages";
 import { POPUP_PANEL } from "../lib/popupPanelFocus";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import { IOC_RULE_ID } from "../lib/iocRegex";
@@ -112,9 +122,9 @@ describe("message handler smoke", () => {
     vi.unstubAllGlobals();
   });
 
-  it("stores popup panel focus for OPEN_EXTENSION_POPUP", async () => {
+  it("stores panel focus and opens the canonical workspace", async () => {
     const store: Record<string, unknown> = {};
-    const openPopup = vi.fn().mockResolvedValue(undefined);
+    const open = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("chrome", {
       storage: {
         local: {
@@ -145,12 +155,13 @@ describe("message handler smoke", () => {
           },
         },
       },
-      action: { openPopup },
+      sidePanel: { open },
+      tabs: { query: vi.fn().mockResolvedValue([{ id: 17 }]) },
       runtime: { id: "test-extension-id" },
     });
 
     const response = await routeIncomingMessageAsync(
-      openExtensionPopupMessage(POPUP_PANEL.SOURCE_OPERATIONS)
+      openWorkspaceMessage(POPUP_PANEL.SOURCE_OPERATIONS)
     );
 
     expect(response).toEqual({
@@ -158,10 +169,15 @@ describe("message handler smoke", () => {
       payload: {
         opened: true,
         panel: POPUP_PANEL.SOURCE_OPERATIONS,
+        surface: "sidepanel",
       },
     });
-    expect(openPopup).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith({ tabId: 17 });
     vi.unstubAllGlobals();
+  });
+
+  it("continues accepting the legacy popup message envelope", () => {
+    expect(isVera5Message(openExtensionPopupMessage(POPUP_PANEL.INVESTIGATION_HISTORY))).toBe(true);
   });
 
   it("acknowledges CONTENT_REGISTER", () => {
@@ -220,8 +236,7 @@ describe("message handler async enrich", () => {
     for (const key of Object.keys(store)) {
       delete store[key];
     }
-    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] =
-      DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
+    store[STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS] = DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS;
     stubChromeStorage(store);
   });
 
@@ -260,10 +275,9 @@ describe("message handler async enrich", () => {
       ],
     });
 
-    const response = await routeIncomingMessageAsync(
-      tabScanSnapshotMessage(snapshot),
-      { tab: { id: 12 } } as chrome.runtime.MessageSender
-    );
+    const response = await routeIncomingMessageAsync(tabScanSnapshotMessage(snapshot), {
+      tab: { id: 12 },
+    } as chrome.runtime.MessageSender);
 
     expect(response).toEqual({ ok: true, payload: { tabId: 12 } });
     expect(store["tabScanSnapshot:12"]).toEqual({ ...snapshot, tabId: 12 });

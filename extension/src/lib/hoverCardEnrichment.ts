@@ -13,9 +13,14 @@ import {
   ENRICHMENT_SOURCE_LABELS,
   resolveEnrichmentSourceConfidenceMetadata,
   formatDisabledSourceMessage,
+  type EnrichmentSourceAssessment,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
-import { ENRICHMENT_ERROR_CODE } from "./enrichment";
+import {
+  buildEnrichmentAssessmentFromPresentation,
+  ENRICHMENT_ERROR_CODE,
+  normalizeEnrichmentSourceAssessment,
+} from "./enrichment";
 import { KNOWN_GOOD_ENRICH_SKIPPED_BADGE } from "./knownGood";
 import {
   CONNECTOR_FRESHNESS_POLICY,
@@ -91,8 +96,7 @@ export const HOVER_CARD_OPEN_SETTINGS_LABEL = "Open settings";
 export const HOVER_CARD_RAW_JSON_SUMMARY_LABEL = "Raw response";
 
 export const HOVER_CARD_ANALYST_NOTES_LABEL = "Analyst notes";
-export const HOVER_CARD_ANALYST_NOTES_PLACEHOLDER =
-  "Add local notes for this indicator…";
+export const HOVER_CARD_ANALYST_NOTES_PLACEHOLDER = "Add local notes for this indicator…";
 export const HOVER_CARD_ANALYST_NOTES_SECTION_ARIA_LABEL = "Analyst notes";
 export const HOVER_CARD_ANALYST_NOTES_INPUT_ID = "vera5-analyst-notes-input";
 
@@ -102,8 +106,7 @@ export const HOVER_CARD_IOC_LABEL_SELECT_ID = "vera5-ioc-label-select";
 export const HOVER_CARD_IOC_LABEL_NONE_VALUE = "";
 
 export const HOVER_CARD_IOC_TIMELINE_LABEL = "Session timeline";
-export const HOVER_CARD_IOC_TIMELINE_SECTION_ARIA_LABEL =
-  "Session timeline for this indicator";
+export const HOVER_CARD_IOC_TIMELINE_SECTION_ARIA_LABEL = "Session timeline for this indicator";
 export const HOVER_CARD_IOC_TIMELINE_EMPTY_TEXT =
   "No session timeline for this indicator yet. Start an investigation session, then scan or enrich to record activity.";
 
@@ -133,8 +136,7 @@ export function resolveHoverCardDisclaimerLines(
 ): readonly string[] {
   const lines: string[] = [];
   const state = input.enrichmentState ?? "empty";
-  const showEnrichmentDisclaimer =
-    state === "ready" || state === "loading" || state === "error";
+  const showEnrichmentDisclaimer = state === "ready" || state === "loading" || state === "error";
 
   if (showEnrichmentDisclaimer) {
     lines.push(HOVER_CARD_ENRICHMENT_DISCLAIMER);
@@ -148,12 +150,9 @@ export function resolveHoverCardDisclaimerLines(
 export const HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_AND_RISK =
   "Enrichment and risk score notice";
 
-export const HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY =
-  "Enrichment notice";
+export const HOVER_CARD_DISCLAIMER_ARIA_LABEL_ENRICHMENT_ONLY = "Enrichment notice";
 
-export function resolveHoverCardDisclaimerAriaLabel(
-  input: HoverCardDisclaimerInput = {}
-): string {
+export function resolveHoverCardDisclaimerAriaLabel(input: HoverCardDisclaimerInput = {}): string {
   const lines = resolveHoverCardDisclaimerLines(input);
   const includesRisk = lines.includes(HOVER_CARD_RISK_SCORE_DISCLAIMER);
   const includesEnrichment = lines.includes(HOVER_CARD_ENRICHMENT_DISCLAIMER);
@@ -233,10 +232,7 @@ export function buildDisabledSourcePlaceholders(
 
 export type HoverCardSourceEntryStatus = "ok" | "error" | "skipped";
 
-export type HoverCardSourceMetadataChipKind =
-  | "reliability"
-  | "freshness"
-  | "sourceClass";
+export type HoverCardSourceMetadataChipKind = "reliability" | "freshness" | "sourceClass";
 
 export type HoverCardSourceMetadataChip = {
   kind: HoverCardSourceMetadataChipKind;
@@ -253,6 +249,7 @@ export type HoverCardSourceEntry = {
   status: HoverCardSourceEntryStatus;
   badgeText: string;
   detail: string;
+  assessment?: EnrichmentSourceAssessment;
   metadataChips: readonly HoverCardSourceMetadataChip[];
   fromCache?: boolean;
   lastUpdatedLine?: string;
@@ -262,9 +259,7 @@ export type HoverCardSourceEntry = {
   rawVendorJson?: string;
 };
 
-export function formatHoverCardLastUpdatedLabel(
-  fetchedAtIso: string
-): string | undefined {
+export function formatHoverCardLastUpdatedLabel(fetchedAtIso: string): string | undefined {
   const trimmed = fetchedAtIso.trim();
   if (!trimmed) {
     return undefined;
@@ -279,12 +274,8 @@ export function formatHoverCardLastUpdatedLabel(
   }).format(date);
 }
 
-export function buildHoverCardLastUpdatedLine(
-  fetchedAtIso?: string
-): string | undefined {
-  const label = fetchedAtIso
-    ? formatHoverCardLastUpdatedLabel(fetchedAtIso)
-    : undefined;
+export function buildHoverCardLastUpdatedLine(fetchedAtIso?: string): string | undefined {
+  const label = fetchedAtIso ? formatHoverCardLastUpdatedLabel(fetchedAtIso) : undefined;
   if (!label) {
     return undefined;
   }
@@ -318,15 +309,11 @@ export function buildSourceStatusBadgeClassName(
   return `vera5-hover-card-source-badge vera5-hover-card-source-badge--${status}`;
 }
 
-export function buildSourceMetadataChipClassName(
-  kind: HoverCardSourceMetadataChipKind
-): string {
+export function buildSourceMetadataChipClassName(kind: HoverCardSourceMetadataChipKind): string {
   return `vera5-hover-card-source-metadata-chip vera5-hover-card-source-metadata-chip--${kind}`;
 }
 
-function formatFreshnessPolicyTooltip(
-  policy: ConnectorFreshnessPolicy
-): string {
+function formatFreshnessPolicyTooltip(policy: ConnectorFreshnessPolicy): string {
   const lead =
     policy === CONNECTOR_FRESHNESS_POLICY.VOLATILE
       ? "Results for this source may change quickly."
@@ -360,20 +347,14 @@ export function buildHoverCardSourceMetadataChipsFromFields(fields: {
   sourceClass: ConnectorSourceClass | null;
 }): HoverCardSourceMetadataChip[] {
   const chips: HoverCardSourceMetadataChip[] = [];
-  if (
-    fields.reliabilityTier &&
-    isConnectorReliabilityTier(fields.reliabilityTier)
-  ) {
+  if (fields.reliabilityTier && isConnectorReliabilityTier(fields.reliabilityTier)) {
     chips.push({
       kind: "reliability",
       label: getConnectorReliabilityTierLabel(fields.reliabilityTier),
       tooltip: formatReliabilityTierTooltip(fields.reliabilityTier),
     });
   }
-  if (
-    fields.freshnessPolicy &&
-    isConnectorFreshnessPolicy(fields.freshnessPolicy)
-  ) {
+  if (fields.freshnessPolicy && isConnectorFreshnessPolicy(fields.freshnessPolicy)) {
     chips.push({
       kind: "freshness",
       label: getConnectorFreshnessPolicyLabel(fields.freshnessPolicy),
@@ -420,6 +401,7 @@ export type HoverCardSourceResultInput = {
   status: HoverCardSourceEntryStatus;
   summary?: string;
   tags?: readonly string[];
+  assessment?: EnrichmentSourceAssessment;
   fromCache?: boolean;
   fetchedAt?: string;
   errorCode?: string;
@@ -464,11 +446,18 @@ export function buildHoverCardSourceEntry(
   if (lastUpdatedLine) {
     entry.lastUpdatedLine = lastUpdatedLine;
   }
-  const tags = result.tags
-    ?.map((tag) => tag.trim())
-    .filter((tag) => tag.length > 0);
+  const tags = result.tags?.map((tag) => tag.trim()).filter((tag) => tag.length > 0);
   if (tags && tags.length > 0) {
     entry.tags = tags;
+  }
+  if (result.status === "ok") {
+    entry.assessment =
+      normalizeEnrichmentSourceAssessment(result.assessment) ??
+      buildEnrichmentAssessmentFromPresentation({
+        sourceId: result.sourceId,
+        summary: result.summary?.trim() || DEFAULT_HOVER_CARD_SUMMARY,
+        tags,
+      });
   }
   if (result.errorCode) {
     entry.errorCode = result.errorCode;
@@ -521,9 +510,7 @@ export function shouldShowMultiSourceResults(
 export function areAllEnrichmentSourcesDisabled(
   disabledSources: readonly EnrichmentSourceId[]
 ): boolean {
-  return ENRICHMENT_SOURCE_ORDER.every((sourceId) =>
-    disabledSources.includes(sourceId)
-  );
+  return ENRICHMENT_SOURCE_ORDER.every((sourceId) => disabledSources.includes(sourceId));
 }
 
 export function shouldShowRiskScore(
@@ -553,9 +540,7 @@ export function shouldIncludeRiskScoreDisclaimer(
   return shouldShowRiskScore(disabledSources, sourceResults);
 }
 
-export function shouldShowHoverCardDisclaimer(
-  input: HoverCardDisclaimerInput = {}
-): boolean {
+export function shouldShowHoverCardDisclaimer(input: HoverCardDisclaimerInput = {}): boolean {
   return resolveHoverCardDisclaimerLines(input).length > 0;
 }
 
@@ -677,9 +662,7 @@ export type HoverCardDisplayView = {
   hasPivotLinks: boolean;
 };
 
-export function resolveHoverCardDisplayView(
-  input: HoverCardDisplayInput
-): HoverCardDisplayView {
+export function resolveHoverCardDisplayView(input: HoverCardDisplayInput): HoverCardDisplayView {
   const sourceResults = input.sourceResults ?? [];
   const disabledSources = input.disabledSources ?? [];
   const enrichment = resolveEnrichmentDisplay({
@@ -687,17 +670,14 @@ export function resolveHoverCardDisplayView(
     summary: input.summary,
     errorMessage: input.errorMessage,
   });
-  const disabledSourcePlaceholders =
-    buildDisabledSourcePlaceholders(disabledSources);
+  const disabledSourcePlaceholders = buildDisabledSourcePlaceholders(disabledSources);
   const enrichmentTags = (input.tags ?? [])
     .map((tag) => tag.trim())
     .filter((tag) => tag.length > 0);
   const showTags = enrichment.variant === "ready" && enrichmentTags.length > 0;
   const showMultiSourceResults = shouldShowMultiSourceResults(sourceResults);
   const showSingleSourceRawJson = shouldShowSingleSourceRawJson(sourceResults);
-  const singleSourceRawJson = showSingleSourceRawJson
-    ? sourceResults[0]?.rawVendorJson
-    : undefined;
+  const singleSourceRawJson = showSingleSourceRawJson ? sourceResults[0]?.rawVendorJson : undefined;
   const showAttribution = shouldShowEnrichmentSourceAttribution(
     enrichment.variant,
     resolveEffectiveSourceAttribution(input.sourceAttribution, sourceResults),
@@ -713,12 +693,8 @@ export function resolveHoverCardDisplayView(
     input.retryHint,
     sourceResults
   );
-  const singleSourceLastUpdatedLine =
-    getSingleSourceLastUpdatedLine(sourceResults);
-  const showRiskScore = shouldShowRiskScoreSection(
-    disabledSources,
-    sourceResults
-  );
+  const singleSourceLastUpdatedLine = getSingleSourceLastUpdatedLine(sourceResults);
+  const showRiskScore = shouldShowRiskScoreSection(disabledSources, sourceResults);
   const includeRiskScoreDisclaimer = shouldIncludeRiskScoreDisclaimer(
     disabledSources,
     sourceResults
@@ -731,9 +707,7 @@ export function resolveHoverCardDisplayView(
   const showDisclaimer = shouldShowHoverCardDisclaimer(disclaimerInput);
   const hasPivotLinks = (input.pivotLinkCount ?? 0) > 0;
   const showFooter =
-    hasPivotLinks ||
-    disabledSourcePlaceholders.length > 0 ||
-    showMultiSourceResults;
+    hasPivotLinks || disabledSourcePlaceholders.length > 0 || showMultiSourceResults;
   const showBelowSummary =
     showFooter ||
     showTags ||
@@ -828,10 +802,7 @@ export const WHY_STILL_VISIBLE_TOOLTIP_MISSING_PROVENANCE =
   "Still matched by detection (provenance unavailable).";
 export const WHY_STILL_VISIBLE_TOOLTIP_MAX_ENTRIES = 3;
 
-function formatWhyDetectedTooltipBlock(
-  value: string,
-  view: WhyDetectedView
-): string {
+function formatWhyDetectedTooltipBlock(value: string, view: WhyDetectedView): string {
   const lines = [
     value,
     `Type: ${view.typeLabel}`,
@@ -853,9 +824,7 @@ function formatWhyDetectedTooltipBlock(
  * provenance view model as **Why detected?**.
  */
 export function buildWhyStillVisibleTooltip(
-  entries: ReadonlyArray<
-    { value: string; type: IocType } & Partial<IocMatchProvenance>
-  >
+  entries: ReadonlyArray<{ value: string; type: IocType } & Partial<IocMatchProvenance>>
 ): string {
   if (entries.length === 0) {
     return `${WHY_STILL_VISIBLE_TOOLTIP_HEADING}\n${WHY_STILL_VISIBLE_TOOLTIP_INTRO}`;
@@ -863,6 +832,9 @@ export function buildWhyStillVisibleTooltip(
 
   const shown = entries.slice(0, WHY_STILL_VISIBLE_TOOLTIP_MAX_ENTRIES);
   const blocks = shown.map((entry) => {
+    if (!entry.ruleId || !entry.sourceTextHint) {
+      return `${entry.value}\n${WHY_STILL_VISIBLE_TOOLTIP_MISSING_PROVENANCE}`;
+    }
     const view = buildWhyDetectedView({
       type: entry.type,
       ruleId: entry.ruleId,
@@ -880,11 +852,9 @@ export function buildWhyStillVisibleTooltip(
     blocks.push(`And ${remainder} more. Expand for full list.`);
   }
 
-  return [
-    WHY_STILL_VISIBLE_TOOLTIP_HEADING,
-    WHY_STILL_VISIBLE_TOOLTIP_INTRO,
-    ...blocks,
-  ].join("\n\n");
+  return [WHY_STILL_VISIBLE_TOOLTIP_HEADING, WHY_STILL_VISIBLE_TOOLTIP_INTRO, ...blocks].join(
+    "\n\n"
+  );
 }
 
 export const HOVER_CARD_ON_PAGE_VALUE_LABEL = "On page:";
@@ -901,8 +871,7 @@ export const PRE_QUERY_DISCLOSURE_SECTION_ARIA_LABEL = "Pre-query notice";
 export const PRE_QUERY_DISCLOSURE_HEADING = "Before querying vendors";
 export const PRE_QUERY_DISCLOSURE_SEND_LABEL = "Send query";
 export const PRE_QUERY_DISCLOSURE_CANCEL_LABEL = "Cancel";
-export const PRE_QUERY_DISCLOSURE_REMEMBER_LABEL =
-  "Don't show this notice again";
+export const PRE_QUERY_DISCLOSURE_REMEMBER_LABEL = "Don't show this notice again";
 
 export type IndicatorValuePresentation = {
   onPageValue: string;
@@ -964,9 +933,6 @@ export function confirmOpenLiveUrl(win: Pick<Window, "confirm"> = window): boole
   return win.confirm(HOVER_CARD_OPEN_LIVE_URL_CONFIRM_MESSAGE);
 }
 
-export function openLiveUrlInNewTab(
-  url: string,
-  win: Pick<Window, "open"> = window
-): void {
+export function openLiveUrlInNewTab(url: string, win: Pick<Window, "open"> = window): void {
   win.open(url, "_blank", "noopener,noreferrer");
 }

@@ -13,8 +13,16 @@ import {
 } from "./enrichment";
 import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
 import {
+  CONNECTOR_AUTHORITY_TIER,
+  createLegacyConnectorDefinition,
+  type ConnectorCapabilityFlags,
+  type ConnectorDefinition,
+  type ConnectorRateLimitPolicy,
+} from "./connectorDefinition";
+import {
   ENRICHMENT_SOURCE,
   enrichmentSourceSupportsIocType,
+  getEnrichmentSourceDefinition,
 } from "./enrichmentSourceRegistry";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import { IOC_TYPE, type IocType } from "./iocRegex";
@@ -35,6 +43,21 @@ export const VIRUSTOTAL_SOURCE_ID = "virustotal" as const;
 export const VIRUSTOTAL_API_V3_BASE = "https://www.virustotal.com/api/v3";
 
 export const DEFAULT_VIRUSTOTAL_REQUEST_TIMEOUT_MS = 15_000;
+
+export const DEFAULT_VIRUSTOTAL_RATE_LIMIT_POLICY: ConnectorRateLimitPolicy = {
+  requestTimeoutMs: DEFAULT_VIRUSTOTAL_REQUEST_TIMEOUT_MS,
+  quotaSummary:
+    "Public and premium quotas vary by account. Confirm request limits in the VirusTotal API console.",
+  rateLimitHeaderHints: ["X-App-Rate-Limit", "X-Quota-Exceeded"],
+};
+
+export const DEFAULT_VIRUSTOTAL_CAPABILITY_FLAGS: ConnectorCapabilityFlags = {
+  liveEnrichment: true,
+  pivotOnly: false,
+  requiresApiKey: true,
+  supportsHealthCheck: true,
+  authorityTier: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
+};
 
 export type VirustotalAnalysisStats = {
   malicious?: number;
@@ -136,9 +159,7 @@ export function inspectVirustotalVendorRequest(
   };
 }
 
-export function parseVirustotalAnalysisStats(
-  payload: unknown
-): VirustotalAnalysisStats | null {
+export function parseVirustotalAnalysisStats(payload: unknown): VirustotalAnalysisStats | null {
   if (!isRecord(payload)) {
     return null;
   }
@@ -193,9 +214,7 @@ function readNonEmptyString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function parseVirustotalUnifiedInput(
-  payload: unknown
-): VirustotalUnifiedInput | null {
+export function parseVirustotalUnifiedInput(payload: unknown): VirustotalUnifiedInput | null {
   const stats = parseVirustotalAnalysisStats(payload);
   if (!stats) {
     return null;
@@ -214,11 +233,9 @@ export function parseVirustotalUnifiedInput(
   }
 
   const countryCode =
-    readNonEmptyString(attributes.country) ??
-    readNonEmptyString(attributes.country_code);
+    readNonEmptyString(attributes.country) ?? readNonEmptyString(attributes.country_code);
   const networkOwner =
-    readNonEmptyString(attributes.as_owner) ??
-    readNonEmptyString(attributes.registrar);
+    readNonEmptyString(attributes.as_owner) ?? readNonEmptyString(attributes.registrar);
 
   return {
     maliciousDetections: stats.malicious,
@@ -239,9 +256,7 @@ export function normalizeVirustotalResponse(
   return mapVirustotalFieldsToUnifiedPresentation(input);
 }
 
-export function formatVirustotalDetectionSummary(
-  stats: VirustotalAnalysisStats
-): string {
+export function formatVirustotalDetectionSummary(stats: VirustotalAnalysisStats): string {
   return mapVirustotalFieldsToUnifiedPresentation({
     maliciousDetections: stats.malicious,
     suspiciousDetections: stats.suspicious,
@@ -446,9 +461,7 @@ export async function checkVirustotalHealth(
   return { status: CONNECTOR_HEALTH_STATUS.OK };
 }
 
-export function createVirustotalConnector(
-  deps: VirustotalConnectorDeps = {}
-): EnrichmentConnector {
+export function createVirustotalConnector(deps: VirustotalConnectorDeps = {}): EnrichmentConnector {
   return {
     name: VIRUSTOTAL_SOURCE_ID,
     enrich(ioc) {
@@ -458,4 +471,21 @@ export function createVirustotalConnector(
       return checkVirustotalHealth(deps);
     },
   };
+}
+
+export function createVirustotalConnectorDefinition(input?: {
+  rateLimitPolicy?: ConnectorRateLimitPolicy;
+  capabilities?: ConnectorCapabilityFlags;
+}): ConnectorDefinition {
+  const sourceDefinition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.VIRUSTOTAL);
+  return createLegacyConnectorDefinition({
+    id: ENRICHMENT_SOURCE.VIRUSTOTAL,
+    supportedIocTypes: sourceDefinition.supportedIndicatorTypes.filter(
+      virustotalLiveSupportsIocType
+    ),
+    rateLimitPolicy: input?.rateLimitPolicy ?? DEFAULT_VIRUSTOTAL_RATE_LIMIT_POLICY,
+    capabilities: input?.capabilities ?? DEFAULT_VIRUSTOTAL_CAPABILITY_FLAGS,
+    enrich: (ioc) => enrichWithVirustotal(ioc),
+    healthCheck: () => checkVirustotalHealth(),
+  });
 }

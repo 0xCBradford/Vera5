@@ -258,6 +258,48 @@ describe("computeCompositeRiskScore", () => {
     expect(result.label).toBe(COMPOSITE_RISK_LABEL.UNKNOWN);
     expect(result.sources[0]?.signalStrength).toBeNull();
   });
+
+  it("uses structured risk assessments and excludes exposure/context signals", () => {
+    const result = computeCompositeRiskScore([
+      {
+        sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
+        sourceLabel: "VirusTotal",
+        status: ENRICHMENT_SOURCE_STATUS.OK,
+        summary: "5 malicious detections",
+        assessment: {
+          kind: "risk",
+          signal: 85,
+          verdict: "Critical risk signal",
+          evidence: ["5 malicious detections"],
+        },
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+        sourceLabel: "AbuseIPDB",
+        status: ENRICHMENT_SOURCE_STATUS.OK,
+        assessment: {
+          kind: "risk",
+          signal: 65,
+          verdict: "High risk signal",
+          evidence: ["65 abuse confidence"],
+        },
+      },
+      {
+        sourceId: ENRICHMENT_SOURCE.SHODAN,
+        sourceLabel: "Shodan",
+        status: ENRICHMENT_SOURCE_STATUS.OK,
+        summary: "12 open services",
+        assessment: {
+          kind: "exposure",
+          verdict: "Exposure observed",
+          evidence: ["12 open services"],
+        },
+      },
+    ]);
+
+    expect(result.compositeSignal).toBeCloseTo(75, 5);
+    expect(result.sources[2]?.signalStrength).toBeNull();
+  });
 });
 
 describe("risk score reasoning chain", () => {
@@ -281,9 +323,7 @@ describe("risk score reasoning chain", () => {
     expect(formatCompositeScoreContributionLine(score.sources[0]!)).toBe(
       "AbuseIPDB: Critical (84/100, weight 1.00)."
     );
-    expect(formatCompositeScoreContributionLine(score.sources[1]!)).toContain(
-      "OTX:"
-    );
+    expect(formatCompositeScoreContributionLine(score.sources[1]!)).toContain("OTX:");
   });
 
   it("builds reasoning chain with disagreement notice when sources diverge", () => {
@@ -454,9 +494,7 @@ describe("connector confidence metadata isolation from scoring", () => {
 
   it("computes the same composite score when metadata chips differ", () => {
     const baseline = computeCompositeRiskScoreFromHoverCardSources(baseSources);
-    const decorated = computeCompositeRiskScoreFromHoverCardSources(
-      decoratedSources
-    );
+    const decorated = computeCompositeRiskScoreFromHoverCardSources(decoratedSources);
     expect(decorated).toEqual(baseline);
   });
 
@@ -471,22 +509,20 @@ describe("connector confidence metadata isolation from scoring", () => {
   it("resolves the same reasoning presentation when metadata chips differ", () => {
     const baselineView = buildHoverCardRiskScoreView(baseSources);
     const decoratedView = buildHoverCardRiskScoreView(decoratedSources);
-    expect(
-      resolveRiskScoreReasoningPresentation(decoratedView, null)
-    ).toEqual(resolveRiskScoreReasoningPresentation(baselineView, null));
+    expect(resolveRiskScoreReasoningPresentation(decoratedView, null)).toEqual(
+      resolveRiskScoreReasoningPresentation(baselineView, null)
+    );
   });
 
   it("computes the same composite score when reliability tier chips are omitted", () => {
     const missingTierChipSources = decoratedSources.map((entry) => ({
       ...entry,
-      metadataChips: entry.metadataChips.filter(
-        (chip) => chip.kind !== "reliability"
-      ),
+      metadataChips: entry.metadataChips.filter((chip) => chip.kind !== "reliability"),
     }));
 
-    expect(
-      computeCompositeRiskScoreFromHoverCardSources(missingTierChipSources)
-    ).toEqual(computeCompositeRiskScoreFromHoverCardSources(baseSources));
+    expect(computeCompositeRiskScoreFromHoverCardSources(missingTierChipSources)).toEqual(
+      computeCompositeRiskScoreFromHoverCardSources(baseSources)
+    );
     expect(buildHoverCardRiskScoreView(missingTierChipSources).score).toEqual(
       buildHoverCardRiskScoreView(baseSources).score
     );
@@ -522,9 +558,7 @@ describe("connector confidence metadata isolation from scoring", () => {
     ];
 
     const baseline = computeCompositeRiskScoreFromHoverCardSources(baseSources);
-    const partial = computeCompositeRiskScoreFromHoverCardSources(
-      partialMetadataSources
-    );
+    const partial = computeCompositeRiskScoreFromHoverCardSources(partialMetadataSources);
     expect(partial).toEqual(baseline);
     expect(buildHoverCardRiskScoreView(partialMetadataSources).chain).toEqual(
       buildHoverCardRiskScoreView(baseSources).chain
@@ -565,9 +599,7 @@ describe("createHoverCardRiskReasoningSection", () => {
     expect(section.className).toBe(RISK_SCORE_REASONING_SECTION_CLASS);
     expect(section.getAttribute("aria-label")).toBe(RISK_SCORE_REASONING_ARIA_LABEL);
     expect(section.textContent).toContain(RISK_SCORE_REASONING_HEADING);
-    expect(section.querySelector("ol")?.className).toBe(
-      RISK_SCORE_REASONING_CHAIN_CLASS
-    );
+    expect(section.querySelector("ol")?.className).toBe(RISK_SCORE_REASONING_CHAIN_CLASS);
     expect(section.querySelectorAll("li")).toHaveLength(2);
   });
 
@@ -594,9 +626,7 @@ describe("resolveHoverCardRiskScorePresentation", () => {
   };
 
   it("returns unavailable when all enrichment sources are disabled", () => {
-    const presentation = resolveHoverCardRiskScorePresentation(allDisabled, [
-      okAbuse,
-    ]);
+    const presentation = resolveHoverCardRiskScorePresentation(allDisabled, [okAbuse]);
     expect(presentation?.mode).toBe("unavailable");
     if (presentation?.mode !== "unavailable") {
       return;
@@ -622,16 +652,19 @@ describe("resolveHoverCardRiskScorePresentation", () => {
   });
 
   it("returns score without insufficient notice when composite is blendable", () => {
-    const presentation = resolveHoverCardRiskScorePresentation([], [
-      okAbuse,
-      {
-        sourceId: ENRICHMENT_SOURCE.OTX,
-        label: "OTX",
-        status: "ok" as const,
-        badgeText: "Live",
-        detail: "4 threat pulses",
-      },
-    ]);
+    const presentation = resolveHoverCardRiskScorePresentation(
+      [],
+      [
+        okAbuse,
+        {
+          sourceId: ENRICHMENT_SOURCE.OTX,
+          label: "OTX",
+          status: "ok" as const,
+          badgeText: "Live",
+          detail: "4 threat pulses",
+        },
+      ]
+    );
     expect(presentation?.mode).toBe("score");
     if (presentation?.mode !== "score") {
       return;
@@ -735,9 +768,7 @@ describe("resolveRiskScoreReasoningPresentation", () => {
       return;
     }
     expect(presentation.chain.showDisagreement).toBe(true);
-    expect(presentation.chain.disagreementLine).toBe(
-      COMPOSITE_SCORE_DISAGREEMENT_NOTICE
-    );
+    expect(presentation.chain.disagreementLine).toBe(COMPOSITE_SCORE_DISAGREEMENT_NOTICE);
   });
 
   it("returns empty reasoning presentation when no parseable source signals exist", () => {

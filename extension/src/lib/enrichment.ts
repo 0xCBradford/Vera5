@@ -1,7 +1,26 @@
-import type { EnrichmentSourceId } from "./hoverCardEnrichment";
-import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
+import type {
+  EnrichmentAssessmentKind,
+  EnrichmentSourceAssessment,
+  EnrichmentSourceId,
+} from "./enrichmentSourceRegistry";
 import type { IocType } from "./iocRegex";
 import { IOC_TYPE } from "./iocRegex";
+
+const ENRICHMENT_RESULT_SOURCE_LABELS: Record<EnrichmentSourceId, string> = {
+  abuseipdb: "AbuseIPDB",
+  otx: "OTX",
+  virustotal: "VirusTotal",
+  urlscan: "URLScan.io",
+  greynoise: "GreyNoise",
+  shodan: "Shodan",
+  google_safe_browsing: "Google Safe Browsing",
+  pulsedive: "Pulsedive",
+  malwarebazaar: "MalwareBazaar",
+  censys: "Censys",
+  threatfox: "ThreatFox",
+  urlhaus: "URLHaus",
+  rdap_whois: "RDAP/WHOIS",
+};
 
 export const ENRICHMENT_SOURCE_STATUS = {
   OK: "ok",
@@ -37,6 +56,7 @@ export type EnrichmentSourceResult = {
   status: EnrichmentSourceStatus;
   summary?: string;
   tags?: readonly string[];
+  assessment?: EnrichmentSourceAssessment;
   errorCode?: EnrichmentErrorCode;
   errorMessage?: string;
   retryHint?: string;
@@ -77,9 +97,7 @@ export type EnrichmentConnector = {
   healthCheck?(): Promise<ConnectorHealthCheckResult>;
 };
 
-const CONNECTOR_HEALTH_STATUS_SET = new Set<string>(
-  Object.values(CONNECTOR_HEALTH_STATUS)
-);
+const CONNECTOR_HEALTH_STATUS_SET = new Set<string>(Object.values(CONNECTOR_HEALTH_STATUS));
 
 export function isEnrichmentIoc(value: unknown): value is EnrichmentIoc {
   if (typeof value !== "object" || value === null) {
@@ -93,17 +111,12 @@ export function isEnrichmentIoc(value: unknown): value is EnrichmentIoc {
   );
 }
 
-export function isConnectorHealthCheckResult(
-  value: unknown
-): value is ConnectorHealthCheckResult {
+export function isConnectorHealthCheckResult(value: unknown): value is ConnectorHealthCheckResult {
   if (typeof value !== "object" || value === null) {
     return false;
   }
   const record = value as Record<string, unknown>;
-  if (
-    typeof record.status !== "string" ||
-    !CONNECTOR_HEALTH_STATUS_SET.has(record.status)
-  ) {
+  if (typeof record.status !== "string" || !CONNECTOR_HEALTH_STATUS_SET.has(record.status)) {
     return false;
   }
   if (record.message !== undefined && typeof record.message !== "string") {
@@ -112,9 +125,7 @@ export function isConnectorHealthCheckResult(
   return true;
 }
 
-export function isEnrichmentConnector(
-  value: unknown
-): value is EnrichmentConnector {
+export function isEnrichmentConnector(value: unknown): value is EnrichmentConnector {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -122,10 +133,7 @@ export function isEnrichmentConnector(
   if (typeof record.name !== "string" || typeof record.enrich !== "function") {
     return false;
   }
-  if (
-    record.healthCheck !== undefined &&
-    typeof record.healthCheck !== "function"
-  ) {
+  if (record.healthCheck !== undefined && typeof record.healthCheck !== "function") {
     return false;
   }
   return true;
@@ -147,13 +155,11 @@ export async function runConnectorHealthCheck(
   return result;
 }
 
-const ENRICHMENT_SOURCE_STATUS_SET = new Set<string>(
-  Object.values(ENRICHMENT_SOURCE_STATUS)
-);
+const ENRICHMENT_SOURCE_STATUS_SET = new Set<string>(Object.values(ENRICHMENT_SOURCE_STATUS));
 
-const ENRICHMENT_ERROR_CODE_SET = new Set<string>(
-  Object.values(ENRICHMENT_ERROR_CODE)
-);
+const ENRICHMENT_ERROR_CODE_SET = new Set<string>(Object.values(ENRICHMENT_ERROR_CODE));
+
+const ENRICHMENT_ASSESSMENT_KIND_SET = new Set<string>(["risk", "exposure", "context"]);
 
 const IOC_TYPE_SET = new Set<string>(Object.values(IOC_TYPE));
 
@@ -179,21 +185,56 @@ function normalizeStringArray(value: unknown): readonly string[] | undefined {
   return tags.length > 0 ? tags : undefined;
 }
 
-export function isEnrichmentSourceStatus(
-  value: unknown
-): value is EnrichmentSourceStatus {
+export function isEnrichmentSourceStatus(value: unknown): value is EnrichmentSourceStatus {
   return typeof value === "string" && ENRICHMENT_SOURCE_STATUS_SET.has(value);
 }
 
-export function isEnrichmentErrorCode(
-  value: unknown
-): value is EnrichmentErrorCode {
+export function isEnrichmentErrorCode(value: unknown): value is EnrichmentErrorCode {
   return typeof value === "string" && ENRICHMENT_ERROR_CODE_SET.has(value);
 }
 
-export function isEnrichmentSourceResult(
+export function isEnrichmentAssessmentKind(value: unknown): value is EnrichmentAssessmentKind {
+  return typeof value === "string" && ENRICHMENT_ASSESSMENT_KIND_SET.has(value);
+}
+
+export function isEnrichmentSourceAssessment(value: unknown): value is EnrichmentSourceAssessment {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    !isEnrichmentAssessmentKind(record.kind) ||
+    !isNonEmptyString(record.verdict) ||
+    !Array.isArray(record.evidence) ||
+    record.evidence.length === 0 ||
+    record.evidence.some((entry) => !isNonEmptyString(entry))
+  ) {
+    return false;
+  }
+  return (
+    record.signal === undefined ||
+    (typeof record.signal === "number" &&
+      Number.isFinite(record.signal) &&
+      record.signal >= 0 &&
+      record.signal <= 100)
+  );
+}
+
+export function normalizeEnrichmentSourceAssessment(
   value: unknown
-): value is EnrichmentSourceResult {
+): EnrichmentSourceAssessment | null {
+  if (!isEnrichmentSourceAssessment(value)) {
+    return null;
+  }
+  return {
+    kind: value.kind,
+    ...(value.signal === undefined ? {} : { signal: Math.round(value.signal) }),
+    verdict: value.verdict.trim(),
+    evidence: value.evidence.map((entry) => entry.trim()),
+  };
+}
+
+export function isEnrichmentSourceResult(value: unknown): value is EnrichmentSourceResult {
   if (typeof value !== "object" || value === null) {
     return false;
   }
@@ -211,34 +252,25 @@ export function isEnrichmentSourceResult(
   if (record.tags !== undefined && normalizeStringArray(record.tags) === undefined) {
     return false;
   }
-  if (
-    record.errorCode !== undefined &&
-    !isEnrichmentErrorCode(record.errorCode)
-  ) {
+  if (record.assessment !== undefined && !isEnrichmentSourceAssessment(record.assessment)) {
     return false;
   }
-  if (
-    record.errorMessage !== undefined &&
-    typeof record.errorMessage !== "string"
-  ) {
+  if (record.errorCode !== undefined && !isEnrichmentErrorCode(record.errorCode)) {
+    return false;
+  }
+  if (record.errorMessage !== undefined && typeof record.errorMessage !== "string") {
     return false;
   }
   if (record.retryHint !== undefined && typeof record.retryHint !== "string") {
     return false;
   }
-  if (
-    record.fetchedAt !== undefined &&
-    !isIso8601Timestamp(record.fetchedAt)
-  ) {
+  if (record.fetchedAt !== undefined && !isIso8601Timestamp(record.fetchedAt)) {
     return false;
   }
   if (record.fromCache !== undefined && typeof record.fromCache !== "boolean") {
     return false;
   }
-  if (
-    record.rawVendorJson !== undefined &&
-    typeof record.rawVendorJson !== "string"
-  ) {
+  if (record.rawVendorJson !== undefined && typeof record.rawVendorJson !== "string") {
     return false;
   }
   return true;
@@ -262,9 +294,7 @@ export function isEnrichmentResult(value: unknown): value is EnrichmentResult {
   return record.sources.every((entry) => isEnrichmentSourceResult(entry));
 }
 
-export function normalizeEnrichmentSourceResult(
-  value: unknown
-): EnrichmentSourceResult | null {
+export function normalizeEnrichmentSourceResult(value: unknown): EnrichmentSourceResult | null {
   if (!isEnrichmentSourceResult(value)) {
     return null;
   }
@@ -281,6 +311,10 @@ export function normalizeEnrichmentSourceResult(
   const tags = normalizeStringArray(record.tags);
   if (tags) {
     normalized.tags = tags;
+  }
+  const assessment = normalizeEnrichmentSourceAssessment(record.assessment);
+  if (assessment) {
+    normalized.assessment = assessment;
   }
   if (record.errorCode) {
     normalized.errorCode = record.errorCode;
@@ -306,9 +340,7 @@ export function normalizeEnrichmentSourceResult(
   return normalized;
 }
 
-export function normalizeEnrichmentResult(
-  value: unknown
-): EnrichmentResult | null {
+export function normalizeEnrichmentResult(value: unknown): EnrichmentResult | null {
   if (!isEnrichmentResult(value)) {
     return null;
   }
@@ -322,6 +354,117 @@ export function normalizeEnrichmentResult(
     sources,
     cached: record.cached,
     lastUpdated: record.lastUpdated,
+  };
+}
+
+function clampAssessmentSignal(value: number): number {
+  return Math.min(100, Math.max(0, Math.round(value)));
+}
+
+function reportCountAssessmentSignal(count: number): number {
+  if (count <= 0) return 0;
+  if (count === 1) return 22;
+  if (count <= 3) return 38;
+  if (count <= 8) return 54;
+  if (count <= 20) return 68;
+  if (count <= 45) return 82;
+  return Math.min(100, 88 + Math.floor((count - 45) / 30));
+}
+
+function pulseCountAssessmentSignal(count: number): number {
+  if (count <= 0) return 0;
+  if (count === 1) return 26;
+  if (count <= 4) return 42;
+  if (count <= 12) return 56;
+  if (count <= 35) return 71;
+  return Math.min(100, 78 + Math.min(22, Math.floor((count - 35) / 8)));
+}
+
+function parseFirstSummaryCount(summary: string): number | null {
+  const match = /^(\d+)/.exec(summary);
+  return match ? Number(match[1]) : null;
+}
+
+function presentationRiskSignal(
+  sourceId: EnrichmentSourceId,
+  summary: string,
+  tags: readonly string[]
+): number | null {
+  const lower = summary.trim().toLowerCase();
+  const count = parseFirstSummaryCount(summary);
+  if (sourceId === "abuseipdb") {
+    if (lower.endsWith(" abuse confidence") && count !== null) {
+      return clampAssessmentSignal(count);
+    }
+    if (lower.endsWith(" reports") && count !== null) {
+      return reportCountAssessmentSignal(count);
+    }
+  }
+  if (sourceId === "otx" && lower.includes("threat pulse") && count !== null) {
+    return pulseCountAssessmentSignal(count);
+  }
+  if (sourceId === "virustotal") {
+    if (lower === "no vendor detections recorded") return 5;
+    if (lower.includes("malicious detection") && count !== null) {
+      return clampAssessmentSignal(45 + count * 8);
+    }
+    if (lower.includes("suspicious detection") && count !== null) {
+      return clampAssessmentSignal(28 + count * 6);
+    }
+    if (lower.includes("harmless detection")) return 8;
+  }
+  if (sourceId === "urlscan" && lower.includes("urlscan result") && count !== null) {
+    return tags.some((tag) => tag.toLowerCase() === "malicious")
+      ? 78
+      : reportCountAssessmentSignal(count);
+  }
+  if (sourceId === "greynoise") {
+    if (lower === "benign riot service") return 8;
+    if (lower === "not observed in greynoise") return 5;
+    if (lower.startsWith("malicious")) return 72;
+    if (lower.startsWith("benign")) return 12;
+    if (lower.startsWith("unknown")) return 45;
+  }
+  return null;
+}
+
+function presentationAssessmentVerdict(
+  kind: EnrichmentSourceAssessment["kind"],
+  signal: number | null,
+  summary: string
+): string {
+  if (kind === "exposure") {
+    return /^no\s/i.test(summary) ? "No exposure observed" : "Exposure observed";
+  }
+  if (kind === "context") {
+    return "Registration context";
+  }
+  if (signal === null) return "Risk evidence available";
+  if (signal <= 24) return "Low risk signal";
+  if (signal <= 49) return "Suspicious signal";
+  if (signal <= 74) return "High risk signal";
+  return "Critical risk signal";
+}
+
+export function buildEnrichmentAssessmentFromPresentation(input: {
+  sourceId: EnrichmentSourceId;
+  summary: string;
+  tags?: readonly string[];
+}): EnrichmentSourceAssessment {
+  const summary = input.summary.trim();
+  const tags = (input.tags ?? []).map((tag) => tag.trim()).filter(Boolean);
+  const kind: EnrichmentAssessmentKind =
+    input.sourceId === "shodan" || input.sourceId === "censys"
+      ? "exposure"
+      : input.sourceId === "rdap_whois"
+        ? "context"
+        : "risk";
+  const signal = kind === "risk" ? presentationRiskSignal(input.sourceId, summary, tags) : null;
+  return {
+    kind,
+    ...(signal === null ? {} : { signal }),
+    verdict: presentationAssessmentVerdict(kind, signal, summary),
+    evidence: [summary, ...tags].filter(Boolean).slice(0, 4),
   };
 }
 
@@ -346,7 +489,7 @@ export function createSkippedSourceResult(
 ): EnrichmentSourceResult {
   const result: EnrichmentSourceResult = {
     sourceId,
-    sourceLabel: ENRICHMENT_SOURCE_LABELS[sourceId],
+    sourceLabel: ENRICHMENT_RESULT_SOURCE_LABELS[sourceId],
     status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
     errorCode,
   };
@@ -361,13 +504,14 @@ export function createOkSourceResult(input: {
   sourceId: EnrichmentSourceId;
   summary: string;
   tags?: readonly string[];
+  assessment?: EnrichmentSourceAssessment;
   fetchedAt?: string;
   fromCache?: boolean;
   rawVendorJson?: string;
 }): EnrichmentSourceResult {
   const result: EnrichmentSourceResult = {
     sourceId: input.sourceId,
-    sourceLabel: ENRICHMENT_SOURCE_LABELS[input.sourceId],
+    sourceLabel: ENRICHMENT_RESULT_SOURCE_LABELS[input.sourceId],
     status: ENRICHMENT_SOURCE_STATUS.OK,
     summary: input.summary.trim(),
   };
@@ -375,6 +519,13 @@ export function createOkSourceResult(input: {
   if (tags) {
     result.tags = tags;
   }
+  result.assessment =
+    normalizeEnrichmentSourceAssessment(input.assessment) ??
+    buildEnrichmentAssessmentFromPresentation({
+      sourceId: input.sourceId,
+      summary: result.summary ?? "",
+      tags: result.tags,
+    });
   if (input.fetchedAt) {
     result.fetchedAt = input.fetchedAt;
   }
@@ -397,7 +548,7 @@ export function createErrorSourceResult(input: {
 }): EnrichmentSourceResult {
   const result: EnrichmentSourceResult = {
     sourceId: input.sourceId,
-    sourceLabel: ENRICHMENT_SOURCE_LABELS[input.sourceId],
+    sourceLabel: ENRICHMENT_RESULT_SOURCE_LABELS[input.sourceId],
     status: ENRICHMENT_SOURCE_STATUS.ERROR,
     errorCode: input.errorCode,
   };
@@ -457,9 +608,7 @@ export function parseRateLimitHeaders(headers: Headers): RateLimitSnapshot | nul
   const resetEpochSeconds = parseRateLimitInteger(headers.get("x-ratelimit-reset"));
   const retryAfterSeconds = parseRetryAfterSeconds(headers.get("retry-after"));
   const resetAt =
-    resetEpochSeconds !== undefined
-      ? new Date(resetEpochSeconds * 1000).toISOString()
-      : undefined;
+    resetEpochSeconds !== undefined ? new Date(resetEpochSeconds * 1000).toISOString() : undefined;
 
   if (
     limit === undefined &&
@@ -502,9 +651,7 @@ export function formatRateLimitedBackoffMessage(sourceLabel: string): string {
   return `${label} rate limit reached. Back off before retrying.`;
 }
 
-export function formatRateLimitRetryHintText(
-  snapshot: RateLimitSnapshot | null
-): string {
+export function formatRateLimitRetryHintText(snapshot: RateLimitSnapshot | null): string {
   if (!snapshot) {
     return "Try again later.";
   }
@@ -530,14 +677,8 @@ export function buildRateLimitedEnrichmentError(
   };
 }
 
-export function buildRateLimitedErrorMessage(
-  baseMessage: string,
-  headers: Headers
-): string {
-  return formatRateLimitRetryHint(
-    baseMessage,
-    parseRateLimitHeaders(headers)
-  );
+export function buildRateLimitedErrorMessage(baseMessage: string, headers: Headers): string {
+  return formatRateLimitRetryHint(baseMessage, parseRateLimitHeaders(headers));
 }
 
 export function formatMissingKeyErrorMessage(sourceLabel: string): string {
@@ -560,9 +701,7 @@ export function isRateLimitedError(
   return errorCode === ENRICHMENT_ERROR_CODE.RATE_LIMITED;
 }
 
-export function parseRetryAfterSecondsFromHint(
-  retryHint?: string
-): number | undefined {
+export function parseRetryAfterSecondsFromHint(retryHint?: string): number | undefined {
   const trimmed = retryHint?.trim();
   if (!trimmed) {
     return undefined;

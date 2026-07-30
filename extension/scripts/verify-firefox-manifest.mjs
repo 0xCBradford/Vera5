@@ -2,22 +2,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const extensionRoot = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  ".."
-);
+const extensionRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const chromeManifestPath = path.join(extensionRoot, "public", "manifest.json");
-const firefoxManifestPath = path.join(
-  extensionRoot,
-  "public",
-  "manifest.firefox.json"
-);
-const iocRequestBoundariesPath = path.join(
-  extensionRoot,
-  "src",
-  "lib",
-  "iocRequestBoundaries.ts"
-);
+const firefoxManifestPath = path.join(extensionRoot, "public", "manifest.firefox.json");
+const iocRequestBoundariesPath = path.join(extensionRoot, "src", "lib", "iocRequestBoundaries.ts");
 
 function readDeclaredEnrichmentApiHosts() {
   const source = fs.readFileSync(iocRequestBoundariesPath, "utf8");
@@ -25,9 +13,7 @@ function readDeclaredEnrichmentApiHosts() {
     /export const DECLARED_ENRICHMENT_API_HOSTS[^=]*=\s*\[([\s\S]*?)\]\s*as const/
   );
   if (!match) {
-    fail(
-      "could not parse DECLARED_ENRICHMENT_API_HOSTS from iocRequestBoundaries.ts"
-    );
+    fail("could not parse DECLARED_ENRICHMENT_API_HOSTS from iocRequestBoundaries.ts");
   }
   const hosts = [...match[1].matchAll(/"([^"]+)"/g)].map((entry) => entry[1]);
   if (hosts.length === 0) {
@@ -53,9 +39,7 @@ function manifestHostPatternCoversHttpsHostname(pattern, hostname) {
 
 function checkManifestCsp(manifestPath) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  const csp =
-    manifest.content_security_policy?.extension_pages ??
-    manifest.content_security_policy;
+  const csp = manifest.content_security_policy?.extension_pages ?? manifest.content_security_policy;
   if (typeof csp !== "string") {
     return;
   }
@@ -85,9 +69,7 @@ function checkManifestDeclaredHostPermissions(manifestLabel, manifest, declaredH
       );
     }
     if (
-      !hostPermissions.some((pattern) =>
-        manifestHostPatternCoversHttpsHostname(pattern, hostname)
-      )
+      !hostPermissions.some((pattern) => manifestHostPatternCoversHttpsHostname(pattern, hostname))
     ) {
       fail(
         `${manifestLabel} host_permissions do not cover declared enrichment API host: ${hostname}`
@@ -97,8 +79,8 @@ function checkManifestDeclaredHostPermissions(manifestLabel, manifest, declaredH
 }
 
 // Permissions that exist only on the Chromium build. The native Side Panel is
-// Chromium-only (`chrome.sidePanel`); Firefox keeps its declared popup action
-// instead, so the manifests intentionally diverge by exactly these entries.
+// Chromium-only (`chrome.sidePanel`); Firefox uses `sidebar_action`, so the
+// manifests intentionally diverge by exactly these entries.
 const CHROME_ONLY_PERMISSIONS = new Set(["sidePanel"]);
 
 function checkManifestRemoteOriginPosture(manifestLabel, manifest, chromeManifest) {
@@ -106,16 +88,16 @@ function checkManifestRemoteOriginPosture(manifestLabel, manifest, chromeManifes
     fail(`${manifestLabel} options_page must match Chrome manifest.json`);
   }
 
-  // Chromium drives its action via the native Side Panel and therefore omits
-  // action.default_popup. Firefox retains popup.html as its action surface.
+  // Both browser targets omit action.default_popup so the toolbar action can
+  // open the canonical persistent workspace.
   if (chromeManifest.side_panel?.default_path) {
     if (chromeManifest.action?.default_popup) {
       fail(
         "Chrome manifest.json must not declare action.default_popup while using side_panel (the popup would preempt openPanelOnActionClick)"
       );
     }
-    if (!manifest.action?.default_popup) {
-      fail(`${manifestLabel} must keep action.default_popup as its action surface`);
+    if (manifest.action?.default_popup) {
+      fail(`${manifestLabel} must not declare action.default_popup`);
     }
     if (manifest.side_panel) {
       fail(`${manifestLabel} must not declare side_panel (Chromium-only API)`);
@@ -124,13 +106,9 @@ function checkManifestRemoteOriginPosture(manifestLabel, manifest, chromeManifes
     // via sidebar_action pointed at the shared side-panel document. Chromium
     // ignores sidebar_action, so the two surfaces are declared per-browser.
     if (chromeManifest.sidebar_action) {
-      fail(
-        "Chrome manifest.json must not declare sidebar_action (Firefox-only API)"
-      );
+      fail("Chrome manifest.json must not declare sidebar_action (Firefox-only API)");
     }
-    if (
-      manifest.sidebar_action?.default_panel !== chromeManifest.side_panel.default_path
-    ) {
+    if (manifest.sidebar_action?.default_panel !== chromeManifest.side_panel.default_path) {
       fail(
         `${manifestLabel} must host the workspace via sidebar_action.default_panel (${chromeManifest.side_panel.default_path})`
       );
@@ -164,7 +142,9 @@ function assertEqualArrays(label, left, right) {
   const leftJson = JSON.stringify(left ?? []);
   const rightJson = JSON.stringify(right ?? []);
   if (leftJson !== rightJson) {
-    fail(`${label} must match Chrome manifest.json:\n  chrome: ${leftJson}\n  firefox: ${rightJson}`);
+    fail(
+      `${label} must match Chrome manifest.json:\n  chrome: ${leftJson}\n  firefox: ${rightJson}`
+    );
   }
 }
 
@@ -184,10 +164,7 @@ if (!Array.isArray(gecko.data_collection_permissions?.required)) {
   fail("browser_specific_settings.gecko.data_collection_permissions.required must be set");
 }
 
-if (
-  JSON.stringify(gecko.data_collection_permissions.required) !==
-  JSON.stringify(["none"])
-) {
+if (JSON.stringify(gecko.data_collection_permissions.required) !== JSON.stringify(["none"])) {
   fail(
     'browser_specific_settings.gecko.data_collection_permissions.required must be ["none"] (no Mozilla data collection declared)'
   );
@@ -196,8 +173,8 @@ if (
 const chromeSharedPermissions = (chrome.permissions ?? []).filter(
   (permission) => !CHROME_ONLY_PERMISSIONS.has(permission)
 );
-const firefoxChromeOnlyPermissions = (firefox.permissions ?? []).filter(
-  (permission) => CHROME_ONLY_PERMISSIONS.has(permission)
+const firefoxChromeOnlyPermissions = (firefox.permissions ?? []).filter((permission) =>
+  CHROME_ONLY_PERMISSIONS.has(permission)
 );
 if (firefoxChromeOnlyPermissions.length > 0) {
   fail(
@@ -205,11 +182,7 @@ if (firefoxChromeOnlyPermissions.length > 0) {
   );
 }
 assertEqualArrays("permissions", chromeSharedPermissions, firefox.permissions);
-assertEqualArrays(
-  "host_permissions",
-  chrome.host_permissions,
-  firefox.host_permissions
-);
+assertEqualArrays("host_permissions", chrome.host_permissions, firefox.host_permissions);
 
 if (!Array.isArray(firefox.background?.scripts) || firefox.background.scripts.length === 0) {
   fail("Firefox background must declare scripts[] for MV3 event background");
@@ -240,16 +213,8 @@ if (JSON.stringify(chrome.commands) !== JSON.stringify(firefox.commands)) {
 }
 
 const declaredEnrichmentApiHosts = readDeclaredEnrichmentApiHosts();
-checkManifestDeclaredHostPermissions(
-  "manifest.json",
-  chrome,
-  declaredEnrichmentApiHosts
-);
-checkManifestDeclaredHostPermissions(
-  "manifest.firefox.json",
-  firefox,
-  declaredEnrichmentApiHosts
-);
+checkManifestDeclaredHostPermissions("manifest.json", chrome, declaredEnrichmentApiHosts);
+checkManifestDeclaredHostPermissions("manifest.firefox.json", firefox, declaredEnrichmentApiHosts);
 
 checkManifestCsp(chromeManifestPath);
 checkManifestCsp(firefoxManifestPath);

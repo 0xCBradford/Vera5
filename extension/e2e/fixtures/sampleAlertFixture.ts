@@ -39,9 +39,10 @@ export const COMMAND_PALETTE_DIALOG_ARIA_LABEL = "Vera5 command palette";
 export const COMMAND_PALETTE_FILTER_ARIA_LABEL = "Filter commands";
 export const COMMAND_PALETTE_SCAN_COMMAND_LABEL = "Scan page";
 
-export const EXPECTED_SAMPLE_ALERT_DETECTED_IOC_COUNT = 11;
+export const EXPECTED_SAMPLE_ALERT_HIGHLIGHT_COUNT = 11;
+export const EXPECTED_SAMPLE_ALERT_DETECTED_IOC_COUNT = 12;
 
-export const EXPECTED_SAMPLE_ALERT_IOC_VALUES = [
+export const EXPECTED_SAMPLE_ALERT_HIGHLIGHT_IOC_VALUES = [
   "192.0.2.1",
   "8.8.8.8",
   "malware.testcategory.com",
@@ -53,6 +54,11 @@ export const EXPECTED_SAMPLE_ALERT_IOC_VALUES = [
   "CVE-2021-44228",
   "CVE-2017-0144",
   "analyst@example.com",
+] as const;
+
+export const EXPECTED_SAMPLE_ALERT_IOC_VALUES = [
+  ...EXPECTED_SAMPLE_ALERT_HIGHLIGHT_IOC_VALUES,
+  "https://example.com/login?ref=analyst",
 ] as const;
 
 export const EXPECTED_SAMPLE_ALERT_SCAN_CLIPBOARD_ORDER = [
@@ -67,6 +73,7 @@ export const EXPECTED_SAMPLE_ALERT_SCAN_CLIPBOARD_ORDER = [
   "098f6bcd4621d373cade4e832627b4f6",
   "CVE-2017-0144",
   "analyst@example.com",
+  "https://example.com/login?ref=analyst",
 ] as const;
 
 export const EXPECTED_SAMPLE_ALERT_COPY_ALL_CLIPBOARD_TEXT =
@@ -76,8 +83,7 @@ export const HOVER_CARD_COPY_ALL_SUCCESS_MESSAGE = `Copied ${EXPECTED_SAMPLE_ALE
 
 export const HOVER_CARD_COPY_DROPDOWN_ARIA_LABEL = "Copy case artifacts to the clipboard";
 
-export const POPUP_INVESTIGATION_SESSION_SECTION_ARIA_LABEL =
-  "Investigation session";
+export const POPUP_INVESTIGATION_SESSION_SECTION_ARIA_LABEL = "Investigation session";
 export const HOVER_CARD_IOC_PIN_ARIA_LABEL = "Pin indicator for triage priority";
 export const HOVER_CARD_IOC_PINNED_LABEL = "Pinned";
 
@@ -108,33 +114,36 @@ export async function scanSampleAlertPage(
   if (!hasExtensionServiceWorker(context, extensionId)) {
     await postExamplesFixtureBridgeMessage(page, "scanPage");
   } else {
-    await evaluateInExtensionRuntime(context, extensionId, async (contentUrl) => {
-      const tabs = await chrome.tabs.query({});
-      const tab = tabs.find((entry) => entry.url === contentUrl);
-      if (!tab?.id) {
-        throw new Error("No content tab for scan request");
-      }
-      await chrome.tabs.sendMessage(tab.id, { type: "SCAN_PAGE" });
-    }, page.url());
+    await evaluateInExtensionRuntime(
+      context,
+      extensionId,
+      async (contentUrl) => {
+        const tabs = await chrome.tabs.query({});
+        const tab = tabs.find((entry) => entry.url === contentUrl);
+        if (!tab?.id) {
+          throw new Error("No content tab for scan request");
+        }
+        await chrome.tabs.sendMessage(tab.id, { type: "SCAN_PAGE" });
+      },
+      page.url()
+    );
   }
 
   await expect
     .poll(async () => page.locator(E2E_SELECTORS.iocHighlight).count(), {
       timeout: 15_000,
     })
-    .toBe(EXPECTED_SAMPLE_ALERT_DETECTED_IOC_COUNT);
+    .toBe(EXPECTED_SAMPLE_ALERT_HIGHLIGHT_COUNT);
 }
 
 export async function expectSampleAlertHighlightResults(page: Page): Promise<void> {
   await expect(page.locator(E2E_SELECTORS.iocHighlight)).toHaveCount(
-    EXPECTED_SAMPLE_ALERT_DETECTED_IOC_COUNT
+    EXPECTED_SAMPLE_ALERT_HIGHLIGHT_COUNT
   );
 
-  for (const value of EXPECTED_SAMPLE_ALERT_IOC_VALUES) {
+  for (const value of EXPECTED_SAMPLE_ALERT_HIGHLIGHT_IOC_VALUES) {
     await expect(
-      page.locator(
-        `${E2E_SELECTORS.iocHighlight}[data-vera5-value="${value}"]`
-      )
+      page.locator(`${E2E_SELECTORS.iocHighlight}[data-vera5-value="${value}"]`)
     ).toHaveCount(1);
   }
 }
@@ -151,7 +160,7 @@ export async function openPopupPageInBackground(
   const popupPagePromise = context.waitForEvent("page");
   await serviceWorker!.evaluate(async (id) => {
     await chrome.tabs.create({
-      url: `chrome-extension://${id}/popup.html`,
+      url: `chrome-extension://${id}/sidepanel.html`,
       active: false,
     });
   }, extensionId);
@@ -174,9 +183,7 @@ export async function expectSampleAlertTrayResults(popupPage: Page): Promise<voi
 
   for (const value of EXPECTED_SAMPLE_ALERT_IOC_VALUES) {
     await expect(
-      popupPage.locator(
-        `${E2E_SELECTORS.trayEntry}[data-vera5-value="${value}"]`
-      )
+      popupPage.locator(`${E2E_SELECTORS.trayEntry}[data-vera5-value="${value}"]`)
     ).toHaveCount(1);
     await expect(
       popupPage.getByRole("button", { name: `View ${value} on page`, exact: true })
@@ -188,9 +195,7 @@ export async function openHoverCardForSampleAlertIoc(
   page: Page,
   value: string = SAMPLE_ALERT_HOVER_CARD_IOC_VALUE
 ): Promise<void> {
-  const highlight = page.locator(
-    `${E2E_SELECTORS.iocHighlight}[data-vera5-value="${value}"]`
-  );
+  const highlight = page.locator(`${E2E_SELECTORS.iocHighlight}[data-vera5-value="${value}"]`);
   await highlight.locator(E2E_SELECTORS.iocEnrichIcon).click({ force: true });
   await page.locator(E2E_SELECTORS.hoverCardPanel).waitFor({
     state: "visible",
@@ -202,9 +207,7 @@ export async function openHoverCardByHighlightClick(
   page: Page,
   value: string = SAMPLE_ALERT_HOVER_CARD_IOC_VALUE
 ): Promise<void> {
-  const highlight = page.locator(
-    `${E2E_SELECTORS.iocHighlight}[data-vera5-value="${value}"]`
-  );
+  const highlight = page.locator(`${E2E_SELECTORS.iocHighlight}[data-vera5-value="${value}"]`);
   await highlight.click({ force: true });
   await page.locator(E2E_SELECTORS.hoverCardPanel).waitFor({
     state: "visible",
@@ -212,10 +215,7 @@ export async function openHoverCardByHighlightClick(
   });
 }
 
-export async function installClipboardWriteCapture(
-  page: Page,
-  origin: string
-): Promise<void> {
+export async function installClipboardWriteCapture(page: Page, origin: string): Promise<void> {
   const browserName = page.context().browser()?.browserType().name();
   if (browserName !== "firefox") {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
@@ -224,9 +224,8 @@ export async function installClipboardWriteCapture(
   }
   await page.addInitScript(() => {
     const writes: string[] = [];
-    (
-      window as unknown as { __vera5E2eClipboardWrites?: string[] }
-    ).__vera5E2eClipboardWrites = writes;
+    (window as unknown as { __vera5E2eClipboardWrites?: string[] }).__vera5E2eClipboardWrites =
+      writes;
     if (!navigator.clipboard?.writeText) {
       return;
     }
@@ -240,9 +239,8 @@ export async function installClipboardWriteCapture(
 
 export async function readCapturedClipboardText(page: Page): Promise<string> {
   const text = await page.evaluate(async () => {
-    const writes = (
-      window as unknown as { __vera5E2eClipboardWrites?: string[] }
-    ).__vera5E2eClipboardWrites;
+    const writes = (window as unknown as { __vera5E2eClipboardWrites?: string[] })
+      .__vera5E2eClipboardWrites;
     if (writes && writes.length > 0) {
       return writes[writes.length - 1] ?? "";
     }
@@ -276,9 +274,7 @@ export async function runCopyAllFromHoverCard(page: Page): Promise<void> {
   });
 }
 
-export async function expectHoverCardCopyAllClipboardResult(
-  page: Page
-): Promise<void> {
+export async function expectHoverCardCopyAllClipboardResult(page: Page): Promise<void> {
   await expect
     .poll(async () => readCapturedClipboardText(page), { timeout: 15_000 })
     .toBe(EXPECTED_SAMPLE_ALERT_COPY_ALL_CLIPBOARD_TEXT);
@@ -334,9 +330,9 @@ export async function toggleCommandPaletteOnActiveTab(
 }
 
 export async function openCommandPalette(page: Page): Promise<void> {
-  await expect(
-    page.getByRole("dialog", { name: COMMAND_PALETTE_DIALOG_ARIA_LABEL })
-  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("dialog", { name: COMMAND_PALETTE_DIALOG_ARIA_LABEL })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.locator(E2E_SELECTORS.commandPaletteInput)).toBeVisible();
 }
 
@@ -347,7 +343,7 @@ export async function runScanPageCommandFromPalette(page: Page): Promise<void> {
   await expect(
     page.getByRole("option", { name: COMMAND_PALETTE_SCAN_COMMAND_LABEL })
   ).toBeVisible();
-  await input.press("Enter");
+  await page.locator(E2E_SELECTORS.commandPaletteScanCommand).click();
   await expect(page.locator(E2E_SELECTORS.commandPaletteHost)).toBeHidden({
     timeout: 15_000,
   });
@@ -373,9 +369,7 @@ export async function ensurePopupInvestigationSession(popupPage: Page): Promise<
   });
   await expect(section).toBeVisible({ timeout: 15_000 });
 
-  if (
-    (await section.textContent())?.includes("No active investigation session")
-  ) {
+  if ((await section.textContent())?.includes("No active investigation session")) {
     await popupPage.getByRole("button", { name: "New session", exact: true }).click();
   }
 
@@ -386,9 +380,7 @@ export async function activatePopupTrayEntry(
   popupPage: Page,
   value: string = SAMPLE_ALERT_HOVER_CARD_IOC_VALUE
 ): Promise<void> {
-  await popupPage
-    .getByRole("button", { name: `View ${value} on page`, exact: true })
-    .click();
+  await popupPage.getByRole("button", { name: `View ${value} on page`, exact: true }).click();
 }
 
 export async function runPopupTrayNavigationOnContentTab(
@@ -491,9 +483,7 @@ export async function savePopupTrayIocToNewCollection(
   collectionName: string,
   value: string = SAMPLE_ALERT_HOVER_CARD_IOC_VALUE
 ): Promise<void> {
-  const trayEntry = popupPage.locator(
-    `${E2E_SELECTORS.trayEntry}[data-vera5-value="${value}"]`
-  );
+  const trayEntry = popupPage.locator(`${E2E_SELECTORS.trayEntry}[data-vera5-value="${value}"]`);
   await expect(trayEntry).toHaveCount(1);
   await trayEntry
     .getByRole("button", {
@@ -501,9 +491,7 @@ export async function savePopupTrayIocToNewCollection(
       exact: true,
     })
     .click();
-  await expect(
-    popupPage.getByRole("group", { name: IOC_COLLECTION_PICKER_HEADING })
-  ).toBeVisible();
+  await expect(popupPage.getByRole("group", { name: IOC_COLLECTION_PICKER_HEADING })).toBeVisible();
   await popupPage.getByLabel(IOC_COLLECTION_NEW_NAME_PLACEHOLDER).fill(collectionName);
   await popupPage
     .getByRole("button", { name: IOC_COLLECTION_SAVE_TO_NEW_LABEL, exact: true })
@@ -536,9 +524,7 @@ export async function exportPopupCollectionCsv(
   });
   const slug = buildCollectionExportFilenameSlug(collectionName);
   const downloadPromise = popupPage.waitForEvent("download");
-  await section
-    .getByRole("button", { name: IOC_COLLECTION_EXPORT_CSV_LABEL, exact: true })
-    .click();
+  await section.getByRole("button", { name: IOC_COLLECTION_EXPORT_CSV_LABEL, exact: true }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(
     new RegExp(`^vera5-collection-${slug}-\\d{4}-\\d{2}-\\d{2}\\.csv$`)
@@ -554,7 +540,5 @@ export async function expectCollectionCsvExportContent(
 ): Promise<void> {
   expect(csv.startsWith(INVESTIGATION_SESSION_EXPORT_CSV_HEADER)).toBe(true);
   expect(csv).toContain(`${value},ipv4`);
-  expect(csv.split("\n").filter((line) => line.length > 0).length).toBeGreaterThanOrEqual(
-    2
-  );
+  expect(csv.split("\n").filter((line) => line.length > 0).length).toBeGreaterThanOrEqual(2);
 }

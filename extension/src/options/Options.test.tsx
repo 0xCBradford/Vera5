@@ -38,14 +38,11 @@ import {
   TEST_FIXTURE_STORED_API_KEY,
   TEST_FIXTURE_URLSCAN_API_KEY,
 } from "../lib/fixtureSecrets";
-import { ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE } from "../lib/enrichmentSourceOps";
+import { ENRICHMENT_SOURCE_OPS_WORKSPACE_GUIDANCE } from "../lib/enrichmentSourceOps";
 import { maskApiKeyForDisplay } from "../lib/storage";
 import { Options } from "./Options";
 
-const IOC_TYPE_OPTION_LABELS: Record<
-  (typeof IOC_TYPE_SETTINGS_ORDER)[number],
-  string
-> = {
+const IOC_TYPE_OPTION_LABELS: Record<(typeof IOC_TYPE_SETTINGS_ORDER)[number], string> = {
   ipv4: "IPv4 addresses",
   domain: "Domain names",
   url: "URLs",
@@ -122,47 +119,25 @@ describe("Options API key inputs", () => {
       await Promise.resolve();
     });
 
-    expect(
-      mounted.container.querySelector('input[aria-label="Enable AbuseIPDB"]')
-    ).not.toBeNull();
-    expect(
-      mounted.container.querySelector('input[aria-label="Enable OTX"]')
-    ).not.toBeNull();
-    expect(
-      mounted.container.querySelector('input[aria-label="Enable URLScan.io"]')
-    ).not.toBeNull();
-    expect(
-      mounted.container.querySelector('input[aria-label="Enable GreyNoise"]')
-    ).not.toBeNull();
-    expect(
-      mounted.container.querySelector('input[aria-label="Enable VirusTotal"]')
-    ).not.toBeNull();
-    expect(
-      mounted.container.querySelector('input[aria-label="Enable Shodan"]')
-    ).not.toBeNull();
-    expect(
-      mounted.container.querySelector('input[aria-label="Enable Censys"]')
-    ).not.toBeNull();
-    expect(
-      mounted.container.querySelector('input[aria-label="Enable RDAP/WHOIS"]')
-    ).not.toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="Enable AbuseIPDB"]')).not.toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="Enable OTX"]')).not.toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="Enable URLScan.io"]')).not.toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="Enable GreyNoise"]')).not.toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="Enable VirusTotal"]')).not.toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="Enable Shodan"]')).not.toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="Enable Censys"]')).not.toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="Enable RDAP/WHOIS"]')).not.toBeNull();
   });
 
-  it("points source health to the popup instead of a duplicate panel", async () => {
+  it("points source health to the workspace instead of a duplicate panel", async () => {
     mounted = renderOptions();
     await act(async () => {
       await Promise.resolve();
     });
 
-    expect(mounted.container.textContent).toContain(
-      ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE
-    );
-    expect(mounted.container.textContent).not.toContain(
-      "Source health monitoring coming soon."
-    );
-    expect(
-      mounted.container.querySelectorAll(".v5-source__health").length
-    ).toBe(0);
+    expect(mounted.container.textContent).toContain(ENRICHMENT_SOURCE_OPS_WORKSPACE_GUIDANCE);
+    expect(mounted.container.textContent).not.toContain("Source health monitoring coming soon.");
+    expect(mounted.container.querySelectorAll(".v5-source__health").length).toBe(0);
     expect(mounted.container.textContent).not.toContain("Last status:");
     expect(mounted.container.textContent).not.toContain("Vendor quota:");
   });
@@ -212,9 +187,7 @@ describe("Options API key inputs", () => {
     await vi.waitFor(() => {
       expect(mounted!.container.querySelector('[role="dialog"]')).not.toBeNull();
     });
-    expect(mounted.container.textContent).toContain(
-      "Enable link attribute scanning?"
-    );
+    expect(mounted.container.textContent).toContain("Enable link attribute scanning?");
     expect(
       mounted.container.querySelector(
         'a[href*="docs/security-model.md#opt-in-attribute-and-href-extraction"]'
@@ -222,9 +195,9 @@ describe("Options API key inputs", () => {
     ).not.toBeNull();
     expect(attributeToggle.checked).toBe(false);
 
-    const cancelButton = Array.from(
-      mounted.container.querySelectorAll("button")
-    ).find((button) => button.textContent === "Cancel");
+    const cancelButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Cancel"
+    );
     cancelButton?.click();
     await act(async () => {
       await Promise.resolve();
@@ -248,9 +221,9 @@ describe("Options API key inputs", () => {
       await Promise.resolve();
     });
 
-    const confirmButton = Array.from(
-      mounted.container.querySelectorAll("button")
-    ).find((button) => button.textContent === "Enable attribute scan");
+    const confirmButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Enable attribute scan"
+    );
     confirmButton?.click();
     await act(async () => {
       await Promise.resolve();
@@ -281,9 +254,9 @@ describe("Options API key inputs", () => {
     ) as HTMLInputElement;
     rememberCheckbox.click();
 
-    const confirmButton = Array.from(
-      mounted.container.querySelectorAll("button")
-    ).find((button) => button.textContent === "Enable attribute scan");
+    const confirmButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Enable attribute scan"
+    );
     confirmButton?.click();
     await act(async () => {
       await Promise.resolve();
@@ -315,10 +288,7 @@ describe("Options API key inputs", () => {
     ) as HTMLButtonElement;
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(hostInput, "splunk.example.com");
       hostInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -354,10 +324,7 @@ describe("Options API key inputs", () => {
     ) as HTMLButtonElement;
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(hostInput, "splunk.example.com");
       hostInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -421,49 +388,31 @@ describe("Options API key inputs", () => {
     });
 
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="Include private-space IPv4 addresses"]'
-      )
+      mounted.container.querySelector('input[aria-label="Include private-space IPv4 addresses"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="Default cache lifetime in seconds"]'
-      )
+      mounted.container.querySelector('input[aria-label="Default cache lifetime in seconds"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="AbuseIPDB cache lifetime in seconds"]'
-      )
+      mounted.container.querySelector('input[aria-label="AbuseIPDB cache lifetime in seconds"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="OTX cache lifetime in seconds"]'
-      )
+      mounted.container.querySelector('input[aria-label="OTX cache lifetime in seconds"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="URLScan.io cache lifetime in seconds"]'
-      )
+      mounted.container.querySelector('input[aria-label="URLScan.io cache lifetime in seconds"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="GreyNoise cache lifetime in seconds"]'
-      )
+      mounted.container.querySelector('input[aria-label="GreyNoise cache lifetime in seconds"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="VirusTotal cache lifetime in seconds"]'
-      )
+      mounted.container.querySelector('input[aria-label="VirusTotal cache lifetime in seconds"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="Shodan cache lifetime in seconds"]'
-      )
+      mounted.container.querySelector('input[aria-label="Shodan cache lifetime in seconds"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="Censys cache lifetime in seconds"]'
-      )
+      mounted.container.querySelector('input[aria-label="Censys cache lifetime in seconds"]')
     ).not.toBeNull();
   });
 
@@ -473,18 +422,10 @@ describe("Options API key inputs", () => {
       await Promise.resolve();
     });
 
-    const abuseInput = mounted.container.querySelector(
-      'input[aria-label="AbuseIPDB API key"]'
-    );
-    const otxInput = mounted.container.querySelector(
-      'input[aria-label="OTX API key"]'
-    );
-    const urlscanInput = mounted.container.querySelector(
-      'input[aria-label="URLScan.io API key"]'
-    );
-    const greynoiseInput = mounted.container.querySelector(
-      'input[aria-label="GreyNoise API key"]'
-    );
+    const abuseInput = mounted.container.querySelector('input[aria-label="AbuseIPDB API key"]');
+    const otxInput = mounted.container.querySelector('input[aria-label="OTX API key"]');
+    const urlscanInput = mounted.container.querySelector('input[aria-label="URLScan.io API key"]');
+    const greynoiseInput = mounted.container.querySelector('input[aria-label="GreyNoise API key"]');
 
     expect(abuseInput).not.toBeNull();
     expect(otxInput).not.toBeNull();
@@ -515,10 +456,7 @@ describe("Options API key inputs", () => {
     });
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(urlscanInput, "fresh-urlscan-key");
       urlscanInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -565,9 +503,7 @@ describe("Options API key inputs", () => {
       'input[aria-label="URLScan.io API key"]'
     ) as HTMLInputElement;
 
-    expect(urlscanInput.value).toBe(
-      maskApiKeyForDisplay(TEST_FIXTURE_URLSCAN_API_KEY)
-    );
+    expect(urlscanInput.value).toBe(maskApiKeyForDisplay(TEST_FIXTURE_URLSCAN_API_KEY));
     expect(urlscanInput.value).not.toBe(TEST_FIXTURE_URLSCAN_API_KEY);
   });
 
@@ -586,10 +522,7 @@ describe("Options API key inputs", () => {
     });
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(greynoiseInput, "fresh-greynoise-key");
       greynoiseInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -636,9 +569,7 @@ describe("Options API key inputs", () => {
       'input[aria-label="GreyNoise API key"]'
     ) as HTMLInputElement;
 
-    expect(greynoiseInput.value).toBe(
-      maskApiKeyForDisplay(TEST_FIXTURE_GREYNOISE_API_KEY)
-    );
+    expect(greynoiseInput.value).toBe(maskApiKeyForDisplay(TEST_FIXTURE_GREYNOISE_API_KEY));
     expect(greynoiseInput.value).not.toBe(TEST_FIXTURE_GREYNOISE_API_KEY);
   });
 
@@ -657,10 +588,7 @@ describe("Options API key inputs", () => {
     });
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(abuseInput, "fresh-abuse-key");
       abuseInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -698,9 +626,7 @@ describe("Options API key inputs", () => {
     expect(abuseInput.value).not.toContain("abuse");
     expect(otxInput.value).toBe(maskApiKeyForDisplay(TEST_FIXTURE_OTX_API_KEY));
     expect(otxInput.value).not.toBe(TEST_FIXTURE_OTX_API_KEY);
-    expect(mounted.container.textContent).toContain(
-      "Only the last four characters are shown"
-    );
+    expect(mounted.container.textContent).toContain("Only the last four characters are shown");
   });
 
   it("renders a clear cache control", async () => {
@@ -781,14 +707,12 @@ describe("Options API key inputs", () => {
     expect(censysSecretInput).not.toBeNull();
     expect(censysSecretInput?.getAttribute("type")).toBe("password");
     expect(
-      mounted.container.querySelector('input[aria-label="VirusTotal API key"]')?.getAttribute(
-        "type"
-      )
+      mounted.container
+        .querySelector('input[aria-label="VirusTotal API key"]')
+        ?.getAttribute("type")
     ).toBe("password");
     expect(
-      mounted.container.querySelector('input[aria-label="Shodan API key"]')?.getAttribute(
-        "type"
-      )
+      mounted.container.querySelector('input[aria-label="Shodan API key"]')?.getAttribute("type")
     ).toBe("password");
   });
 
@@ -807,10 +731,7 @@ describe("Options API key inputs", () => {
     });
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(shodanInput, "fresh-shodan-key");
       shodanInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -843,10 +764,7 @@ describe("Options API key inputs", () => {
     });
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(censysIdInput, "fresh-censys-id");
       censysIdInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -861,10 +779,7 @@ describe("Options API key inputs", () => {
     });
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(censysSecretInput, "fresh-censys-secret");
       censysSecretInput.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -958,9 +873,9 @@ describe("Options API key inputs", () => {
       await Promise.resolve();
     });
 
-    const censysSource = Array.from(
-      mounted.container.querySelectorAll(".v5-source")
-    ).find((element) => element.textContent?.includes("Censys"));
+    const censysSource = Array.from(mounted.container.querySelectorAll(".v5-source")).find(
+      (element) => element.textContent?.includes("Censys")
+    );
 
     expect(censysSource?.textContent).toContain("Saved");
     expect(censysSource?.textContent).not.toContain("No API key");
@@ -988,14 +903,12 @@ describe("Options API key inputs", () => {
       expect.objectContaining({ rdap_whois: true })
     );
 
-    const rdapSource = Array.from(
-      mounted.container.querySelectorAll(".v5-source")
-    ).find((element) => element.textContent?.includes("RDAP/WHOIS"));
+    const rdapSource = Array.from(mounted.container.querySelectorAll(".v5-source")).find(
+      (element) => element.textContent?.includes("RDAP/WHOIS")
+    );
 
     expect(rdapSource?.textContent).toContain("No API key required");
-    expect(rdapSource?.querySelector(".v5-badge")?.textContent).toContain(
-      "Enabled"
-    );
+    expect(rdapSource?.querySelector(".v5-badge")?.textContent).toContain("Enabled");
   });
 
   it("does not show RDAP/WHOIS in the API keys section", async () => {
@@ -1004,12 +917,8 @@ describe("Options API key inputs", () => {
       await Promise.resolve();
     });
 
-    expect(
-      mounted.container.querySelector('input[aria-label="RDAP/WHOIS API key"]')
-    ).toBeNull();
-    expect(
-      mounted.container.querySelector('input[aria-label="Enable RDAP/WHOIS"]')
-    ).not.toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="RDAP/WHOIS API key"]')).toBeNull();
+    expect(mounted.container.querySelector('input[aria-label="Enable RDAP/WHOIS"]')).not.toBeNull();
   });
 
   it("exports settings without API keys by default", async () => {
@@ -1024,9 +933,7 @@ describe("Options API key inputs", () => {
       revokeObjectURL,
     });
 
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     mounted = renderOptions();
     await act(async () => {
@@ -1064,9 +971,7 @@ describe("Options API key inputs", () => {
       revokeObjectURL,
     });
 
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     mounted = renderOptions();
     await act(async () => {
@@ -1107,9 +1012,7 @@ describe("Options API key inputs", () => {
       revokeObjectURL,
     });
 
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     mounted = renderOptions();
     await act(async () => {
@@ -1151,9 +1054,7 @@ describe("Options API key inputs", () => {
     });
 
     expect(
-      mounted.container.querySelector(
-        'button[aria-label="Import threat profile JSON"]'
-      )
+      mounted.container.querySelector('button[aria-label="Import threat profile JSON"]')
     ).not.toBeNull();
 
     const fileInput = mounted.container.querySelector(
@@ -1184,9 +1085,7 @@ describe("Options API key inputs", () => {
     expect(mounted.container.textContent).toContain(
       "Warning: This profile can change enabled connectors, export templates, and analyst modes"
     );
-    expect(mounted.container.textContent).toContain(
-      "It does not import or change your API keys."
-    );
+    expect(mounted.container.textContent).toContain("It does not import or change your API keys.");
     expect(mounted.container.textContent).toContain("Merge into current settings");
     expect(mounted.container.textContent).toContain("Apply as new active profile");
     expect(mounted.container.textContent).toContain("Quiet mode");
@@ -1417,10 +1316,7 @@ describe("Options API key inputs", () => {
     expect(store[STORAGE_KEY_API_KEYS]).toEqual({
       abuseipdb: TEST_FIXTURE_STORED_API_KEY,
     });
-    const enabled = store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED] as Record<
-      string,
-      boolean
-    >;
+    const enabled = store[STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED] as Record<string, boolean>;
     expect(enabled.otx).toBe(true);
     expect(enabled.abuseipdb).toBe(false);
     expect(mounted.container.textContent).toContain("Threat profile imported.");
@@ -1494,9 +1390,7 @@ describe("Options API key inputs", () => {
     });
 
     expect(
-      mounted.container.querySelector(
-        'button[aria-label="Import settings pack JSON"]'
-      )
+      mounted.container.querySelector('button[aria-label="Import settings pack JSON"]')
     ).not.toBeNull();
   });
 
@@ -1605,16 +1499,12 @@ describe("Options API key inputs", () => {
 
 function clickQuickStartContinue(container: ParentNode): void {
   const continueButton = Array.from(container.querySelectorAll("button")).find(
-    (button) =>
-      button.textContent === "Continue" ||
-      button.textContent === "Continue without keys"
+    (button) => button.textContent === "Continue" || button.textContent === "Continue without keys"
   );
   continueButton?.click();
 }
 
-async function advanceQuickStartToTrustStep(
-  container: ParentNode
-): Promise<void> {
+async function advanceQuickStartToTrustStep(container: ParentNode): Promise<void> {
   for (let step = 0; step < 3; step += 1) {
     await act(async () => {
       clickQuickStartContinue(container);
@@ -1678,9 +1568,7 @@ describe("Options install quick start", () => {
     expect(mounted.container.textContent).toContain("Install quick start");
     expect(mounted.container.textContent).toContain("Welcome");
     expect(mounted.container.textContent).toContain("Continue");
-    expect(mounted.container.textContent).not.toContain(
-      "Skip pre-query notices"
-    );
+    expect(mounted.container.textContent).not.toContain("Skip pre-query notices");
   });
 
   it("renders GreyNoise in install quick start API key step", async () => {
@@ -1708,9 +1596,9 @@ describe("Options install quick start", () => {
 
     await advanceQuickStartToTrustStep(mounted.container);
 
-    const skipButton = Array.from(
-      mounted.container.querySelectorAll("button")
-    ).find((button) => button.textContent === "Skip pre-query notices");
+    const skipButton = Array.from(mounted.container.querySelectorAll("button")).find(
+      (button) => button.textContent === "Skip pre-query notices"
+    );
 
     expect(skipButton).not.toBeUndefined();
 
@@ -1723,9 +1611,7 @@ describe("Options install quick start", () => {
     expect(store[STORAGE_KEY_PRE_QUERY_NOTICE_PREFERENCE_CONFIGURED]).toBe(true);
     expect(store[STORAGE_KEY_INSTALL_QUICK_START_COMPLETED]).toBe(true);
     expect(mounted.container.textContent).not.toContain("Install quick start");
-    expect(mounted.container.textContent).not.toContain(
-      "Skip pre-query notices"
-    );
+    expect(mounted.container.textContent).not.toContain("Skip pre-query notices");
 
     const toggle = mounted.container.querySelector(
       'input[aria-label="Show pre-query notices"]'
@@ -1744,9 +1630,7 @@ describe("Options install quick start", () => {
       await Promise.resolve();
     });
 
-    expect(mounted.container.textContent).not.toContain(
-      "Skip pre-query notices"
-    );
+    expect(mounted.container.textContent).not.toContain("Skip pre-query notices");
     expect(mounted.container.textContent).toContain("Trust & Consent");
 
     const toggle = mounted.container.querySelector(
@@ -1920,13 +1804,9 @@ describe("Options domain policy controls", () => {
       mounted.container.querySelector('input[aria-label="Allowlist entry pattern"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'input[aria-label="Apply domain policy to live enrichment"]'
-      )
+      mounted.container.querySelector('input[aria-label="Apply domain policy to live enrichment"]')
     ).not.toBeNull();
-    expect(
-      mounted.container.querySelector('input[name="domainPolicyMode"]')
-    ).not.toBeNull();
+    expect(mounted.container.querySelector('input[name="domainPolicyMode"]')).not.toBeNull();
     expect(mounted.container.textContent).toContain("Allow by default");
     expect(mounted.container.textContent).toContain("Deny by default");
     expect(mounted.container.textContent).toContain("Default-safe presets");
@@ -1947,10 +1827,7 @@ describe("Options domain policy controls", () => {
     ) as HTMLButtonElement;
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(input, " legacy.example.com ");
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -2180,20 +2057,13 @@ describe("Options operator macros", () => {
       await Promise.resolve();
     });
 
-    const nameInput = container.querySelector(
-      "#operator-macro-name"
-    ) as HTMLInputElement;
-    const idInput = container.querySelector(
-      "#operator-macro-id"
-    ) as HTMLInputElement;
+    const nameInput = container.querySelector("#operator-macro-name") as HTMLInputElement;
+    const idInput = container.querySelector("#operator-macro-id") as HTMLInputElement;
     expect(nameInput).not.toBeNull();
     expect(idInput).not.toBeNull();
 
     const setInputValue = (input: HTMLInputElement, value: string) => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(input, value);
       input.dispatchEvent(new Event("input", { bubbles: true }));
     };
@@ -2295,20 +2165,13 @@ describe("Options operator macros", () => {
       await Promise.resolve();
     });
 
-    const nameInput = container.querySelector(
-      "#operator-macro-name"
-    ) as HTMLInputElement;
-    const idInput = container.querySelector(
-      "#operator-macro-id"
-    ) as HTMLInputElement;
+    const nameInput = container.querySelector("#operator-macro-name") as HTMLInputElement;
+    const idInput = container.querySelector("#operator-macro-id") as HTMLInputElement;
     expect(nameInput).not.toBeNull();
     expect(idInput).not.toBeNull();
 
     const setInputValue = (input: HTMLInputElement, value: string) => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
       setter?.call(input, value);
       input.dispatchEvent(new Event("input", { bubbles: true }));
     };
@@ -2346,10 +2209,7 @@ describe("Options operator macros", () => {
     expect(noteTemplateTextarea).not.toBeNull();
 
     const setTextareaValue = (textarea: HTMLTextAreaElement, value: string) => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLTextAreaElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
       setter?.call(textarea, value);
       textarea.dispatchEvent(new Event("input", { bubbles: true }));
     };
@@ -2383,9 +2243,7 @@ describe("Options operator macros", () => {
     expect(
       container.querySelector('button[aria-label="Import user macro pack JSON"]')
     ).not.toBeNull();
-    expect(container.textContent).toContain(
-      "Built-in playbooks and API keys are never included"
-    );
+    expect(container.textContent).toContain("Built-in playbooks and API keys are never included");
   });
 
   it("shows a preview and applies macro pack import after confirmation", async () => {
@@ -2439,9 +2297,7 @@ describe("Options operator macros", () => {
     const stored = store[STORAGE_KEY_OPERATOR_MACROS] as {
       macros: Array<{ id: string }>;
     };
-    expect(stored.macros.some((macro) => macro.id === "imported-pack-macro")).toBe(
-      true
-    );
+    expect(stored.macros.some((macro) => macro.id === "imported-pack-macro")).toBe(true);
     expect(container.textContent).toContain("Imported user macros");
   });
 });
@@ -2506,9 +2362,7 @@ describe("Options cross-session correlation controls", () => {
       )
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'select[aria-label="Correlation cluster overlap merge mode"]'
-      )
+      mounted.container.querySelector('select[aria-label="Correlation cluster overlap merge mode"]')
     ).not.toBeNull();
     expect(
       mounted.container.querySelector('button[aria-label="Clear all correlation clusters"]')
@@ -2558,9 +2412,7 @@ describe("Options cross-session correlation controls", () => {
 
   it("clears relationship memory after confirmation and preserves retention", async () => {
     const { STORAGE_KEY_RELATIONSHIP_EDGES } = await import("../lib/relationshipEdgeStorage");
-    const { createRelationshipEdge, RELATIONSHIP_TYPE } = await import(
-      "../lib/relationshipEdge"
-    );
+    const { createRelationshipEdge, RELATIONSHIP_TYPE } = await import("../lib/relationshipEdge");
     const nowMs = Date.UTC(2026, 6, 22);
     const edge = createRelationshipEdge({
       entityA: "ipv4:8.8.8.8",
@@ -2618,9 +2470,7 @@ describe("Options cross-session correlation controls", () => {
 
   it("does not clear relationship memory when confirmation is cancelled", async () => {
     const { STORAGE_KEY_RELATIONSHIP_EDGES } = await import("../lib/relationshipEdgeStorage");
-    const { createRelationshipEdge, RELATIONSHIP_TYPE } = await import(
-      "../lib/relationshipEdge"
-    );
+    const { createRelationshipEdge, RELATIONSHIP_TYPE } = await import("../lib/relationshipEdge");
     const nowMs = Date.UTC(2026, 6, 22);
     const edge = createRelationshipEdge({
       entityA: "ipv4:1.1.1.1",
@@ -2669,12 +2519,9 @@ describe("Options cross-session correlation controls", () => {
   });
 
   it("persists retention window and clears stored clusters", async () => {
-    const { STORAGE_KEY_CORRELATION_CLUSTERS } = await import(
-      "../lib/correlationClusterStorage"
-    );
-    const { createCorrelationCluster, CORRELATION_CLUSTER_SCHEMA_VERSION } = await import(
-      "../lib/correlationCluster"
-    );
+    const { STORAGE_KEY_CORRELATION_CLUSTERS } = await import("../lib/correlationClusterStorage");
+    const { createCorrelationCluster, CORRELATION_CLUSTER_SCHEMA_VERSION } =
+      await import("../lib/correlationCluster");
     const { buildIocCoOccurrenceMemberKey } = await import("../lib/iocCoOccurrence");
     const { IOC_TYPE } = await import("../lib/iocRegex");
 
@@ -2732,9 +2579,7 @@ describe("Options cross-session correlation controls", () => {
   });
 
   it("persists Jaccard overlap mode from Options", async () => {
-    const { STORAGE_KEY_CORRELATION_CLUSTERS } = await import(
-      "../lib/correlationClusterStorage"
-    );
+    const { STORAGE_KEY_CORRELATION_CLUSTERS } = await import("../lib/correlationClusterStorage");
 
     mounted = renderOptions();
     await act(async () => {
@@ -2747,10 +2592,7 @@ describe("Options cross-session correlation controls", () => {
     ) as HTMLSelectElement;
 
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(
-        HTMLSelectElement.prototype,
-        "value"
-      )?.set;
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
       setter?.call(modeSelect, "jaccard");
       modeSelect.dispatchEvent(new Event("change", { bubbles: true }));
       await Promise.resolve();
@@ -2869,14 +2711,10 @@ describe("Options noise rules controls", () => {
       mounted.container.querySelector('button[aria-label="Import rules JSON/CSV"]')
     ).not.toBeNull();
     expect(
-      mounted.container.querySelector(
-        'button[aria-label="Import SOC dashboard starter"]'
-      )
+      mounted.container.querySelector('button[aria-label="Import SOC dashboard starter"]')
     ).not.toBeNull();
     expect(mounted.container.textContent).toContain("Optional");
-    expect(mounted.container.textContent).toContain(
-      "examples/soc-dashboard-noise-starter.json"
-    );
+    expect(mounted.container.textContent).toContain("examples/soc-dashboard-noise-starter.json");
     expect(
       mounted.container.querySelector('button[aria-label="Clear all noise rules"]')
     ).not.toBeNull();
@@ -2887,9 +2725,7 @@ describe("Options noise rules controls", () => {
     ).not.toBeNull();
     expect(mounted.container.textContent).toContain("examples/sample-alert.html");
     expect(
-      mounted.container.querySelector(
-        'button[aria-label="Undo last learned noise rule"]'
-      )
+      mounted.container.querySelector('button[aria-label="Undo last learned noise rule"]')
     ).not.toBeNull();
   });
 
@@ -2937,17 +2773,11 @@ describe("Options noise rules controls", () => {
     );
     expect(mounted.container.textContent).toContain("8.8.8.8");
     expect(mounted.container.textContent).toContain("examples/sample-alert.html");
-    expect(mounted.container.textContent).toContain(
-      "Does not open, scan, or change any live page"
-    );
+    expect(mounted.container.textContent).toContain("Does not open, scan, or change any live page");
     expect(
-      mounted.container.querySelector(
-        '[aria-label="Sample alert indicators matching noise rules"]'
-      )
+      mounted.container.querySelector('[aria-label="Sample alert indicators matching noise rules"]')
     ).not.toBeNull();
-    expect(document.getElementById("live-page-marker")?.textContent).toBe(
-      "untouched-live-page"
-    );
+    expect(document.getElementById("live-page-marker")?.textContent).toBe("untouched-live-page");
     expect(document.body.contains(bodyMarker)).toBe(true);
 
     const clearPreview = mounted.container.querySelector(
@@ -2959,21 +2789,15 @@ describe("Options noise rules controls", () => {
       await Promise.resolve();
     });
     expect(
-      mounted.container.querySelector(
-        '[aria-label="Sample alert indicators matching noise rules"]'
-      )
+      mounted.container.querySelector('[aria-label="Sample alert indicators matching noise rules"]')
     ).toBeNull();
-    expect(document.getElementById("live-page-marker")?.textContent).toBe(
-      "untouched-live-page"
-    );
+    expect(document.getElementById("live-page-marker")?.textContent).toBe("untouched-live-page");
     bodyMarker.remove();
   });
 
   it("undoes the last learned noise rule in a single step from Options", async () => {
-    const {
-      STORAGE_KEY_NOISE_RULES,
-      STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO,
-    } = await import("../lib/noiseRuleStorage");
+    const { STORAGE_KEY_NOISE_RULES, STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO } =
+      await import("../lib/noiseRuleStorage");
     const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
 
     const keep = createNoiseRule({
@@ -3023,9 +2847,7 @@ describe("Options noise rules controls", () => {
       await Promise.resolve();
     });
 
-    expect(mounted.container.textContent).toContain(
-      "Undid learned rule for learned.example."
-    );
+    expect(mounted.container.textContent).toContain("Undid learned rule for learned.example.");
     expect(mounted.container.textContent).not.toContain("Pattern: learned.example");
     expect(mounted.container.textContent).toContain("Pattern: keep.example");
     expect(store[STORAGE_KEY_NOISE_RULE_LAST_LEARN_UNDO]).toBeUndefined();
@@ -3233,9 +3055,7 @@ describe("Options noise rules controls", () => {
       createObjectURL,
       revokeObjectURL,
     });
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     mounted = renderOptions();
     await act(async () => {
@@ -3290,9 +3110,7 @@ describe("Options noise rules controls", () => {
       createObjectURL,
       revokeObjectURL,
     });
-    const clickSpy = vi
-      .spyOn(HTMLAnchorElement.prototype, "click")
-      .mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 
     mounted = renderOptions();
     await act(async () => {
@@ -3367,9 +3185,7 @@ describe("Options noise rules controls", () => {
       await Promise.resolve();
     });
     expect(skipEnrichToggle.checked).toBe(true);
-    const { STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH } = await import(
-      "../lib/storage"
-    );
+    const { STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH } = await import("../lib/storage");
     expect(store[STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH]).toBe(true);
 
     const cdnToggle = mounted.container.querySelector(

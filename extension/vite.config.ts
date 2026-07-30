@@ -15,7 +15,6 @@ export default defineConfig({
     rollupOptions: {
       input: {
         dev: "index.html",
-        popup: "popup.html",
         sidepanel: "sidepanel.html",
         options: "options.html",
         background: "src/background/serviceWorker.ts",

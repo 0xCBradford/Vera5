@@ -6,9 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- Nothing yet.
+- **Workspace / side panel hierarchy** — Scan and Enrich stay at the top; **Detected indicators** follows immediately for faster triage. Investigation session sits below the tray. Settings and Permissions are demoted to quiet text links. Collection exports fold under an **Export** disclosure (View / Rename / Delete stay visible). Only **Scan page** uses the amber primary button.
+- **Side panel two-column workspace** — Chromium side panel (`host="sidepanel"`) uses a width-gated split (≥560px): triage (scan + tray) on the left, casework (session, history, collections, source ops) on the right. Narrow panels and the toolbar popup stay single-column.
 
 ## [0.1.0] — 2026-07-29
 

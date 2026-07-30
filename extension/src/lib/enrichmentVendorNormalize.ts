@@ -25,11 +25,7 @@ export type UnifiedVendorFieldMap = {
   threatTags?: readonly string[];
 };
 
-function appendUniqueTag(
-  tags: string[],
-  seen: Set<string>,
-  value: string | undefined
-): void {
+function appendUniqueTag(tags: string[], seen: Set<string>, value: string | undefined): void {
   if (tags.length >= UNIFIED_TAG_LIMIT) {
     return;
   }
@@ -62,10 +58,7 @@ export function buildUnifiedSummary(
 }
 
 export function buildUnifiedTags(
-  fields: Pick<
-    UnifiedVendorFieldMap,
-    "countryCode" | "usageType" | "isp" | "domain" | "threatTags"
-  >
+  fields: Pick<UnifiedVendorFieldMap, "countryCode" | "usageType" | "isp" | "domain" | "threatTags">
 ): readonly string[] {
   const tags: string[] = [];
   const seen = new Set<string>();
@@ -250,9 +243,7 @@ export function buildGreyNoiseUnifiedSummary(input: GreyNoiseUnifiedInput): stri
   return "not observed in GreyNoise";
 }
 
-export function buildGreyNoiseUnifiedTags(
-  input: GreyNoiseUnifiedInput
-): readonly string[] {
+export function buildGreyNoiseUnifiedTags(input: GreyNoiseUnifiedInput): readonly string[] {
   const tags: string[] = [];
   const seen = new Set<string>();
 
@@ -287,9 +278,7 @@ export type VirustotalUnifiedInput = {
   networkOwner?: string;
 };
 
-export function buildVirustotalUnifiedSummary(
-  input: VirustotalUnifiedInput
-): string {
+export function buildVirustotalUnifiedSummary(input: VirustotalUnifiedInput): string {
   const malicious = input.maliciousDetections ?? 0;
   const suspicious = input.suspiciousDetections ?? 0;
   if (malicious > 0) {
@@ -345,9 +334,7 @@ export function buildShodanUnifiedSummary(input: ShodanUnifiedInput): string {
   return "No Shodan exposure data";
 }
 
-export function buildShodanUnifiedTags(
-  input: ShodanUnifiedInput
-): readonly string[] {
+export function buildShodanUnifiedTags(input: ShodanUnifiedInput): readonly string[] {
   const tags: string[] = [];
   const seen = new Set<string>();
 
@@ -405,9 +392,7 @@ export function buildCensysUnifiedSummary(input: CensysUnifiedInput): string {
   return "No Censys host data";
 }
 
-export function buildCensysUnifiedTags(
-  input: CensysUnifiedInput
-): readonly string[] {
+export function buildCensysUnifiedTags(input: CensysUnifiedInput): readonly string[] {
   const tags: string[] = [];
   const seen = new Set<string>();
 
@@ -458,9 +443,7 @@ export type RdapWhoisUnifiedInput = {
   nameservers?: readonly string[];
 };
 
-export function buildRdapWhoisUnifiedSummary(
-  input: RdapWhoisUnifiedInput
-): string {
+export function buildRdapWhoisUnifiedSummary(input: RdapWhoisUnifiedInput): string {
   const parts: string[] = [];
   const registrar = input.registrar?.trim();
   if (registrar) {

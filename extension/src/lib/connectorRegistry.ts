@@ -1,9 +1,5 @@
-import {
-  createAbuseIpdbConnectorDefinition,
-} from "./abuseipdbConnector";
-import {
-  createCensysConnectorDefinition,
-} from "./censysConnector";
+import { createAbuseIpdbConnectorDefinition } from "./abuseipdbConnector";
+import { createCensysConnectorDefinition } from "./censysConnector";
 import {
   buildConnectorProfileRateLimitMetadata,
   getEnrichmentSourceQuotaSummary,
@@ -18,13 +14,8 @@ import {
   type ConnectorDefinition,
   type ConnectorRateLimitPolicy,
 } from "./connectorDefinition";
-import {
-  type EnrichmentIoc,
-  type EnrichmentSourceResult,
-} from "./enrichment";
-import {
-  createGreynoiseConnectorDefinition,
-} from "./greynoiseConnector";
+import { type EnrichmentIoc, type EnrichmentSourceResult } from "./enrichment";
+import { createGreynoiseConnectorDefinition } from "./greynoiseConnector";
 import {
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
@@ -33,18 +24,11 @@ import {
   LIVE_ENRICHMENT_SOURCE_ORDER,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
-import {
-  createOtxConnectorDefinition,
-} from "./otxConnector";
-import {
-  createRdapWhoisConnectorDefinition,
-} from "./rdapWhoisConnector";
-import {
-  createShodanConnectorDefinition,
-} from "./shodanConnector";
-import {
-  createUrlscanConnectorDefinition,
-} from "./urlscanConnector";
+import { createOtxConnectorDefinition } from "./otxConnector";
+import { createRdapWhoisConnectorDefinition } from "./rdapWhoisConnector";
+import { createShodanConnectorDefinition } from "./shodanConnector";
+import { createUrlscanConnectorDefinition } from "./urlscanConnector";
+import { createVirustotalConnectorDefinition } from "./virustotalConnector";
 
 export class ConnectorRegistryError extends Error {
   constructor(message: string) {
@@ -69,6 +53,11 @@ const CONNECTOR_DEFINITION_BUILDERS: Partial<
     createOtxConnectorDefinition({
       rateLimitPolicy: buildRateLimitPolicyForSource(ENRICHMENT_SOURCE.OTX),
       capabilities: buildCapabilityFlagsForSource(ENRICHMENT_SOURCE.OTX),
+    }),
+  [ENRICHMENT_SOURCE.VIRUSTOTAL]: () =>
+    createVirustotalConnectorDefinition({
+      rateLimitPolicy: buildRateLimitPolicyForSource(ENRICHMENT_SOURCE.VIRUSTOTAL),
+      capabilities: buildCapabilityFlagsForSource(ENRICHMENT_SOURCE.VIRUSTOTAL),
     }),
   [ENRICHMENT_SOURCE.URLSCAN]: () =>
     createUrlscanConnectorDefinition({
@@ -107,8 +96,7 @@ const CONNECTOR_AUTHORITY_TIER_BY_SOURCE: Record<
   [ENRICHMENT_SOURCE.URLSCAN]: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
   [ENRICHMENT_SOURCE.GREYNOISE]: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
   [ENRICHMENT_SOURCE.SHODAN]: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
-  [ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING]:
-    CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
+  [ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING]: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
   [ENRICHMENT_SOURCE.PULSEDIVE]: CONNECTOR_AUTHORITY_TIER.COMMUNITY,
   [ENRICHMENT_SOURCE.MALWAREBAZAAR]: CONNECTOR_AUTHORITY_TIER.COMMUNITY,
   [ENRICHMENT_SOURCE.CENSYS]: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
@@ -117,9 +105,7 @@ const CONNECTOR_AUTHORITY_TIER_BY_SOURCE: Record<
   [ENRICHMENT_SOURCE.RDAP_WHOIS]: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
 };
 
-function buildRateLimitPolicyForSource(
-  sourceId: EnrichmentSourceId
-): ConnectorRateLimitPolicy {
+function buildRateLimitPolicyForSource(sourceId: EnrichmentSourceId): ConnectorRateLimitPolicy {
   const metadata = buildConnectorProfileRateLimitMetadata().sources.find(
     (entry) => entry.sourceId === sourceId
   );
@@ -132,26 +118,20 @@ function buildRateLimitPolicyForSource(
   }
   return {
     requestTimeoutMs:
-      metadata.requestTimeoutSeconds === null
-        ? null
-        : metadata.requestTimeoutSeconds * 1000,
+      metadata.requestTimeoutSeconds === null ? null : metadata.requestTimeoutSeconds * 1000,
     quotaSummary: metadata.quotaSummary,
     rateLimitHeaderHints: metadata.rateLimitHeaderHints,
   };
 }
 
-function buildCapabilityFlagsForSource(
-  sourceId: EnrichmentSourceId
-): ConnectorCapabilityFlags {
+function buildCapabilityFlagsForSource(sourceId: EnrichmentSourceId): ConnectorCapabilityFlags {
   const definition = getEnrichmentSourceDefinition(sourceId);
   return {
     liveEnrichment: definition.liveConnector,
     pivotOnly: !definition.liveConnector,
     requiresApiKey: definition.requiresApiKey,
     supportsHealthCheck: definition.liveConnector,
-    authorityTier:
-      CONNECTOR_AUTHORITY_TIER_BY_SOURCE[sourceId] ??
-      CONNECTOR_AUTHORITY_TIER.UNKNOWN,
+    authorityTier: CONNECTOR_AUTHORITY_TIER_BY_SOURCE[sourceId] ?? CONNECTOR_AUTHORITY_TIER.UNKNOWN,
   };
 }
 
@@ -165,9 +145,7 @@ export function getConnectorCapabilityMetadata(
 }
 
 export function listConnectorCapabilityMetadata(): readonly ConnectorCapabilityMetadata[] {
-  return ENRICHMENT_SOURCE_ORDER.map((sourceId) =>
-    getConnectorCapabilityMetadata(sourceId)
-  );
+  return ENRICHMENT_SOURCE_ORDER.map((sourceId) => getConnectorCapabilityMetadata(sourceId));
 }
 
 export function lookupConnectorCapabilityMetadata(
@@ -190,9 +168,7 @@ export function getConnectorConfidenceMetadata(
 }
 
 export function listConnectorConfidenceMetadata(): readonly ConnectorConfidenceMetadata[] {
-  return ENRICHMENT_SOURCE_ORDER.map((sourceId) =>
-    getConnectorConfidenceMetadata(sourceId)
-  );
+  return ENRICHMENT_SOURCE_ORDER.map((sourceId) => getConnectorConfidenceMetadata(sourceId));
 }
 
 export function lookupConnectorConfidenceMetadata(
@@ -204,9 +180,7 @@ export function lookupConnectorConfidenceMetadata(
   return getConnectorConfidenceMetadata(sourceId);
 }
 
-function assertCapabilityMetadataMatchesDefinition(
-  definition: ConnectorDefinition
-): void {
+function assertCapabilityMetadataMatchesDefinition(definition: ConnectorDefinition): void {
   const expected = getConnectorCapabilityMetadata(definition.id);
   const actual = definition.capabilities;
   if (
@@ -222,29 +196,21 @@ function assertCapabilityMetadataMatchesDefinition(
   }
 }
 
-function createBuiltInLiveConnectorDefinition(
-  sourceId: EnrichmentSourceId
-): ConnectorDefinition {
+function createBuiltInLiveConnectorDefinition(sourceId: EnrichmentSourceId): ConnectorDefinition {
   const builder = CONNECTOR_DEFINITION_BUILDERS[sourceId];
   if (!builder) {
-    throw new ConnectorRegistryError(
-      `No connector definition builder registered for ${sourceId}.`
-    );
+    throw new ConnectorRegistryError(`No connector definition builder registered for ${sourceId}.`);
   }
   return builder();
 }
 
-export function registerConnectorDefinition(
-  definition: ConnectorDefinition
-): void {
+export function registerConnectorDefinition(definition: ConnectorDefinition): void {
   if (!isConnectorDefinition(definition)) {
     throw new ConnectorRegistryError("Invalid connector definition.");
   }
   assertCapabilityMetadataMatchesDefinition(definition);
   if (registry.has(definition.id)) {
-    throw new ConnectorRegistryError(
-      `Connector ${definition.id} is already registered.`
-    );
+    throw new ConnectorRegistryError(`Connector ${definition.id} is already registered.`);
   }
   registry.set(definition.id, definition);
 }
@@ -263,9 +229,7 @@ export function listRegisteredConnectorIds(): readonly EnrichmentSourceId[] {
   return ENRICHMENT_SOURCE_ORDER.filter((sourceId) => registry.has(sourceId));
 }
 
-export function unregisterConnectorDefinition(
-  sourceId: EnrichmentSourceId
-): boolean {
+export function unregisterConnectorDefinition(sourceId: EnrichmentSourceId): boolean {
   return registry.delete(sourceId);
 }
 

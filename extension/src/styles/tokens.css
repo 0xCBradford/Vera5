@@ -107,8 +107,7 @@
 
   /* Typography */
   --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas,
-    monospace;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-wordmark: "Space Grotesk", "Inter", system-ui, sans-serif;
 
   /* ----------------------------------------------------------------
@@ -194,7 +193,8 @@
  * is declared last to win on shared properties.
  * ------------------------------------------------------------------ */
 .v5-btn {
-  transition: box-shadow var(--t-hover) var(--ease-out),
+  transition:
+    box-shadow var(--t-hover) var(--ease-out),
     transform var(--t-hover) var(--ease-out),
     background-color var(--t-hover) var(--ease-out),
     border-color var(--t-hover) var(--ease-out);
@@ -202,7 +202,9 @@
 .v5-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   border-color: var(--border-accent) !important;
-  box-shadow: 0 0 0 1px rgba(255, 178, 36, 0.1), 0 6px 18px rgba(255, 178, 36, 0.14);
+  box-shadow:
+    0 0 0 1px rgba(255, 178, 36, 0.1),
+    0 6px 18px rgba(255, 178, 36, 0.14);
 }
 .v5-btn--primary:hover:not(:disabled) {
   background-color: var(--accent-hover) !important;
@@ -227,10 +229,939 @@
   transition: box-shadow var(--t-hover) var(--ease-out);
 }
 .vera5-popup button:hover:not(:disabled) {
-  box-shadow: 0 0 0 1.5px rgba(255, 178, 36, 0.45), 0 4px 16px rgba(255, 178, 36, 0.18);
+  box-shadow:
+    0 0 0 1.5px rgba(255, 178, 36, 0.45),
+    0 4px 16px rgba(255, 178, 36, 0.18);
 }
 @media (prefers-reduced-motion: reduce) {
   .vera5-popup button:not(.v5-btn) {
     transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------
+ * Popup / side-panel SOC command center.
+ * Evidence stays dense and neutral; amber marks deliberate action.
+ * ------------------------------------------------------------------ */
+.vera5-popup {
+  min-height: 100%;
+  padding: 14px !important;
+  overflow-x: hidden;
+  background: var(--surface-page) !important;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.vera5-popup *,
+.vera5-popup *::before,
+.vera5-popup *::after {
+  box-sizing: border-box;
+}
+
+.vera5-popup ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.vera5-popup ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.vera5-popup ::-webkit-scrollbar-thumb {
+  border: 2px solid var(--surface-page);
+  border-radius: 999px;
+  background: var(--border-hard);
+}
+
+.vera5-command-header {
+  flex: 0 0 auto;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.vera5-command-header h1 {
+  flex-wrap: wrap;
+  margin-bottom: 0 !important;
+}
+
+.vera5-header-utilities {
+  gap: 5px !important;
+}
+
+.vera5-header-utilities > a,
+.vera5-header-utilities > button {
+  min-height: 26px;
+}
+
+.vera5-status-strip {
+  flex: 0 0 auto;
+  margin: 8px 0 0 !important;
+  padding-left: 1px;
+}
+
+.vera5-operator-controls {
+  gap: 6px !important;
+  margin: 10px 0 10px !important;
+  padding: 6px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+  box-shadow: var(--highlight-top);
+}
+
+.vera5-operator-controls > button {
+  min-height: 30px;
+  padding: 5px 7px 5px 9px !important;
+  border-color: transparent !important;
+  border-radius: 4px !important;
+  background: transparent !important;
+}
+
+.vera5-operator-controls > button:hover:not(:disabled) {
+  background: var(--surface-2) !important;
+  box-shadow: none;
+}
+
+.vera5-scan-commands {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 6px !important;
+}
+
+.vera5-scan-commands > .v5-btn--primary {
+  grid-column: 1 / -1;
+  min-height: 34px;
+}
+
+.vera5-scan-commands > .v5-btn:not(.v5-btn--primary) {
+  min-height: 30px;
+  padding-block: 6px !important;
+  border-radius: var(--r-sm) !important;
+  background: var(--surface-2) !important;
+  color: var(--text-primary) !important;
+}
+
+.vera5-triage-section {
+  margin-top: 12px !important;
+  padding-top: 12px !important;
+  border-top-color: var(--border-hairline) !important;
+}
+
+.vera5-triage-section > div:first-child h2,
+.vera5-casework-panel-title {
+  margin: 0 0 8px;
+  color: var(--text-primary) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+}
+
+.vera5-triage-section [aria-label^="Filter by indicator type"] button {
+  min-height: 25px;
+  padding: 3px 8px !important;
+  border-radius: 4px !important;
+  font-size: 11px !important;
+}
+
+.vera5-tray-case-tools {
+  padding: 7px 9px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--r-sm);
+  background: var(--surface-1);
+}
+
+.vera5-ioc-queue {
+  gap: 3px !important;
+  max-height: 300px !important;
+}
+
+.vera5-ioc-queue > [data-vera5-tray-entry="true"] {
+  position: relative;
+  gap: 5px !important;
+  padding: 7px 8px 7px 10px !important;
+  border: 1px solid var(--border-hairline) !important;
+  border-radius: 4px !important;
+  background: var(--surface-1) !important;
+  box-shadow: inset 2px 0 0 transparent;
+}
+
+.vera5-ioc-queue > [data-vera5-tray-entry="true"]:hover {
+  border-color: var(--border-soft) !important;
+  background: var(--surface-1) !important;
+}
+
+.vera5-ioc-queue > [data-vera5-tray-entry="true"][data-vera5-selected="true"] {
+  border-color: var(--border-accent) !important;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-1)) !important;
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    var(--shadow-low);
+}
+
+.vera5-ioc-queue > [data-vera5-tray-entry="true"] > div:first-child {
+  align-items: center !important;
+}
+
+.vera5-ioc-queue > [data-vera5-tray-entry="true"] details > summary {
+  color: var(--text-secondary) !important;
+  font-size: 11px !important;
+}
+
+.vera5-tray-context {
+  padding-top: 4px;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.vera5-tray-context > summary {
+  color: var(--deep-violet) !important;
+  font-weight: 700 !important;
+}
+
+.vera5-tray-context-body {
+  display: grid;
+  gap: 5px;
+  margin-top: 6px;
+  padding: 7px;
+  border: 1px solid color-mix(in srgb, var(--deep-violet) 28%, var(--border-soft));
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--deep-violet) 5%, var(--surface-page));
+}
+
+.vera5-tray-context-body > details {
+  margin: 0 !important;
+}
+
+.vera5-ioc-queue--suppressed {
+  max-height: 180px !important;
+}
+
+.vera5-popup-inspector {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--border-hard);
+  border-radius: var(--r-sm);
+  background: var(--surface-raised);
+  box-shadow: var(--highlight-top), var(--shadow-med);
+}
+
+.vera5-inspector-kicker,
+.vera5-section-kicker {
+  margin-bottom: 6px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.vera5-popup-inspector [data-vera5-detail-pane="true"] {
+  gap: 9px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.vera5-popup-inspector textarea,
+.vera5-casework-panel input[type="text"] {
+  border-color: var(--border-hard) !important;
+  border-radius: 4px !important;
+  background: var(--surface-2) !important;
+}
+
+.vera5-popup-casework {
+  min-width: 0;
+}
+
+.vera5-casework-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-hairline);
+}
+
+.vera5-casework-header p {
+  margin: 0;
+  color: var(--text-low);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.vera5-casework-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  padding: 3px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-sm);
+  background: var(--surface-page);
+}
+
+.vera5-casework-tabs > button {
+  min-width: 0;
+  padding: 6px 4px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: 600 11px/1.2 var(--font-ui);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.vera5-casework-tabs > button:hover {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+.vera5-casework-tabs > button[aria-selected="true"] {
+  background: var(--accent-weak);
+  color: var(--accent-hover);
+  box-shadow:
+    inset 0 0 0 1px var(--border-accent),
+    var(--highlight-top);
+}
+
+.vera5-semantic-intel > summary,
+.vera5-semantic-intel-label,
+.vera5-tray-relationship > summary,
+.vera5-tray-correlation-clusters > summary {
+  color: var(--deep-violet) !important;
+}
+
+.vera5-source-row[data-vera5-source-health="healthy"] {
+  border-color: color-mix(in srgb, var(--terminal-teal) 42%, var(--border-soft)) !important;
+}
+
+.vera5-source-row[data-vera5-source-health="healthy"] .vera5-source-status {
+  color: var(--terminal-teal) !important;
+}
+
+.vera5-source-row[data-vera5-source-health="error"] {
+  border-color: color-mix(in srgb, var(--signal-red) 42%, var(--border-soft)) !important;
+}
+
+.vera5-source-row[data-vera5-source-health="error"] .vera5-source-status {
+  color: var(--signal-red) !important;
+}
+
+.vera5-casework-panel {
+  margin-top: 10px !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+.vera5-visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.vera5-session-facts {
+  padding: 7px 9px;
+  border-left: 2px solid var(--accent);
+  background: var(--surface-1);
+}
+
+.vera5-session-disclosure {
+  margin-top: 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--surface-1);
+}
+
+.vera5-session-disclosure > summary {
+  padding: 7px 9px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.vera5-session-disclosure[open] > summary {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}
+
+.vera5-session-disclosure--intel > summary,
+.vera5-session-disclosure--intel[open] > summary {
+  color: var(--deep-violet);
+}
+
+.vera5-session-disclosure-body {
+  padding: 0 9px 9px;
+  border-top: 1px solid var(--border-hairline);
+}
+
+.vera5-session-disclosure-body > div > h3:first-child {
+  display: none;
+}
+
+.vera5-source-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 7px;
+}
+
+.vera5-source-overview > span {
+  padding: 3px 6px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.vera5-source-overview > [data-vera5-source-health="healthy"] {
+  border-color: color-mix(in srgb, var(--terminal-teal) 38%, var(--border-soft));
+  color: var(--terminal-teal);
+}
+
+.vera5-source-overview > [data-vera5-source-health="error"] {
+  border-color: color-mix(in srgb, var(--signal-red) 38%, var(--border-soft));
+  color: var(--signal-red);
+}
+
+.vera5-source-guidance {
+  margin-bottom: 8px;
+}
+
+.vera5-source-guidance > summary {
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.vera5-source-guidance > p {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.vera5-source-row {
+  background: var(--surface-1) !important;
+}
+
+.vera5-casework-panel > section {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+.vera5-casework-panel ul > li {
+  border-radius: 4px !important;
+}
+
+.vera5-casework-tools {
+  min-width: 0;
+}
+
+.vera5-popup button:focus-visible,
+.vera5-popup a:focus-visible,
+.vera5-popup [role="button"]:focus-visible,
+.vera5-popup summary:focus-visible,
+.vera5-popup input:focus-visible,
+.vera5-popup textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Side panel workspace: permanent three-panel shell.
+ * Intel Feed band at top; lower two-column workspace owns remaining height.
+ * Narrow widths compact proportions only — they never stack into one column.
+ */
+.vera5-popup[data-host="sidepanel"] {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  height: 100dvh;
+  min-height: 0;
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.vera5-popup-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-workspace {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  /* Intel Feed sizes to content; lower operational workspace fills leftover height. */
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px 16px;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-triage,
+.vera5-popup[data-host="sidepanel"] .vera5-popup-detail {
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  max-height: none;
+  overflow: hidden;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-triage {
+  grid-column: 1;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-triage > :not(.vera5-triage-section) {
+  flex: 0 0 auto;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-detail {
+  grid-column: 2;
+  grid-row: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border-left: 1px solid var(--border-hard);
+  padding-left: 16px;
+  padding-right: 6px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-detail > :not(.vera5-popup-casework) {
+  flex: 0 0 auto;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-inspector {
+  flex: 0 0 auto;
+  min-width: 0;
+  max-height: none;
+  overflow: visible;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-casework {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-casework-header {
+  flex: 0 0 auto;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-casework-panel:not([hidden]) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  align-content: start;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-operator-controls,
+.vera5-popup[data-host="sidepanel"] .vera5-scan-commands {
+  flex: 0 0 auto;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-operator-controls {
+  margin: 0 0 10px !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section > :not(.vera5-ioc-queue) {
+  flex: 0 0 auto;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-queue {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  align-content: start;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-queue--suppressed {
+  flex: 0 1 auto;
+  max-height: min(160px, 28dvh) !important;
+  overflow-y: auto !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-queue > [data-vera5-tray-entry="true"] {
+  flex: 0 0 auto;
+}
+
+.vera5-intel-feed-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-section {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  align-self: stretch;
+  flex: 0 0 auto;
+  height: fit-content;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vera5-intel-feed-heading {
+  margin: 0;
+  flex: 0 0 auto;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.vera5-intel-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border-hard);
+  border-top: 2px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--surface-raised);
+  box-shadow: var(--highlight-top);
+  overflow: hidden;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed {
+  flex: 0 0 auto;
+  min-height: 0;
+  height: fit-content;
+}
+
+.vera5-intel-feed--empty {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  gap: 12px;
+}
+
+.vera5-intel-feed--empty p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+/* Top portion: IOC + score + summary — content-sized, never stretched. */
+.vera5-intel-feed-summary-row {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: minmax(120px, 168px) minmax(72px, 96px) minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+}
+
+.vera5-intel-feed-command,
+.vera5-intel-feed-score,
+.vera5-intel-feed-summary {
+  min-width: 0;
+  height: fit-content;
+  padding: 7px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--surface-1);
+}
+
+.vera5-intel-feed-command {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 6px;
+  align-content: start;
+}
+
+.vera5-intel-feed-command > strong {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--text-primary);
+  font: 600 11px/1.3 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vera5-intel-feed-type {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font: 700 9px/1.2 var(--font-ui);
+}
+
+.vera5-intel-feed-enrich {
+  grid-column: 1 / -1;
+  min-height: 24px;
+  border: 1px solid var(--border-accent);
+  border-radius: 4px;
+  background: var(--accent-weak);
+  color: var(--accent-hover);
+  font: 700 10px/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.vera5-intel-feed-score {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.vera5-intel-feed-score > span,
+.vera5-intel-feed-score > small {
+  color: var(--text-secondary);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.vera5-intel-feed-score > strong {
+  margin: 0;
+  color: var(--accent-hover);
+  font: 800 20px/1 var(--font-display);
+}
+
+.vera5-intel-feed-score[data-vera5-risk-label="low"] > strong {
+  color: var(--terminal-teal);
+}
+
+.vera5-intel-feed-score[data-vera5-risk-label="high"] > strong,
+.vera5-intel-feed-score[data-vera5-risk-label="critical"] > strong {
+  color: var(--signal-red);
+}
+
+.vera5-intel-feed-summary {
+  margin: 0;
+  max-height: 4.8em;
+  overflow-y: auto;
+  color: var(--text-primary);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+/* Bottom portion: compact horizontal vendor rail + pivot. */
+.vera5-intel-feed-rail {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.vera5-intel-feed-sources {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  align-items: flex-start;
+}
+
+.vera5-intel-source-card {
+  display: flex;
+  flex: 0 0 136px;
+  flex-direction: column;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 136px;
+  min-width: 136px;
+  max-width: 136px;
+  min-height: 88px;
+  height: auto;
+  padding: 6px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  background: var(--surface-1);
+  scroll-snap-align: start;
+}
+
+.vera5-intel-source-card > div {
+  display: flex;
+  gap: 4px;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.vera5-intel-source-card strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vera5-intel-source-card > div > span {
+  flex-shrink: 0;
+  color: var(--accent-hover);
+  font: 700 10px/1.2 var(--font-mono);
+}
+
+.vera5-intel-source-card p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.vera5-intel-source-card small {
+  margin-top: 2px;
+  padding-top: 0;
+  color: var(--text-low);
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+.vera5-intel-source-card[data-vera5-source-status="ok"] {
+  border-color: color-mix(in srgb, var(--terminal-teal) 38%, var(--border-soft));
+}
+
+.vera5-intel-source-card[data-vera5-source-status="error"] {
+  border-color: color-mix(in srgb, var(--signal-red) 48%, var(--border-soft));
+}
+
+.vera5-intel-source-card[data-vera5-assessment-kind="exposure"],
+.vera5-intel-source-card[data-vera5-assessment-kind="context"] {
+  border-color: color-mix(in srgb, var(--deep-violet) 38%, var(--border-soft));
+}
+
+.vera5-intel-feed-pivots {
+  position: relative;
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+
+.vera5-intel-feed-pivots > summary {
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  min-height: 88px;
+  height: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border-accent);
+  border-radius: 4px;
+  background: var(--accent-weak);
+  color: var(--accent-hover);
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
+  list-style: none;
+  cursor: pointer;
+}
+
+.vera5-intel-feed-pivots > summary::-webkit-details-marker {
+  display: none;
+}
+
+.vera5-intel-feed-pivots > div {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 5px;
+  width: max-content;
+  max-width: min(420px, 80vw);
+  padding: 8px;
+  border: 1px solid var(--border-hard);
+  border-radius: 4px;
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-med);
+}
+
+.vera5-intel-feed-pivots button {
+  padding: 6px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font-size: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vera5-popup-triage,
+.vera5-popup-casework,
+.vera5-popup-detail {
+  min-width: 0;
+}
+
+@container vera5-workspace (max-width: 559px) {
+  .vera5-popup[data-host="sidepanel"] .vera5-header-utilities {
+    gap: 4px !important;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-popup-workspace {
+    gap: 10px 10px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-popup-detail {
+    padding-left: 10px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-summary-row {
+    grid-template-columns: minmax(100px, 140px) minmax(64px, 84px) minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-source-card {
+    flex-basis: 124px;
+    width: 124px;
+    min-width: 124px;
+    max-width: 124px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vera5-popup *,
+  .vera5-popup *::before,
+  .vera5-popup *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
   }
 }

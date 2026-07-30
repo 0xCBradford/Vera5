@@ -4,6 +4,7 @@ import {
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
   ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS,
+  ENRICHMENT_SOURCE_DEFINITIONS,
   LIVE_ENRICHMENT_SOURCE_ORDER,
   OPTIONS_API_KEY_SLOTS,
   enrichmentSourceSupportsIocType,
@@ -16,10 +17,7 @@ import {
   setConnectorConfidenceMetadataOverrides,
 } from "./enrichmentSourceRegistry";
 import { enrichWithConnectorShell } from "./enrichmentConnectorShell";
-import {
-  ENRICHMENT_ERROR_CODE,
-  ENRICHMENT_SOURCE_STATUS,
-} from "./enrichment";
+import { ENRICHMENT_ERROR_CODE, ENRICHMENT_SOURCE_STATUS } from "./enrichment";
 
 vi.mock("./storage", () => ({
   getApiKey: vi.fn().mockResolvedValue(""),
@@ -45,9 +43,9 @@ describe("enrichmentSourceRegistry", () => {
   });
 
   it("assigns confidence metadata defaults for every built-in source", () => {
-    expect(Object.keys(ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS)).toEqual(
-      [...ENRICHMENT_SOURCE_ORDER]
-    );
+    expect(Object.keys(ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS)).toEqual([
+      ...ENRICHMENT_SOURCE_ORDER,
+    ]);
 
     for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
       const defaults = ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[sourceId];
@@ -56,24 +54,32 @@ describe("enrichmentSourceRegistry", () => {
       expect(defaults.sourceClass).toBeTruthy();
     }
 
-    expect(
-      ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[ENRICHMENT_SOURCE.OTX]
-    ).toMatchObject({
+    expect(ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[ENRICHMENT_SOURCE.OTX]).toMatchObject({
       reliabilityTier: "community",
       sourceClass: "community",
     });
     expect(
       ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[ENRICHMENT_SOURCE.VIRUSTOTAL]
     ).toMatchObject({
-      reliabilityTier: "pivot_only",
+      reliabilityTier: "authoritative",
       sourceClass: "authoritative",
     });
+  });
+
+  it("assigns an assessment kind to every built-in source", () => {
+    expect(Object.keys(ENRICHMENT_SOURCE_DEFINITIONS)).toEqual([...ENRICHMENT_SOURCE_ORDER]);
+    for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
+      expect(["risk", "exposure", "context"]).toContain(
+        ENRICHMENT_SOURCE_DEFINITIONS[sourceId].assessmentKind
+      );
+    }
   });
 
   it("registers live connectors and options API key slots", () => {
     expect(LIVE_ENRICHMENT_SOURCE_ORDER).toEqual([
       "abuseipdb",
       "otx",
+      "virustotal",
       "urlscan",
       "greynoise",
       "shodan",
@@ -111,13 +117,11 @@ describe("enrichmentSourceRegistry", () => {
     expect(OPTIONS_API_KEY_SLOTS).not.toContain(ENRICHMENT_SOURCE.RDAP_WHOIS);
   });
 
-  it("keeps VirusTotal disabled by default and outside live connector order", () => {
+  it("registers VirusTotal as live but disabled by default", () => {
     const definition = getEnrichmentSourceDefinition(ENRICHMENT_SOURCE.VIRUSTOTAL);
     expect(definition.enabledDefault).toBe(false);
-    expect(definition.liveConnector).toBe(false);
-    expect(LIVE_ENRICHMENT_SOURCE_ORDER).not.toContain(
-      ENRICHMENT_SOURCE.VIRUSTOTAL
-    );
+    expect(definition.liveConnector).toBe(true);
+    expect(LIVE_ENRICHMENT_SOURCE_ORDER).toContain(ENRICHMENT_SOURCE.VIRUSTOTAL);
   });
 
   it("formats workspace source messages", () => {
@@ -133,75 +137,37 @@ describe("enrichmentSourceRegistry", () => {
   });
 
   it("lists pivot-capable sources for an IPv4 indicator", () => {
-    const sources = listEnrichmentSourcesWithPivotSupport(
-      IOC_TYPE.IPV4,
-      "8.8.8.8"
-    );
+    const sources = listEnrichmentSourcesWithPivotSupport(IOC_TYPE.IPV4, "8.8.8.8");
     expect(sources).toContain(ENRICHMENT_SOURCE.VIRUSTOTAL);
     expect(sources).toContain(ENRICHMENT_SOURCE.GREYNOISE);
     expect(sources).not.toContain(ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING);
   });
 
   it("tracks supported indicator types per source", () => {
-    expect(
-      enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.ABUSEIPDB, IOC_TYPE.IPV4)
-    ).toBe(true);
-    expect(
-      enrichmentSourceSupportsIocType(
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        IOC_TYPE.DOMAIN
-      )
-    ).toBe(false);
-    expect(
-      enrichmentSourceSupportsIocType(
-        ENRICHMENT_SOURCE.MALWAREBAZAAR,
-        IOC_TYPE.SHA256
-      )
-    ).toBe(true);
-    expect(
-      enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.URLSCAN, IOC_TYPE.URL)
-    ).toBe(true);
-    expect(
-      enrichmentSourceSupportsIocType(
-        ENRICHMENT_SOURCE.URLSCAN,
-        IOC_TYPE.DOMAIN
-      )
-    ).toBe(true);
-    expect(
-      enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.URLSCAN, IOC_TYPE.IPV4)
-    ).toBe(false);
-    expect(
-      enrichmentSourceSupportsIocType(
-        ENRICHMENT_SOURCE.URLSCAN,
-        IOC_TYPE.SHA256
-      )
-    ).toBe(false);
-    expect(
-      enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.GREYNOISE, IOC_TYPE.IPV4)
-    ).toBe(true);
-    expect(
-      enrichmentSourceSupportsIocType(
-        ENRICHMENT_SOURCE.GREYNOISE,
-        IOC_TYPE.DOMAIN
-      )
-    ).toBe(false);
-    expect(
-      enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.GREYNOISE, IOC_TYPE.URL)
-    ).toBe(false);
-    expect(
-      enrichmentSourceSupportsIocType(
-        ENRICHMENT_SOURCE.GREYNOISE,
-        IOC_TYPE.SHA256
-      )
-    ).toBe(false);
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.ABUSEIPDB, IOC_TYPE.IPV4)).toBe(true);
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.ABUSEIPDB, IOC_TYPE.DOMAIN)).toBe(
+      false
+    );
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.MALWAREBAZAAR, IOC_TYPE.SHA256)).toBe(
+      true
+    );
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.URLSCAN, IOC_TYPE.URL)).toBe(true);
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.URLSCAN, IOC_TYPE.DOMAIN)).toBe(true);
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.URLSCAN, IOC_TYPE.IPV4)).toBe(false);
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.URLSCAN, IOC_TYPE.SHA256)).toBe(false);
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.GREYNOISE, IOC_TYPE.IPV4)).toBe(true);
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.GREYNOISE, IOC_TYPE.DOMAIN)).toBe(
+      false
+    );
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.GREYNOISE, IOC_TYPE.URL)).toBe(false);
+    expect(enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.GREYNOISE, IOC_TYPE.SHA256)).toBe(
+      false
+    );
   });
 
   it("lists pivot-capable sources for Phase 2 indicator types", () => {
     expect(
-      listEnrichmentSourcesWithPivotSupport(
-        IOC_TYPE.EMAIL,
-        "analyst@corp.example.com"
-      )
+      listEnrichmentSourcesWithPivotSupport(IOC_TYPE.EMAIL, "analyst@corp.example.com")
     ).toEqual(
       expect.arrayContaining([
         ENRICHMENT_SOURCE.VIRUSTOTAL,
@@ -237,9 +203,7 @@ describe("enrichmentConnectorShell", () => {
     });
     expect(result.status).toBe(ENRICHMENT_SOURCE_STATUS.SKIPPED);
     expect(result.errorCode).toBe(ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE);
-    expect(result.errorMessage).toBe(
-      "AbuseIPDB does not support this indicator type."
-    );
+    expect(result.errorMessage).toBe("AbuseIPDB does not support this indicator type.");
   });
 
   it("returns missing key for keyed shell sources", async () => {
@@ -276,13 +240,11 @@ describe("connector confidence metadata overrides", () => {
       },
     });
 
-    expect(resolveEnrichmentSourceConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual(
-      {
-        freshnessPolicy: "standard",
-        reliabilityTier: "authoritative",
-        sourceClass: "authoritative",
-      }
-    );
+    expect(resolveEnrichmentSourceConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual({
+      freshnessPolicy: "standard",
+      reliabilityTier: "authoritative",
+      sourceClass: "authoritative",
+    });
   });
 
   it("allows explicit null overrides to clear metadata fields", () => {
@@ -294,9 +256,7 @@ describe("connector confidence metadata overrides", () => {
       },
     });
 
-    expect(
-      resolveEnrichmentSourceConfidenceMetadata(ENRICHMENT_SOURCE.ABUSEIPDB)
-    ).toEqual({
+    expect(resolveEnrichmentSourceConfidenceMetadata(ENRICHMENT_SOURCE.ABUSEIPDB)).toEqual({
       freshnessPolicy: null,
       reliabilityTier: null,
       sourceClass: null,

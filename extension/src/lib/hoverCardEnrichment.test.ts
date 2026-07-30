@@ -53,29 +53,22 @@ describe("connector confidence metadata rendering per source", () => {
     enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
   });
 
-  it.each([...ENRICHMENT_SOURCE_ORDER])(
-    "renders default metadata chips for %s",
-    (sourceId) => {
-      const fields = resolveHoverCardSourceConfidenceMetadata(sourceId);
-      const chips = buildHoverCardSourceMetadataChips(sourceId);
-      const expected = buildHoverCardSourceMetadataChipsFromFields(fields);
+  it.each([...ENRICHMENT_SOURCE_ORDER])("renders default metadata chips for %s", (sourceId) => {
+    const fields = resolveHoverCardSourceConfidenceMetadata(sourceId);
+    const chips = buildHoverCardSourceMetadataChips(sourceId);
+    const expected = buildHoverCardSourceMetadataChipsFromFields(fields);
 
-      expect(chips).toEqual(expected);
-      expect(chips.map((chip) => chip.kind)).toEqual([
-        "reliability",
-        "freshness",
-        "sourceClass",
-      ]);
-      for (const chip of chips) {
-        expect(chip.tooltip.length).toBeGreaterThan(0);
-        if (chip.kind === "reliability" && chip.label === "Pivot only") {
-          expect(chip.tooltip.toLowerCase()).toContain("pivot");
-        } else {
-          expect(chip.tooltip.toLowerCase()).toContain("informational");
-        }
+    expect(chips).toEqual(expected);
+    expect(chips.map((chip) => chip.kind)).toEqual(["reliability", "freshness", "sourceClass"]);
+    for (const chip of chips) {
+      expect(chip.tooltip.length).toBeGreaterThan(0);
+      if (chip.kind === "reliability" && chip.label === "Pivot only") {
+        expect(chip.tooltip.toLowerCase()).toContain("pivot");
+      } else {
+        expect(chip.tooltip.toLowerCase()).toContain("informational");
       }
     }
-  );
+  });
 
   it.each([...ENRICHMENT_SOURCE_ORDER])(
     "attaches metadata chips on hover card entries for %s",
@@ -90,9 +83,7 @@ describe("connector confidence metadata rendering per source", () => {
       ]);
 
       expect(entry?.sourceId).toBe(sourceId);
-      expect(entry?.metadataChips).toEqual(
-        buildHoverCardSourceMetadataChips(sourceId)
-      );
+      expect(entry?.metadataChips).toEqual(buildHoverCardSourceMetadataChips(sourceId));
     }
   );
 
@@ -101,69 +92,25 @@ describe("connector confidence metadata rendering per source", () => {
       (typeof ENRICHMENT_SOURCE_ORDER)[number],
       readonly [string, string, string]
     > = {
-      [ENRICHMENT_SOURCE.ABUSEIPDB]: [
-        "Authoritative",
-        "Standard",
-        "Authoritative",
-      ],
+      [ENRICHMENT_SOURCE.ABUSEIPDB]: ["Authoritative", "Standard", "Authoritative"],
       [ENRICHMENT_SOURCE.OTX]: ["Community", "Standard", "Community"],
-      [ENRICHMENT_SOURCE.VIRUSTOTAL]: [
-        "Pivot only",
-        "Standard",
-        "Authoritative",
-      ],
-      [ENRICHMENT_SOURCE.URLSCAN]: [
-        "Authoritative",
-        "Volatile",
-        "Authoritative",
-      ],
-      [ENRICHMENT_SOURCE.GREYNOISE]: [
-        "Authoritative",
-        "Volatile",
-        "Authoritative",
-      ],
-      [ENRICHMENT_SOURCE.SHODAN]: [
-        "Authoritative",
-        "Standard",
-        "Authoritative",
-      ],
-      [ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING]: [
-        "Pivot only",
-        "Stable",
-        "Authoritative",
-      ],
-      [ENRICHMENT_SOURCE.PULSEDIVE]: [
-        "Pivot only",
-        "Standard",
-        "Community",
-      ],
-      [ENRICHMENT_SOURCE.MALWAREBAZAAR]: [
-        "Pivot only",
-        "Stable",
-        "Community",
-      ],
-      [ENRICHMENT_SOURCE.CENSYS]: [
-        "Authoritative",
-        "Standard",
-        "Authoritative",
-      ],
-      [ENRICHMENT_SOURCE.THREATFOX]: [
-        "Pivot only",
-        "Volatile",
-        "Community",
-      ],
+      [ENRICHMENT_SOURCE.VIRUSTOTAL]: ["Authoritative", "Standard", "Authoritative"],
+      [ENRICHMENT_SOURCE.URLSCAN]: ["Authoritative", "Volatile", "Authoritative"],
+      [ENRICHMENT_SOURCE.GREYNOISE]: ["Authoritative", "Volatile", "Authoritative"],
+      [ENRICHMENT_SOURCE.SHODAN]: ["Authoritative", "Standard", "Authoritative"],
+      [ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING]: ["Pivot only", "Stable", "Authoritative"],
+      [ENRICHMENT_SOURCE.PULSEDIVE]: ["Pivot only", "Standard", "Community"],
+      [ENRICHMENT_SOURCE.MALWAREBAZAAR]: ["Pivot only", "Stable", "Community"],
+      [ENRICHMENT_SOURCE.CENSYS]: ["Authoritative", "Standard", "Authoritative"],
+      [ENRICHMENT_SOURCE.THREATFOX]: ["Pivot only", "Volatile", "Community"],
       [ENRICHMENT_SOURCE.URLHAUS]: ["Pivot only", "Volatile", "Community"],
-      [ENRICHMENT_SOURCE.RDAP_WHOIS]: [
-        "Authoritative",
-        "Stable",
-        "Authoritative",
-      ],
+      [ENRICHMENT_SOURCE.RDAP_WHOIS]: ["Authoritative", "Stable", "Authoritative"],
     };
 
     for (const sourceId of ENRICHMENT_SOURCE_ORDER) {
-      expect(
-        buildHoverCardSourceMetadataChips(sourceId).map((chip) => chip.label)
-      ).toEqual([...expectedLabelsBySource[sourceId]]);
+      expect(buildHoverCardSourceMetadataChips(sourceId).map((chip) => chip.label)).toEqual([
+        ...expectedLabelsBySource[sourceId],
+      ]);
     }
   });
 });
@@ -211,27 +158,20 @@ describe("hover card enrichment placeholders", () => {
       ENRICHMENT_SOURCE.ABUSEIPDB,
       ENRICHMENT_SOURCE.URLSCAN,
     ]);
-    expect(placeholders[0]?.message).toBe(
-      formatDisabledSourceMessage("AbuseIPDB")
-    );
+    expect(placeholders[0]?.message).toBe(formatDisabledSourceMessage("AbuseIPDB"));
   });
 
   it("resolves hover card disclaimer lines by enrichment state and risk visibility", () => {
-    expect(resolveHoverCardDisclaimerLines({ enrichmentState: "empty" })).toEqual(
-      []
-    );
-    expect(
-      resolveHoverCardDisclaimerLines({ enrichmentState: "ready" })
-    ).toEqual([HOVER_CARD_ENRICHMENT_DISCLAIMER]);
+    expect(resolveHoverCardDisclaimerLines({ enrichmentState: "empty" })).toEqual([]);
+    expect(resolveHoverCardDisclaimerLines({ enrichmentState: "ready" })).toEqual([
+      HOVER_CARD_ENRICHMENT_DISCLAIMER,
+    ]);
     expect(
       resolveHoverCardDisclaimerLines({
         enrichmentState: "ready",
         includeRiskScoreDisclaimer: true,
       })
-    ).toEqual([
-      HOVER_CARD_ENRICHMENT_DISCLAIMER,
-      HOVER_CARD_RISK_SCORE_DISCLAIMER,
-    ]);
+    ).toEqual([HOVER_CARD_ENRICHMENT_DISCLAIMER, HOVER_CARD_RISK_SCORE_DISCLAIMER]);
     expect(
       shouldShowHoverCardDisclaimer({
         enrichmentState: "loading",
@@ -260,31 +200,20 @@ describe("hover card enrichment placeholders", () => {
     expect(shouldShowRiskScoreSection(allDisabled, staleResults)).toBe(true);
     expect(shouldShowRiskScore(allDisabled, [])).toBe(false);
     expect(shouldShowRiskScoreSection(allDisabled, [])).toBe(true);
-    expect(
-      shouldShowRiskScore([ENRICHMENT_SOURCE.ABUSEIPDB], staleResults)
-    ).toBe(true);
+    expect(shouldShowRiskScore([ENRICHMENT_SOURCE.ABUSEIPDB], staleResults)).toBe(true);
     expect(shouldShowRiskScore([], staleResults)).toBe(true);
   });
 
   it("formats source attribution for live, cached, and error states", () => {
+    expect(formatEnrichmentSourceAttribution({ sourceLabel: "AbuseIPDB" }, "ready")).toBe(
+      "Source: AbuseIPDB · live"
+    );
     expect(
-      formatEnrichmentSourceAttribution(
-        { sourceLabel: "AbuseIPDB" },
-        "ready"
-      )
-    ).toBe("Source: AbuseIPDB · live");
-    expect(
-      formatEnrichmentSourceAttribution(
-        { sourceLabel: "AbuseIPDB", fromCache: true },
-        "ready"
-      )
+      formatEnrichmentSourceAttribution({ sourceLabel: "AbuseIPDB", fromCache: true }, "ready")
     ).toBe("Source: AbuseIPDB · cached");
-    expect(
-      formatEnrichmentSourceAttribution(
-        { sourceLabel: "AbuseIPDB" },
-        "error"
-      )
-    ).toBe("Source: AbuseIPDB");
+    expect(formatEnrichmentSourceAttribution({ sourceLabel: "AbuseIPDB" }, "error")).toBe(
+      "Source: AbuseIPDB"
+    );
   });
 
   it("shows attribution only for ready and error enrichment states", () => {
@@ -303,9 +232,7 @@ describe("hover card enrichment placeholders", () => {
         sourceLabel: "AbuseIPDB",
       })
     ).toBe(false);
-    expect(
-      shouldShowEnrichmentSourceAttribution("ready", { sourceLabel: "  " })
-    ).toBe(false);
+    expect(shouldShowEnrichmentSourceAttribution("ready", { sourceLabel: "  " })).toBe(false);
   });
 
   it("shows open-settings action only for missing-key errors", () => {
@@ -371,7 +298,7 @@ describe("hover card enrichment placeholders", () => {
       "Community",
     ]);
     expect(entries[2]?.metadataChips.map((chip) => chip.label)).toEqual([
-      "Pivot only",
+      "Authoritative",
       "Standard",
       "Authoritative",
     ]);
@@ -400,9 +327,7 @@ describe("hover card enrichment placeholders", () => {
       }
     }
 
-    expect(entries[0]?.metadataChips[0]?.tooltip).toContain(
-      "composite risk score"
-    );
+    expect(entries[0]?.metadataChips[0]?.tooltip).toContain("composite risk score");
     expect(entries[1]?.metadataChips[0]?.tooltip).toContain("Community-sourced");
   });
 
@@ -447,9 +372,7 @@ describe("hover card enrichment placeholders", () => {
   });
 
   it("returns an empty chip list for unknown source ids", () => {
-    expect(buildHoverCardSourceMetadataChips("unknown-source" as never)).toEqual(
-      []
-    );
+    expect(buildHoverCardSourceMetadataChips("unknown-source" as never)).toEqual([]);
   });
 
   it("treats explicit null metadata overrides as missing", () => {
@@ -461,13 +384,11 @@ describe("hover card enrichment placeholders", () => {
       },
     });
 
-    expect(resolveHoverCardSourceConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual(
-      {
-        freshnessPolicy: null,
-        reliabilityTier: null,
-        sourceClass: null,
-      }
-    );
+    expect(resolveHoverCardSourceConfidenceMetadata(ENRICHMENT_SOURCE.OTX)).toEqual({
+      freshnessPolicy: null,
+      reliabilityTier: null,
+      sourceClass: null,
+    });
     expect(buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX)).toEqual([]);
 
     enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
@@ -484,9 +405,7 @@ describe("hover card enrichment placeholders", () => {
       buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX).map((chip) => chip.kind)
     ).toEqual(["freshness", "sourceClass"]);
     expect(
-      buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX).map(
-        (chip) => chip.label
-      )
+      buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX).map((chip) => chip.label)
     ).toEqual(["Standard", "Community"]);
 
     enrichmentSourceRegistry.setConnectorConfidenceMetadataOverrides({});
@@ -508,10 +427,7 @@ describe("hover card enrichment placeholders", () => {
       },
     ]);
 
-    expect(entry?.metadataChips.map((chip) => chip.kind)).toEqual([
-      "freshness",
-      "sourceClass",
-    ]);
+    expect(entry?.metadataChips.map((chip) => chip.kind)).toEqual(["freshness", "sourceClass"]);
     expect(entry?.detail).toBe("12 abuse confidence");
     expect(entry?.badgeText).toBe(formatSourceStatusBadge("ok"));
 
@@ -545,9 +461,7 @@ describe("hover card enrichment placeholders", () => {
     });
 
     expect(
-      buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX).map(
-        (chip) => chip.label
-      )
+      buildHoverCardSourceMetadataChips(ENRICHMENT_SOURCE.OTX).map((chip) => chip.label)
     ).toEqual(["Authoritative", "Standard", "Authoritative"]);
   });
 
@@ -579,11 +493,7 @@ describe("hover card enrichment placeholders", () => {
       ENRICHMENT_SOURCE.OTX,
       ENRICHMENT_SOURCE.GREYNOISE,
     ]);
-    expect(entries.map((entry) => entry.label)).toEqual([
-      "AbuseIPDB",
-      "OTX",
-      "GreyNoise",
-    ]);
+    expect(entries.map((entry) => entry.label)).toEqual(["AbuseIPDB", "OTX", "GreyNoise"]);
     expect(entries[2]?.detail).toBe("malicious internet noise");
     expect(entries[2]?.tags).toEqual(["malicious", "noise"]);
   });
@@ -744,8 +654,7 @@ describe("hover card enrichment placeholders", () => {
         sourceLabel: "URLScan.io",
         status: "skipped",
         errorCode: "missing_key",
-        errorMessage:
-          "Add your URLScan.io API key in Vera5 Settings to load enrichment.",
+        errorMessage: "Add your URLScan.io API key in Vera5 Settings to load enrichment.",
       },
     ])[0];
     expect(missingKey?.detail).toBe(
@@ -769,14 +678,11 @@ describe("hover card enrichment placeholders", () => {
         sourceLabel: "URLScan.io",
         status: "error",
         errorCode: "rate_limited",
-        errorMessage:
-          "URLScan.io rate limit reached. Back off before retrying.",
+        errorMessage: "URLScan.io rate limit reached. Back off before retrying.",
         retryHint: "Retry after 45 seconds.",
       },
     ])[0];
-    expect(rateLimited?.detail).toBe(
-      "URLScan.io rate limit reached. Back off before retrying."
-    );
+    expect(rateLimited?.detail).toBe("URLScan.io rate limit reached. Back off before retrying.");
     expect(rateLimited?.retryHint).toBe("Retry after 45 seconds.");
 
     const timedOut = buildHoverCardSourceEntries([
@@ -798,13 +704,10 @@ describe("hover card enrichment placeholders", () => {
         sourceLabel: "RDAP/WHOIS",
         status: "error",
         errorCode: "vendor_error",
-        errorMessage:
-          "RDAP/WHOIS: no registration record found (NXDOMAIN).",
+        errorMessage: "RDAP/WHOIS: no registration record found (NXDOMAIN).",
       },
     ])[0];
-    expect(notFound?.detail).toBe(
-      "RDAP/WHOIS: no registration record found (NXDOMAIN)."
-    );
+    expect(notFound?.detail).toBe("RDAP/WHOIS: no registration record found (NXDOMAIN).");
     expect(notFound?.badgeText).toBe("Error");
 
     const rateLimited = buildHoverCardSourceEntries([
@@ -813,14 +716,11 @@ describe("hover card enrichment placeholders", () => {
         sourceLabel: "RDAP/WHOIS",
         status: "error",
         errorCode: "rate_limited",
-        errorMessage:
-          "RDAP/WHOIS rate limit reached. Back off before retrying.",
+        errorMessage: "RDAP/WHOIS rate limit reached. Back off before retrying.",
         retryHint: "Retry after 30 seconds.",
       },
     ])[0];
-    expect(rateLimited?.detail).toBe(
-      "RDAP/WHOIS rate limit reached. Back off before retrying."
-    );
+    expect(rateLimited?.detail).toBe("RDAP/WHOIS rate limit reached. Back off before retrying.");
     expect(rateLimited?.retryHint).toBe("Retry after 30 seconds.");
 
     const timedOut = buildHoverCardSourceEntries([
@@ -854,12 +754,8 @@ describe("hover card enrichment placeholders", () => {
     ]);
 
     expect(view.enrichmentState).toBe("error");
-    expect(view.sourceResults[0]?.detail).toBe(
-      "AbuseIPDB does not support this indicator type."
-    );
-    expect(view.sourceResults[1]?.detail).toBe(
-      "OTX does not support this indicator type."
-    );
+    expect(view.sourceResults[0]?.detail).toBe("AbuseIPDB does not support this indicator type.");
+    expect(view.sourceResults[1]?.detail).toBe("OTX does not support this indicator type.");
   });
 
   it("surfaces GreyNoise connector error copy on source entries", () => {
@@ -869,8 +765,7 @@ describe("hover card enrichment placeholders", () => {
         sourceLabel: "GreyNoise",
         status: "skipped",
         errorCode: "missing_key",
-        errorMessage:
-          "Add your GreyNoise API key in Vera5 Settings to load enrichment.",
+        errorMessage: "Add your GreyNoise API key in Vera5 Settings to load enrichment.",
       },
     ])[0];
     expect(missingKey?.detail).toBe(
@@ -898,9 +793,7 @@ describe("hover card enrichment placeholders", () => {
         retryHint: "Retry after 45 seconds.",
       },
     ])[0];
-    expect(rateLimited?.detail).toBe(
-      "GreyNoise rate limit reached. Back off before retrying."
-    );
+    expect(rateLimited?.detail).toBe("GreyNoise rate limit reached. Back off before retrying.");
     expect(rateLimited?.retryHint).toBe("Retry after 45 seconds.");
 
     const timedOut = buildHoverCardSourceEntries([
@@ -955,12 +848,8 @@ describe("hover card enrichment placeholders", () => {
     ]);
     expect(entries[0]?.badgeText).toBe("Cached");
     expect(entries[0]?.fromCache).toBe(true);
-    expect(entries[0]?.lastUpdatedLine).toBe(
-      buildHoverCardLastUpdatedLine(fetchedAt)
-    );
-    expect(getSingleSourceLastUpdatedLine(entries)).toBe(
-      entries[0]?.lastUpdatedLine
-    );
+    expect(entries[0]?.lastUpdatedLine).toBe(buildHoverCardLastUpdatedLine(fetchedAt));
+    expect(getSingleSourceLastUpdatedLine(entries)).toBe(entries[0]?.lastUpdatedLine);
   });
 
   it("omits single-source last updated line when multiple sources are shown", () => {
@@ -991,19 +880,14 @@ describe("hover card enrichment placeholders", () => {
         sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
         sourceLabel: "RDAP/WHOIS",
         status: "ok",
-        summary:
-          "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+        summary: "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
         fetchedAt,
       },
     ]);
 
     expect(entries[0]?.label).toBe("RDAP/WHOIS");
-    expect(entries[0]?.lastUpdatedLine).toBe(
-      buildHoverCardLastUpdatedLine(fetchedAt)
-    );
-    expect(getSingleSourceLastUpdatedLine(entries)).toBe(
-      entries[0]?.lastUpdatedLine
-    );
+    expect(entries[0]?.lastUpdatedLine).toBe(buildHoverCardLastUpdatedLine(fetchedAt));
+    expect(getSingleSourceLastUpdatedLine(entries)).toBe(entries[0]?.lastUpdatedLine);
   });
 
   it("labels cached and quiet-blocked sources separately under quiet mode", () => {
@@ -1041,9 +925,9 @@ describe("hover card enrichment placeholders", () => {
     expect(formatSourceStatusBadge("ok", true)).toBe("Cached");
     expect(formatSourceStatusBadge("ok", false)).toBe("Live");
     expect(formatSourceStatusBadge("skipped")).toBe("Skipped");
-    expect(
-      formatSourceStatusBadge("skipped", false, "known_good_policy")
-    ).toBe("Skipped (known-good)");
+    expect(formatSourceStatusBadge("skipped", false, "known_good_policy")).toBe(
+      "Skipped (known-good)"
+    );
   });
 
   it("resolves single-source RDAP/WHOIS enrichment with attribution footer and timestamp", () => {
@@ -1053,8 +937,7 @@ describe("hover card enrichment placeholders", () => {
         sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
         sourceLabel: "RDAP/WHOIS",
         status: "ok",
-        summary:
-          "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+        summary: "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
         fetchedAt,
       },
     ]);
@@ -1066,9 +949,7 @@ describe("hover card enrichment placeholders", () => {
     expect(formatEnrichmentSourceAttribution(view.sourceAttribution!, "ready")).toBe(
       "Source: RDAP/WHOIS · live"
     );
-    expect(view.sourceResults[0]?.lastUpdatedLine).toBe(
-      buildHoverCardLastUpdatedLine(fetchedAt)
-    );
+    expect(view.sourceResults[0]?.lastUpdatedLine).toBe(buildHoverCardLastUpdatedLine(fetchedAt));
   });
 
   it("shows RDAP/WHOIS attribution on multi-source rows with per-source timestamps", () => {
@@ -1085,19 +966,13 @@ describe("hover card enrichment placeholders", () => {
         sourceId: ENRICHMENT_SOURCE.RDAP_WHOIS,
         sourceLabel: "RDAP/WHOIS",
         status: "ok",
-        summary:
-          "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+        summary: "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
         fetchedAt,
       },
     ]);
 
-    expect(view.sourceResults.map((entry) => entry.label)).toEqual([
-      "OTX",
-      "RDAP/WHOIS",
-    ]);
-    expect(view.sourceResults[1]?.lastUpdatedLine).toBe(
-      buildHoverCardLastUpdatedLine(fetchedAt)
-    );
+    expect(view.sourceResults.map((entry) => entry.label)).toEqual(["OTX", "RDAP/WHOIS"]);
+    expect(view.sourceResults[1]?.lastUpdatedLine).toBe(buildHoverCardLastUpdatedLine(fetchedAt));
     expect(shouldShowMultiSourceResults(view.sourceResults)).toBe(true);
     expect(
       shouldShowEnrichmentSourceAttribution("ready", view.sourceAttribution, view.sourceResults)
@@ -1283,19 +1158,15 @@ describe("hover card enrichment placeholders", () => {
     ]);
     expect(view.enrichmentState).toBe("error");
     expect(view.summary).toBe("Missing API key.");
-    expect(shouldShowMissingKeyAction(view.enrichmentState, view.errorCode, view.sourceResults)).toBe(
-      false
-    );
+    expect(
+      shouldShowMissingKeyAction(view.enrichmentState, view.errorCode, view.sourceResults)
+    ).toBe(false);
   });
 
   it("shows rate-limit retry hint only for error states with hint text", () => {
-    expect(shouldShowRateLimitRetryHint("error", "Retry after 30 seconds.")).toBe(
-      true
-    );
+    expect(shouldShowRateLimitRetryHint("error", "Retry after 30 seconds.")).toBe(true);
     expect(shouldShowRateLimitRetryHint("error", "  ")).toBe(false);
-    expect(shouldShowRateLimitRetryHint("loading", "Retry after 30 seconds.")).toBe(
-      false
-    );
+    expect(shouldShowRateLimitRetryHint("loading", "Retry after 30 seconds.")).toBe(false);
   });
 });
 
@@ -1468,8 +1339,7 @@ describe("why detected view model", () => {
         {
           typeLabel: "Domain",
           value: "example.com",
-          reason:
-            "Matched a domain name in visible text, including bracket-dot defanged forms.",
+          reason: "Matched a domain name in visible text, including bracket-dot defanged forms.",
         },
       ],
     });
@@ -1501,15 +1371,12 @@ describe("why detected view model", () => {
     const view = buildWhyDetectedView({
       type: IOC_TYPE.URL,
       ruleId: IOC_RULE_ID.ATTRIBUTE,
-      sourceTextHint:
-        "href on <a> element: https://attribute-only.example.com/path",
+      sourceTextHint: "href on <a> element: https://attribute-only.example.com/path",
     });
     expect(view).toEqual({
       typeLabel: "URL",
-      reason:
-        "Matched an allowlisted link or attribute value on a visible page element.",
-      sourceTextHint:
-        "href on <a> element: https://attribute-only.example.com/path",
+      reason: "Matched an allowlisted link or attribute value on a visible page element.",
+      sourceTextHint: "href on <a> element: https://attribute-only.example.com/path",
       ignoredOverlaps: [],
     });
   });
@@ -1532,9 +1399,7 @@ describe("why still visible tooltip", () => {
     expect(tooltip).toContain(
       "Reason: Matched an IPv4 address in visible text, including bracket-dot defanged forms."
     );
-    expect(tooltip).toContain(
-      "Source context: Contact 192.0.2.1 for details."
-    );
+    expect(tooltip).toContain("Source context: Contact 192.0.2.1 for details.");
   });
 
   it("caps long lists and notes missing provenance", () => {
@@ -1633,10 +1498,6 @@ describe("live URL open safety", () => {
       "This opens the live URL in a new browser tab. The destination may be malicious or unreachable. Continue?"
     );
     openLiveUrlInNewTab("https://example.com/evil", { open });
-    expect(open).toHaveBeenCalledWith(
-      "https://example.com/evil",
-      "_blank",
-      "noopener,noreferrer"
-    );
+    expect(open).toHaveBeenCalledWith("https://example.com/evil", "_blank", "noopener,noreferrer");
   });
 });

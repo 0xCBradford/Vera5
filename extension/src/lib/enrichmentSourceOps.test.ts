@@ -8,10 +8,7 @@ import {
   createEmptyEnrichmentCache,
   readEnrichmentCacheClearedAt,
 } from "./cache";
-import {
-  ENRICHMENT_SOURCE,
-  ENRICHMENT_SOURCE_ORDER,
-} from "./enrichmentSourceRegistry";
+import { ENRICHMENT_SOURCE, ENRICHMENT_SOURCE_ORDER } from "./enrichmentSourceRegistry";
 import {
   STORAGE_KEY_ENRICHMENT_SOURCE_LAST_STATUS,
   buildEnrichmentSourceOpsRows,
@@ -21,7 +18,7 @@ import {
   formatEnrichmentSourceLastErrorLabel,
   formatEnrichmentSourceLastStatusLabel,
   formatEnrichmentSourceOpsCooldownLabel,
-  ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE,
+  ENRICHMENT_SOURCE_OPS_WORKSPACE_GUIDANCE,
   isEnrichmentSourceOpsSnapshot,
   normalizeEnrichmentSourceLastStatusRecord,
   recordEnrichmentSourceLastStatuses,
@@ -71,8 +68,7 @@ describe("enrichment source ops", () => {
 
   beforeEach(() => {
     store = {
-      [STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS]:
-        DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
+      [STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS]: DEFAULT_ENRICHMENT_CACHE_TTL_SECONDS,
     };
     stubChromeStorage(store);
   });
@@ -180,9 +176,9 @@ describe("enrichment source ops", () => {
     for (const row of rows) {
       expect(row.quotaHint.trim().length).toBeGreaterThan(0);
     }
-    expect(
-      rows.find((row) => row.sourceId === ENRICHMENT_SOURCE.GREYNOISE)?.quotaHint
-    ).toContain("50 IPv4 lookups/week");
+    expect(rows.find((row) => row.sourceId === ENRICHMENT_SOURCE.GREYNOISE)?.quotaHint).toContain(
+      "50 IPv4 lookups/week"
+    );
   });
 
   it("builds a snapshot from cache, status, and cooldown inputs", async () => {
@@ -265,11 +261,11 @@ describe("enrichment source ops", () => {
     expect(await readEnrichmentCacheClearedAt()).toMatch(/^\d{4}-/);
   });
 
-  it("defers duplicate source health UI to the popup via options guidance", () => {
-    expect(ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE).toContain(
+  it("defers duplicate source health UI to the workspace via options guidance", () => {
+    expect(ENRICHMENT_SOURCE_OPS_WORKSPACE_GUIDANCE).toContain(
       "Source operations—not on this page"
     );
-    expect(ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE).toContain("vendor quota hints");
-    expect(ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE).toContain("last error");
+    expect(ENRICHMENT_SOURCE_OPS_WORKSPACE_GUIDANCE).toContain("vendor quota hints");
+    expect(ENRICHMENT_SOURCE_OPS_WORKSPACE_GUIDANCE).toContain("last error");
   });
 });

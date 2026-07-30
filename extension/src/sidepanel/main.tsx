@@ -8,15 +8,12 @@ import { subscribeActiveTabChange } from "./sidePanelActiveTab";
 /**
  * Native Chrome side panel host for the Vera5 analyst workspace.
  *
- * The panel reuses the existing `Popup` workspace verbatim — the popup already
- * runs out-of-page and drives scans on the active tab via background/content
- * messaging, which is exactly the model a side panel needs. The only behaviour
- * the panel adds is tab-switch awareness: tab-scoped state (the detected
- * indicator tray and detail pane) is re-read whenever the active tab changes,
- * while storage-backed state (sessions, collections, notes, settings) survives
- * the remount because it is reloaded from local storage.
+ * The panel mounts the canonical shared workspace as a permanent
+ * three-panel shell: top-left triage, top-right detail/casework, and
+ * a full-width Intel Feed row. Tab-scoped state remounts on active tab
+ * change; storage-backed state reloads from local storage.
  */
-function SidePanelWorkspace(): JSX.Element {
+function SidePanelWorkspace() {
   const [activeTabEpoch, setActiveTabEpoch] = useState(0);
 
   useEffect(

@@ -39,9 +39,7 @@ import {
 import * as enrichmentSourceRegistry from "./enrichmentSourceRegistry";
 import { IOC_TYPE } from "./iocRegex";
 
-function buildStubDefinition(
-  overrides: Partial<ConnectorDefinition> = {}
-): ConnectorDefinition {
+function buildStubDefinition(overrides: Partial<ConnectorDefinition> = {}): ConnectorDefinition {
   return {
     id: ENRICHMENT_SOURCE.OTX,
     supportedIocTypes: [IOC_TYPE.IPV4],
@@ -121,15 +119,12 @@ describe("connectorRegistry", () => {
     it("returns null when the source is pivot-only and not registered for live enrichment", async () => {
       registerBuiltInLiveConnectors();
 
-      expect(lookupConnectorDefinition(ENRICHMENT_SOURCE.VIRUSTOTAL)).toBeUndefined();
+      expect(lookupConnectorDefinition(ENRICHMENT_SOURCE.THREATFOX)).toBeUndefined();
 
-      const result = await enrichRegisteredLiveConnector(
-        ENRICHMENT_SOURCE.VIRUSTOTAL,
-        {
-          value: "8.8.8.8",
-          type: IOC_TYPE.IPV4,
-        }
-      );
+      const result = await enrichRegisteredLiveConnector(ENRICHMENT_SOURCE.THREATFOX, {
+        value: "8.8.8.8",
+        type: IOC_TYPE.IPV4,
+      });
 
       expect(result).toBeNull();
     });
@@ -138,9 +133,7 @@ describe("connectorRegistry", () => {
       registerBuiltInLiveConnectors();
 
       const fetchSpy = vi.fn();
-      const abuseIpdbDefinition = lookupConnectorDefinition(
-        ENRICHMENT_SOURCE.ABUSEIPDB
-      );
+      const abuseIpdbDefinition = lookupConnectorDefinition(ENRICHMENT_SOURCE.ABUSEIPDB);
       expect(abuseIpdbDefinition).toBeDefined();
       const fetch = abuseIpdbDefinition!.fetch;
       abuseIpdbDefinition!.fetch = (...args) => {
@@ -191,9 +184,7 @@ describe("connectorRegistry", () => {
 
     expect(listRegisteredConnectorIds()).toEqual(LIVE_ENRICHMENT_SOURCE_ORDER);
     for (const sourceId of LIVE_ENRICHMENT_SOURCE_ORDER) {
-      expect(lookupConnectorDefinition(sourceId)?.capabilities.liveEnrichment).toBe(
-        true
-      );
+      expect(lookupConnectorDefinition(sourceId)?.capabilities.liveEnrichment).toBe(true);
     }
   });
 
@@ -210,9 +201,7 @@ describe("connectorRegistry", () => {
     clearConnectorRegistry();
     registerBuiltInLiveConnectors();
 
-    const abuseIpdbDefinition = lookupConnectorDefinition(
-      ENRICHMENT_SOURCE.ABUSEIPDB
-    );
+    const abuseIpdbDefinition = lookupConnectorDefinition(ENRICHMENT_SOURCE.ABUSEIPDB);
     expect(abuseIpdbDefinition).toBeDefined();
 
     const mockFetch = vi.fn().mockResolvedValue({
@@ -247,9 +236,7 @@ describe("connectorRegistry", () => {
 
     const otxDefinition = lookupConnectorDefinition(ENRICHMENT_SOURCE.OTX);
     expect(otxDefinition?.supportedIocTypes).toContain(IOC_TYPE.DOMAIN);
-    expect(otxDefinition?.capabilities.authorityTier).toBe(
-      CONNECTOR_AUTHORITY_TIER.COMMUNITY
-    );
+    expect(otxDefinition?.capabilities.authorityTier).toBe(CONNECTOR_AUTHORITY_TIER.COMMUNITY);
   });
 
   it("exposes live vs pivot-only and authority tier metadata for all sources", () => {
@@ -274,10 +261,10 @@ describe("connectorRegistry", () => {
     });
     expect(getConnectorCapabilityMetadata(ENRICHMENT_SOURCE.VIRUSTOTAL)).toEqual({
       sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
-      liveEnrichment: false,
-      pivotOnly: true,
+      liveEnrichment: true,
+      pivotOnly: false,
       requiresApiKey: true,
-      supportsHealthCheck: false,
+      supportsHealthCheck: true,
       authorityTier: CONNECTOR_AUTHORITY_TIER.AUTHORITATIVE,
     });
 
@@ -324,7 +311,7 @@ describe("connectorRegistry", () => {
     expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.VIRUSTOTAL)).toEqual({
       sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
       freshnessPolicy: CONNECTOR_FRESHNESS_POLICY.STANDARD,
-      reliabilityTier: CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY,
+      reliabilityTier: CONNECTOR_RELIABILITY_TIER.AUTHORITATIVE,
       sourceClass: CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
     });
     expect(getConnectorConfidenceMetadata(ENRICHMENT_SOURCE.URLSCAN)).toEqual({
@@ -352,9 +339,7 @@ describe("connectorRegistry", () => {
       expect(entry.reliabilityTier).not.toBeNull();
       expect(entry.sourceClass).not.toBeNull();
       if (!getEnrichmentSourceDefinition(sourceId).liveConnector) {
-        expect(entry.reliabilityTier).toBe(
-          CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY
-        );
+        expect(entry.reliabilityTier).toBe(CONNECTOR_RELIABILITY_TIER.PIVOT_ONLY);
       }
     }
   });

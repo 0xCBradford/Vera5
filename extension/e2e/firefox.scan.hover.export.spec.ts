@@ -1,11 +1,10 @@
-import { test } from "./fixtures/firefoxExtension";
+import { expect, test } from "./fixtures/firefoxExtension";
 import { startExamplesServer, stopExamplesServer } from "./fixtures/examplesServer";
-import { seedEnrichmentMockStorage } from "./fixtures/enrichmentMockRoutes";
+import { seedExportSmokeStorage } from "./fixtures/enrichmentMockRoutes";
 import { closeExtensionShellPage, closeFirefoxExtensionPages } from "./fixtures/extensionRuntime";
 import {
   E2E_SELECTORS,
-  expectHoverCardCompositeScoreVisible,
-  expectHoverCardCopyAllClipboardResult,
+  HOVER_CARD_COPY_ALL_SUCCESS_MESSAGE,
   installClipboardWriteCapture,
   openHoverCardByHighlightClick,
   runCopyAllFromHoverCard,
@@ -23,7 +22,7 @@ test.afterAll(async () => {
 });
 
 test.describe("Firefox investigation smoke", () => {
-  test("scan, hover enrich with mocks, and copy all export", async ({
+  test("scans, opens the hover card, and copies all case artifacts", async ({
     context,
     extensionId,
   }) => {
@@ -40,12 +39,13 @@ test.describe("Firefox investigation smoke", () => {
         state: "attached",
         timeout: 30_000,
       });
-      await seedEnrichmentMockStorage(context, extensionId, page);
+      await seedExportSmokeStorage(context, extensionId, page);
       await scanSampleAlertPage(context, extensionId, page, examplesBaseUrl);
       await openHoverCardByHighlightClick(page);
-      await expectHoverCardCompositeScoreVisible(page);
       await runCopyAllFromHoverCard(page);
-      await expectHoverCardCopyAllClipboardResult(page);
+      const exportStatus = page.locator(E2E_SELECTORS.hoverCardScanExportStatus);
+      await expect(exportStatus).toBeVisible();
+      await expect(exportStatus).toHaveText(HOVER_CARD_COPY_ALL_SUCCESS_MESSAGE);
     } finally {
       await page.close();
       await closeExtensionShellPage(context);

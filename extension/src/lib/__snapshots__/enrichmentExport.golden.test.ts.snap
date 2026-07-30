@@ -66,15 +66,19 @@ exports[`golden: enrichment export JSON snapshots > Priority-2 multi-source read
   ],
   "disabledSources": [],
   "score": {
-    "mode": "insufficient",
-    "label": "unknown",
-    "summaryText": "Unknown risk",
-    "compositeSignal": null,
-    "reasoningLines": [],
-    "reasoningEmptyDetail": "Blended score steps are not available until at least two sources return parseable evidence.",
-    "insufficientDetail": "Need two sources to blend."
+    "mode": "available",
+    "label": "high",
+    "summaryText": "High risk (64/100)",
+    "compositeSignal": 63.5,
+    "reasoningLines": [
+      "AbuseIPDB: Suspicious (42/100, weight 1.00).",
+      "VirusTotal: Critical (85/100, weight 1.00).",
+      "Shodan: no weighted signal (ok).",
+      "Censys: no weighted signal (ok)."
+    ]
   },
-  "disagreement": false,
+  "disagreement": true,
+  "disagreementNotice": "Sources disagree: compare per-source details before deciding.",
   "pivots": [
     {
       "provider": "abuseipdb",
@@ -112,6 +116,11 @@ exports[`golden: enrichment export JSON snapshots > Priority-2 multi-source read
       "href": "https://pulsedive.com/explore?q=8.8.8.8"
     },
     {
+      "provider": "malwarebazaar",
+      "label": "MalwareBazaar",
+      "href": "https://bazaar.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
       "provider": "censys",
       "label": "Censys",
       "href": "https://search.censys.io/hosts/8.8.8.8"
@@ -120,6 +129,16 @@ exports[`golden: enrichment export JSON snapshots > Priority-2 multi-source read
       "provider": "threatfox",
       "label": "ThreatFox",
       "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
+    },
+    {
+      "provider": "urlhaus",
+      "label": "URLHaus",
+      "href": "https://urlhaus.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
+      "provider": "rdap_whois",
+      "label": "RDAP/WHOIS",
+      "href": "https://www.whois.com/whois/8.8.8.8"
     }
   ]
 }"
@@ -193,6 +212,11 @@ exports[`golden: enrichment export JSON snapshots > all enrichment sources disab
       "href": "https://pulsedive.com/explore?q=8.8.8.8"
     },
     {
+      "provider": "malwarebazaar",
+      "label": "MalwareBazaar",
+      "href": "https://bazaar.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
       "provider": "censys",
       "label": "Censys",
       "href": "https://search.censys.io/hosts/8.8.8.8"
@@ -201,6 +225,16 @@ exports[`golden: enrichment export JSON snapshots > all enrichment sources disab
       "provider": "threatfox",
       "label": "ThreatFox",
       "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
+    },
+    {
+      "provider": "urlhaus",
+      "label": "URLHaus",
+      "href": "https://urlhaus.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
+      "provider": "rdap_whois",
+      "label": "RDAP/WHOIS",
+      "href": "https://www.whois.com/whois/8.8.8.8"
     }
   ]
 }"
@@ -286,6 +320,11 @@ exports[`golden: enrichment export JSON snapshots > disagreement callout 1`] = `
       "href": "https://pulsedive.com/explore?q=8.8.8.8"
     },
     {
+      "provider": "malwarebazaar",
+      "label": "MalwareBazaar",
+      "href": "https://bazaar.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
       "provider": "censys",
       "label": "Censys",
       "href": "https://search.censys.io/hosts/8.8.8.8"
@@ -294,6 +333,16 @@ exports[`golden: enrichment export JSON snapshots > disagreement callout 1`] = `
       "provider": "threatfox",
       "label": "ThreatFox",
       "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
+    },
+    {
+      "provider": "urlhaus",
+      "label": "URLHaus",
+      "href": "https://urlhaus.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
+      "provider": "rdap_whois",
+      "label": "RDAP/WHOIS",
+      "href": "https://www.whois.com/whois/8.8.8.8"
     }
   ]
 }"
@@ -379,6 +428,11 @@ exports[`golden: enrichment export JSON snapshots > multi-source ready enrichmen
       "href": "https://pulsedive.com/explore?q=185.220.101.4"
     },
     {
+      "provider": "malwarebazaar",
+      "label": "MalwareBazaar",
+      "href": "https://bazaar.abuse.ch/browse.php?search=185.220.101.4"
+    },
+    {
       "provider": "censys",
       "label": "Censys",
       "href": "https://search.censys.io/hosts/185.220.101.4"
@@ -387,6 +441,16 @@ exports[`golden: enrichment export JSON snapshots > multi-source ready enrichmen
       "provider": "threatfox",
       "label": "ThreatFox",
       "href": "https://threatfox.abuse.ch/browse.php?search=ioc:185.220.101.4"
+    },
+    {
+      "provider": "urlhaus",
+      "label": "URLHaus",
+      "href": "https://urlhaus.abuse.ch/browse.php?search=185.220.101.4"
+    },
+    {
+      "provider": "rdap_whois",
+      "label": "RDAP/WHOIS",
+      "href": "https://www.whois.com/whois/185.220.101.4"
     }
   ]
 }"
@@ -446,6 +510,11 @@ exports[`golden: enrichment export JSON snapshots > no enrichment results 1`] = 
       "href": "https://pulsedive.com/explore?q=8.8.8.8"
     },
     {
+      "provider": "malwarebazaar",
+      "label": "MalwareBazaar",
+      "href": "https://bazaar.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
       "provider": "censys",
       "label": "Censys",
       "href": "https://search.censys.io/hosts/8.8.8.8"
@@ -454,6 +523,16 @@ exports[`golden: enrichment export JSON snapshots > no enrichment results 1`] = 
       "provider": "threatfox",
       "label": "ThreatFox",
       "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
+    },
+    {
+      "provider": "urlhaus",
+      "label": "URLHaus",
+      "href": "https://urlhaus.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
+      "provider": "rdap_whois",
+      "label": "RDAP/WHOIS",
+      "href": "https://www.whois.com/whois/8.8.8.8"
     }
   ]
 }"
@@ -528,6 +607,11 @@ exports[`golden: enrichment export JSON snapshots > with analyst notes 1`] = `
       "href": "https://pulsedive.com/explore?q=8.8.8.8"
     },
     {
+      "provider": "malwarebazaar",
+      "label": "MalwareBazaar",
+      "href": "https://bazaar.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
       "provider": "censys",
       "label": "Censys",
       "href": "https://search.censys.io/hosts/8.8.8.8"
@@ -536,6 +620,16 @@ exports[`golden: enrichment export JSON snapshots > with analyst notes 1`] = `
       "provider": "threatfox",
       "label": "ThreatFox",
       "href": "https://threatfox.abuse.ch/browse.php?search=ioc:8.8.8.8"
+    },
+    {
+      "provider": "urlhaus",
+      "label": "URLHaus",
+      "href": "https://urlhaus.abuse.ch/browse.php?search=8.8.8.8"
+    },
+    {
+      "provider": "rdap_whois",
+      "label": "RDAP/WHOIS",
+      "href": "https://www.whois.com/whois/8.8.8.8"
     }
   ],
   "analystNotes": "Review firewall logs."
@@ -552,13 +646,16 @@ Summary: 42 abuse confidence
 
 Tags: US
 
-Risk score: Unknown risk
-
-Need two sources to blend.
+Risk score: High risk (64/100)
 
 ### How this score was computed
 
-Blended score steps are not available until at least two sources return parseable evidence.
+1. AbuseIPDB: Suspicious (42/100, weight 1.00).
+2. VirusTotal: Critical (85/100, weight 1.00).
+3. Shodan: no weighted signal (ok).
+4. Censys: no weighted signal (ok).
+
+Sources disagree: compare per-source details before deciding.
 
 ### Source Summary
 

@@ -6,66 +6,55 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IOC_RULE_ID, IOC_TYPE } from "../lib/iocRegex";
 import { createInvestigationSession } from "../lib/investigationSession";
+import { createTimelineEvent, TIMELINE_EVENT_TYPE } from "../lib/timelineEvent";
 import {
-  createTimelineEvent,
-  TIMELINE_EVENT_TYPE,
-} from "../lib/timelineEvent";
-import { ENRICHMENT_SOURCE_STATUS } from "../lib/enrichment";
+  ENRICHMENT_SOURCE_STATUS,
+  createErrorSourceResult,
+  createOkSourceResult,
+} from "../lib/enrichment";
 import { ENRICHMENT_SOURCE } from "../lib/enrichmentSourceRegistry";
-import { createEmptyEnrichmentCache } from "../lib/cache";
+import { createEmptyEnrichmentCache, STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
 import { buildEnrichmentSourceOpsRows } from "../lib/enrichmentSourceOps";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
-import {
-  PAGE_CONTEXT_CLASSIFIER_SCHEMA_VERSION,
-  PAGE_CONTEXT_TYPE,
-} from "../lib/pageContext";
+import { PAGE_CONTEXT_CLASSIFIER_SCHEMA_VERSION, PAGE_CONTEXT_TYPE } from "../lib/pageContext";
 import type { TabPageContextRecord } from "../lib/pageContext";
 import { buildTabScanSnapshotPayload } from "../lib/tabScanSnapshot";
 import * as tabScanSummary from "../lib/tabScanSummary";
 import * as iocCoOccurrenceStorage from "../lib/iocCoOccurrenceStorage";
-import { buildIocCoOccurrenceMemberKey, buildPageIocCoOccurrenceIndexFromSnapshot } from "../lib/iocCoOccurrence";
+import {
+  buildIocCoOccurrenceMemberKey,
+  buildPageIocCoOccurrenceIndexFromSnapshot,
+} from "../lib/iocCoOccurrence";
 import * as correlationClusterStorage from "../lib/correlationClusterStorage";
 import { createCorrelationCluster } from "../lib/correlationCluster";
 import * as relationshipEdgeStorage from "../lib/relationshipEdgeStorage";
-import {
-  createEmptyRelationshipEdgesStore,
-} from "../lib/relationshipEdgeStorage";
-import {
-  RELATIONSHIP_TYPE,
-  createRelationshipEdge,
-} from "../lib/relationshipEdge";
+import { createEmptyRelationshipEdgesStore } from "../lib/relationshipEdgeStorage";
+import { RELATIONSHIP_TYPE, createRelationshipEdge } from "../lib/relationshipEdge";
 import * as investigationSessionStorage from "../lib/investigationSessionStorage";
 import * as investigationSessionClient from "../lib/investigationSessionClient";
 import * as notebookFragmentStorage from "../lib/notebookFragmentStorage";
 import { createEmptyNotebookFragmentsStore } from "../lib/notebookFragmentStorage";
-import {
-  createNotebookFragment,
-  NOTEBOOK_FRAGMENT_TYPE,
-} from "../lib/notebookFragment";
+import { createNotebookFragment, NOTEBOOK_FRAGMENT_TYPE } from "../lib/notebookFragment";
 import { createIocCollection } from "../lib/iocCollection";
 import * as iocCollectionExport from "../lib/iocCollectionExport";
 import { MESSAGE } from "../lib/messages";
-import {
-  INVESTIGATION_HISTORY_SCHEMA_VERSION,
-} from "../lib/investigationHistory";
+import { INVESTIGATION_HISTORY_SCHEMA_VERSION } from "../lib/investigationHistory";
 import { STORAGE_KEY_INVESTIGATION_HISTORY } from "../lib/investigationHistoryStorage";
-import {
-  POPUP_PANEL,
-  POPUP_PANEL_FOCUS_STORAGE_KEY,
-} from "../lib/popupPanelFocus";
+import { POPUP_PANEL, POPUP_PANEL_FOCUS_STORAGE_KEY } from "../lib/popupPanelFocus";
 import { STORAGE_KEY_ANALYST_NOTES } from "../lib/analystNotesStorage";
-import { Popup, InvestigationReplayPanel, POPUP_TRAY_CASE_TOOLS_SUMMARY, POPUP_TRAY_ROW_ACTIONS_SUMMARY } from "./Popup";
-import * as copyText from "../lib/copyText";
 import {
-  REPLAY_SEGMENT_ACTION,
-  createReplaySegment,
-} from "../lib/replaySegment";
+  Popup,
+  InvestigationReplayPanel,
+  POPUP_TRAY_CASE_TOOLS_SUMMARY,
+  POPUP_TRAY_ROW_ACTIONS_SUMMARY,
+} from "./Popup";
+import * as copyText from "../lib/copyText";
+import { REPLAY_SEGMENT_ACTION, createReplaySegment } from "../lib/replaySegment";
 import * as storage from "../lib/storage";
 import {
   POPUP_QUIET_MODE_STATUS_LABEL,
-  POPUP_STATUS_AUTO_ENRICH_LABEL,
-  POPUP_STATUS_MANUAL_ENRICH_LABEL,
   POPUP_STATUS_STRIP_ARIA_LABEL,
+  STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_QUIET_MODE,
 } from "../lib/storage";
@@ -238,10 +227,7 @@ const sampleSourceOpsSnapshot = {
 };
 
 const storageOnChangedListeners: Array<
-  (
-    changes: Record<string, chrome.storage.StorageChange>,
-    areaName: string
-  ) => void
+  (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => void
 > = [];
 let chromeLocalStore: Record<string, unknown> = {};
 
@@ -344,211 +330,214 @@ function stubChrome(options: {
     },
     runtime: {
       id: "test-extension-id",
-      sendMessage: vi.fn(async (message: { type?: string; name?: string; collectionId?: string; iocType?: string; value?: string }) => {
-        if (message?.type === MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION) {
-          return {
-            ok: true,
-            payload: { session: options.activeSession ?? null },
-          };
-        }
-        if (message?.type === MESSAGE.LIST_INVESTIGATION_SESSIONS) {
-          return {
-            ok: true,
-            payload: { sessions: options.recentSessions ?? [] },
-          };
-        }
-        if (message?.type === MESSAGE.GET_ENRICHMENT_SOURCE_OPS) {
-          return {
-            ok: true,
-            payload: options.sourceOps ?? defaultSourceOpsSnapshot,
-          };
-        }
-        if (message?.type === MESSAGE.LIST_IOC_COLLECTIONS) {
-          return {
-            ok: true,
-            payload: { collections },
-          };
-        }
-        if (message?.type === MESSAGE.CREATE_IOC_COLLECTION) {
-          const created = createIocCollection({
-            id: `vera5-col-${collections.length + 1}`,
-            name: message.name ?? "",
-            createdAt: 200,
-            updatedAt: 200,
-            members: [],
-          });
-          if (!created) {
-            return { ok: false, error: "could not create collection" };
+      sendMessage: vi.fn(
+        async (message: {
+          type?: string;
+          name?: string;
+          collectionId?: string;
+          iocType?: string;
+          value?: string;
+        }) => {
+          if (message?.type === MESSAGE.GET_ACTIVE_INVESTIGATION_SESSION) {
+            return {
+              ok: true,
+              payload: { session: options.activeSession ?? null },
+            };
           }
-          collections.unshift(created);
-          return { ok: true, payload: { collection: created } };
-        }
-        if (message?.type === MESSAGE.ADD_IOC_TO_COLLECTION) {
-          const index = collections.findIndex(
-            (collection) => collection?.id === message.collectionId
-          );
-          if (index < 0 || !collections[index]) {
-            return { ok: false, error: "collection not found" };
+          if (message?.type === MESSAGE.LIST_INVESTIGATION_SESSIONS) {
+            return {
+              ok: true,
+              payload: { sessions: options.recentSessions ?? [] },
+            };
           }
-          const existing = collections[index]!;
-          const member = {
-            iocType: message.iocType as (typeof IOC_TYPE)[keyof typeof IOC_TYPE],
-            value: message.value ?? "",
-          };
-          const alreadyPresent = existing.members.some(
-            (item) => item.iocType === member.iocType && item.value === member.value
-          );
-          const nextMembers = alreadyPresent
-            ? existing.members
-            : [...existing.members, member];
-          const updated = createIocCollection({
-            ...existing,
-            members: nextMembers,
-            updatedAt: 300,
-          });
-          if (!updated) {
-            return { ok: false, error: "could not add indicator to collection" };
+          if (message?.type === MESSAGE.GET_ENRICHMENT_SOURCE_OPS) {
+            return {
+              ok: true,
+              payload: options.sourceOps ?? defaultSourceOpsSnapshot,
+            };
           }
-          collections[index] = updated;
-          return {
-            ok: true,
-            payload: { collection: updated, added: !alreadyPresent },
-          };
-        }
-        if (message?.type === MESSAGE.ADD_IOCS_TO_COLLECTION) {
-          const bulkMessage = message as {
-            collectionId?: string;
-            members?: Array<{ iocType: string; value: string }>;
-          };
-          const index = collections.findIndex(
-            (collection) => collection?.id === bulkMessage.collectionId
-          );
-          if (index < 0 || !collections[index]) {
-            return { ok: false, error: "collection not found" };
+          if (message?.type === MESSAGE.LIST_IOC_COLLECTIONS) {
+            return {
+              ok: true,
+              payload: { collections },
+            };
           }
-          const existing = collections[index]!;
-          const incoming = bulkMessage.members ?? [];
-          let addedCount = 0;
-          let duplicateCount = 0;
-          const nextMembers = [...existing.members];
-          for (const member of incoming) {
-            const alreadyPresent = nextMembers.some(
+          if (message?.type === MESSAGE.CREATE_IOC_COLLECTION) {
+            const created = createIocCollection({
+              id: `vera5-col-${collections.length + 1}`,
+              name: message.name ?? "",
+              createdAt: 200,
+              updatedAt: 200,
+              members: [],
+            });
+            if (!created) {
+              return { ok: false, error: "could not create collection" };
+            }
+            collections.unshift(created);
+            return { ok: true, payload: { collection: created } };
+          }
+          if (message?.type === MESSAGE.ADD_IOC_TO_COLLECTION) {
+            const index = collections.findIndex(
+              (collection) => collection?.id === message.collectionId
+            );
+            if (index < 0 || !collections[index]) {
+              return { ok: false, error: "collection not found" };
+            }
+            const existing = collections[index]!;
+            const member = {
+              iocType: message.iocType as (typeof IOC_TYPE)[keyof typeof IOC_TYPE],
+              value: message.value ?? "",
+            };
+            const alreadyPresent = existing.members.some(
               (item) => item.iocType === member.iocType && item.value === member.value
             );
-            if (alreadyPresent) {
-              duplicateCount++;
-              continue;
-            }
-            nextMembers.push({
-              iocType: member.iocType as (typeof IOC_TYPE)[keyof typeof IOC_TYPE],
-              value: member.value,
+            const nextMembers = alreadyPresent ? existing.members : [...existing.members, member];
+            const updated = createIocCollection({
+              ...existing,
+              members: nextMembers,
+              updatedAt: 300,
             });
-            addedCount++;
+            if (!updated) {
+              return { ok: false, error: "could not add indicator to collection" };
+            }
+            collections[index] = updated;
+            return {
+              ok: true,
+              payload: { collection: updated, added: !alreadyPresent },
+            };
           }
-          const updated = createIocCollection({
-            ...existing,
-            members: nextMembers,
-            updatedAt: 300,
-          });
-          if (!updated) {
-            return { ok: false, error: "could not add indicators to collection" };
+          if (message?.type === MESSAGE.ADD_IOCS_TO_COLLECTION) {
+            const bulkMessage = message as {
+              collectionId?: string;
+              members?: Array<{ iocType: string; value: string }>;
+            };
+            const index = collections.findIndex(
+              (collection) => collection?.id === bulkMessage.collectionId
+            );
+            if (index < 0 || !collections[index]) {
+              return { ok: false, error: "collection not found" };
+            }
+            const existing = collections[index]!;
+            const incoming = bulkMessage.members ?? [];
+            let addedCount = 0;
+            let duplicateCount = 0;
+            const nextMembers = [...existing.members];
+            for (const member of incoming) {
+              const alreadyPresent = nextMembers.some(
+                (item) => item.iocType === member.iocType && item.value === member.value
+              );
+              if (alreadyPresent) {
+                duplicateCount++;
+                continue;
+              }
+              nextMembers.push({
+                iocType: member.iocType as (typeof IOC_TYPE)[keyof typeof IOC_TYPE],
+                value: member.value,
+              });
+              addedCount++;
+            }
+            const updated = createIocCollection({
+              ...existing,
+              members: nextMembers,
+              updatedAt: 300,
+            });
+            if (!updated) {
+              return { ok: false, error: "could not add indicators to collection" };
+            }
+            collections[index] = updated;
+            return {
+              ok: true,
+              payload: {
+                collection: updated,
+                addedCount,
+                duplicateCount,
+                totalCount: incoming.length,
+              },
+            };
           }
-          collections[index] = updated;
-          return {
-            ok: true,
-            payload: {
-              collection: updated,
-              addedCount,
-              duplicateCount,
-              totalCount: incoming.length,
-            },
-          };
-        }
-        if (message?.type === MESSAGE.RENAME_IOC_COLLECTION) {
-          const renameMessage = message as { collectionId?: string; name?: string };
-          const index = collections.findIndex(
-            (collection) => collection?.id === renameMessage.collectionId
-          );
-          if (index < 0 || !collections[index]) {
-            return { ok: false, error: "could not rename collection" };
+          if (message?.type === MESSAGE.RENAME_IOC_COLLECTION) {
+            const renameMessage = message as { collectionId?: string; name?: string };
+            const index = collections.findIndex(
+              (collection) => collection?.id === renameMessage.collectionId
+            );
+            if (index < 0 || !collections[index]) {
+              return { ok: false, error: "could not rename collection" };
+            }
+            const existing = collections[index]!;
+            const updated = createIocCollection({
+              ...existing,
+              name: renameMessage.name ?? "",
+              updatedAt: 400,
+            });
+            if (!updated) {
+              return { ok: false, error: "could not rename collection" };
+            }
+            collections[index] = updated;
+            return { ok: true, payload: { collection: updated } };
           }
-          const existing = collections[index]!;
-          const updated = createIocCollection({
-            ...existing,
-            name: renameMessage.name ?? "",
-            updatedAt: 400,
-          });
-          if (!updated) {
-            return { ok: false, error: "could not rename collection" };
+          if (message?.type === MESSAGE.DELETE_IOC_COLLECTION) {
+            const deleteMessage = message as { collectionId?: string };
+            const index = collections.findIndex(
+              (collection) => collection?.id === deleteMessage.collectionId
+            );
+            if (index < 0) {
+              return { ok: false, error: "collection not found" };
+            }
+            collections.splice(index, 1);
+            return { ok: true, payload: { deleted: true } };
           }
-          collections[index] = updated;
-          return { ok: true, payload: { collection: updated } };
-        }
-        if (message?.type === MESSAGE.DELETE_IOC_COLLECTION) {
-          const deleteMessage = message as { collectionId?: string };
-          const index = collections.findIndex(
-            (collection) => collection?.id === deleteMessage.collectionId
-          );
-          if (index < 0) {
-            return { ok: false, error: "collection not found" };
+          if (message?.type === MESSAGE.REMOVE_IOC_FROM_COLLECTION) {
+            const removeMessage = message as {
+              collectionId?: string;
+              iocType?: string;
+              value?: string;
+            };
+            const index = collections.findIndex(
+              (collection) => collection?.id === removeMessage.collectionId
+            );
+            if (index < 0 || !collections[index]) {
+              return { ok: false, error: "collection not found" };
+            }
+            const existing = collections[index]!;
+            const nextMembers = existing.members.filter(
+              (member) =>
+                !(member.iocType === removeMessage.iocType && member.value === removeMessage.value)
+            );
+            if (nextMembers.length === existing.members.length) {
+              return { ok: false, error: "could not remove indicator from collection" };
+            }
+            const updated = createIocCollection({
+              ...existing,
+              members: nextMembers,
+              updatedAt: 500,
+            });
+            if (!updated) {
+              return { ok: false, error: "could not remove indicator from collection" };
+            }
+            collections[index] = updated;
+            return {
+              ok: true,
+              payload: { collection: updated, removed: true },
+            };
           }
-          collections.splice(index, 1);
-          return { ok: true, payload: { deleted: true } };
-        }
-        if (message?.type === MESSAGE.REMOVE_IOC_FROM_COLLECTION) {
-          const removeMessage = message as {
-            collectionId?: string;
-            iocType?: string;
-            value?: string;
-          };
-          const index = collections.findIndex(
-            (collection) => collection?.id === removeMessage.collectionId
-          );
-          if (index < 0 || !collections[index]) {
-            return { ok: false, error: "collection not found" };
+          if (message?.type === MESSAGE.GET_TAB_SCAN_SUMMARY) {
+            return {
+              ok: true,
+              payload: { summary: options.initialSummary ?? null },
+            };
           }
-          const existing = collections[index]!;
-          const nextMembers = existing.members.filter(
-            (member) =>
-              !(
-                member.iocType === removeMessage.iocType &&
-                member.value === removeMessage.value
-              )
-          );
-          if (nextMembers.length === existing.members.length) {
-            return { ok: false, error: "could not remove indicator from collection" };
+          if (message?.type === MESSAGE.GET_TAB_PAGE_CONTEXT) {
+            return {
+              ok: true,
+              payload: { context: options.pageContext ?? null },
+            };
           }
-          const updated = createIocCollection({
-            ...existing,
-            members: nextMembers,
-            updatedAt: 500,
-          });
-          if (!updated) {
-            return { ok: false, error: "could not remove indicator from collection" };
-          }
-          collections[index] = updated;
-          return {
-            ok: true,
-            payload: { collection: updated, removed: true },
-          };
-        }
-        if (message?.type === MESSAGE.GET_TAB_SCAN_SUMMARY) {
           return {
             ok: true,
             payload: { summary: options.initialSummary ?? null },
           };
         }
-        if (message?.type === MESSAGE.GET_TAB_PAGE_CONTEXT) {
-          return {
-            ok: true,
-            payload: { context: options.pageContext ?? null },
-          };
-        }
-        return {
-          ok: true,
-          payload: { summary: options.initialSummary ?? null },
-        };
-      }),
+      ),
       openOptionsPage: vi.fn(),
     },
     tabs: {
@@ -564,7 +553,10 @@ function stubChrome(options: {
   });
 }
 
-function renderPopup(): { container: HTMLDivElement; root: Root } {
+function renderPopup(): {
+  container: HTMLDivElement;
+  root: Root;
+} {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
@@ -579,9 +571,7 @@ function openTrayDemotedDetails(
   summaryText: string
 ): HTMLDetailsElement | null {
   const details = Array.from(container.querySelectorAll("details")).find((node) => {
-    const summary = Array.from(node.children).find(
-      (child) => child.tagName === "SUMMARY"
-    );
+    const summary = Array.from(node.children).find((child) => child.tagName === "SUMMARY");
     return summary?.textContent === summaryText;
   }) as HTMLDetailsElement | undefined;
   if (details) {
@@ -625,6 +615,224 @@ describe("Popup IOC tray", () => {
     expect(mounted?.container.textContent).toContain("Scan selection");
     expect(mounted?.container.textContent).toContain("Enrich selection");
     expect(mounted?.container.textContent).toContain("Settings");
+    const main = mounted?.container.querySelector("main.vera5-popup");
+    expect(main?.getAttribute("data-host")).toBe("sidepanel");
+    expect(mounted?.container.querySelector(".vera5-popup-triage")).not.toBeNull();
+    expect(mounted?.container.querySelector(".vera5-popup-casework")).not.toBeNull();
+  });
+
+  it("marks side panel host for permanent three-panel workspace", async () => {
+    stubChrome({ initialSummary: null });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("Scan page");
+    });
+    const main = mounted?.container.querySelector("main.vera5-popup");
+    expect(main?.getAttribute("data-host")).toBe("sidepanel");
+    const triage = mounted?.container.querySelector(".vera5-popup-triage");
+    const detail = mounted?.container.querySelector(".vera5-popup-detail");
+    const casework = mounted?.container.querySelector(".vera5-popup-casework");
+    const workspace = mounted?.container.querySelector(".vera5-popup-workspace");
+    const intelSection = mounted?.container.querySelector(".vera5-intel-feed-section");
+    const intelFeed = mounted?.container.querySelector(".vera5-intel-feed");
+    expect(triage).not.toBeNull();
+    expect(detail).not.toBeNull();
+    expect(casework).not.toBeNull();
+    expect(workspace?.children[0]).toBe(intelSection);
+    expect(workspace?.children[1]).toBe(triage);
+    expect(workspace?.children[2]).toBe(detail);
+    expect(detail?.contains(casework as Node)).toBe(true);
+    expect(intelSection?.querySelector(".vera5-intel-feed-heading")?.textContent).toBe(
+      "Intel Feed"
+    );
+    expect(intelFeed).not.toBeNull();
+    expect(intelFeed?.textContent).toContain("Select an indicator");
+    expect(triage?.textContent).toContain("Extension enabled");
+    expect(triage?.textContent).toContain("Scan page");
+    expect(triage?.textContent).toContain("Detected indicators");
+    expect(casework?.textContent).toContain("Investigation session");
+    expect(casework?.textContent).toContain("Casework");
+    expect(casework?.querySelectorAll('[role="tab"]')).toHaveLength(4);
+    expect(
+      casework
+        ?.querySelector('[role="tab"][aria-controls="popup-investigation-body"]')
+        ?.getAttribute("aria-selected")
+    ).toBe("true");
+  });
+
+  it("keeps selected IOC intelligence visible across Casework tabs", async () => {
+    const fetchedAt = Date.now();
+    stubChrome({
+      initialSummary: sampleSummary,
+      localStore: {
+        [STORAGE_KEY_ENRICHMENT_CACHE]: {
+          "8.8.8.8|abuseipdb": {
+            fetchedAt,
+            payload: createOkSourceResult({
+              sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+              summary: "74 abuse confidence",
+              tags: ["scanner"],
+              fetchedAt: new Date(fetchedAt).toISOString(),
+            }),
+          },
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '[data-vera5-tray-entry="true"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+
+    await vi.waitFor(() => {
+      const feed = mounted?.container.querySelector(".vera5-intel-feed");
+      expect(feed?.getAttribute("data-vera5-intel-value")).toBe("8.8.8.8");
+      expect(feed?.textContent).toContain("74/100");
+      expect(feed?.textContent).toContain("High risk signal");
+      expect(feed?.textContent).toContain("Pivot only");
+    });
+
+    const feed = mounted?.container.querySelector(".vera5-intel-feed");
+    const summaryRow = feed?.querySelector(".vera5-intel-feed-summary-row");
+    const rail = feed?.querySelector(".vera5-intel-feed-rail");
+    expect(summaryRow).not.toBeNull();
+    expect(summaryRow?.querySelector(".vera5-intel-feed-command")).not.toBeNull();
+    expect(summaryRow?.querySelector(".vera5-intel-feed-score")).not.toBeNull();
+    expect(summaryRow?.querySelector(".vera5-intel-feed-summary")).not.toBeNull();
+    expect(rail).not.toBeNull();
+    expect(rail?.querySelector(".vera5-intel-feed-sources")).not.toBeNull();
+    expect(rail?.querySelector(".vera5-intel-feed-pivots")).not.toBeNull();
+    expect(feed?.children[0]).toBe(summaryRow);
+    expect(feed?.children[1]).toBe(rail);
+    const sources = rail?.querySelector(".vera5-intel-feed-sources") as HTMLElement | null;
+    expect(sources).not.toBeNull();
+    if (sources) {
+      sources.scrollLeft = 120;
+    }
+    const sourceIds = Array.from(feed?.querySelectorAll(".vera5-intel-source-card") ?? []).map(
+      (card) => card.getAttribute("data-vera5-source-id")
+    );
+    expect(sourceIds.slice(0, 6)).toEqual([
+      "abuseipdb",
+      "otx",
+      "virustotal",
+      "greynoise",
+      "shodan",
+      "pulsedive",
+    ]);
+
+    flushSync(() => {
+      const nextIoc = Array.from(
+        mounted?.container.querySelectorAll('[data-vera5-tray-entry="true"]') ?? []
+      ).find((row) => row.textContent?.includes("192.0.2.1")) as HTMLButtonElement | null;
+      nextIoc?.click();
+    });
+    await vi.waitFor(() => {
+      const nextFeed = mounted?.container.querySelector(".vera5-intel-feed");
+      expect(nextFeed?.getAttribute("data-vera5-intel-value")).toBe("192.0.2.1");
+      expect(
+        (nextFeed?.querySelector(".vera5-intel-feed-sources") as HTMLElement | null)?.scrollLeft
+      ).toBe(0);
+    });
+
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '[data-vera5-tray-entry="true"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(".vera5-intel-feed")?.getAttribute("data-vera5-intel-value")
+      ).toBe("8.8.8.8");
+    });
+
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '[role="tab"][aria-controls="popup-history-body"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+    expect(
+      mounted?.container.querySelector(".vera5-intel-feed")?.getAttribute("data-vera5-intel-value")
+    ).toBe("8.8.8.8");
+
+    const feedAfter = mounted?.container.querySelector(".vera5-intel-feed");
+    flushSync(() => {
+      (feedAfter?.querySelector(".vera5-intel-feed-pivots > summary") as HTMLElement | null)?.click();
+    });
+    flushSync(() => {
+      (feedAfter?.querySelector(".vera5-intel-feed-pivots button") as HTMLButtonElement | null)?.click();
+    });
+    expect(chrome.tabs.create).toHaveBeenCalledWith(
+      expect.objectContaining({ url: expect.stringMatching(/^https:\/\//) })
+    );
+  });
+
+  it("renders vendor errors and missing live configuration without zero scores", async () => {
+    const fetchedAt = Date.now();
+    stubChrome({
+      initialSummary: sampleSummary,
+      localStore: {
+        [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+          abuseipdb: true,
+          virustotal: true,
+        },
+        [STORAGE_KEY_ENRICHMENT_CACHE]: {
+          "8.8.8.8|abuseipdb": {
+            fetchedAt,
+            payload: createErrorSourceResult({
+              sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+              errorCode: "rate_limited",
+              errorMessage: "AbuseIPDB rate limit reached.",
+              fetchedAt: new Date(fetchedAt).toISOString(),
+            }),
+          },
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '[data-vera5-tray-entry="true"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container
+          .querySelector('.vera5-intel-source-card[data-vera5-source-id="abuseipdb"]')
+          ?.getAttribute("data-vera5-source-status")
+      ).toBe("error");
+    });
+
+    const abuse = mounted?.container.querySelector(
+      '.vera5-intel-source-card[data-vera5-source-id="abuseipdb"]'
+    );
+    const virustotal = mounted?.container.querySelector(
+      '.vera5-intel-source-card[data-vera5-source-id="virustotal"]'
+    );
+    expect(abuse?.getAttribute("data-vera5-source-status")).toBe("error");
+    expect(abuse?.textContent).toContain("AbuseIPDB rate limit reached.");
+    expect(virustotal?.getAttribute("data-vera5-source-status")).toBe("not-configured");
+    expect(virustotal?.textContent).toContain("Not configured");
+    expect(virustotal?.textContent).not.toContain("0/100");
   });
 
   it("shows investigation session empty state when no session is active", async () => {
@@ -636,13 +844,11 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain(
-        "No active investigation session"
-      );
+      expect(mounted?.container.textContent).toContain("No active investigation session");
     });
     expect(mounted?.container.textContent).toContain("Scan this page");
     expect(mounted?.container.textContent).not.toMatch(/Investigation session[\s\S]*0 indicators/);
-    expect(mounted?.container.textContent).toContain("Recent sessions");
+    expect(mounted?.container.textContent).toContain("Recent · 1");
     expect(mounted?.container.textContent).toContain("Older case");
   });
 
@@ -672,44 +878,44 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("Advanced");
       expect(mounted?.container.textContent).toContain("Source operations");
     });
-    const advancedToggle = mounted?.container.querySelector(
-      '[aria-controls="popup-advanced-body"]'
+    const sourcesTab = mounted?.container.querySelector(
+      '[role="tab"][aria-controls="popup-source-ops-body"]'
     );
-    expect(advancedToggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(sourcesTab?.getAttribute("aria-selected")).toBe("false");
     expect(
-      mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
+      mounted?.container
+        .querySelector('section[aria-label="Source operations"]')
+        ?.hasAttribute("hidden")
     ).toBe(true);
     flushSync(() => {
-      (advancedToggle as HTMLButtonElement | null)?.click();
+      (sourcesTab as HTMLButtonElement | null)?.click();
     });
-    expect(advancedToggle?.getAttribute("aria-expanded")).toBe("true");
+    expect(sourcesTab?.getAttribute("aria-selected")).toBe("true");
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain(
-        "HTTP 429 cooldown: 30s remaining"
-      );
+      expect(mounted?.container.textContent).toContain("HTTP 429 cooldown: 30s remaining");
     });
-    expect(mounted?.container.textContent).toContain("Last cache clear:");
-    expect(mounted?.container.textContent).toContain("Cache entries: 2");
+    expect(mounted?.container.textContent).toContain("Cleared ");
+    expect(mounted?.container.textContent).toContain("2 cached");
     expect(mounted?.container.textContent).toContain("AbuseIPDB");
-    expect(mounted?.container.textContent).toContain("Last status: Rate limited");
-    expect(mounted?.container.textContent).toContain(
-      "Last error: HTTP 429 rate limited"
-    );
+    expect(mounted?.container.textContent).toContain("Rate limited");
+    expect(mounted?.container.textContent).toContain("Error: HTTP 429 rate limited");
     expect(mounted?.container.textContent).toContain("2 cache entries");
     expect(mounted?.container.textContent).toContain("Clear cache");
-    expect(mounted?.container.textContent).toContain(
-      "Vendor quota hints are orientation only"
-    );
-    expect(mounted?.container.textContent).toContain(
-      "Vendor quota: Typical free tier: 1,000 checks/day"
-    );
+    expect(mounted?.container.textContent).toContain("Vendor quota hints are orientation only");
+    expect(
+      mounted?.container.querySelector('.vera5-source-row[title*="Typical free tier"]')
+    ).not.toBeNull();
+    expect(
+      mounted?.container
+        .querySelector(".vera5-source-row")
+        ?.getAttribute("data-vera5-source-health")
+    ).toBe("error");
   });
 
-  it("keeps Advanced collapsed by default while scan and tray stay visible", async () => {
+  it("defaults casework to Session while scan and tray stay visible", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
 
@@ -717,54 +923,51 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("Detected indicators");
       expect(mounted?.container.textContent).toContain("Scan page");
     });
-    const advancedToggle = mounted?.container.querySelector(
-      '[aria-controls="popup-advanced-body"]'
+    const sessionTab = mounted?.container.querySelector(
+      '[role="tab"][aria-controls="popup-investigation-body"]'
     );
-    expect(advancedToggle).not.toBeNull();
-    expect(advancedToggle?.getAttribute("aria-expanded")).toBe("false");
+    expect(sessionTab).not.toBeNull();
+    expect(sessionTab?.getAttribute("aria-selected")).toBe("true");
     expect(
-      mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
+      mounted?.container.querySelector("#popup-investigation-session")?.hasAttribute("hidden")
+    ).toBe(false);
+    expect(
+      mounted?.container
+        .querySelector('section[aria-label="Investigation history"]')
+        ?.hasAttribute("hidden")
     ).toBe(true);
     expect(mounted?.container.textContent).toContain("Extension enabled");
   });
 
-  it("nests Advanced subsections under Advanced without peer-level chrome", async () => {
+  it("switches among casework tools without removing their stable panel IDs", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("Advanced");
-    });
-
-    const advancedToggle = mounted!.container.querySelector(
-      '[aria-controls="popup-advanced-body"]'
-    ) as HTMLButtonElement;
-    advancedToggle.click();
-
-    await vi.waitFor(() => {
-      expect(
-        mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
-      ).toBe(false);
+      expect(mounted?.container.textContent).toContain("Casework");
     });
 
     const advancedBody = mounted!.container.querySelector("#popup-advanced-body");
     expect(advancedBody).not.toBeNull();
-    expect(
-      advancedBody?.querySelector('[aria-label="Investigation history"]')
-    ).not.toBeNull();
-    expect(
-      advancedBody?.querySelector("#popup-collections-body")
-    ).not.toBeNull();
-    expect(
-      advancedBody?.querySelector("#popup-source-ops-body")
-    ).not.toBeNull();
+    expect(advancedBody?.querySelector('[aria-label="Investigation history"]')).not.toBeNull();
+    expect(advancedBody?.querySelector("#popup-collections-body")).not.toBeNull();
+    expect(advancedBody?.querySelector("#popup-source-ops-body")).not.toBeNull();
 
-    const historyToggle = advancedBody?.querySelector(
-      '[aria-controls="popup-history-body"]'
+    const historyTab = mounted!.container.querySelector(
+      '[role="tab"][aria-controls="popup-history-body"]'
     ) as HTMLButtonElement | null;
-    expect(historyToggle).not.toBeNull();
-    expect(historyToggle?.style.fontSize).toBe("13px");
-    expect(advancedToggle.style.fontSize).toBe("15px");
+    flushSync(() => {
+      historyTab?.click();
+    });
+    expect(historyTab?.getAttribute("aria-selected")).toBe("true");
+    expect(
+      advancedBody
+        ?.querySelector('section[aria-label="Investigation history"]')
+        ?.hasAttribute("hidden")
+    ).toBe(false);
+    expect(
+      mounted!.container.querySelector("#popup-investigation-session")?.hasAttribute("hidden")
+    ).toBe(true);
   });
 
   it("collapses tray collection and macro controls by default", async () => {
@@ -776,26 +979,26 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain(POPUP_TRAY_CASE_TOOLS_SUMMARY);
     });
 
-    const caseTools = Array.from(mounted!.container.querySelectorAll("details")).find(
-      (node) =>
-        Array.from(node.children).some(
-          (child) =>
-            child.tagName === "SUMMARY" &&
-            child.textContent === POPUP_TRAY_CASE_TOOLS_SUMMARY
-        )
+    const caseTools = Array.from(mounted!.container.querySelectorAll("details")).find((node) =>
+      Array.from(node.children).some(
+        (child) =>
+          child.tagName === "SUMMARY" && child.textContent === POPUP_TRAY_CASE_TOOLS_SUMMARY
+      )
     ) as HTMLDetailsElement | undefined;
-    const rowActions = Array.from(mounted!.container.querySelectorAll("details")).find(
-      (node) =>
-        Array.from(node.children).some(
-          (child) =>
-            child.tagName === "SUMMARY" &&
-            child.textContent === POPUP_TRAY_ROW_ACTIONS_SUMMARY
-        )
+    const rowActions = Array.from(mounted!.container.querySelectorAll("details")).find((node) =>
+      Array.from(node.children).some(
+        (child) =>
+          child.tagName === "SUMMARY" && child.textContent === POPUP_TRAY_ROW_ACTIONS_SUMMARY
+      )
     ) as HTMLDetailsElement | undefined;
+    const context = mounted!.container.querySelector(
+      ".vera5-tray-context"
+    ) as HTMLDetailsElement | null;
 
     expect(caseTools?.open).toBe(false);
     expect(rowActions?.open).toBe(false);
-    expect(mounted?.container.textContent).toContain("Why detected?");
+    expect(context?.open).toBe(false);
+    expect(context?.querySelector(".vera5-tray-why-detected")).not.toBeNull();
   });
 
   it("shows session export copy and download actions when a session is active", async () => {
@@ -806,15 +1009,24 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("Export session");
+      expect(
+        Array.from(
+          mounted!.container.querySelectorAll<HTMLDetailsElement>(".vera5-session-disclosure")
+        ).some((details) => details.querySelector("summary")?.textContent?.trim() === "Export")
+      ).toBe(true);
     });
+    const exportDetails = Array.from(
+      mounted!.container.querySelectorAll<HTMLDetailsElement>(".vera5-session-disclosure")
+    ).find((details) => details.querySelector("summary")?.textContent?.trim() === "Export");
+    expect(exportDetails?.open).toBe(false);
     expect(mounted?.container.textContent).toContain("IOC export only");
-    expect(mounted?.container.textContent).toContain(
-      "Omit notebook fragments from the export"
-    );
     expect(
-      mounted?.container.querySelector('[aria-label="IOC export only"]')
-    ).not.toBeNull();
+      mounted?.container
+        .querySelector('[aria-label="IOC export only"]')
+        ?.closest("label")
+        ?.getAttribute("title")
+    ).toContain("Omit notebook fragments from the export");
+    expect(mounted?.container.querySelector('[aria-label="IOC export only"]')).not.toBeNull();
     expect(mounted?.container.textContent).toContain("Copy Markdown");
     expect(mounted?.container.textContent).toContain("Copy JSON");
     expect(mounted?.container.textContent).toContain("Copy CSV");
@@ -834,10 +1046,9 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("Session timeline");
     });
 
-    const timelineList = mounted?.container.querySelector(
-      '[aria-label="Session timeline events"]'
-    );
+    const timelineList = mounted?.container.querySelector('[aria-label="Session timeline events"]');
     expect(timelineList).not.toBeNull();
+    expect(timelineList?.closest("details")?.open).toBe(false);
     expect(timelineList?.textContent).toMatch(/First seen[\s\S]*8\.8\.8\.8/);
     expect(timelineList?.textContent).toMatch(/Enriched[\s\S]*Source: AbuseIPDB · live/);
     expect(timelineList?.textContent).toMatch(/Exported[\s\S]*example\.com/);
@@ -866,15 +1077,11 @@ describe("Popup IOC tray", () => {
     expect(mounted?.container.textContent).toContain(
       "Text-only notebook — screenshot capture is not available."
     );
-    expect(
-      mounted?.container.querySelector('[data-vera5-notebook-empty="true"]')
-    ).not.toBeNull();
+    expect(mounted?.container.querySelector('[data-vera5-notebook-empty="true"]')).not.toBeNull();
     expect(
       mounted?.container.querySelector('[aria-label="Session notebook fragments"]')
     ).toBeNull();
-    expect(mounted?.container.textContent?.toLowerCase()).not.toContain(
-      "take screenshot"
-    );
+    expect(mounted?.container.textContent?.toLowerCase()).not.toContain("take screenshot");
     expect(mounted?.container.textContent?.toLowerCase()).not.toMatch(
       /capture screenshot|screen capture|attach image/
     );
@@ -913,11 +1120,7 @@ describe("Popup IOC tray", () => {
           ],
           iocAttachments: {},
           sessionAttachments: {
-            "vera5-inv-popup-test": [
-              "nf-popup-later",
-              "nf-popup-earlier",
-              "nf-popup-hyp",
-            ],
+            "vera5-inv-popup-test": ["nf-popup-later", "nf-popup-earlier", "nf-popup-hyp"],
           },
           pageAttachments: {},
         },
@@ -926,9 +1129,7 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      const list = mounted?.container.querySelector(
-        '[aria-label="Session notebook fragments"]'
-      );
+      const list = mounted?.container.querySelector('[aria-label="Session notebook fragments"]');
       expect(list).not.toBeNull();
       expect(list?.textContent).toMatch(
         /Earlier session observation[\s\S]*Middle session hypothesis[\s\S]*Later session conclusion/
@@ -984,11 +1185,7 @@ describe("Popup IOC tray", () => {
           ],
           iocAttachments: {},
           sessionAttachments: {
-            "vera5-inv-popup-test": [
-              "nf-popup-later",
-              "nf-popup-earlier",
-              "nf-popup-hyp",
-            ],
+            "vera5-inv-popup-test": ["nf-popup-later", "nf-popup-earlier", "nf-popup-hyp"],
           },
           pageAttachments: {},
         },
@@ -1017,9 +1214,7 @@ describe("Popup IOC tray", () => {
     });
 
     await vi.waitFor(() => {
-      const list = mounted?.container.querySelector(
-        '[aria-label="Session notebook fragments"]'
-      );
+      const list = mounted?.container.querySelector('[aria-label="Session notebook fragments"]');
       expect(list?.querySelectorAll("li").length).toBe(1);
       expect(list?.textContent).toContain("Middle session hypothesis");
       expect(list?.textContent).not.toContain("Earlier session observation");
@@ -1039,9 +1234,7 @@ describe("Popup IOC tray", () => {
         "No fragments match this search. Clear the search or try different text."
       );
       expect(
-        mounted?.container.querySelector(
-          '[aria-label="Session notebook fragments"]'
-        )
+        mounted?.container.querySelector('[aria-label="Session notebook fragments"]')
       ).toBeNull();
     });
   });
@@ -1077,9 +1270,7 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("Editable session note");
     });
 
-    const addGroup = mounted?.container.querySelector(
-      '[aria-label="Add notebook fragment"]'
-    );
+    const addGroup = mounted?.container.querySelector('[aria-label="Add notebook fragment"]');
     const addBody = addGroup?.querySelector(
       'textarea[aria-label="Fragment body"]'
     ) as HTMLTextAreaElement | null;
@@ -1094,20 +1285,16 @@ describe("Popup IOC tray", () => {
       addBody!.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
-    const addButton = Array.from(
-      mounted?.container.querySelectorAll("button") ?? []
-    ).find((button) => button.textContent === "Add fragment") as
-      | HTMLButtonElement
-      | undefined;
+    const addButton = Array.from(mounted?.container.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent === "Add fragment"
+    ) as HTMLButtonElement | undefined;
     expect(addButton?.disabled).toBe(false);
     flushSync(() => {
       addButton?.click();
     });
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain(
-        "Brand new session fragment"
-      );
+      expect(mounted?.container.textContent).toContain("Brand new session fragment");
       expect(mounted?.container.textContent).toContain("Fragment saved.");
     });
 
@@ -1121,9 +1308,7 @@ describe("Popup IOC tray", () => {
 
     await vi.waitFor(() => {
       expect(
-        mounted?.container.querySelector(
-          '[aria-label="Session notebook fragments"] textarea'
-        )
+        mounted?.container.querySelector('[aria-label="Session notebook fragments"] textarea')
       ).not.toBeNull();
     });
 
@@ -1139,19 +1324,15 @@ describe("Popup IOC tray", () => {
       editBody!.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
-    const saveButton = Array.from(
-      mounted?.container.querySelectorAll("button") ?? []
-    ).find((button) => button.textContent === "Save") as
-      | HTMLButtonElement
-      | undefined;
+    const saveButton = Array.from(mounted?.container.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent === "Save"
+    ) as HTMLButtonElement | undefined;
     flushSync(() => {
       saveButton?.click();
     });
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain(
-        "Updated session observation"
-      );
+      expect(mounted?.container.textContent).toContain("Updated session observation");
     });
 
     expect(
@@ -1177,12 +1358,8 @@ describe("Popup IOC tray", () => {
     expect(
       mounted?.container.querySelector('[aria-label="Replay step navigation"]')
     ).not.toBeNull();
-    expect(
-      mounted?.container.querySelector('button[aria-label="Previous"]')
-    ).not.toBeNull();
-    expect(
-      mounted?.container.querySelector('button[aria-label="Next"]')
-    ).not.toBeNull();
+    expect(mounted?.container.querySelector('button[aria-label="Previous"]')).not.toBeNull();
+    expect(mounted?.container.querySelector('button[aria-label="Next"]')).not.toBeNull();
   });
 
   it("steps through investigation replay with previous, next, and jump-to-step", () => {
@@ -1226,16 +1403,12 @@ describe("Popup IOC tray", () => {
 
     try {
       expect(container.textContent).toContain("Step 1 of 3");
-      const detail = container.querySelector(
-        '[aria-label="Current replay step detail"]'
-      );
+      const detail = container.querySelector('[aria-label="Current replay step detail"]');
       expect(detail?.textContent).toContain("Action: Scan");
       expect(detail?.textContent).toContain("Indicator: 192.0.2.1");
       expect(detail?.textContent).not.toContain("Template:");
 
-      const next = container.querySelector(
-        'button[aria-label="Next"]'
-      ) as HTMLButtonElement | null;
+      const next = container.querySelector('button[aria-label="Next"]') as HTMLButtonElement | null;
       const previous = container.querySelector(
         'button[aria-label="Previous"]'
       ) as HTMLButtonElement | null;
@@ -1258,9 +1431,7 @@ describe("Popup IOC tray", () => {
       expect(container.textContent).toContain("Step 3 of 3");
       expect(next?.disabled).toBe(true);
       expect(onActivateSegment).toHaveBeenCalledWith(segments[2]);
-      const exportDetail = container.querySelector(
-        '[aria-label="Current replay step detail"]'
-      );
+      const exportDetail = container.querySelector('[aria-label="Current replay step detail"]');
       expect(exportDetail?.textContent).toContain("Action: Export");
       expect(exportDetail?.textContent).toContain("Template: Markdown report");
 
@@ -1347,12 +1518,8 @@ describe("Popup IOC tray", () => {
       expect(copyButton).toBeTruthy();
       expect(downloadButton).toBeTruthy();
 
-      const createObjectURL = vi
-        .spyOn(URL, "createObjectURL")
-        .mockReturnValue("blob:replay-ui");
-      const revokeObjectURL = vi
-        .spyOn(URL, "revokeObjectURL")
-        .mockImplementation(() => {});
+      const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:replay-ui");
+      const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
 
       flushSync(() => {
         copyButton?.click();
@@ -1376,9 +1543,11 @@ describe("Popup IOC tray", () => {
         'select[aria-label="Transcript template"]'
       ) as HTMLSelectElement | null;
       expect(templateSelect).toBeTruthy();
-      expect(
-        Array.from(templateSelect?.options ?? []).map((option) => option.value)
-      ).toEqual(["markdown-report", "obsidian-note", "analyst-update"]);
+      expect(Array.from(templateSelect?.options ?? []).map((option) => option.value)).toEqual([
+        "markdown-report",
+        "obsidian-note",
+        "analyst-update",
+      ]);
       flushSync(() => {
         if (!templateSelect) {
           return;
@@ -1397,9 +1566,7 @@ describe("Popup IOC tray", () => {
       expect(obsidianText).toContain("artifact: investigation-replay-transcript");
       expect(obsidianText).toContain("session: Transcript UI case");
       expect(obsidianText).toContain("source: Vera5");
-      expect(container.textContent).toContain(
-        "Copied Obsidian note replay transcript (2 steps)."
-      );
+      expect(container.textContent).toContain("Copied Obsidian note replay transcript (2 steps).");
 
       flushSync(() => {
         appendixToggle?.click();
@@ -1460,9 +1627,7 @@ describe("Popup IOC tray", () => {
     });
 
     try {
-      const detail = container.querySelector(
-        '[aria-label="Current replay step detail"]'
-      );
+      const detail = container.querySelector('[aria-label="Current replay step detail"]');
       expect(detail).not.toBeNull();
       expect(detail?.textContent).toContain("Action: Enrich");
       expect(detail?.textContent).toContain("Attribution: Source: OTX · cached");
@@ -1494,13 +1659,9 @@ describe("Popup IOC tray", () => {
     try {
       expect(container.textContent).toContain("Investigation replay");
       expect(container.textContent).toContain("No replayable steps yet");
-      expect(
-        container.querySelector('[aria-label="Replay step navigation"]')
-      ).toBeNull();
+      expect(container.querySelector('[aria-label="Replay step navigation"]')).toBeNull();
       expect(container.querySelector('[aria-label="Replay steps"]')).toBeNull();
-      expect(
-        container.querySelector('[aria-label="Current replay step detail"]')
-      ).toBeNull();
+      expect(container.querySelector('[aria-label="Current replay step detail"]')).toBeNull();
     } finally {
       root.unmount();
       container.remove();
@@ -1527,9 +1688,7 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("Investigation replay");
     });
     expect(mounted?.container.textContent).toContain("No replayable steps yet");
-    expect(
-      mounted?.container.querySelector('[aria-label="Replay steps"]')
-    ).toBeNull();
+    expect(mounted?.container.querySelector('[aria-label="Replay steps"]')).toBeNull();
   });
 
   it("does not trigger outbound enrich during replay step-through", async () => {
@@ -1666,26 +1825,20 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("Session timeline");
     });
 
-    const timelineList = mounted?.container.querySelector(
-      '[aria-label="Session timeline events"]'
-    );
+    const timelineList = mounted?.container.querySelector('[aria-label="Session timeline events"]');
     expect(timelineList).not.toBeNull();
 
     const firstSeenRow = Array.from(timelineList?.querySelectorAll('[role="button"]') ?? []).find(
-      (element) =>
-        element.getAttribute("aria-label") === "View 8.8.8.8 on page. First seen"
+      (element) => element.getAttribute("aria-label") === "View 8.8.8.8 on page. First seen"
     );
     expect(firstSeenRow).toBeDefined();
     firstSeenRow?.click();
 
     await vi.waitFor(() => {
-      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
-        7,
-        {
-          type: "NAVIGATE_TO_IOC_ANCHOR",
-          anchorId: "vera5-hl-1",
-        }
-      );
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, {
+        type: "NAVIGATE_TO_IOC_ANCHOR",
+        anchorId: "vera5-hl-1",
+      });
     });
   });
 
@@ -1711,8 +1864,7 @@ describe("Popup IOC tray", () => {
     });
 
     const row = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
-      (element) =>
-        element.getAttribute("aria-label") === "View missing.example on page. First seen"
+      (element) => element.getAttribute("aria-label") === "View missing.example on page. First seen"
     );
     expect(row).toBeDefined();
     row?.click();
@@ -1747,9 +1899,7 @@ describe("Popup IOC tray", () => {
     expect(optionValues).toContain(TIMELINE_EVENT_TYPE.ENRICH);
     expect(optionValues).toContain(TIMELINE_EVENT_TYPE.EXPORT);
 
-    const timelineList = mounted?.container.querySelector(
-      '[aria-label="Session timeline events"]'
-    );
+    const timelineList = mounted?.container.querySelector('[aria-label="Session timeline events"]');
     expect(timelineList?.querySelectorAll("li").length).toBe(3);
   });
 
@@ -1817,14 +1967,14 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("Recent sessions");
+      expect(mounted?.container.textContent).toContain("Recent · 2");
     });
     expect(mounted?.container.textContent).toContain("Older case");
     expect(mounted?.container.textContent).toContain("Active");
     expect(
       mounted?.container.querySelector('button[aria-label="Reopen"]') ??
-        Array.from(mounted!.container.querySelectorAll("button")).find((button) =>
-          button.textContent === "Reopen"
+        Array.from(mounted!.container.querySelectorAll("button")).find(
+          (button) => button.textContent === "Reopen"
         )
     ).toBeTruthy();
     expect(mounted?.container.textContent).toContain("Rename");
@@ -1840,7 +1990,10 @@ describe("Popup IOC tray", () => {
     });
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("3 indicators · 1 CVE · 2 IP");
+      const filterGroup = Array.from(mounted!.container.querySelectorAll('[role="group"]')).find(
+        (group) => group.getAttribute("aria-label")?.startsWith("Filter by indicator type")
+      );
+      expect(filterGroup?.getAttribute("aria-label")).toContain("3 indicators · 1 CVE · 2 IP");
     });
     expect(mounted.container.textContent).toContain("Generic page");
     expect(mounted.container.textContent).toContain("All (3)");
@@ -1849,19 +2002,14 @@ describe("Popup IOC tray", () => {
     expect(mounted.container.textContent).toContain("8.8.8.8");
     expect(mounted.container.textContent).toContain("CVE-2021-44228");
 
-    const firstRow = mounted.container.querySelector<HTMLElement>(
-      "[data-vera5-tray-entry='true']"
-    );
+    const firstRow = mounted.container.querySelector<HTMLElement>("[data-vera5-tray-entry='true']");
     expect(firstRow?.dataset.vera5RuleId).toBe("ioc.regex.ipv4");
-    expect(firstRow?.dataset.vera5SourceTextHint).toBe(
-      "Contact 8.8.8.8 for details."
-    );
+    expect(firstRow?.dataset.vera5SourceTextHint).toBe("Contact 8.8.8.8 for details.");
   });
 
   it("moves noise-rule matches into a collapsed Suppressed tray section", async () => {
-    const { STORAGE_KEY_NOISE_RULES, NOISE_RULES_STORE_SCHEMA_VERSION } = await import(
-      "../lib/noiseRuleStorage"
-    );
+    const { STORAGE_KEY_NOISE_RULES, NOISE_RULES_STORE_SCHEMA_VERSION } =
+      await import("../lib/noiseRuleStorage");
     const { createNoiseRule, NOISE_RULE_SCHEMA_VERSION } = await import("../lib/noiseRule");
 
     const rule = createNoiseRule({
@@ -1908,10 +2056,7 @@ describe("Popup IOC tray", () => {
         "[data-vera5-tray-entry='true'][data-vera5-noise-suppressed='true']"
       )
     );
-    expect(activeRows.map((row) => row.dataset.vera5Value)).toEqual([
-      "8.8.8.8",
-      "CVE-2021-44228",
-    ]);
+    expect(activeRows.map((row) => row.dataset.vera5Value)).toEqual(["8.8.8.8", "CVE-2021-44228"]);
     expect(suppressedRows.map((row) => row.dataset.vera5Value)).toEqual(["192.0.2.1"]);
     expect(suppressedSection?.contains(suppressedRows[0]!)).toBe(true);
 
@@ -1951,8 +2096,7 @@ describe("Popup IOC tray", () => {
 
     await vi.waitFor(() => {
       expect(
-        mounted?.container.querySelector("[data-vera5-known-good-badge='true']")
-          ?.textContent
+        mounted?.container.querySelector("[data-vera5-known-good-badge='true']")?.textContent
       ).toBe("Known benign");
     });
 
@@ -1964,9 +2108,8 @@ describe("Popup IOC tray", () => {
     expect(badgedRow?.dataset.vera5KnownGoodMatchType).toBe("ip");
     expect(badgedRow?.dataset.vera5KnownGoodPattern).toBe("8.8.8.8");
     expect(
-      badgedRow?.querySelector("[data-vera5-known-good-provenance='true']")
-        ?.textContent
-    ).toBe("Matched: CDN · IP · 8.8.8.8");
+      badgedRow?.querySelector("[data-vera5-known-good-badge='true']")?.getAttribute("title")
+    ).toContain("CDN · IP · 8.8.8.8");
   });
 
   it("sorts known-good matches below active investigation IOCs in the tray", async () => {
@@ -2040,7 +2183,7 @@ describe("Popup IOC tray", () => {
     );
     expect(badge).not.toBeNull();
     expect(badge?.textContent).toBe("SOC dashboard");
-    expect(mounted!.container.textContent).toContain("Auto-detected");
+    expect(badge?.getAttribute("title")).toContain("auto-detected");
   });
 
   it("shows override active state and resets to auto-detect from the tray header", async () => {
@@ -2066,22 +2209,22 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("CTI platform");
     });
 
-    expect(mounted!.container.textContent).toContain("Override");
-    expect(mounted!.container.textContent).toContain("Reset to auto-detect");
-
     const resetButton = mounted!.container.querySelector(
       'button[aria-label="Reset page profile to auto-detect"]'
     ) as HTMLButtonElement;
+    expect(resetButton.getAttribute("title")).toContain("Profile override active");
     resetButton.click();
 
     await vi.waitFor(() => {
-      expect(chromeLocalStore[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]).toEqual(
-        {}
-      );
+      expect(chromeLocalStore[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]).toEqual({});
     });
     await vi.waitFor(() => {
       expect(mounted!.container.textContent).toContain("SOC dashboard");
-      expect(mounted!.container.textContent).toContain("Auto-detected");
+      expect(
+        mounted!.container.querySelector(
+          '[aria-label="Page profile: SOC dashboard. Auto-detected."]'
+        )
+      ).not.toBeNull();
     });
   });
 
@@ -2154,12 +2297,12 @@ describe("Popup IOC tray", () => {
     expect(expander?.querySelector("ul.vera5-tray-relationship-list")).not.toBeNull();
     expect(expander?.querySelector("canvas")).toBeNull();
     expect(expander?.querySelector("svg")).toBeNull();
-    expect(
-      expander?.querySelector(".vera5-tray-relationship-disclaimer")?.textContent
-    ).toContain("Correlation ≠ causation");
-    expect(
-      expander?.querySelector(".vera5-tray-relationship-disclaimer")?.textContent
-    ).toContain("not a detection verdict");
+    expect(expander?.querySelector(".vera5-tray-relationship-disclaimer")?.textContent).toContain(
+      "Correlation ≠ causation"
+    );
+    expect(expander?.querySelector(".vera5-tray-relationship-disclaimer")?.textContent).toContain(
+      "not a detection verdict"
+    );
   });
 
   it("opens investigation session summary from relationship prior-session drill-down", async () => {
@@ -2212,16 +2355,17 @@ describe("Popup IOC tray", () => {
       ".vera5-tray-relationship-prior-session"
     );
     expect(priorButton).not.toBeNull();
-    expect(priorButton?.getAttribute("aria-label")).toContain(
-      "Prior co-occurrence session"
-    );
+    expect(priorButton?.getAttribute("aria-label")).toContain("Prior co-occurrence session");
     expect(priorButton?.getAttribute("aria-label")).toContain("4 indicators");
     expect(priorButton?.textContent).toContain("4 indicators");
 
-    const investigationToggle = mounted!.container.querySelector<HTMLButtonElement>(
-      'button[aria-controls="popup-investigation-body"]'
+    const historyTab = mounted!.container.querySelector<HTMLButtonElement>(
+      '[role="tab"][aria-controls="popup-history-body"]'
     );
-    expect(investigationToggle?.getAttribute("aria-expanded")).toBe("false");
+    flushSync(() => {
+      historyTab?.click();
+    });
+    expect(historyTab?.getAttribute("aria-selected")).toBe("true");
 
     priorButton?.click();
 
@@ -2229,21 +2373,18 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(
         mounted!.container
-          .querySelector('button[aria-controls="popup-investigation-body"]')
-          ?.getAttribute("aria-expanded")
+          .querySelector('[role="tab"][aria-controls="popup-investigation-body"]')
+          ?.getAttribute("aria-selected")
       ).toBe("true");
     });
-    expect(
-      mounted!.container.querySelector("#popup-investigation-session")
-    ).not.toBeNull();
+    expect(mounted!.container.querySelector("#popup-investigation-session")).not.toBeNull();
   });
 
   it("shows truncated page-context origin on relationship prior-session rows", async () => {
     const priorSession = createInvestigationSession({
       id: "vera5-inv-prior-origin",
       title: "Prior origin session",
-      pageUrl:
-        "https://example.com/alerts/prior-long-path/investigation-report.html?q=1",
+      pageUrl: "https://example.com/alerts/prior-long-path/investigation-report.html?q=1",
       createdAt: 50,
       updatedAt: 200,
       totalIocCount: 2,
@@ -2363,22 +2504,21 @@ describe("Popup IOC tray", () => {
     );
     expect(replayLink).not.toBeNull();
     expect(replayLink?.textContent).toBe("Investigation replay");
-    expect(replayLink?.getAttribute("aria-label")).toContain(
-      "Investigation replay"
-    );
+    expect(replayLink?.getAttribute("aria-label")).toContain("Investigation replay");
 
     replayLink?.click();
     expect(reopenSpy).toHaveBeenCalledWith(priorSession!.id);
     await vi.waitFor(() => {
       expect(
         mounted!.container
-          .querySelector('button[aria-controls="popup-investigation-body"]')
-          ?.getAttribute("aria-expanded")
+          .querySelector('[role="tab"][aria-controls="popup-investigation-body"]')
+          ?.getAttribute("aria-selected")
       ).toBe("true");
     });
+    expect(mounted!.container.querySelector("#popup-investigation-replay")).not.toBeNull();
     expect(
-      mounted!.container.querySelector("#popup-investigation-replay")
-    ).not.toBeNull();
+      mounted!.container.querySelector("#popup-investigation-replay")?.closest("details")?.open
+    ).toBe(true);
   });
 
   it("links relationship rows to notebook fragments on related IOC or prior session", async () => {
@@ -2463,11 +2603,14 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(
         mounted!.container
-          .querySelector('button[aria-controls="popup-investigation-body"]')
-          ?.getAttribute("aria-expanded")
+          .querySelector('[role="tab"][aria-controls="popup-investigation-body"]')
+          ?.getAttribute("aria-selected")
       ).toBe("true");
     });
     expect(mounted!.container.querySelector("#popup-session-notebook")).not.toBeNull();
+    expect(
+      mounted!.container.querySelector("#popup-session-notebook")?.closest("details")?.open
+    ).toBe(true);
   });
 
   it("links relationship expander to overlapping correlation clusters", async () => {
@@ -2546,7 +2689,10 @@ describe("Popup IOC tray", () => {
       createdAt: 50,
       updatedAt: 200,
     });
-    vi.spyOn(correlationClusterStorage, "buildStoredCorrelationClustersFromInvestigationMemory").mockResolvedValue([
+    vi.spyOn(
+      correlationClusterStorage,
+      "buildStoredCorrelationClustersFromInvestigationMemory"
+    ).mockResolvedValue([
       createCorrelationCluster({
         memberIocKeys: [
           buildIocCoOccurrenceMemberKey(IOC_TYPE.IPV4, "8.8.8.8"),
@@ -2589,9 +2735,10 @@ describe("Popup IOC tray", () => {
   });
 
   it("shows empty state when cross-session correlation data is insufficient", async () => {
-    vi.spyOn(correlationClusterStorage, "buildStoredCorrelationClustersFromInvestigationMemory").mockResolvedValue(
-      []
-    );
+    vi.spyOn(
+      correlationClusterStorage,
+      "buildStoredCorrelationClustersFromInvestigationMemory"
+    ).mockResolvedValue([]);
     vi.spyOn(investigationSessionStorage, "listStoredInvestigationSessions").mockResolvedValue([
       sampleActiveSession,
     ]);
@@ -2624,7 +2771,10 @@ describe("Popup IOC tray", () => {
       createdAt: 50,
       updatedAt: 200,
     });
-    vi.spyOn(correlationClusterStorage, "buildStoredCorrelationClustersFromInvestigationMemory").mockResolvedValue([
+    vi.spyOn(
+      correlationClusterStorage,
+      "buildStoredCorrelationClustersFromInvestigationMemory"
+    ).mockResolvedValue([
       createCorrelationCluster({
         memberIocKeys: [
           buildIocCoOccurrenceMemberKey(IOC_TYPE.IPV4, "8.8.8.8"),
@@ -2710,15 +2860,12 @@ describe("Popup IOC tray", () => {
     relatedButton?.click();
 
     await vi.waitFor(() => {
-      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(
-        7,
-        {
-          type: "NAVIGATE_TO_IOC_ANCHOR",
-          anchorId: "vera5-hl-2",
-          iocType: "ipv4",
-          value: "192.0.2.1",
-        }
-      );
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, {
+        type: "NAVIGATE_TO_IOC_ANCHOR",
+        anchorId: "vera5-hl-2",
+        iocType: "ipv4",
+        value: "192.0.2.1",
+      });
     });
   });
 
@@ -2746,9 +2893,7 @@ describe("Popup IOC tray", () => {
     );
     expect(buttons.length).toBeGreaterThan(1);
     buttons[0]?.focus();
-    buttons[0]?.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })
-    );
+    buttons[0]?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     expect(document.activeElement).toBe(buttons[1]);
   });
 
@@ -2789,7 +2934,10 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain(
+      const phase2FilterGroup = Array.from(
+        mounted?.container.querySelectorAll('[role="group"]') ?? []
+      ).find((group) => group.getAttribute("aria-label")?.startsWith("Filter by indicator type"));
+      expect(phase2FilterGroup?.getAttribute("aria-label")).toContain(
         "2 indicators · 1 EML · 1 ASN"
       );
     });
@@ -2826,9 +2974,7 @@ describe("Popup IOC tray", () => {
     expect(mounted.container.textContent).toContain("AbuseIPDB · Error");
 
     const cachedRow = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
-      (element) =>
-        element.getAttribute("aria-label") ===
-        "View 8.8.8.8 on page. OTX · Cached"
+      (element) => element.getAttribute("aria-label") === "View 8.8.8.8 on page. OTX · Cached"
     );
     expect(cachedRow).toBeDefined();
     const cachedHint = Array.from(cachedRow?.querySelectorAll('[aria-hidden="true"]') ?? []).find(
@@ -2860,8 +3006,7 @@ describe("Popup IOC tray", () => {
     });
 
     const row = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
-      (element) =>
-        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+      (element) => element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
     );
     expect(row).toBeDefined();
     row?.click();
@@ -2886,11 +3031,8 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
-    const row = Array.from(
-      mounted.container.querySelectorAll('[role="button"]')
-    ).find(
-      (element) =>
-        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+    const row = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
+      (element) => element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
     ) as HTMLElement | undefined;
     expect(row).toBeDefined();
     flushSync(() => {
@@ -2899,8 +3041,19 @@ describe("Popup IOC tray", () => {
 
     const pane = mounted.container.querySelector('[data-vera5-detail-pane="true"]');
     expect(pane).not.toBeNull();
+    expect(pane?.closest(".vera5-popup-inspector")).not.toBeNull();
+    expect(row?.getAttribute("data-vera5-selected")).toBe("true");
+    const workspaceChildren = Array.from(
+      mounted.container.querySelector(".vera5-popup-workspace")?.children ?? []
+    );
+    expect(workspaceChildren[0]?.classList.contains("vera5-intel-feed-section")).toBe(true);
+    expect(workspaceChildren[1]?.classList.contains("vera5-popup-triage")).toBe(true);
+    expect(workspaceChildren[2]?.classList.contains("vera5-popup-detail")).toBe(true);
+    expect(pane?.closest(".vera5-popup-detail")).not.toBeNull();
+    expect(pane?.closest(".vera5-popup-inspector")).not.toBeNull();
+    expect(workspaceChildren[2]?.querySelector(".vera5-popup-casework")).not.toBeNull();
     expect(pane?.textContent).toContain("Analyst notes");
-    expect(pane?.textContent).toContain("Why detected?");
+    expect(pane?.textContent).not.toContain("Why detected?");
 
     const closeButton = pane?.querySelector(
       'button[aria-label="Close indicator details"]'
@@ -2909,9 +3062,7 @@ describe("Popup IOC tray", () => {
     flushSync(() => {
       closeButton?.click();
     });
-    expect(
-      mounted.container.querySelector('[data-vera5-detail-pane="true"]')
-    ).toBeNull();
+    expect(mounted.container.querySelector('[data-vera5-detail-pane="true"]')).toBeNull();
   });
 
   it("loads a persisted analyst note for the selected indicator", async () => {
@@ -2926,11 +3077,8 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
-    const row = Array.from(
-      mounted.container.querySelectorAll('[role="button"]')
-    ).find(
-      (element) =>
-        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+    const row = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
+      (element) => element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
     ) as HTMLElement | undefined;
     flushSync(() => {
       row?.click();
@@ -2952,11 +3100,8 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
-    const row = Array.from(
-      mounted.container.querySelectorAll('[role="button"]')
-    ).find(
-      (element) =>
-        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+    const row = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
+      (element) => element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
     ) as HTMLElement | undefined;
     flushSync(() => {
       row?.click();
@@ -2980,9 +3125,7 @@ describe("Popup IOC tray", () => {
     });
 
     await vi.waitFor(() => {
-      const record = localStore[STORAGE_KEY_ANALYST_NOTES] as
-        | Record<string, string>
-        | undefined;
+      const record = localStore[STORAGE_KEY_ANALYST_NOTES] as Record<string, string> | undefined;
       expect(record?.["8.8.8.8"]).toBe("Blocklisted at firewall");
     });
   });
@@ -3007,11 +3150,8 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
-    const row = Array.from(
-      mounted.container.querySelectorAll('[role="button"]')
-    ).find(
-      (element) =>
-        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+    const row = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
+      (element) => element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
     ) as HTMLElement | undefined;
     flushSync(() => {
       row?.click();
@@ -3049,8 +3189,7 @@ describe("Popup IOC tray", () => {
     });
 
     const row = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
-      (element) =>
-        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+      (element) => element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
     );
     row?.click();
 
@@ -3072,8 +3211,7 @@ describe("Popup IOC tray", () => {
     });
 
     const row = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
-      (element) =>
-        element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
+      (element) => element.getAttribute("aria-label")?.startsWith("View 8.8.8.8 on page") === true
     );
     row?.click();
 
@@ -3156,9 +3294,7 @@ describe("Popup IOC tray", () => {
     });
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain(
-        "Added 3 indicators to Phishing Campaign."
-      );
+      expect(mounted?.container.textContent).toContain("Added 3 indicators to Phishing Campaign.");
     });
   });
 
@@ -3171,8 +3307,7 @@ describe("Popup IOC tray", () => {
 
     openTrayDemotedDetails(mounted.container, POPUP_TRAY_ROW_ACTIONS_SUMMARY);
     const runToggle = Array.from(mounted.container.querySelectorAll("button")).find(
-      (button) =>
-        button.getAttribute("aria-label") === "Run macro… for 8.8.8.8"
+      (button) => button.getAttribute("aria-label") === "Run macro… for 8.8.8.8"
     );
     expect(runToggle).toBeDefined();
     flushSync(() => {
@@ -3271,9 +3406,7 @@ describe("Popup IOC tray", () => {
           },
         })
       );
-      expect(mounted?.container.textContent).toContain(
-        "Ran DFIR Triage on 3 filtered indicators."
-      );
+      expect(mounted?.container.textContent).toContain("Ran DFIR Triage on 3 filtered indicators.");
     });
   });
 
@@ -3743,9 +3876,7 @@ describe("Popup IOC tray", () => {
     scanButton?.click();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain(
-        "No indicators detected on this page."
-      );
+      expect(mounted?.container.textContent).toContain("No indicators detected on this page.");
     });
     expect(mounted!.container.textContent).toContain("Settings");
     expect(mounted!.container.textContent).toContain("Permissions");
@@ -3810,22 +3941,18 @@ describe("Popup operator UX surfaces", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      const advancedToggle = mounted?.container.querySelector(
-        '[aria-controls="popup-advanced-body"]'
+      const tab = mounted?.container.querySelector(
+        '[role="tab"][aria-controls="popup-source-ops-body"]'
       );
-      const toggle = mounted?.container.querySelector(
-        '[aria-controls="popup-source-ops-body"]'
-      );
-      expect(advancedToggle?.getAttribute("aria-expanded")).toBe("true");
-      expect(toggle?.getAttribute("aria-expanded")).toBe("true");
-      expect(mounted?.container.textContent).toContain("Last status: Rate limited");
+      expect(tab?.getAttribute("aria-selected")).toBe("true");
+      expect(mounted?.container.textContent).toContain("Rate limited");
     });
-    expect(
-      mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
-    ).toBe(false);
-    expect(
-      mounted?.container.querySelector("#popup-source-ops-body")?.hasAttribute("hidden")
-    ).toBe(false);
+    expect(mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")).toBe(
+      false
+    );
+    expect(mounted?.container.querySelector("#popup-source-ops-body")?.hasAttribute("hidden")).toBe(
+      false
+    );
   });
 
   it("expands investigation history when popup panel focus requests history", async () => {
@@ -3853,22 +3980,18 @@ describe("Popup operator UX surfaces", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      const advancedToggle = mounted?.container.querySelector(
-        '[aria-controls="popup-advanced-body"]'
+      const tab = mounted?.container.querySelector(
+        '[role="tab"][aria-controls="popup-history-body"]'
       );
-      const toggle = mounted?.container.querySelector(
-        '[aria-controls="popup-history-body"]'
-      );
-      expect(advancedToggle?.getAttribute("aria-expanded")).toBe("true");
-      expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+      expect(tab?.getAttribute("aria-selected")).toBe("true");
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
-    expect(
-      mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")
-    ).toBe(false);
-    expect(
-      mounted?.container.querySelector("#popup-history-body")?.hasAttribute("hidden")
-    ).toBe(false);
+    expect(mounted?.container.querySelector("#popup-advanced-body")?.hasAttribute("hidden")).toBe(
+      false
+    );
+    expect(mounted?.container.querySelector("#popup-history-body")?.hasAttribute("hidden")).toBe(
+      false
+    );
   });
 });
 
@@ -3896,19 +4019,14 @@ describe("Popup quiet mode header", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain(
-        POPUP_QUIET_MODE_STATUS_LABEL
-      );
+      expect(mounted?.container.textContent).toContain(POPUP_QUIET_MODE_STATUS_LABEL);
     });
     expect(
       mounted?.container.querySelector(
         `[role="status"][aria-label="${POPUP_STATUS_STRIP_ARIA_LABEL}"]`
       )
     ).not.toBeNull();
-    expect(
-      mounted?.container.querySelector('[aria-label*="Quiet mode active"]')
-    ).not.toBeNull();
-    expect(mounted?.container.textContent).toContain(POPUP_STATUS_MANUAL_ENRICH_LABEL);
+    expect(mounted?.container.querySelector('[aria-label*="Quiet mode active"]')).not.toBeNull();
   });
 
   it("hides quiet mode status in the popup header when quiet mode is off", async () => {
@@ -3919,11 +4037,8 @@ describe("Popup quiet mode header", () => {
 
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("Extension enabled");
-      expect(mounted?.container.textContent).toContain(POPUP_STATUS_AUTO_ENRICH_LABEL);
     });
-    expect(mounted?.container.textContent).not.toContain(
-      POPUP_QUIET_MODE_STATUS_LABEL
-    );
+    expect(mounted?.container.textContent).not.toContain(POPUP_QUIET_MODE_STATUS_LABEL);
   });
 
   it("updates the header when quiet mode changes in storage", async () => {
@@ -3951,9 +4066,7 @@ describe("Popup quiet mode header", () => {
     });
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain(
-        POPUP_QUIET_MODE_STATUS_LABEL
-      );
+      expect(mounted?.container.textContent).toContain(POPUP_QUIET_MODE_STATUS_LABEL);
     });
   });
 });

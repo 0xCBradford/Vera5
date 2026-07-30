@@ -62,9 +62,7 @@ describe("EnrichmentResult shape", () => {
     expect(isEnrichmentResult(null)).toBe(false);
     expect(isEnrichmentResult({ ...sampleResult, ioc: "" })).toBe(false);
     expect(isEnrichmentResult({ ...sampleResult, type: "wallet" })).toBe(false);
-    expect(
-      isEnrichmentResult({ ...sampleResult, lastUpdated: "not-a-date" })
-    ).toBe(false);
+    expect(isEnrichmentResult({ ...sampleResult, lastUpdated: "not-a-date" })).toBe(false);
   });
 
   it("validates per-source results", () => {
@@ -133,18 +131,24 @@ describe("EnrichmentResult shape", () => {
     expect(empty.cached).toBe(false);
     expect(isEnrichmentResult(empty)).toBe(true);
 
-    expect(
-      createOkSourceResult({
-        sourceId: "abuseipdb",
-        summary: "Low confidence",
-        tags: ["scanner"],
-        fromCache: true,
-      })
-    ).toMatchObject({
+    const okResult = createOkSourceResult({
+      sourceId: "abuseipdb",
+      summary: "74 abuse confidence",
+      tags: ["scanner"],
+      fromCache: true,
+    });
+    expect(okResult).toMatchObject({
       status: "ok",
       sourceLabel: "AbuseIPDB",
       fromCache: true,
+      assessment: {
+        kind: "risk",
+        signal: 74,
+        verdict: "High risk signal",
+        evidence: ["74 abuse confidence", "scanner"],
+      },
     });
+    expect(isEnrichmentSourceResult(okResult)).toBe(true);
 
     expect(
       createErrorSourceResult({
@@ -209,10 +213,7 @@ describe("EnrichmentConnector interface", () => {
       name: "otx",
       async enrich(ioc) {
         if (ioc.type !== "ipv4") {
-          return createSkippedSourceResult(
-            "otx",
-            ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE
-          );
+          return createSkippedSourceResult("otx", ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE);
         }
         return createOkSourceResult({
           sourceId: "otx",
@@ -277,9 +278,7 @@ describe("rate limit header handling", () => {
         "AbuseIPDB rate limit reached. Back off before retrying.",
         new Headers({ "Retry-After": "30" })
       )
-    ).toBe(
-      "AbuseIPDB rate limit reached. Back off before retrying. Retry after 30 seconds."
-    );
+    ).toBe("AbuseIPDB rate limit reached. Back off before retrying. Retry after 30 seconds.");
   });
 });
 
@@ -310,10 +309,7 @@ describe("rate limit error messaging", () => {
     );
     expect(formatRateLimitRetryHintText(null)).toBe("Try again later.");
     expect(
-      buildRateLimitedEnrichmentError(
-        "AbuseIPDB",
-        new Headers({ "Retry-After": "120" })
-      )
+      buildRateLimitedEnrichmentError("AbuseIPDB", new Headers({ "Retry-After": "120" }))
     ).toEqual({
       errorMessage: "AbuseIPDB rate limit reached. Back off before retrying.",
       retryHint: "Retry after 120 seconds.",

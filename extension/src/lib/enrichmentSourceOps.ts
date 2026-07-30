@@ -22,11 +22,10 @@ import {
 
 export const ENRICHMENT_SOURCE_OPS_SECTION_TITLE = "Source operations";
 
-export const ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE =
-  "Source health and vendor quota hints (last status, last error, cache counts, scoped clear cache, rate-limit cooldown, and last cache clear) live in the extension popup under Source operations—not on this page.";
+export const ENRICHMENT_SOURCE_OPS_WORKSPACE_GUIDANCE =
+  "Source health and vendor quota hints (last status, last error, cache counts, scoped clear cache, rate-limit cooldown, and last cache clear) live in the side-panel workspace under Source operations—not on this page.";
 
-export const STORAGE_KEY_ENRICHMENT_SOURCE_LAST_STATUS =
-  "enrichmentSourceLastStatus";
+export const STORAGE_KEY_ENRICHMENT_SOURCE_LAST_STATUS = "enrichmentSourceLastStatus";
 
 export type EnrichmentSourceLastStatusEntry = {
   status: EnrichmentSourceStatus;
@@ -55,13 +54,9 @@ export type EnrichmentSourceOpsSnapshot = {
   sources: EnrichmentSourceOpsRow[];
 };
 
-const ENRICHMENT_SOURCE_STATUS_SET = new Set<string>(
-  Object.values(ENRICHMENT_SOURCE_STATUS)
-);
+const ENRICHMENT_SOURCE_STATUS_SET = new Set<string>(Object.values(ENRICHMENT_SOURCE_STATUS));
 
-const ENRICHMENT_ERROR_CODE_SET = new Set<string>(
-  Object.values(ENRICHMENT_ERROR_CODE)
-);
+const ENRICHMENT_ERROR_CODE_SET = new Set<string>(Object.values(ENRICHMENT_ERROR_CODE));
 
 function isEnrichmentSourceLastStatusEntry(
   value: unknown
@@ -70,10 +65,7 @@ function isEnrichmentSourceLastStatusEntry(
     return false;
   }
   const record = value as Record<string, unknown>;
-  if (
-    typeof record.status !== "string" ||
-    !ENRICHMENT_SOURCE_STATUS_SET.has(record.status)
-  ) {
+  if (typeof record.status !== "string" || !ENRICHMENT_SOURCE_STATUS_SET.has(record.status)) {
     return false;
   }
   if (typeof record.at !== "string" || record.at.trim().length === 0) {
@@ -81,8 +73,7 @@ function isEnrichmentSourceLastStatusEntry(
   }
   if (
     record.errorCode !== undefined &&
-    (typeof record.errorCode !== "string" ||
-      !ENRICHMENT_ERROR_CODE_SET.has(record.errorCode))
+    (typeof record.errorCode !== "string" || !ENRICHMENT_ERROR_CODE_SET.has(record.errorCode))
   ) {
     return false;
   }
@@ -153,9 +144,7 @@ export function isEnrichmentSourceOpsSnapshot(
 }
 
 async function readEnrichmentSourceLastStatusRecord(): Promise<EnrichmentSourceLastStatusRecord> {
-  const result = await chrome.storage.local.get(
-    STORAGE_KEY_ENRICHMENT_SOURCE_LAST_STATUS
-  );
+  const result = await chrome.storage.local.get(STORAGE_KEY_ENRICHMENT_SOURCE_LAST_STATUS);
   return normalizeEnrichmentSourceLastStatusRecord(
     result[STORAGE_KEY_ENRICHMENT_SOURCE_LAST_STATUS]
   );
@@ -306,9 +295,7 @@ export function formatEnrichmentSourceLastErrorLabel(
   }
 }
 
-export function formatEnrichmentCacheClearedAtLabel(
-  clearedAt: string | null
-): string {
+export function formatEnrichmentCacheClearedAtLabel(clearedAt: string | null): string {
   if (!clearedAt) {
     return "Never";
   }

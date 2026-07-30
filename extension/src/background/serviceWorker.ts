@@ -59,7 +59,6 @@ import {
 import type { IocCollection } from "../lib/iocCollection";
 import { isInvestigationSessionIocPinned } from "../lib/investigationSession";
 import { toggleActiveInvestigationSessionIocPin } from "../lib/investigationSessionStorage";
-import type { IocType } from "../lib/iocRegex";
 import { clearTabScanSnapshot } from "../lib/tabScanSnapshotStorage";
 import { runStorageMigrationOnExtensionUpdate } from "../lib/storageMigration";
 import {
@@ -116,9 +115,7 @@ export function caseContextMenuSaveId(collectionId: string): string {
   return `${CASE_CONTEXT_MENU_SAVE_ID_PREFIX}${collectionId}`;
 }
 
-export function parseCaseContextMenuSaveId(
-  menuItemId: string | number
-): string | null {
+export function parseCaseContextMenuSaveId(menuItemId: string | number): string | null {
   const raw = String(menuItemId);
   if (
     raw === CASE_CONTEXT_MENU_SAVE_EMPTY_ID ||
@@ -135,13 +132,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-// Open the persistent native side panel (the primary analyst workspace) when
-// the toolbar icon is clicked. Guarded because `chrome.sidePanel` is
-// Chromium-only — on Firefox the action keeps its declared popup launcher.
+// Open the persistent native workspace from the toolbar on both browser APIs.
 if (typeof chrome.sidePanel?.setPanelBehavior === "function") {
-  void chrome.sidePanel
-    .setPanelBehavior({ openPanelOnActionClick: true })
-    .catch(() => {});
+  void chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+} else {
+  const sidebarAction = (
+    chrome as typeof chrome & {
+      sidebarAction?: { open?: () => Promise<void> };
+    }
+  ).sidebarAction;
+  if (
+    typeof sidebarAction?.open === "function" &&
+    typeof chrome.action?.onClicked?.addListener === "function"
+  ) {
+    chrome.action.onClicked.addListener(() => {
+      void sidebarAction.open?.().catch(() => {});
+    });
+  }
 }
 
 function resolveEnrichSelectionContextMenuActionId(): string {
@@ -155,9 +162,7 @@ let pivotContextMenuIoc: { type: IocType; value: string } | null = null;
 let pivotContextMenuFilterKey = "";
 let pivotContextMenuUpdateGeneration = 0;
 
-function pivotContextMenuFilterKeyForIoc(
-  ioc: { type: IocType; value: string } | null
-): string {
+function pivotContextMenuFilterKeyForIoc(ioc: { type: IocType; value: string } | null): string {
   return ioc ? `${ioc.type}|${ioc.value}` : "";
 }
 
@@ -219,9 +224,7 @@ function registerPivotContextMenus(
   }
 }
 
-export async function refreshPivotContextMenusForSelection(
-  selectionText: string
-): Promise<void> {
+export async function refreshPivotContextMenusForSelection(selectionText: string): Promise<void> {
   const match = resolveIocFromSelectionText(selectionText);
   const nextKey = pivotContextMenuFilterKeyForIoc(match);
   if (nextKey === pivotContextMenuFilterKey) {
@@ -400,10 +403,7 @@ async function readLiveSelectionText(tabId: number): Promise<string> {
   }
 }
 
-async function showPivotStatusOnTab(
-  tabId: number,
-  message: string
-): Promise<void> {
+async function showPivotStatusOnTab(tabId: number, message: string): Promise<void> {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
@@ -436,8 +436,7 @@ async function resolveSelectionIocForCaseAction(input: {
   selectionText: string;
 }): Promise<{ type: IocType; value: string } | null> {
   const liveSelection = await readLiveSelectionText(input.tabId);
-  const selectionText =
-    liveSelection.trim().length > 0 ? liveSelection : input.selectionText;
+  const selectionText = liveSelection.trim().length > 0 ? liveSelection : input.selectionText;
   return resolveIocFromSelectionText(selectionText);
 }
 
@@ -447,16 +446,12 @@ async function openPivotTabFromSelection(input: {
   selectionText: string;
 }): Promise<void> {
   const liveSelection = await readLiveSelectionText(input.tabId);
-  const selectionText =
-    liveSelection.trim().length > 0 ? liveSelection : input.selectionText;
+  const selectionText = liveSelection.trim().length > 0 ? liveSelection : input.selectionText;
 
   // Loose mode: single-site clicks may use browse/WHOIS fallbacks.
   const resolved = resolvePivotOpenTarget(input.provider, selectionText, "loose");
   if ("error" in resolved) {
-    await showPivotStatusOnTab(
-      input.tabId,
-      formatPivotStatusMessage(resolved.error)
-    );
+    await showPivotStatusOnTab(input.tabId, formatPivotStatusMessage(resolved.error));
     return;
   }
   await chrome.tabs.create({ url: resolved.href, active: true });
@@ -468,8 +463,7 @@ async function openAllPivotTabsFromSelection(input: {
   selectionText: string;
 }): Promise<void> {
   const liveSelection = await readLiveSelectionText(input.tabId);
-  const selectionText =
-    liveSelection.trim().length > 0 ? liveSelection : input.selectionText;
+  const selectionText = liveSelection.trim().length > 0 ? liveSelection : input.selectionText;
 
   // Strict mode: only open pivots that truly support the detected IOC type.
   if (!resolveIocFromSelectionText(selectionText)) {
@@ -487,10 +481,7 @@ async function openAllPivotTabsFromSelection(input: {
     visibility
   );
   if (targets.length === 0) {
-    await showPivotStatusOnTab(
-      input.tabId,
-      formatPivotOpenAllEmptyMessage(input.sourceClass)
-    );
+    await showPivotStatusOnTab(input.tabId, formatPivotOpenAllEmptyMessage(input.sourceClass));
     return;
   }
   for (const [index, target] of targets.entries()) {
@@ -501,10 +492,7 @@ async function openAllPivotTabsFromSelection(input: {
   }
 }
 
-async function pinIocFromSelection(input: {
-  tabId: number;
-  selectionText: string;
-}): Promise<void> {
+async function pinIocFromSelection(input: { tabId: number; selectionText: string }): Promise<void> {
   const ioc = await resolveSelectionIocForCaseAction(input);
   if (!ioc) {
     await showPivotStatusOnTab(
@@ -520,9 +508,7 @@ async function pinIocFromSelection(input: {
   if (!session) {
     await showPivotStatusOnTab(
       input.tabId,
-      formatPivotStatusMessage(
-        "No active investigation session. Start a session, then pin."
-      )
+      formatPivotStatusMessage("No active investigation session. Start a session, then pin.")
     );
     return;
   }
@@ -552,9 +538,7 @@ async function labelIocFromSelection(input: {
   await showPivotStatusOnTab(
     input.tabId,
     formatPivotStatusMessage(
-      input.label
-        ? `Labeled ${formatIocLabelDisplay(input.label)}.`
-        : "Cleared indicator label."
+      input.label ? `Labeled ${formatIocLabelDisplay(input.label)}.` : "Cleared indicator label."
     )
   );
 }
@@ -583,16 +567,10 @@ async function saveIocToCollectionFromSelection(input: {
     );
     return;
   }
-  await showPivotStatusOnTab(
-    input.tabId,
-    formatPivotStatusMessage(`Saved to ${updated.name}.`)
-  );
+  await showPivotStatusOnTab(input.tabId, formatPivotStatusMessage(`Saved to ${updated.name}.`));
 }
 
-async function sendRunOperatorMacroOnSelectionToTab(
-  tabId: number,
-  macroId: string
-): Promise<void> {
+async function sendRunOperatorMacroOnSelectionToTab(tabId: number, macroId: string): Promise<void> {
   await sendMessageToTab(
     tabId,
     runOperatorMacroMessage({
@@ -652,8 +630,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab?.id) {
       return;
     }
-    const selectionText =
-      typeof info.selectionText === "string" ? info.selectionText : "";
+    const selectionText = typeof info.selectionText === "string" ? info.selectionText : "";
     void openPivotTabFromSelection({
       tabId: tab.id,
       provider: pivotProvider,
@@ -667,8 +644,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab?.id) {
       return;
     }
-    const selectionText =
-      typeof info.selectionText === "string" ? info.selectionText : "";
+    const selectionText = typeof info.selectionText === "string" ? info.selectionText : "";
     void openAllPivotTabsFromSelection({
       tabId: tab.id,
       sourceClass: openAllSourceClass,
@@ -681,8 +657,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab?.id) {
       return;
     }
-    const selectionText =
-      typeof info.selectionText === "string" ? info.selectionText : "";
+    const selectionText = typeof info.selectionText === "string" ? info.selectionText : "";
     void pinIocFromSelection({ tabId: tab.id, selectionText });
     return;
   }
@@ -692,8 +667,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab?.id) {
       return;
     }
-    const selectionText =
-      typeof info.selectionText === "string" ? info.selectionText : "";
+    const selectionText = typeof info.selectionText === "string" ? info.selectionText : "";
     void labelIocFromSelection({
       tabId: tab.id,
       selectionText,
@@ -711,8 +685,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab?.id) {
       return;
     }
-    const selectionText =
-      typeof info.selectionText === "string" ? info.selectionText : "";
+    const selectionText = typeof info.selectionText === "string" ? info.selectionText : "";
     void saveIocToCollectionFromSelection({
       tabId: tab.id,
       selectionText,

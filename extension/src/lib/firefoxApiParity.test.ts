@@ -9,17 +9,15 @@ import {
   MANIFEST_DECLARED_ENRICHMENT_HOST_PERMISSIONS,
 } from "./iocRequestBoundaries";
 
-const extensionRoot = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  ".."
-);
+const extensionRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function readManifest(relativePath: string): {
   permissions?: string[];
   host_permissions?: string[];
   background?: { service_worker?: string; scripts?: string[] };
-  browser_specific_settings?: { gecko?: { strict_min_version?: string; data_collection_permissions?: { required?: string[] } } };
+  browser_specific_settings?: {
+    gecko?: { strict_min_version?: string; data_collection_permissions?: { required?: string[] } };
+  };
   web_accessible_resources?: unknown;
   content_security_policy?: unknown;
   options_page?: string;
@@ -27,9 +25,9 @@ function readManifest(relativePath: string): {
   side_panel?: { default_path?: string };
   sidebar_action?: { default_panel?: string };
 } {
-  return JSON.parse(
-    readFileSync(path.join(extensionRoot, relativePath), "utf8")
-  ) as ReturnType<typeof readManifest>;
+  return JSON.parse(readFileSync(path.join(extensionRoot, relativePath), "utf8")) as ReturnType<
+    typeof readManifest
+  >;
 }
 
 function readSource(relativePath: string): string {
@@ -51,6 +49,7 @@ const BACKGROUND_ASYNC_MESSAGE_TYPES = [
   MESSAGE.ARCHIVE_INVESTIGATION_SESSION,
   MESSAGE.DELETE_INVESTIGATION_SESSION,
   MESSAGE.GET_ENRICHMENT_SOURCE_OPS,
+  MESSAGE.OPEN_WORKSPACE,
   MESSAGE.OPEN_EXTENSION_POPUP,
   MESSAGE.LIST_IOC_COLLECTIONS,
   MESSAGE.CREATE_IOC_COLLECTION,
@@ -94,15 +93,11 @@ const CONTENT_MESSAGE_TYPE_MARKERS: Partial<
 const BROWSER_COMPAT_ENTRY_POINTS = [
   "src/background/serviceWorker.ts",
   "src/content/contentScript.ts",
-  "src/popup/main.tsx",
   "src/sidepanel/main.tsx",
   "src/options/main.tsx",
 ] as const;
 
-function manifestHostPatternCoversHttpsHostname(
-  pattern: string,
-  hostname: string
-): boolean {
+function manifestHostPatternCoversHttpsHostname(pattern: string, hostname: string): boolean {
   if (pattern === "https://*/*") {
     return true;
   }
@@ -132,9 +127,7 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
     const chromeManifest = readManifest("public/manifest.json");
     const firefoxManifest = readManifest("public/manifest.firefox.json");
 
-    expect(firefoxManifest.host_permissions).toEqual(
-      chromeManifest.host_permissions
-    );
+    expect(firefoxManifest.host_permissions).toEqual(chromeManifest.host_permissions);
   });
 
   it("covers every declared connector API host in the Firefox manifest", () => {
@@ -145,9 +138,7 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
 
     for (const hostname of DECLARED_ENRICHMENT_API_HOSTS) {
       expect(
-        hostPermissions.some((pattern) =>
-          manifestHostPatternCoversHttpsHostname(pattern, hostname)
-        )
+        hostPermissions.some((pattern) => manifestHostPatternCoversHttpsHostname(pattern, hostname))
       ).toBe(true);
     }
   });
@@ -179,7 +170,7 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
     expect(firefoxManifest.options_page).toBe(chromeManifest.options_page);
   });
 
-  it("uses the native Side Panel as the Chromium action surface and keeps the popup launcher on Firefox", () => {
+  it("uses the canonical side workspace as both browser action surfaces", () => {
     const chromeManifest = readManifest("public/manifest.json");
     const firefoxManifest = readManifest("public/manifest.firefox.json");
 
@@ -189,24 +180,27 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
     // A declared popup would preempt openPanelOnActionClick, so it must be absent.
     expect(chromeManifest.action?.default_popup).toBeUndefined();
 
-    // Firefox has no chrome.sidePanel: keep the existing popup action surface
-    // and never leak the Chromium-only permission/entry.
+    // Firefox has no chrome.sidePanel and never leaks the Chromium-only
+    // permission/entry.
     expect(firefoxManifest.permissions).not.toContain("sidePanel");
     expect(firefoxManifest.side_panel).toBeUndefined();
-    expect(firefoxManifest.action?.default_popup).toBe("popup.html");
+    expect(firefoxManifest.action?.default_popup).toBeUndefined();
 
     // Firefox hosts the same persistent workspace via sidebar_action pointed at
     // the shared side-panel document; Chromium ignores sidebar_action.
     expect(firefoxManifest.sidebar_action?.default_panel).toBe("sidepanel.html");
     expect(chromeManifest.sidebar_action).toBeUndefined();
+
+    const serviceWorkerSource = readSource("src/background/serviceWorker.ts");
+    expect(serviceWorkerSource).toContain("chrome.action.onClicked.addListener");
+    expect(serviceWorkerSource).toContain("sidebarAction.open");
   });
 
   it("declares no Mozilla data collection on the Firefox manifest", () => {
     const firefoxManifest = readManifest("public/manifest.firefox.json");
 
     expect(
-      firefoxManifest.browser_specific_settings?.gecko?.data_collection_permissions
-        ?.required
+      firefoxManifest.browser_specific_settings?.gecko?.data_collection_permissions?.required
     ).toEqual(["none"]);
   });
 
@@ -217,10 +211,11 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
   });
 
   it("defers representative async messages to routeIncomingMessageAsync", () => {
-    const response = routeIncomingMessage(
-      enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" })
-    );
+    const response = routeIncomingMessage(enrichIocMessage({ value: "8.8.8.8", iocType: "ipv4" }));
     expect(response.ok).toBe(false);
+    if (response.ok) {
+      throw new Error("Expected async message deferral");
+    }
     expect(response.error).toMatch(/requires async handler/);
   });
 
@@ -248,9 +243,7 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
 
     for (const type of CONTENT_TO_TAB_MESSAGE_TYPES) {
       const markers = CONTENT_MESSAGE_TYPE_MARKERS[type] ?? [type];
-      expect(markers.some((marker) => combinedSources.includes(marker))).toBe(
-        true
-      );
+      expect(markers.some((marker) => combinedSources.includes(marker))).toBe(true);
     }
   });
 
@@ -276,9 +269,7 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
     expect(serviceWorkerSource).toContain("chrome.contextMenus.create");
     expect(serviceWorkerSource).toContain('contexts: ["selection"]');
     expect(serviceWorkerSource).toContain("chrome.runtime.onInstalled");
-    expect(serviceWorkerSource).toContain(
-      "OPERATOR_MACRO_CONTEXT_RUN_ON_SELECTION_LABEL"
-    );
+    expect(serviceWorkerSource).toContain("OPERATOR_MACRO_CONTEXT_RUN_ON_SELECTION_LABEL");
     expect(serviceWorkerSource).toContain('mode: "activeSelection"');
   });
 
@@ -292,9 +283,7 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
 
   it("documents storage.session minimum version gap for Firefox tray snapshots", () => {
     const firefoxManifest = readManifest("public/manifest.firefox.json");
-    const minVersion =
-      firefoxManifest.browser_specific_settings?.gecko?.strict_min_version ??
-      "0";
+    const minVersion = firefoxManifest.browser_specific_settings?.gecko?.strict_min_version ?? "0";
 
     const majorNum = Number(minVersion.split(".")[0]);
 
@@ -304,8 +293,6 @@ describe("Firefox API parity (storage, messaging, contextMenus)", () => {
   it("documents callback-style contextMenus.removeAll as a Firefox follow-up", () => {
     const serviceWorkerSource = readSource("src/background/serviceWorker.ts");
 
-    expect(serviceWorkerSource).toMatch(
-      /contextMenus\.removeAll\(\(\)\s*=>\s*\{/
-    );
+    expect(serviceWorkerSource).toMatch(/contextMenus\.removeAll\(\(\)\s*=>\s*\{/);
   });
 });

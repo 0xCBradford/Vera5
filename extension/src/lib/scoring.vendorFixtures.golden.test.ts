@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { normalizeAbuseIpdbCheckResponse } from "./abuseipdbConnector";
-import { ENRICHMENT_SOURCE_STATUS } from "./enrichment";
+import { ENRICHMENT_SOURCE_STATUS, createOkSourceResult } from "./enrichment";
 import { normalizeOtxIndicatorResponse } from "./otxConnector";
 import {
   buildHoverCardSourceEntries,
@@ -25,6 +25,17 @@ import {
 } from "./scoring";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+
+const LIVE_ASSESSMENT_GOLDENS = [
+  ["abuseipdb", "74 abuse confidence", [], "risk", 74],
+  ["otx", "3 threat pulses", [], "risk", 42],
+  ["virustotal", "5 malicious detections", [], "risk", 85],
+  ["urlscan", "3 urlscan results", ["malicious"], "risk", 78],
+  ["greynoise", "malicious internet noise", [], "risk", 72],
+  ["shodan", "12 open services", [], "exposure", null],
+  ["censys", "4 observed services", [], "exposure", null],
+  ["rdap_whois", "Example Registrar · registered 1995-08-14", [], "context", null],
+] as const;
 
 function loadVendorFixture(relativePath: string): unknown {
   const raw = readFileSync(join(fixturesDir, relativePath), "utf8");
@@ -73,6 +84,20 @@ function expectOverlayScorePresentation(
 }
 
 describe("golden: vendor fixtures → composite score bands", () => {
+  it.each(LIVE_ASSESSMENT_GOLDENS)(
+    "%s emits its declared structured assessment",
+    (sourceId, summary, tags, kind, signal) => {
+      const result = createOkSourceResult({
+        sourceId,
+        summary,
+        tags,
+      });
+      expect(result.assessment?.kind).toBe(kind);
+      expect(result.assessment?.signal ?? null).toBe(signal);
+      expect(result.assessment?.evidence[0]).toBe(summary);
+    }
+  );
+
   it("AbuseIPDB check-high-confidence.json summary maps to HIGH band", () => {
     const payload = loadVendorFixture("abuseipdb/check-high-confidence.json");
     const normalized = normalizeAbuseIpdbCheckResponse(payload);
@@ -86,16 +111,8 @@ describe("golden: vendor fixtures → composite score bands", () => {
     expect(normalized?.summary).toBe("3 threat pulses");
 
     const result = computeCompositeRiskScore([
-      scoringInputFromNormalized(
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        "AbuseIPDB",
-        normalized?.summary
-      ),
-      scoringInputFromNormalized(
-        ENRICHMENT_SOURCE.OTX,
-        "OTX",
-        normalized?.summary
-      ),
+      scoringInputFromNormalized(ENRICHMENT_SOURCE.ABUSEIPDB, "AbuseIPDB", normalized?.summary),
+      scoringInputFromNormalized(ENRICHMENT_SOURCE.OTX, "OTX", normalized?.summary),
     ]);
     expect(result.label).toBe(COMPOSITE_RISK_LABEL.SUSPICIOUS);
     expect(result.compositeSignal).toBeCloseTo(42, 10);
@@ -109,11 +126,7 @@ describe("golden: vendor fixtures → composite score bands", () => {
     const otxSummary = normalizeOtxIndicatorResponse(otxPayload)?.summary;
 
     const paired = computeCompositeRiskScore([
-      scoringInputFromNormalized(
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        "AbuseIPDB",
-        abuseSummary
-      ),
+      scoringInputFromNormalized(ENRICHMENT_SOURCE.ABUSEIPDB, "AbuseIPDB", abuseSummary),
       scoringInputFromNormalized(ENRICHMENT_SOURCE.OTX, "OTX", otxSummary),
     ]);
     expect(paired.label).toBe(COMPOSITE_RISK_LABEL.HIGH);
@@ -126,11 +139,7 @@ describe("golden: vendor fixtures → composite score bands", () => {
     const otxSummary = normalizeOtxIndicatorResponse(otxPayload)?.summary;
 
     const result = computeCompositeRiskScore([
-      scoringInputFromNormalized(
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        "AbuseIPDB",
-        "92 abuse confidence"
-      ),
+      scoringInputFromNormalized(ENRICHMENT_SOURCE.ABUSEIPDB, "AbuseIPDB", "92 abuse confidence"),
       scoringInputFromNormalized(ENRICHMENT_SOURCE.OTX, "OTX", otxSummary),
     ]);
     expect(result.disagreement).toBe(true);
@@ -143,16 +152,8 @@ describe("golden: vendor fixtures → composite score bands", () => {
     expect(normalized?.summary).toBe("9 reports");
 
     const result = computeCompositeRiskScore([
-      scoringInputFromNormalized(
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        "AbuseIPDB",
-        normalized?.summary
-      ),
-      scoringInputFromNormalized(
-        ENRICHMENT_SOURCE.OTX,
-        "OTX",
-        "1 threat pulse"
-      ),
+      scoringInputFromNormalized(ENRICHMENT_SOURCE.ABUSEIPDB, "AbuseIPDB", normalized?.summary),
+      scoringInputFromNormalized(ENRICHMENT_SOURCE.OTX, "OTX", "1 threat pulse"),
     ]);
 
     expect(result.label).toBe(COMPOSITE_RISK_LABEL.SUSPICIOUS);
@@ -164,18 +165,12 @@ describe("golden: vendor fixtures → composite score bands", () => {
     const abuseEmpty = normalizeAbuseIpdbCheckResponse(
       loadVendorFixture("abuseipdb/check-empty-data.json")
     );
-    const otxEmpty = normalizeOtxIndicatorResponse(
-      loadVendorFixture("otx/indicator-empty.json")
-    );
+    const otxEmpty = normalizeOtxIndicatorResponse(loadVendorFixture("otx/indicator-empty.json"));
     expect(abuseEmpty).toBeNull();
     expect(otxEmpty).toBeNull();
 
     const result = computeCompositeRiskScore([
-      scoringInputFromNormalized(
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        "AbuseIPDB",
-        undefined
-      ),
+      scoringInputFromNormalized(ENRICHMENT_SOURCE.ABUSEIPDB, "AbuseIPDB", undefined),
       scoringInputFromNormalized(ENRICHMENT_SOURCE.OTX, "OTX", undefined),
     ]);
     expect(result.label).toBe(COMPOSITE_RISK_LABEL.UNKNOWN);
@@ -212,8 +207,7 @@ describe("golden: vendor fixtures → overlay-equivalent risk score output", () 
     expect(view.score.compositeSignal).toBeCloseTo(59.297, 2);
     expect(presentation.insufficientCompositeNotice).toBeNull();
     expect(
-      resolveRiskScoreReasoningPresentation(view, presentation.insufficientCompositeNotice)
-        .mode
+      resolveRiskScoreReasoningPresentation(view, presentation.insufficientCompositeNotice).mode
     ).toBe("chain");
     expect(view.chain.sourceLines).toEqual(
       view.score.sources.map(formatCompositeScoreContributionLine)
@@ -246,8 +240,7 @@ describe("golden: vendor fixtures → overlay-equivalent risk score output", () 
     expect(view.chain.showDisagreement).toBe(true);
     expect(presentation.insufficientCompositeNotice).toBeNull();
     expect(
-      resolveRiskScoreReasoningPresentation(view, presentation.insufficientCompositeNotice)
-        .mode
+      resolveRiskScoreReasoningPresentation(view, presentation.insufficientCompositeNotice).mode
     ).toBe("chain");
   });
 
@@ -314,11 +307,7 @@ describe("golden: vendor fixtures → overlay-equivalent risk score output", () 
     )?.summary;
 
     const direct = computeCompositeRiskScore([
-      scoringInputFromNormalized(
-        ENRICHMENT_SOURCE.ABUSEIPDB,
-        "AbuseIPDB",
-        abuseSummary
-      ),
+      scoringInputFromNormalized(ENRICHMENT_SOURCE.ABUSEIPDB, "AbuseIPDB", abuseSummary),
       scoringInputFromNormalized(ENRICHMENT_SOURCE.OTX, "OTX", otxSummary),
     ]);
     const overlayView = buildHoverCardRiskScoreView(

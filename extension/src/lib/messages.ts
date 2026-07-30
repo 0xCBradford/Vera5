@@ -1,18 +1,10 @@
 import type { PopupPanelFocus } from "./popupPanelFocus";
 import { isPopupPanelFocus } from "./popupPanelFocus";
 import { IOC_TYPE, type IocType } from "./iocRegex";
-import {
-  extractExactIocValue,
-  hasOnlyEnrichIocMessageKeys,
-} from "./iocRequestBoundaries";
-import {
-  isTabScanSnapshotPayload,
-  type TabScanSnapshotPayload,
-} from "./tabScanSnapshot";
-import {
-  isPageContextClassification,
-  type PageContextClassification,
-} from "./pageContext";
+import { extractExactIocValue, hasOnlyEnrichIocMessageKeys } from "./iocRequestBoundaries";
+import { isTabScanSnapshotPayload, type TabScanSnapshotPayload } from "./tabScanSnapshot";
+import { isPageContextClassification, type PageContextClassification } from "./pageContext";
+import type { EnrichmentSourceId } from "./enrichmentSourceRegistry";
 
 export const MESSAGE = {
   PING: "PING",
@@ -22,8 +14,7 @@ export const MESSAGE = {
   ENRICH_SELECTION: "ENRICH_SELECTION",
   GET_SELECTION_ACTION_STATE: "GET_SELECTION_ACTION_STATE",
   OPEN_PIVOT_FROM_SELECTION: "OPEN_PIVOT_FROM_SELECTION",
-  UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION:
-    "UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION",
+  UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION: "UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION",
   NAVIGATE_TO_IOC_ANCHOR: "NAVIGATE_TO_IOC_ANCHOR",
   REOPEN_INVESTIGATION_HISTORY: "REOPEN_INVESTIGATION_HISTORY",
   TAB_SCAN_SNAPSHOT: "TAB_SCAN_SNAPSHOT",
@@ -32,6 +23,7 @@ export const MESSAGE = {
   GET_TAB_PAGE_CONTEXT: "GET_TAB_PAGE_CONTEXT",
   ENRICH_IOC: "ENRICH_IOC",
   OPEN_OPTIONS_PAGE: "OPEN_OPTIONS_PAGE",
+  OPEN_WORKSPACE: "OPEN_WORKSPACE",
   OPEN_EXTENSION_POPUP: "OPEN_EXTENSION_POPUP",
   OPEN_SITE_PERMISSIONS: "OPEN_SITE_PERMISSIONS",
   TOGGLE_COMMAND_PALETTE: "TOGGLE_COMMAND_PALETTE",
@@ -116,6 +108,10 @@ export type EnrichIocMessage = {
   bypassCache?: boolean;
 };
 export type OpenOptionsPageMessage = { type: typeof MESSAGE.OPEN_OPTIONS_PAGE };
+export type OpenWorkspaceMessage = {
+  type: typeof MESSAGE.OPEN_WORKSPACE;
+  panel: PopupPanelFocus;
+};
 export type OpenExtensionPopupMessage = {
   type: typeof MESSAGE.OPEN_EXTENSION_POPUP;
   panel: PopupPanelFocus;
@@ -218,6 +214,7 @@ export type Vera5Message =
   | GetTabPageContextMessage
   | EnrichIocMessage
   | OpenOptionsPageMessage
+  | OpenWorkspaceMessage
   | OpenExtensionPopupMessage
   | OpenSitePermissionsMessage
   | ToggleCommandPaletteMessage
@@ -240,9 +237,7 @@ export type Vera5Message =
   | RemoveIocFromCollectionMessage
   | UpdatePivotContextMenuForSelectionMessage;
 
-export type MessageResponse =
-  | { ok: true; payload?: unknown }
-  | { ok: false; error: string };
+export type MessageResponse = { ok: true; payload?: unknown } | { ok: false; error: string };
 
 export function pingMessage(): PingMessage {
   return { type: MESSAGE.PING };
@@ -260,9 +255,7 @@ export function scanSelectionMessage(): ScanSelectionMessage {
   return { type: MESSAGE.SCAN_SELECTION };
 }
 
-export function enrichSelectionMessage(input?: {
-  macroStepType?: string;
-}): EnrichSelectionMessage {
+export function enrichSelectionMessage(input?: { macroStepType?: string }): EnrichSelectionMessage {
   const message: EnrichSelectionMessage = { type: MESSAGE.ENRICH_SELECTION };
   const macroStepType = input?.macroStepType?.trim();
   if (macroStepType && macroStepType.length > 0) {
@@ -343,9 +336,7 @@ export function reopenInvestigationHistoryMessage(input: {
   };
 }
 
-export function isNavigateToIocAnchorMessage(
-  raw: unknown
-): raw is NavigateToIocAnchorMessage {
+export function isNavigateToIocAnchorMessage(raw: unknown): raw is NavigateToIocAnchorMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -409,9 +400,7 @@ export function isReopenInvestigationHistoryMessage(
   return extractExactIocValue(record.ioc, record.iocType as IocType) !== null;
 }
 
-export function tabScanSnapshotMessage(
-  snapshot: TabScanSnapshotPayload
-): TabScanSnapshotMessage {
+export function tabScanSnapshotMessage(snapshot: TabScanSnapshotPayload): TabScanSnapshotMessage {
   return { type: MESSAGE.TAB_SCAN_SNAPSHOT, snapshot };
 }
 
@@ -425,9 +414,12 @@ export function openOptionsPageMessage(): OpenOptionsPageMessage {
   return { type: MESSAGE.OPEN_OPTIONS_PAGE };
 }
 
-export function openExtensionPopupMessage(
-  panel: PopupPanelFocus
-): OpenExtensionPopupMessage {
+export function openWorkspaceMessage(panel: PopupPanelFocus): OpenWorkspaceMessage {
+  return { type: MESSAGE.OPEN_WORKSPACE, panel };
+}
+
+/** @deprecated Accepted only for messages sent by an older extension context. */
+export function openExtensionPopupMessage(panel: PopupPanelFocus): OpenExtensionPopupMessage {
   return { type: MESSAGE.OPEN_EXTENSION_POPUP, panel };
 }
 
@@ -615,9 +607,7 @@ export function renameIocCollectionMessage(input: {
   };
 }
 
-export function deleteIocCollectionMessage(
-  collectionId: string
-): DeleteIocCollectionMessage {
+export function deleteIocCollectionMessage(collectionId: string): DeleteIocCollectionMessage {
   return {
     type: MESSAGE.DELETE_IOC_COLLECTION,
     collectionId: collectionId.trim(),
@@ -716,10 +706,7 @@ export function isRenameInvestigationSessionMessage(
   if (record.type !== MESSAGE.RENAME_INVESTIGATION_SESSION) {
     return false;
   }
-  return (
-    readNonEmptySessionId(record.sessionId) !== null &&
-    typeof record.title === "string"
-  );
+  return readNonEmptySessionId(record.sessionId) !== null && typeof record.title === "string";
 }
 
 export function isArchiveInvestigationSessionMessage(
@@ -759,9 +746,7 @@ export function isGetEnrichmentSourceOpsMessage(
   );
 }
 
-export function isListIocCollectionsMessage(
-  raw: unknown
-): raw is ListIocCollectionsMessage {
+export function isListIocCollectionsMessage(raw: unknown): raw is ListIocCollectionsMessage {
   return (
     raw !== null &&
     typeof raw === "object" &&
@@ -770,9 +755,7 @@ export function isListIocCollectionsMessage(
   );
 }
 
-export function isCreateIocCollectionMessage(
-  raw: unknown
-): raw is CreateIocCollectionMessage {
+export function isCreateIocCollectionMessage(raw: unknown): raw is CreateIocCollectionMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -783,9 +766,7 @@ export function isCreateIocCollectionMessage(
   return typeof record.name === "string" && record.name.trim().length > 0;
 }
 
-export function isAddIocToCollectionMessage(
-  raw: unknown
-): raw is AddIocToCollectionMessage {
+export function isAddIocToCollectionMessage(raw: unknown): raw is AddIocToCollectionMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -819,9 +800,7 @@ function isIocCollectionMemberInput(value: unknown): value is { iocType: IocType
   );
 }
 
-export function isAddIocsToCollectionMessage(
-  raw: unknown
-): raw is AddIocsToCollectionMessage {
+export function isAddIocsToCollectionMessage(raw: unknown): raw is AddIocsToCollectionMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -838,9 +817,7 @@ export function isAddIocsToCollectionMessage(
   return record.members.every((member) => isIocCollectionMemberInput(member));
 }
 
-export function isRenameIocCollectionMessage(
-  raw: unknown
-): raw is RenameIocCollectionMessage {
+export function isRenameIocCollectionMessage(raw: unknown): raw is RenameIocCollectionMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -854,9 +831,7 @@ export function isRenameIocCollectionMessage(
   return typeof record.name === "string" && record.name.trim().length > 0;
 }
 
-export function isDeleteIocCollectionMessage(
-  raw: unknown
-): raw is DeleteIocCollectionMessage {
+export function isDeleteIocCollectionMessage(raw: unknown): raw is DeleteIocCollectionMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -889,27 +864,21 @@ export function isRemoveIocFromCollectionMessage(
   );
 }
 
-export function getTabScanSummaryMessage(
-  tabId?: number
-): GetTabScanSummaryMessage {
+export function getTabScanSummaryMessage(tabId?: number): GetTabScanSummaryMessage {
   if (tabId === undefined) {
     return { type: MESSAGE.GET_TAB_SCAN_SUMMARY };
   }
   return { type: MESSAGE.GET_TAB_SCAN_SUMMARY, tabId };
 }
 
-export function getTabPageContextMessage(
-  tabId?: number
-): GetTabPageContextMessage {
+export function getTabPageContextMessage(tabId?: number): GetTabPageContextMessage {
   if (tabId === undefined) {
     return { type: MESSAGE.GET_TAB_PAGE_CONTEXT };
   }
   return { type: MESSAGE.GET_TAB_PAGE_CONTEXT, tabId };
 }
 
-export function isTabScanSnapshotMessage(
-  raw: unknown
-): raw is TabScanSnapshotMessage {
+export function isTabScanSnapshotMessage(raw: unknown): raw is TabScanSnapshotMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -920,9 +889,7 @@ export function isTabScanSnapshotMessage(
   return isTabScanSnapshotPayload(record.snapshot);
 }
 
-export function isGetTabScanSummaryMessage(
-  raw: unknown
-): raw is GetTabScanSummaryMessage {
+export function isGetTabScanSummaryMessage(raw: unknown): raw is GetTabScanSummaryMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -936,9 +903,7 @@ export function isGetTabScanSummaryMessage(
   return typeof record.tabId === "number" && Number.isFinite(record.tabId);
 }
 
-export function isTabPageContextMessage(
-  raw: unknown
-): raw is TabPageContextMessage {
+export function isTabPageContextMessage(raw: unknown): raw is TabPageContextMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -949,9 +914,7 @@ export function isTabPageContextMessage(
   return isPageContextClassification(record.classification);
 }
 
-export function isGetTabPageContextMessage(
-  raw: unknown
-): raw is GetTabPageContextMessage {
+export function isGetTabPageContextMessage(raw: unknown): raw is GetTabPageContextMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
@@ -1011,10 +974,7 @@ export function isEnrichIocMessage(raw: unknown): raw is EnrichIocMessage {
   if (record.sourceId !== undefined && typeof record.sourceId !== "string") {
     return false;
   }
-  if (
-    record.bypassCache !== undefined &&
-    record.bypassCache !== true
-  ) {
+  if (record.bypassCache !== undefined && record.bypassCache !== true) {
     return false;
   }
   return true;
@@ -1123,6 +1083,9 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   if (type === MESSAGE.REMOVE_IOC_FROM_COLLECTION) {
     return isRemoveIocFromCollectionMessage(raw);
   }
+  if (type === MESSAGE.OPEN_WORKSPACE) {
+    return isOpenWorkspaceMessage(raw);
+  }
   if (type === MESSAGE.OPEN_EXTENSION_POPUP) {
     return isOpenExtensionPopupMessage(raw);
   }
@@ -1142,15 +1105,18 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   );
 }
 
-export function isOpenExtensionPopupMessage(
-  raw: unknown
-): raw is OpenExtensionPopupMessage {
+export function isOpenWorkspaceMessage(raw: unknown): raw is OpenWorkspaceMessage {
+  if (typeof raw !== "object" || raw === null) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  return record.type === MESSAGE.OPEN_WORKSPACE && isPopupPanelFocus(record.panel);
+}
+
+export function isOpenExtensionPopupMessage(raw: unknown): raw is OpenExtensionPopupMessage {
   if (raw === null || typeof raw !== "object" || !("type" in raw)) {
     return false;
   }
   const record = raw as Record<string, unknown>;
-  return (
-    record.type === MESSAGE.OPEN_EXTENSION_POPUP &&
-    isPopupPanelFocus(record.panel)
-  );
+  return record.type === MESSAGE.OPEN_EXTENSION_POPUP && isPopupPanelFocus(record.panel);
 }

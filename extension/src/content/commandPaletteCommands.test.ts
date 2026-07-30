@@ -35,7 +35,7 @@ import {
   registerOperatorMacroPaletteCommands,
   runOperatorMacro,
 } from "./commandPaletteCommands";
-import { openExtensionPopupMessage, runOperatorMacroMessage } from "../lib/messages";
+import { openWorkspaceMessage, runOperatorMacroMessage } from "../lib/messages";
 import { POPUP_PANEL } from "../lib/popupPanelFocus";
 import { IOC_TYPE } from "../lib/iocRegex";
 import { MAX_OPERATOR_MACRO_LIVE_ENRICH_CALLS_PER_RUN } from "../lib/operatorMacroStepTypes";
@@ -65,8 +65,7 @@ vi.mock("../lib/storage", async (importOriginal) => {
 });
 
 vi.mock("../lib/operatorMacroStorage", () => ({
-  ensureBuiltInOperatorMacros: (...args: unknown[]) =>
-    ensureBuiltInOperatorMacros(...args),
+  ensureBuiltInOperatorMacros: (...args: unknown[]) => ensureBuiltInOperatorMacros(...args),
   listStoredOperatorMacros: (...args: unknown[]) => listStoredOperatorMacros(...args),
   getStoredOperatorMacro: (...args: unknown[]) => getStoredOperatorMacro(...args),
 }));
@@ -106,17 +105,15 @@ describe("registerCoreCommandPaletteCommands", () => {
   it("registers palette-triggered macros for search and run", async () => {
     await registerOperatorMacroPaletteCommands();
 
-    const ctiCommandId = operatorMacroPaletteCommandId(
-      BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK
-    );
+    const ctiCommandId = operatorMacroPaletteCommandId(BUILT_IN_OPERATOR_MACRO_ID_CTI_DEEP_CHECK);
     const ctiCommand = getCommandPaletteCommandById(ctiCommandId);
     expect(ctiCommand?.label).toBe("CTI Deep Check");
-    expect(
-      filterCommandPaletteCommands("cti deep").map((command) => command.id)
-    ).toContain(ctiCommandId);
-    expect(
-      filterCommandPaletteCommands("macro playbook").map((command) => command.id)
-    ).toContain(ctiCommandId);
+    expect(filterCommandPaletteCommands("cti deep").map((command) => command.id)).toContain(
+      ctiCommandId
+    );
+    expect(filterCommandPaletteCommands("macro playbook").map((command) => command.id)).toContain(
+      ctiCommandId
+    );
 
     const runOperatorMacroEnrichStep = vi
       .spyOn(enrichSelection, "runOperatorMacroEnrichStep")
@@ -146,9 +143,7 @@ describe("registerCoreCommandPaletteCommands", () => {
       summary: "ok",
     });
     const openSpy = vi.spyOn(window, "open").mockReturnValue(null);
-    const copySpy = vi
-      .spyOn(copyText, "copyTextToClipboard")
-      .mockResolvedValue(true);
+    const copySpy = vi.spyOn(copyText, "copyTextToClipboard").mockResolvedValue(true);
     vi.spyOn(exportTemplates, "renderExportTemplate").mockReturnValue("# report");
 
     await executeCommandPaletteCommand(ctiCommandId);
@@ -434,8 +429,7 @@ describe("registerCoreCommandPaletteCommands", () => {
         value: "example.com",
         type: "domain",
         trustGateBlocked: true,
-        abortMessage:
-          "Threat intelligence queries are blocked for this site by domain policy.",
+        abortMessage: "Threat intelligence queries are blocked for this site by domain policy.",
       });
     const emitMacroRun = vi.spyOn(
       macroStepActions,
@@ -465,8 +459,7 @@ describe("registerCoreCommandPaletteCommands", () => {
 
     expect(result).toEqual({
       status: "aborted",
-      message:
-        "Threat intelligence queries are blocked for this site by domain policy.",
+      message: "Threat intelligence queries are blocked for this site by domain policy.",
     });
     expect(runOperatorMacroEnrichStep).toHaveBeenCalledTimes(1);
     expect(renderSpy).not.toHaveBeenCalled();
@@ -578,9 +571,7 @@ describe("registerCoreCommandPaletteCommands", () => {
     const renderSpy = vi
       .spyOn(exportTemplates, "renderExportTemplate")
       .mockReturnValue("# shared markdown report");
-    const copySpy = vi
-      .spyOn(copyText, "copyTextToClipboard")
-      .mockResolvedValue(true);
+    const copySpy = vi.spyOn(copyText, "copyTextToClipboard").mockResolvedValue(true);
 
     const result = await runOperatorMacro(
       createOperatorMacro({
@@ -731,9 +722,7 @@ describe("registerCoreCommandPaletteCommands", () => {
       .spyOn(enrichSelection, "handleEnrichSelectionRequest")
       .mockResolvedValue({ ok: true, payload: { value: "1.2.3.4", type: "ipv4" } });
 
-    await executeCommandPaletteCommand(
-      CORE_COMMAND_PALETTE_COMMAND_IDS.ENRICH_SELECTION
-    );
+    await executeCommandPaletteCommand(CORE_COMMAND_PALETTE_COMMAND_IDS.ENRICH_SELECTION);
 
     expect(handleEnrichSelectionRequest).toHaveBeenCalledTimes(1);
   });
@@ -741,17 +730,13 @@ describe("registerCoreCommandPaletteCommands", () => {
   it("disables enrich selection when nothing is selected", () => {
     document.getSelection()?.removeAllRanges();
 
-    const command = getCommandPaletteCommandById(
-      CORE_COMMAND_PALETTE_COMMAND_IDS.ENRICH_SELECTION
-    );
+    const command = getCommandPaletteCommandById(CORE_COMMAND_PALETTE_COMMAND_IDS.ENRICH_SELECTION);
     expect(command?.isEnabled?.()).toBe(false);
   });
 
   it("copies filtered tray markdown when records exist", async () => {
     const records = [{ exportedAt: "2026-01-01T00:00:00.000Z" }] as const;
-    vi.spyOn(hoverCardOverlay, "getFilteredTrayEnrichmentRecords").mockResolvedValue(
-      records
-    );
+    vi.spyOn(hoverCardOverlay, "getFilteredTrayEnrichmentRecords").mockResolvedValue(records);
     vi.spyOn(analystModeStorage, "refreshActiveTrayExportTemplateId").mockResolvedValue(
       "jira-comment"
     );
@@ -759,21 +744,14 @@ describe("registerCoreCommandPaletteCommands", () => {
       .spyOn(exportTemplates, "copyTrayTemplateExportToClipboard")
       .mockResolvedValue(true);
 
-    await executeCommandPaletteCommand(
-      CORE_COMMAND_PALETTE_COMMAND_IDS.COPY_FILTERED_MARKDOWN
-    );
+    await executeCommandPaletteCommand(CORE_COMMAND_PALETTE_COMMAND_IDS.COPY_FILTERED_MARKDOWN);
 
-    expect(copyTrayTemplateExportToClipboard).toHaveBeenCalledWith(
-      "jira-comment",
-      records
-    );
+    expect(copyTrayTemplateExportToClipboard).toHaveBeenCalledWith("jira-comment", records);
   });
 
   it("downloads filtered tray markdown when records exist", async () => {
     const records = [{ exportedAt: "2026-01-01T00:00:00.000Z" }] as const;
-    vi.spyOn(hoverCardOverlay, "getFilteredTrayEnrichmentRecords").mockResolvedValue(
-      records
-    );
+    vi.spyOn(hoverCardOverlay, "getFilteredTrayEnrichmentRecords").mockResolvedValue(records);
     vi.spyOn(analystModeStorage, "refreshActiveTrayExportTemplateId").mockResolvedValue(
       "jira-comment"
     );
@@ -781,24 +759,15 @@ describe("registerCoreCommandPaletteCommands", () => {
       .spyOn(exportTemplates, "downloadTrayTemplateExportFile")
       .mockImplementation(() => undefined);
 
-    await executeCommandPaletteCommand(
-      CORE_COMMAND_PALETTE_COMMAND_IDS.EXPORT_TRAY_SUBSET
-    );
+    await executeCommandPaletteCommand(CORE_COMMAND_PALETTE_COMMAND_IDS.EXPORT_TRAY_SUBSET);
 
-    expect(downloadTrayTemplateExportFile).toHaveBeenCalledWith(
-      "jira-comment",
-      records
-    );
+    expect(downloadTrayTemplateExportFile).toHaveBeenCalledWith("jira-comment", records);
   });
 
   it("clears page highlights", async () => {
-    const clearIocHighlights = vi
-      .spyOn(highlighter, "clearIocHighlights")
-      .mockReturnValue(2);
+    const clearIocHighlights = vi.spyOn(highlighter, "clearIocHighlights").mockReturnValue(2);
 
-    await executeCommandPaletteCommand(
-      CORE_COMMAND_PALETTE_COMMAND_IDS.CLEAR_HIGHLIGHTS
-    );
+    await executeCommandPaletteCommand(CORE_COMMAND_PALETTE_COMMAND_IDS.CLEAR_HIGHLIGHTS);
 
     expect(clearIocHighlights).toHaveBeenCalledWith(document.body);
   });
@@ -818,35 +787,29 @@ describe("registerCoreCommandPaletteCommands", () => {
       .spyOn(extensionContext, "safeRuntimeSendMessage")
       .mockResolvedValue({ ok: true, payload: { opened: true } });
 
-    await executeCommandPaletteCommand(
-      CORE_COMMAND_PALETTE_COMMAND_IDS.OPEN_HISTORY
-    );
+    await executeCommandPaletteCommand(CORE_COMMAND_PALETTE_COMMAND_IDS.OPEN_HISTORY);
 
     expect(safeRuntimeSendMessage).toHaveBeenCalledWith(
-      openExtensionPopupMessage(POPUP_PANEL.INVESTIGATION_HISTORY)
+      openWorkspaceMessage(POPUP_PANEL.INVESTIGATION_HISTORY)
     );
   });
 
-  it("requests source health popup focus", async () => {
+  it("requests source health workspace focus", async () => {
     const safeRuntimeSendMessage = vi
       .spyOn(extensionContext, "safeRuntimeSendMessage")
       .mockResolvedValue({ ok: true, payload: { opened: true } });
 
-    await executeCommandPaletteCommand(
-      CORE_COMMAND_PALETTE_COMMAND_IDS.SOURCE_HEALTH
-    );
+    await executeCommandPaletteCommand(CORE_COMMAND_PALETTE_COMMAND_IDS.SOURCE_HEALTH);
 
     expect(safeRuntimeSendMessage).toHaveBeenCalledWith(
-      openExtensionPopupMessage(POPUP_PANEL.SOURCE_OPERATIONS)
+      openWorkspaceMessage(POPUP_PANEL.SOURCE_OPERATIONS)
     );
   });
 
   it("turns quiet mode on when it is currently off", async () => {
     getQuietMode.mockResolvedValue(false);
 
-    await executeCommandPaletteCommand(
-      CORE_COMMAND_PALETTE_COMMAND_IDS.TOGGLE_QUIET_MODE
-    );
+    await executeCommandPaletteCommand(CORE_COMMAND_PALETTE_COMMAND_IDS.TOGGLE_QUIET_MODE);
 
     expect(getQuietMode).toHaveBeenCalledTimes(1);
     expect(setQuietMode).toHaveBeenCalledWith(true);
@@ -855,9 +818,7 @@ describe("registerCoreCommandPaletteCommands", () => {
   it("turns quiet mode off when it is currently on", async () => {
     getQuietMode.mockResolvedValue(true);
 
-    await executeCommandPaletteCommand(
-      CORE_COMMAND_PALETTE_COMMAND_IDS.TOGGLE_QUIET_MODE
-    );
+    await executeCommandPaletteCommand(CORE_COMMAND_PALETTE_COMMAND_IDS.TOGGLE_QUIET_MODE);
 
     expect(getQuietMode).toHaveBeenCalledTimes(1);
     expect(setQuietMode).toHaveBeenCalledWith(false);

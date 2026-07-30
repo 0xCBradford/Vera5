@@ -5,9 +5,7 @@ import {
   type MessageResponse,
 } from "../lib/messages";
 import { openExtensionSitePermissionsPage } from "../lib/extensionSitePermissions";
-import {
-  setPopupPanelFocus,
-} from "../lib/popupPanelFocus";
+import { setPopupPanelFocus } from "../lib/popupPanelFocus";
 import {
   handleGetTabPageContextMessage,
   handleTabPageContextMessage,
@@ -97,8 +95,9 @@ export function routeIncomingMessage(raw: unknown): MessageResponse {
       return { ok: false, error: "enrich request requires async handler" };
     case MESSAGE.OPEN_OPTIONS_PAGE:
       return handleOpenOptionsPageMessage();
+    case MESSAGE.OPEN_WORKSPACE:
     case MESSAGE.OPEN_EXTENSION_POPUP:
-      return { ok: false, error: "open extension popup requires async handler" };
+      return { ok: false, error: "open workspace requires async handler" };
     case MESSAGE.OPEN_SITE_PERMISSIONS:
       return handleOpenSitePermissionsMessage();
     case MESSAGE.UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION:
@@ -106,6 +105,8 @@ export function routeIncomingMessage(raw: unknown): MessageResponse {
         ok: false,
         error: "pivot context menu update requires async handler",
       };
+    default:
+      return { ok: false, error: "unsupported background message" };
   }
 }
 
@@ -127,41 +128,75 @@ function handleOpenSitePermissionsMessage(): MessageResponse {
   }
 }
 
-async function handleOpenExtensionPopupMessage(raw: {
-  panel: Parameters<typeof setPopupPanelFocus>[0];
-}): Promise<MessageResponse> {
+async function handleOpenWorkspaceMessage(
+  raw: {
+    panel: Parameters<typeof setPopupPanelFocus>[0];
+  },
+  sender?: chrome.runtime.MessageSender
+): Promise<MessageResponse> {
   const stored = await setPopupPanelFocus(raw.panel);
   if (!stored) {
-    return { ok: false, error: "could not store popup panel focus" };
+    return { ok: false, error: "could not store workspace panel focus" };
   }
 
   let opened = false;
-  if (typeof chrome.action?.openPopup === "function") {
+  if (typeof chrome.sidePanel?.open === "function") {
     try {
-      await chrome.action.openPopup();
-      opened = true;
+      let tabId = sender?.tab?.id;
+      if (tabId === undefined && typeof chrome.tabs?.query === "function") {
+        const [activeTab] = await chrome.tabs.query({
+          active: true,
+          currentWindow: true,
+        });
+        tabId = activeTab?.id;
+      }
+      if (tabId !== undefined) {
+        await chrome.sidePanel.open({ tabId });
+        opened = true;
+      }
     } catch {
       opened = false;
     }
   }
 
   if (!opened) {
-    return {
-      ok: true,
-      payload: {
-        opened: false,
-        panel: raw.panel,
-      },
-    };
+    const sidebarAction = (
+      chrome as typeof chrome & {
+        sidebarAction?: { open?: () => Promise<void> };
+      }
+    ).sidebarAction;
+    if (typeof sidebarAction?.open === "function") {
+      try {
+        await sidebarAction.open();
+        opened = true;
+      } catch {
+        opened = false;
+      }
+    }
   }
 
   return {
     ok: true,
     payload: {
-      opened: true,
+      opened,
       panel: raw.panel,
+      surface: "sidepanel",
     },
   };
+}
+
+async function handleLegacyOpenExtensionPopupMessage(
+  raw: { panel: Parameters<typeof setPopupPanelFocus>[0] },
+  sender?: chrome.runtime.MessageSender
+): Promise<MessageResponse> {
+  try {
+    return await handleOpenWorkspaceMessage(raw, sender);
+  } catch {
+    return {
+      ok: false,
+      error: "could not open workspace",
+    };
+  }
 }
 
 export async function routeIncomingMessageAsync(
@@ -256,17 +291,19 @@ export async function routeIncomingMessageAsync(
     return handleRemoveIocFromCollectionMessage(raw);
   }
 
+  if (raw.type === MESSAGE.OPEN_WORKSPACE) {
+    return handleOpenWorkspaceMessage(raw, sender);
+  }
+
   if (raw.type === MESSAGE.OPEN_EXTENSION_POPUP) {
-    return handleOpenExtensionPopupMessage(raw);
+    return handleLegacyOpenExtensionPopupMessage(raw, sender);
   }
 
   if (raw.type === MESSAGE.UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION) {
     if (!isUpdatePivotContextMenuForSelectionMessage(raw)) {
       return { ok: false, error: "invalid pivot context menu update message" };
     }
-    const { refreshPivotContextMenusForSelection } = await import(
-      "./serviceWorker"
-    );
+    const { refreshPivotContextMenusForSelection } = await import("./serviceWorker");
     await refreshPivotContextMenusForSelection(raw.selectionText);
     return { ok: true };
   }

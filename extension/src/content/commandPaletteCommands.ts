@@ -1,7 +1,4 @@
-import {
-  getSessionAnalystNote,
-  setSessionAnalystNote,
-} from "../lib/analystNotesSession";
+import { getSessionAnalystNote, setSessionAnalystNote } from "../lib/analystNotesSession";
 import {
   registerCommandPaletteCommand,
   unregisterCommandPaletteCommand,
@@ -52,7 +49,7 @@ import {
 import { presentEnrichmentTrustGateBlocked } from "./enrichmentBackgroundFetch";
 import {
   isRunOperatorMacroMessage,
-  openExtensionPopupMessage,
+  openWorkspaceMessage,
   type MessageResponse,
   type OperatorMacroTrayTargetEntry,
   type RunOperatorMacroMessage,
@@ -61,10 +58,7 @@ import { getPivotLinks } from "../lib/pivots";
 import { POPUP_PANEL } from "../lib/popupPanelFocus";
 import { filterTabScanSummaryEntries } from "../lib/tabScanSummary";
 import { refreshActiveTrayExportTemplateId } from "./analystModeStorage";
-import {
-  handleEnrichSelectionRequest,
-  runOperatorMacroEnrichStep,
-} from "./enrichSelection";
+import { handleEnrichSelectionRequest, runOperatorMacroEnrichStep } from "./enrichSelection";
 import {
   buildExportRecordFromPayload,
   getFilteredTrayEnrichmentRecords,
@@ -129,9 +123,7 @@ export function buildOperatorMacroBulkEnrichQuotaWarningMessage(input: {
   return `${OPERATOR_MACRO_BULK_ENRICH_QUOTA_WARNING_MESSAGE} Ran ${input.allowed} of ${input.attempted} planned enrichment call(s) (cap ${input.maxPerRun} per run).`;
 }
 
-function remainingOperatorMacroLiveEnrichCalls(
-  budget: OperatorMacroLiveEnrichBudget
-): number {
+function remainingOperatorMacroLiveEnrichCalls(budget: OperatorMacroLiveEnrichBudget): number {
   return Math.max(0, budget.max - budget.used);
 }
 
@@ -153,10 +145,7 @@ function reserveOperatorMacroLiveEnrichCalls(
   return { allowed, truncated };
 }
 
-function presentOperatorMacroQuotaWarning(
-  message: string,
-  doc: Document
-): void {
+function presentOperatorMacroQuotaWarning(message: string, doc: Document): void {
   const payload = getLastHoverCardPayload();
   if (!payload) {
     return;
@@ -173,9 +162,7 @@ function presentOperatorMacroQuotaWarning(
 
 function hasNonCollapsedTextSelection(doc: Document = document): boolean {
   const selection = doc.getSelection();
-  return Boolean(
-    selection && selection.rangeCount > 0 && !selection.isCollapsed
-  );
+  return Boolean(selection && selection.rangeCount > 0 && !selection.isCollapsed);
 }
 
 export function operatorMacroPaletteCommandId(macroId: string): string {
@@ -205,10 +192,7 @@ function resolveMacroRunIoc(
   return null;
 }
 
-async function resolveMacroExportRecords(
-  scope: string,
-  context: OperatorMacroRunContext
-) {
+async function resolveMacroExportRecords(scope: string, context: OperatorMacroRunContext) {
   if (scope === OPERATOR_MACRO_IOC_SCOPE.TRAY_FILTERED) {
     return getFilteredTrayEnrichmentRecords();
   }
@@ -251,17 +235,12 @@ async function runOperatorMacroExportMarkdownStep(
   if (params.destination === OPERATOR_MACRO_EXPORT_DESTINATION.DOWNLOAD) {
     downloadTrayTemplateExportFile(params.templateId, records);
   } else if (records.length === 1 && records[0]) {
-    const copied = await copyTextToClipboard(
-      renderExportTemplate(params.templateId, records[0])
-    );
+    const copied = await copyTextToClipboard(renderExportTemplate(params.templateId, records[0]));
     if (!copied) {
       return false;
     }
   } else {
-    const copied = await copyTrayTemplateExportToClipboard(
-      params.templateId,
-      records
-    );
+    const copied = await copyTrayTemplateExportToClipboard(params.templateId, records);
     if (!copied) {
       return false;
     }
@@ -298,17 +277,14 @@ function runOperatorMacroOpenPivotStep(
   }
 
   const links = getPivotLinks(ioc.type, ioc.value, {
-    enabledSourceIds:
-      params.providers.length > 0 ? [...params.providers] : undefined,
+    enabledSourceIds: params.providers.length > 0 ? [...params.providers] : undefined,
   });
   if (links.length === 0) {
     return false;
   }
 
   const toOpen =
-    params.openMode === OPERATOR_MACRO_PIVOT_OPEN_MODE.FIRST
-      ? links.slice(0, 1)
-      : links;
+    params.openMode === OPERATOR_MACRO_PIVOT_OPEN_MODE.FIRST ? links.slice(0, 1) : links;
 
   for (const link of toOpen) {
     window.open(link.href, "_blank", "noopener,noreferrer");
@@ -383,21 +359,14 @@ async function runOperatorMacroQueueRelatedIocsStep(
       value: ioc.value,
       pageUrl: doc.defaultView?.location?.href ?? "",
     });
-    plannedAnchorIds = view.entries
-      .map((entry) => entry.anchorId)
-      .slice(0, params.limit);
+    plannedAnchorIds = view.entries.map((entry) => entry.anchorId).slice(0, params.limit);
   } else {
     const scanContext = await loadScanListExportContext();
     if (!scanContext) {
       return { continued: false };
     }
-    const filtered = filterTabScanSummaryEntries(
-      scanContext.summary.entries,
-      scanContext.filter
-    );
-    plannedAnchorIds = filtered
-      .map((entry) => entry.anchorId)
-      .slice(0, params.limit);
+    const filtered = filterTabScanSummaryEntries(scanContext.summary.entries, scanContext.filter);
+    plannedAnchorIds = filtered.map((entry) => entry.anchorId).slice(0, params.limit);
   }
 
   if (plannedAnchorIds.length === 0) {
@@ -423,10 +392,7 @@ async function runOperatorMacroQueueRelatedIocsStep(
   }
 
   if (reservation.truncated && context.liveEnrichBudget.warningMessage) {
-    presentOperatorMacroQuotaWarning(
-      context.liveEnrichBudget.warningMessage,
-      doc
-    );
+    presentOperatorMacroQuotaWarning(context.liveEnrichBudget.warningMessage, doc);
   }
 
   await runSequentialTrayEnrichQueue(anchorIds, async (anchorId) => {
@@ -434,11 +400,7 @@ async function runOperatorMacroQueueRelatedIocsStep(
     if (!highlight) {
       return;
     }
-    openHoverCardForHighlight(
-      highlight,
-      { enrichmentTrigger: "manual", bypassCache: false },
-      doc
-    );
+    openHoverCardForHighlight(highlight, { enrichmentTrigger: "manual", bypassCache: false }, doc);
   });
 
   emitInvestigationSessionMacroRunTimelineEvent({
@@ -484,10 +446,7 @@ async function runOperatorMacroStep(
 ): Promise<OperatorMacroStepRunOutcome> {
   switch (step.type) {
     case OPERATOR_MACRO_STEP_TYPE.ENRICH: {
-      const reservation = reserveOperatorMacroLiveEnrichCalls(
-        context.liveEnrichBudget,
-        1
-      );
+      const reservation = reserveOperatorMacroLiveEnrichCalls(context.liveEnrichBudget, 1);
       if (reservation.allowed < 1) {
         const message =
           context.liveEnrichBudget.warningMessage ??
@@ -528,39 +487,18 @@ async function runOperatorMacroStep(
     }
     case OPERATOR_MACRO_STEP_TYPE.EXPORT_MARKDOWN:
       return {
-        continued: await runOperatorMacroExportMarkdownStep(
-          step,
-          context,
-          macroId,
-          stepIndex
-        ),
+        continued: await runOperatorMacroExportMarkdownStep(step, context, macroId, stepIndex),
       };
     case OPERATOR_MACRO_STEP_TYPE.OPEN_PIVOT:
       return {
-        continued: await runOperatorMacroOpenPivotStep(
-          step,
-          context,
-          macroId,
-          stepIndex
-        ),
+        continued: await runOperatorMacroOpenPivotStep(step, context, macroId, stepIndex),
       };
     case OPERATOR_MACRO_STEP_TYPE.APPLY_NOTE_TEMPLATE:
       return {
-        continued: await runOperatorMacroApplyNoteTemplateStep(
-          step,
-          context,
-          macroId,
-          stepIndex
-        ),
+        continued: await runOperatorMacroApplyNoteTemplateStep(step, context, macroId, stepIndex),
       };
     case OPERATOR_MACRO_STEP_TYPE.QUEUE_RELATED_IOCS:
-      return runOperatorMacroQueueRelatedIocsStep(
-        step,
-        context,
-        macroId,
-        stepIndex,
-        doc
-      );
+      return runOperatorMacroQueueRelatedIocsStep(step, context, macroId, stepIndex, doc);
     default:
       return { continued: false };
   }
@@ -593,8 +531,7 @@ export async function runOperatorMacro(
     );
   }
 
-  const liveEnrichBudget =
-    options.liveEnrichBudget ?? createOperatorMacroLiveEnrichBudget();
+  const liveEnrichBudget = options.liveEnrichBudget ?? createOperatorMacroLiveEnrichBudget();
   const context: OperatorMacroRunContext = {
     iocValue: seed?.value,
     iocType: seed?.iocType,
@@ -608,13 +545,7 @@ export async function runOperatorMacro(
       continue;
     }
     const adaptedStep = adaptOperatorMacroStepForTraySeed(step, useTraySeed);
-    const outcome = await runOperatorMacroStep(
-      macro.id,
-      adaptedStep,
-      stepIndex,
-      context,
-      doc
-    );
+    const outcome = await runOperatorMacroStep(macro.id, adaptedStep, stepIndex, context, doc);
     if (!outcome.continued) {
       emitInvestigationSessionMacroRunTimelineEvent({
         stepType: adaptedStep.type,
@@ -626,17 +557,13 @@ export async function runOperatorMacro(
       });
       return {
         status: "aborted",
-        message:
-          outcome.abortMessage?.trim() ||
-          OPERATOR_MACRO_RUN_ABORTED_FALLBACK_MESSAGE,
+        message: outcome.abortMessage?.trim() || OPERATOR_MACRO_RUN_ABORTED_FALLBACK_MESSAGE,
       };
     }
   }
   return {
     status: "completed",
-    ...(liveEnrichBudget.warningMessage
-      ? { warning: liveEnrichBudget.warningMessage }
-      : {}),
+    ...(liveEnrichBudget.warningMessage ? { warning: liveEnrichBudget.warningMessage } : {}),
   };
 }
 
@@ -749,14 +676,10 @@ export async function registerOperatorMacroPaletteCommands(): Promise<void> {
         macro.metadata.description.trim().length > 0
           ? macro.metadata.description
           : `Run operator macro ${macro.name}`,
-      keywords: [
-        "macro",
-        "playbook",
-        macro.id,
-        macro.name,
-        ...macro.metadata.tags,
-      ],
-      run: () => runOperatorMacro(macro),
+      keywords: ["macro", "playbook", macro.id, macro.name, ...macro.metadata.tags],
+      run: async () => {
+        await runOperatorMacro(macro);
+      },
     });
     registeredOperatorMacroPaletteCommandIds.add(commandId);
   }
@@ -787,24 +710,20 @@ export function registerCoreCommandPaletteCommands(): void {
   registerCommandPaletteCommand({
     id: CORE_COMMAND_PALETTE_COMMAND_IDS.OPEN_HISTORY,
     label: "Open history",
-    description: "Open investigation history in the extension popup",
+    description: "Open investigation history in the Vera5 workspace",
     keywords: ["history", "investigation", "recent", "reopen"],
     run: () => {
-      void safeRuntimeSendMessage(
-        openExtensionPopupMessage(POPUP_PANEL.INVESTIGATION_HISTORY)
-      );
+      void safeRuntimeSendMessage(openWorkspaceMessage(POPUP_PANEL.INVESTIGATION_HISTORY));
     },
   });
 
   registerCommandPaletteCommand({
     id: CORE_COMMAND_PALETTE_COMMAND_IDS.SOURCE_HEALTH,
     label: "Source health",
-    description: `Open ${ENRICHMENT_SOURCE_OPS_SECTION_TITLE} in the extension popup`,
+    description: `Open ${ENRICHMENT_SOURCE_OPS_SECTION_TITLE} in the Vera5 workspace`,
     keywords: ["health", "quota", "cooldown", "cache", "source", "429"],
     run: () => {
-      void safeRuntimeSendMessage(
-        openExtensionPopupMessage(POPUP_PANEL.SOURCE_OPERATIONS)
-      );
+      void safeRuntimeSendMessage(openWorkspaceMessage(POPUP_PANEL.SOURCE_OPERATIONS));
     },
   });
 

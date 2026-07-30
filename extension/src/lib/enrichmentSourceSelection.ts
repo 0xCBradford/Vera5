@@ -9,6 +9,7 @@ import {
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
 import { censysLiveSupportsIocType } from "./censysConnector";
+import { virustotalLiveSupportsIocType } from "./virustotalConnector";
 import type { IocType } from "./iocRegex";
 import type { EnrichmentSourceEnabledRecord } from "./storage";
 import {
@@ -38,6 +39,9 @@ export function liveEnrichmentSupportsIocType(
   if (sourceId === ENRICHMENT_SOURCE.CENSYS) {
     return censysLiveSupportsIocType(iocType);
   }
+  if (sourceId === ENRICHMENT_SOURCE.VIRUSTOTAL) {
+    return virustotalLiveSupportsIocType(iocType);
+  }
   return enrichmentSourceSupportsIocType(sourceId, iocType);
 }
 
@@ -52,9 +56,7 @@ export function listEnabledLiveEnrichmentSourceIds(
   );
 }
 
-export function hasAnyEnabledLiveEnrichmentSource(
-  enabled: EnrichmentSourceEnabledRecord
-): boolean {
+export function hasAnyEnabledLiveEnrichmentSource(enabled: EnrichmentSourceEnabledRecord): boolean {
   return LIVE_ENRICHMENT_SOURCE_ORDER.some((sourceId) =>
     isEnrichmentSourceEnabled(enabled, sourceId)
   );

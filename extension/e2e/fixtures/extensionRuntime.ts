@@ -3,19 +3,12 @@ import type { BrowserContext, Page } from "@playwright/test";
 const shellPages = new WeakMap<BrowserContext, Page>();
 const firefoxInternalIds = new WeakMap<BrowserContext, string>();
 
-function hasExtensionServiceWorker(
-  context: BrowserContext,
-  extensionId: string
-): boolean {
-  return context
-    .serviceWorkers()
-    .some((worker) => worker.url().includes(extensionId));
+function hasExtensionServiceWorker(context: BrowserContext, extensionId: string): boolean {
+  return context.serviceWorkers().some((worker) => worker.url().includes(extensionId));
 }
 
 function extensionPageScheme(context: BrowserContext, extensionId: string): string {
-  return hasExtensionServiceWorker(context, extensionId)
-    ? "chrome-extension"
-    : "moz-extension";
+  return hasExtensionServiceWorker(context, extensionId) ? "chrome-extension" : "moz-extension";
 }
 
 function resolveExtensionPageId(context: BrowserContext, extensionId: string): string {
@@ -29,17 +22,14 @@ export function registerFirefoxExtensionInternalId(
   firefoxInternalIds.set(context, internalId);
 }
 
-async function getExtensionShellPage(
-  context: BrowserContext,
-  extensionId: string
-): Promise<Page> {
+async function getExtensionShellPage(context: BrowserContext, extensionId: string): Promise<Page> {
   const cached = shellPages.get(context);
   if (cached && !cached.isClosed()) {
     return cached;
   }
 
   const pageId = resolveExtensionPageId(context, extensionId);
-  const popupUrl = `${extensionPageScheme(context, extensionId)}://${pageId}/popup.html`;
+  const popupUrl = `${extensionPageScheme(context, extensionId)}://${pageId}/sidepanel.html`;
   const page = await context.newPage();
   await page.goto(popupUrl, { waitUntil: "domcontentloaded" });
   shellPages.set(context, page);
