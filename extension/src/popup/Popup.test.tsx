@@ -615,6 +615,7 @@ describe("Popup IOC tray", () => {
     expect(mounted?.container.textContent).toContain("Scan selection");
     expect(mounted?.container.textContent).toContain("Enrich selection");
     expect(mounted?.container.textContent).toContain("Settings");
+    expect(mounted?.container.querySelector(".vera5-command-section")).not.toBeNull();
     const main = mounted?.container.querySelector("main.vera5-popup");
     expect(main?.getAttribute("data-host")).toBe("sidepanel");
     expect(mounted?.container.querySelector(".vera5-popup-triage")).not.toBeNull();
@@ -634,11 +635,21 @@ describe("Popup IOC tray", () => {
     const detail = mounted?.container.querySelector(".vera5-popup-detail");
     const casework = mounted?.container.querySelector(".vera5-popup-casework");
     const workspace = mounted?.container.querySelector(".vera5-popup-workspace");
+    const commandSection = mounted?.container.querySelector(".vera5-command-section");
     const intelSection = mounted?.container.querySelector(".vera5-intel-feed-section");
     const intelFeed = mounted?.container.querySelector(".vera5-intel-feed");
+    const header = mounted?.container.querySelector(".vera5-command-header");
     expect(triage).not.toBeNull();
     expect(detail).not.toBeNull();
     expect(casework).not.toBeNull();
+    expect(commandSection).not.toBeNull();
+    expect(header?.textContent).toContain("How-To");
+    expect(header?.textContent).not.toContain("Settings");
+    expect(header?.textContent).not.toContain("Permissions");
+    expect(commandSection?.textContent).toContain("Extension enabled");
+    expect(commandSection?.textContent).toContain("Scan page");
+    expect(commandSection?.textContent).toContain("Settings");
+    expect(commandSection?.textContent).toContain("Permissions");
     expect(workspace?.children[0]).toBe(intelSection);
     expect(workspace?.children[1]).toBe(triage);
     expect(workspace?.children[2]).toBe(detail);
@@ -646,10 +657,12 @@ describe("Popup IOC tray", () => {
     expect(intelSection?.querySelector(".vera5-intel-feed-heading")?.textContent).toBe(
       "Intel Feed"
     );
+    expect(intelSection?.querySelector(".vera5-intel-feed-subheading")).not.toBeNull();
+    expect(mounted?.container.querySelector(".vera5-workspace-footer")).not.toBeNull();
     expect(intelFeed).not.toBeNull();
     expect(intelFeed?.textContent).toContain("Select an indicator");
-    expect(triage?.textContent).toContain("Extension enabled");
-    expect(triage?.textContent).toContain("Scan page");
+    expect(triage?.textContent).not.toContain("Extension enabled");
+    expect(triage?.textContent).not.toContain("Scan page");
     expect(triage?.textContent).toContain("Detected indicators");
     expect(casework?.textContent).toContain("Investigation session");
     expect(casework?.textContent).toContain("Casework");
@@ -702,21 +715,16 @@ describe("Popup IOC tray", () => {
 
     const feed = mounted?.container.querySelector(".vera5-intel-feed");
     const summaryRow = feed?.querySelector(".vera5-intel-feed-summary-row");
-    const rail = feed?.querySelector(".vera5-intel-feed-rail");
+    const sourcesGrid = feed?.querySelector(".vera5-intel-feed-sources");
     expect(summaryRow).not.toBeNull();
     expect(summaryRow?.querySelector(".vera5-intel-feed-command")).not.toBeNull();
     expect(summaryRow?.querySelector(".vera5-intel-feed-score")).not.toBeNull();
     expect(summaryRow?.querySelector(".vera5-intel-feed-summary")).not.toBeNull();
-    expect(rail).not.toBeNull();
-    expect(rail?.querySelector(".vera5-intel-feed-sources")).not.toBeNull();
-    expect(rail?.querySelector(".vera5-intel-feed-pivots")).not.toBeNull();
+    expect(sourcesGrid).not.toBeNull();
+    expect(sourcesGrid?.querySelector(".vera5-intel-feed-pivots")).not.toBeNull();
+    expect(sourcesGrid?.querySelector(".vera5-intel-pivot-label")?.textContent).toBe("Pivot");
     expect(feed?.children[0]).toBe(summaryRow);
-    expect(feed?.children[1]).toBe(rail);
-    const sources = rail?.querySelector(".vera5-intel-feed-sources") as HTMLElement | null;
-    expect(sources).not.toBeNull();
-    if (sources) {
-      sources.scrollLeft = 120;
-    }
+    expect(feed?.children[1]).toBe(sourcesGrid);
     const sourceIds = Array.from(feed?.querySelectorAll(".vera5-intel-source-card") ?? []).map(
       (card) => card.getAttribute("data-vera5-source-id")
     );
@@ -736,11 +744,9 @@ describe("Popup IOC tray", () => {
       nextIoc?.click();
     });
     await vi.waitFor(() => {
-      const nextFeed = mounted?.container.querySelector(".vera5-intel-feed");
-      expect(nextFeed?.getAttribute("data-vera5-intel-value")).toBe("192.0.2.1");
       expect(
-        (nextFeed?.querySelector(".vera5-intel-feed-sources") as HTMLElement | null)?.scrollLeft
-      ).toBe(0);
+        mounted?.container.querySelector(".vera5-intel-feed")?.getAttribute("data-vera5-intel-value")
+      ).toBe("192.0.2.1");
     });
 
     flushSync(() => {

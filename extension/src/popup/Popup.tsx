@@ -4051,18 +4051,13 @@ function IntelFeedPanel({
   availability: IntelSourceAvailabilityRecord;
   onEnrich: () => void;
 }) {
-  const sourcesRailRef = useRef<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    if (sourcesRailRef.current) {
-      sourcesRailRef.current.scrollLeft = 0;
-    }
-  }, [entry?.value]);
-
   if (!entry) {
     return (
       <section className="vera5-intel-feed-section" aria-label="Intel feed">
         <h2 className="vera5-intel-feed-heading">Intel Feed</h2>
+        <p className="vera5-intel-feed-subheading">
+          Real-time intelligence, scoring, and vendor evidence.
+        </p>
         <div className="vera5-intel-feed vera5-intel-feed--empty">
           <p>Select an indicator to assemble vendor evidence, scoring, and pivots.</p>
         </div>
@@ -4091,6 +4086,9 @@ function IntelFeedPanel({
   return (
     <section className="vera5-intel-feed-section" aria-label="Intel feed">
       <h2 className="vera5-intel-feed-heading">Intel Feed</h2>
+      <p className="vera5-intel-feed-subheading">
+        Real-time intelligence, scoring, and vendor evidence.
+      </p>
       <div className="vera5-intel-feed" data-vera5-intel-value={entry.value}>
         <div className="vera5-intel-feed-summary-row">
           <div className="vera5-intel-feed-command">
@@ -4117,64 +4115,64 @@ function IntelFeedPanel({
           </p>
         </div>
 
-        <div className="vera5-intel-feed-rail">
-          <div
-            ref={sourcesRailRef}
-            className="vera5-intel-feed-sources"
-            aria-label="Vendor assessments"
-          >
-            {applicableSourceIds.map((sourceId) => {
-              const definition = getEnrichmentSourceDefinition(sourceId);
-              const source = sourceEntryById.get(sourceId);
-              const sourceAvailability = availability[sourceId];
-              const status = source
-                ? source.status
-                : !definition.liveConnector
-                  ? "pivot-only"
-                  : sourceAvailability?.enabled === false
-                    ? "disabled"
-                    : sourceAvailability?.configured === false
-                      ? "not-configured"
-                      : "not-enriched";
-              const assessment = source?.assessment;
-              const score =
-                assessment?.kind === ENRICHMENT_ASSESSMENT_KIND.RISK &&
-                typeof assessment.signal === "number"
-                  ? `${Math.round(assessment.signal)}/100`
-                  : null;
-              const detail =
-                source?.status === "ok"
-                  ? (assessment?.verdict ?? source.detail)
-                  : (source?.detail ??
-                    (status === "pivot-only"
-                      ? "Pivot only"
-                      : status === "disabled"
-                        ? "Disabled"
-                        : status === "not-configured"
-                          ? "Not configured"
-                          : "Not enriched"));
-              return (
-                <article
-                  key={sourceId}
-                  className="vera5-intel-source-card"
-                  data-vera5-source-id={sourceId}
-                  data-vera5-source-status={status}
-                  data-vera5-assessment-kind={definition.assessmentKind}
-                  title={source?.detail ?? definition.description}
-                >
-                  <div>
-                    <strong>{definition.displayName}</strong>
-                    {score ? <span>{score}</span> : null}
-                  </div>
-                  <p>{detail}</p>
-                  {source?.lastUpdatedLine ? <small>{source.lastUpdatedLine}</small> : null}
-                </article>
-              );
-            })}
-          </div>
+        <div className="vera5-intel-feed-sources" aria-label="Vendor assessments">
+          {applicableSourceIds.map((sourceId) => {
+            const definition = getEnrichmentSourceDefinition(sourceId);
+            const source = sourceEntryById.get(sourceId);
+            const sourceAvailability = availability[sourceId];
+            const status = source
+              ? source.status
+              : !definition.liveConnector
+                ? "pivot-only"
+                : sourceAvailability?.enabled === false
+                  ? "disabled"
+                  : sourceAvailability?.configured === false
+                    ? "not-configured"
+                    : "not-enriched";
+            const assessment = source?.assessment;
+            const score =
+              assessment?.kind === ENRICHMENT_ASSESSMENT_KIND.RISK &&
+              typeof assessment.signal === "number"
+                ? `${Math.round(assessment.signal)}/100`
+                : null;
+            const detail =
+              source?.status === "ok"
+                ? (assessment?.verdict ?? source.detail)
+                : (source?.detail ??
+                  (status === "pivot-only"
+                    ? "Pivot only"
+                    : status === "disabled"
+                      ? "Disabled"
+                      : status === "not-configured"
+                        ? "Not configured"
+                        : "Not enriched"));
+            return (
+              <article
+                key={sourceId}
+                className="vera5-intel-source-card"
+                data-vera5-source-id={sourceId}
+                data-vera5-source-status={status}
+                data-vera5-assessment-kind={definition.assessmentKind}
+                title={source?.detail ?? definition.description}
+              >
+                <div>
+                  <strong>{definition.displayName}</strong>
+                  {score ? <span>{score}</span> : null}
+                </div>
+                <p>{detail}</p>
+                {source?.lastUpdatedLine ? <small>{source.lastUpdatedLine}</small> : null}
+              </article>
+            );
+          })}
 
           <details className="vera5-intel-feed-pivots">
-            <summary>Pivot</summary>
+            <summary>
+              <span className="vera5-intel-pivot-mark" aria-hidden="true">
+                ◎
+              </span>
+              <span className="vera5-intel-pivot-label">Pivot</span>
+              <span className="vera5-intel-pivot-hint">External tools</span>
+            </summary>
             <div role="group" aria-label={`Pivot ${entry.value} to an intelligence source`}>
               {pivotLinks.map((link) => (
                 <button key={link.provider} type="button" onClick={() => openIntelPivot(link)}>
@@ -4295,10 +4293,10 @@ const buttonStyle = {
   boxSizing: "border-box" as const,
 };
 
-const actionButtonGroupStyle = {
+const scanSecondaryActionsStyle = {
   display: "flex",
-  flexDirection: "column" as const,
   gap: VERA5_SPACE.sm,
+  minWidth: 0,
 };
 
 type SelectionActionState = {
@@ -6090,60 +6088,6 @@ export function Popup() {
               </svg>
               How-To
             </a>
-            <button
-              type="button"
-              disabled={!ready}
-              onClick={handleOpenSettings}
-              aria-label="Open Vera5 Settings"
-              style={{
-                ...headerGlassButtonStyle,
-                cursor: ready ? "pointer" : "not-allowed",
-                opacity: ready ? 1 : 0.65,
-              }}
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
-              Settings
-            </button>
-            <button
-              type="button"
-              disabled={!ready}
-              onClick={handleOpenPermissions}
-              aria-label="Open site permissions"
-              style={{
-                ...headerGlassButtonStyle,
-                cursor: ready ? "pointer" : "not-allowed",
-                opacity: ready ? 1 : 0.65,
-              }}
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-              Permissions
-            </button>
           </div>
         </h1>
       </header>
@@ -6208,19 +6152,9 @@ export function Popup() {
           ) : null}
         </div>
       ) : null}
-      <div className="vera5-popup-workspace">
-        <IntelFeedPanel
-          entry={selectedDetailEntry}
-          loading={intelFeedLoading || detailEnrichState === "enriching"}
-          sourceEntries={intelSourceEntries}
-          availability={intelSourceAvailability}
-          onEnrich={handleEnrichSelectedDetail}
-        />
-        <div className="vera5-popup-triage" aria-label="Triage">
-          <div
-            className="vera5-operator-controls"
-            style={{ display: "flex", gap: 8, marginBottom: 12 }}
-          >
+      <section className="vera5-command-section" aria-label="Scan and extension controls">
+        <div className="vera5-command-utilities">
+          <div className="vera5-operator-controls">
             <button
               type="button"
               role="switch"
@@ -6336,66 +6270,135 @@ export function Popup() {
               </span>
             </button>
           </div>
-          <div className="vera5-scan-commands" style={actionButtonGroupStyle}>
+          <div className="vera5-command-admin">
             <button
               type="button"
-              disabled={!ready || !enabled || scanState === "scanning"}
-              className="v5-btn v5-btn--primary"
-              onClick={handleScanPage}
+              disabled={!ready}
+              onClick={handleOpenSettings}
+              aria-label="Open Vera5 Settings"
               style={{
-                ...primaryButtonStyle,
-                cursor: !ready || !enabled ? "not-allowed" : "pointer",
-                opacity: !ready || !enabled ? 0.65 : 1,
+                ...headerGlassButtonStyle,
+                cursor: ready ? "pointer" : "not-allowed",
+                opacity: ready ? 1 : 0.65,
               }}
             >
-              {scanState === "scanning" ? "Scanning…" : "Scan page"}
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              Settings
             </button>
             <button
               type="button"
-              disabled={scanSelectionDisabled}
-              className="v5-btn"
-              onClick={handleScanSelection}
+              disabled={!ready}
+              onClick={handleOpenPermissions}
+              aria-label="Open site permissions"
               style={{
-                ...buttonStyle,
-                cursor: scanSelectionDisabled ? "not-allowed" : "pointer",
-                opacity: scanSelectionDisabled ? 0.65 : 1,
+                ...headerGlassButtonStyle,
+                cursor: ready ? "pointer" : "not-allowed",
+                opacity: ready ? 1 : 0.65,
               }}
             >
-              {scanState === "scanning" ? "Scanning…" : "Scan selection"}
-            </button>
-            <button
-              type="button"
-              disabled={enrichSelectionDisabled}
-              className="v5-btn"
-              onClick={handleEnrichSelection}
-              style={{
-                ...buttonStyle,
-                cursor: enrichSelectionDisabled ? "not-allowed" : "pointer",
-                opacity: enrichSelectionDisabled ? 0.65 : 1,
-              }}
-            >
-              Enrich selection
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              Permissions
             </button>
           </div>
-          {scanState === "error" ? (
-            <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
-              Scan failed. Reload the tab and try again.
-            </p>
-          ) : null}
-          {selectionEnrichMessage ? (
-            <p style={{ fontSize: 12, margin: "10px 0 0", color: POPUP_THEME.error }}>
-              {selectionEnrichMessage}
-            </p>
-          ) : null}
+        </div>
+        <div className="vera5-scan-primary">
+          <button
+            type="button"
+            disabled={!ready || !enabled || scanState === "scanning"}
+            className="v5-btn v5-btn--primary vera5-scan-page-cta"
+            onClick={handleScanPage}
+            style={{
+              ...primaryButtonStyle,
+              cursor: !ready || !enabled ? "not-allowed" : "pointer",
+              opacity: !ready || !enabled ? 0.65 : 1,
+            }}
+          >
+            {scanState === "scanning" ? "Scanning…" : "Scan page"}
+          </button>
+          <p className="vera5-scan-primary-hint">Detect IOCs on this page</p>
+        </div>
+        <div className="vera5-scan-secondary" style={scanSecondaryActionsStyle}>
+          <button
+            type="button"
+            disabled={scanSelectionDisabled}
+            className="v5-btn"
+            onClick={handleScanSelection}
+            style={{
+              ...buttonStyle,
+              flex: "1 1 0",
+              width: "auto",
+              cursor: scanSelectionDisabled ? "not-allowed" : "pointer",
+              opacity: scanSelectionDisabled ? 0.65 : 1,
+            }}
+          >
+            {scanState === "scanning" ? "Scanning…" : "Scan selection"}
+          </button>
+          <button
+            type="button"
+            disabled={enrichSelectionDisabled}
+            className="v5-btn"
+            onClick={handleEnrichSelection}
+            style={{
+              ...buttonStyle,
+              flex: "1 1 0",
+              width: "auto",
+              cursor: enrichSelectionDisabled ? "not-allowed" : "pointer",
+              opacity: enrichSelectionDisabled ? 0.65 : 1,
+            }}
+          >
+            Enrich selection
+          </button>
+        </div>
+        {scanState === "error" ? (
+          <p style={{ fontSize: 12, margin: 0, color: POPUP_THEME.error }}>
+            Scan failed. Reload the tab and try again.
+          </p>
+        ) : null}
+        {selectionEnrichMessage ? (
+          <p style={{ fontSize: 12, margin: 0, color: POPUP_THEME.error }}>
+            {selectionEnrichMessage}
+          </p>
+        ) : null}
+      </section>
+      <div className="vera5-popup-workspace">
+        <IntelFeedPanel
+          entry={selectedDetailEntry}
+          loading={intelFeedLoading || detailEnrichState === "enriching"}
+          sourceEntries={intelSourceEntries}
+          availability={intelSourceAvailability}
+          onEnrich={handleEnrichSelectedDetail}
+        />
+        <div className="vera5-popup-triage" aria-label="Triage">
           {trayView ? (
             <section
               className="vera5-triage-section"
               aria-label="Detected indicators"
-              style={{
-                marginTop: 14,
-                borderTop: `1px solid ${POPUP_THEME.border}`,
-                paddingTop: 12,
-              }}
             >
               <div
                 style={{
@@ -7434,6 +7437,30 @@ export function Popup() {
           </div>
         </div>
       </div>
+      <footer className="vera5-workspace-footer" role="contentinfo" aria-label="Workspace status">
+        <div className="vera5-workspace-footer-meta">
+          <span className="vera5-workspace-footer-version">Vera5 v0.1.0</span>
+          <span
+            className="vera5-workspace-footer-pill"
+            data-vera5-footer-state={ready ? "ready" : "loading"}
+          >
+            {ready ? "Ready" : "Loading…"}
+          </span>
+          <span
+            className="vera5-workspace-footer-pill"
+            data-vera5-footer-state={quietModeActive ? "quiet" : "live"}
+          >
+            {quietModeActive ? "Quiet mode" : "Threat feeds: Live"}
+          </span>
+          <span
+            className="vera5-workspace-footer-pill"
+            data-vera5-footer-state={enabled ? "enabled" : "disabled"}
+          >
+            {enabled ? "Extension: Enabled" : "Extension: Disabled"}
+          </span>
+        </div>
+        <span className="vera5-workspace-footer-privacy">All data cached locally</span>
+      </footer>
     </main>
   );
 }

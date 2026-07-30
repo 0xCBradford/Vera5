@@ -109,6 +109,12 @@
   --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-wordmark: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-display: var(--font-wordmark);
+
+  /* Side-panel intelligence grid */
+  --intel-card-height: 112px;
+  --intel-card-min: 148px;
+  --panel-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 
   /* ----------------------------------------------------------------
    * Back-compat aliases: the settings page (options.css) consumes the
@@ -320,6 +326,14 @@
 .vera5-operator-controls > button:hover:not(:disabled) {
   background: var(--surface-2) !important;
   box-shadow: none;
+}
+
+.vera5-scan-primary > .v5-btn--primary {
+  min-height: 34px;
+}
+
+.vera5-scan-secondary > .v5-btn {
+  min-height: 30px;
 }
 
 .vera5-scan-commands {
@@ -679,9 +693,8 @@
 }
 
 /*
- * Side panel workspace: permanent three-panel shell.
- * Intel Feed band at top; lower two-column workspace owns remaining height.
- * Narrow widths compact proportions only — they never stack into one column.
+ * Side panel workspace: Command → Intelligence → Investigation.
+ * Command band and Intel Feed are content-sized; lower two-column workspace fills remainder.
  */
 .vera5-popup[data-host="sidepanel"] {
   display: flex;
@@ -693,6 +706,224 @@
   width: 100%;
   min-width: 0;
   overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 100% 0%, rgba(34, 199, 169, 0.04), transparent 45%),
+    radial-gradient(90% 60% at 0% 100%, rgba(255, 178, 36, 0.05), transparent 42%),
+    var(--surface-page) !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-command-header {
+  padding-bottom: 12px;
+  border-bottom-color: var(--border-soft);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+  border-top: 0 !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section h2 {
+  color: var(--accent) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [aria-label^="Filter by indicator type"] button[aria-pressed="true"] {
+  border-color: var(--border-accent) !important;
+  background: var(--accent-weak) !important;
+  color: var(--accent-hover) !important;
+  box-shadow: var(--panel-glow);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-queue > [data-vera5-tray-entry="true"] {
+  border-radius: var(--r-sm) !important;
+  transition:
+    border-color var(--t-hover) var(--ease-out),
+    background-color var(--t-hover) var(--ease-out),
+    box-shadow var(--t-hover) var(--ease-out);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-queue > [data-vera5-tray-entry="true"][data-vera5-selected="true"] {
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    0 0 0 1px color-mix(in srgb, var(--accent) 28%, transparent),
+    var(--shadow-low);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-inspector {
+  padding: 12px;
+  border-radius: var(--r-md);
+  border-color: var(--border-soft);
+  background: linear-gradient(180deg, var(--surface-raised), var(--surface-1));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-popup-casework {
+  padding-top: 2px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-casework-tabs > button[aria-selected="true"] {
+  box-shadow:
+    inset 0 0 0 1px var(--border-accent),
+    0 0 12px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.vera5-command-section {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-command-section {
+  padding: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(120% 140% at 50% -24%, rgba(255, 178, 36, 0.1), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-2) 88%, #0f1520), var(--surface-1));
+  box-shadow: var(--highlight-top), var(--shadow-low);
+}
+
+.vera5-command-utilities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vera5-command-utilities .vera5-operator-controls {
+  display: flex;
+  flex: 1 1 240px;
+  gap: 6px !important;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 6px;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--surface-page) 55%, var(--surface-1));
+  box-shadow: var(--highlight-top);
+}
+
+.vera5-command-admin {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.vera5-scan-primary,
+.vera5-scan-secondary {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-scan-primary .vera5-scan-page-cta {
+  min-height: 46px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 0 1px rgba(255, 194, 77, 0.42),
+    0 10px 28px rgba(255, 178, 36, 0.24);
+}
+
+.vera5-scan-primary-hint {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-scan-secondary > .v5-btn {
+  min-height: 34px;
+  border-color: var(--border-soft) !important;
+  background: color-mix(in srgb, var(--surface-2) 88%, var(--surface-1)) !important;
+  color: var(--text-primary) !important;
+  font-weight: 600;
+}
+
+.vera5-workspace-footer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-hairline);
+  color: var(--text-low);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.vera5-workspace-footer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.vera5-workspace-footer-version {
+  color: var(--text-secondary);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.vera5-workspace-footer-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vera5-workspace-footer-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-low);
+}
+
+.vera5-workspace-footer-pill[data-vera5-footer-state="ready"]::before,
+.vera5-workspace-footer-pill[data-vera5-footer-state="live"]::before,
+.vera5-workspace-footer-pill[data-vera5-footer-state="enabled"]::before {
+  background: var(--terminal-teal);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-teal) 55%, transparent);
+}
+
+.vera5-workspace-footer-pill[data-vera5-footer-state="loading"]::before {
+  background: var(--accent);
+}
+
+.vera5-workspace-footer-pill[data-vera5-footer-state="quiet"]::before,
+.vera5-workspace-footer-pill[data-vera5-footer-state="disabled"]::before {
+  background: var(--signal-red);
+}
+
+.vera5-workspace-footer-privacy {
+  color: var(--text-low);
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .vera5-popup-workspace {
@@ -730,10 +961,6 @@
   grid-row: 2;
   display: flex;
   flex-direction: column;
-}
-
-.vera5-popup[data-host="sidepanel"] .vera5-popup-triage > :not(.vera5-triage-section) {
-  flex: 0 0 auto;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-popup-detail {
@@ -779,15 +1006,6 @@
   align-content: start;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-operator-controls,
-.vera5-popup[data-host="sidepanel"] .vera5-scan-commands {
-  flex: 0 0 auto;
-}
-
-.vera5-popup[data-host="sidepanel"] .vera5-operator-controls {
-  margin: 0 0 10px !important;
-}
-
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section {
   display: flex;
   flex: 1 1 auto;
@@ -822,7 +1040,7 @@
 .vera5-intel-feed-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
@@ -840,24 +1058,33 @@
   margin: 0;
   flex: 0 0 auto;
   color: var(--accent);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+
+.vera5-intel-feed-subheading {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .vera5-intel-feed {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   align-items: stretch;
   min-width: 0;
-  padding: 8px;
+  padding: 10px;
   border: 1px solid var(--border-hard);
   border-top: 2px solid var(--accent);
-  border-radius: var(--r-sm);
-  background: var(--surface-raised);
-  box-shadow: var(--highlight-top);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(255, 178, 36, 0.06), transparent 52%),
+    linear-gradient(180deg, var(--surface-raised), color-mix(in srgb, var(--surface-1) 88%, #0c1018));
+  box-shadow: var(--highlight-top), var(--shadow-low);
   overflow: hidden;
 }
 
@@ -895,10 +1122,11 @@
 .vera5-intel-feed-summary {
   min-width: 0;
   height: fit-content;
-  padding: 7px 8px;
+  padding: 9px 10px;
   border: 1px solid var(--border-soft);
-  border-radius: 4px;
-  background: var(--surface-1);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--surface-1) 92%, var(--surface-page));
+  box-shadow: var(--highlight-top);
 }
 
 .vera5-intel-feed-command {
@@ -952,7 +1180,13 @@
 .vera5-intel-feed-score > strong {
   margin: 0;
   color: var(--accent-hover);
-  font: 800 20px/1 var(--font-display);
+  font: 800 24px/1 var(--font-display);
+  text-shadow: 0 0 16px var(--accent-glow);
+}
+
+.vera5-intel-feed-score > small {
+  font-weight: 700;
+  letter-spacing: 0.06em;
 }
 
 .vera5-intel-feed-score[data-vera5-risk-label="low"] > strong {
@@ -970,47 +1204,39 @@
   overflow-y: auto;
   color: var(--text-primary);
   font-size: 11px;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
-/* Bottom portion: compact horizontal vendor rail + pivot. */
-.vera5-intel-feed-rail {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 0;
-  overflow: hidden;
-}
-
+/* Source evidence grid — equal footprint cards, wraps into rows. */
 .vera5-intel-feed-sources {
-  display: flex;
-  flex: 1 1 auto;
-  flex-wrap: nowrap;
-  gap: 6px;
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--intel-card-min), 100%), 1fr));
+  grid-auto-rows: var(--intel-card-height);
+  gap: 8px;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x proximity;
-  align-items: flex-start;
+  align-items: stretch;
 }
 
 .vera5-intel-source-card {
-  display: flex;
-  flex: 0 0 136px;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 4px;
   box-sizing: border-box;
-  width: 136px;
-  min-width: 136px;
-  max-width: 136px;
-  min-height: 88px;
-  height: auto;
-  padding: 6px 7px;
+  min-width: 0;
+  height: var(--intel-card-height);
+  min-height: var(--intel-card-height);
+  max-height: var(--intel-card-height);
+  padding: 8px 9px;
   border: 1px solid var(--border-soft);
-  border-radius: 4px;
-  background: var(--surface-1);
-  scroll-snap-align: start;
+  border-radius: var(--r-sm);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--surface-2) 76%, transparent),
+    var(--surface-1)
+  );
+  box-shadow: var(--highlight-top);
+  overflow: hidden;
 }
 
 .vera5-intel-source-card > div {
@@ -1018,12 +1244,14 @@
   gap: 4px;
   justify-content: space-between;
   align-items: baseline;
+  min-height: 0;
 }
 
 .vera5-intel-source-card strong {
   overflow: hidden;
   color: var(--text-primary);
   font-size: 10px;
+  font-weight: 700;
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1037,17 +1265,18 @@
 
 .vera5-intel-source-card p {
   margin: 0;
+  align-self: start;
   color: var(--text-secondary);
   font-size: 10px;
   line-height: 1.3;
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   overflow: hidden;
 }
 
 .vera5-intel-source-card small {
-  margin-top: 2px;
+  margin: 0;
   padding-top: 0;
   color: var(--text-low);
   font-size: 9px;
@@ -1055,11 +1284,25 @@
 }
 
 .vera5-intel-source-card[data-vera5-source-status="ok"] {
-  border-color: color-mix(in srgb, var(--terminal-teal) 38%, var(--border-soft));
+  border-color: color-mix(in srgb, var(--terminal-teal) 42%, var(--border-soft));
 }
 
 .vera5-intel-source-card[data-vera5-source-status="error"] {
-  border-color: color-mix(in srgb, var(--signal-red) 48%, var(--border-soft));
+  border-color: color-mix(in srgb, var(--signal-red) 52%, var(--border-soft));
+}
+
+.vera5-intel-source-card[data-vera5-source-status="pivot-only"],
+.vera5-intel-source-card[data-vera5-source-status="disabled"],
+.vera5-intel-source-card[data-vera5-source-status="not-configured"],
+.vera5-intel-source-card[data-vera5-source-status="not-enriched"] {
+  border-color: color-mix(in srgb, var(--deep-violet) 34%, var(--border-soft));
+}
+
+.vera5-intel-source-card[data-vera5-source-status="pivot-only"] p,
+.vera5-intel-source-card[data-vera5-source-status="disabled"] p,
+.vera5-intel-source-card[data-vera5-source-status="not-configured"] p,
+.vera5-intel-source-card[data-vera5-source-status="not-enriched"] p {
+  color: color-mix(in srgb, var(--deep-violet) 72%, var(--text-secondary));
 }
 
 .vera5-intel-source-card[data-vera5-assessment-kind="exposure"],
@@ -1069,28 +1312,55 @@
 
 .vera5-intel-feed-pivots {
   position: relative;
-  flex: 0 0 auto;
-  align-self: flex-start;
+  box-sizing: border-box;
+  min-width: 0;
+  height: var(--intel-card-height);
+  min-height: var(--intel-card-height);
+  max-height: var(--intel-card-height);
 }
 
 .vera5-intel-feed-pivots > summary {
   display: flex;
   box-sizing: border-box;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 64px;
-  min-height: 88px;
-  height: auto;
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
   padding: 8px 10px;
   border: 1px solid var(--border-accent);
-  border-radius: 4px;
-  background: var(--accent-weak);
+  border-radius: var(--r-sm);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 14%, var(--surface-2)),
+    var(--surface-1)
+  );
+  box-shadow: var(--panel-glow), var(--highlight-top);
   color: var(--accent-hover);
-  font-size: 11px;
-  font-weight: 800;
-  text-align: center;
   list-style: none;
   cursor: pointer;
+}
+
+.vera5-intel-pivot-mark {
+  color: var(--accent);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.vera5-intel-pivot-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vera5-intel-pivot-hint {
+  color: var(--text-secondary);
+  font-size: 9px;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .vera5-intel-feed-pivots > summary::-webkit-details-marker {
@@ -1136,6 +1406,16 @@
     gap: 4px !important;
   }
 
+  .vera5-popup[data-host="sidepanel"] .vera5-command-utilities {
+    gap: 6px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-command-admin {
+    margin-left: 0;
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .vera5-popup[data-host="sidepanel"] .vera5-popup-workspace {
     gap: 10px 10px;
   }
@@ -1149,11 +1429,12 @@
     gap: 6px;
   }
 
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-source-card {
-    flex-basis: 124px;
-    width: 124px;
-    min-width: 124px;
-    max-width: 124px;
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-sources {
+    grid-template-columns: repeat(auto-fill, minmax(min(124px, 100%), 1fr));
+  }
+
+  .vera5-popup[data-host="sidepanel"] {
+    --intel-card-min: 124px;
   }
 }
 
