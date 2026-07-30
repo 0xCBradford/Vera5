@@ -17,6 +17,9 @@ import {
   getDomainPolicyMode,
   getEnrichmentSourceEnabled,
   getManualOnlyMode,
+  getPivotContextMenuCategoryEnabled,
+  getPivotContextMenuSiteEnabled,
+  getPivotContextMenuVisibility,
   completeInstallQuickStart,
   getInstallQuickStartCompleted,
   getPreQueryNoticePreferenceConfigured,
@@ -55,7 +58,13 @@ import {
   QUIET_MODE_ACTION_BADGE_TEXT,
   setIocTypeEnabled,
   setManualOnlyMode,
+  setPivotContextMenuCategoryEnabled,
+  setPivotContextMenuSiteEnabled,
   setPreQueryNoticePreference,
+  createDefaultPivotContextMenuCategoryEnabledRecord,
+  createDefaultPivotContextMenuSiteEnabledRecord,
+  normalizePivotContextMenuCategoryEnabledRecord,
+  normalizePivotContextMenuSiteEnabledRecord,
   STORAGE_KEY_MANUAL_ONLY_MODE,
   STORAGE_KEY_LOCAL_BACKEND_ENABLED,
   STORAGE_KEY_ATTRIBUTE_HREF_EXTRACTION_ENABLED,
@@ -95,6 +104,8 @@ import {
   STORAGE_KEY_HIDE_SUPPRESSED_FROM_SCAN,
   STORAGE_KEY_SKIP_ENRICH_ON_KNOWN_GOOD_MATCH,
   STORAGE_KEY_IOC_TYPE_ENABLED,
+  STORAGE_KEY_PIVOT_CONTEXT_MENU_CATEGORY_ENABLED,
+  STORAGE_KEY_PIVOT_CONTEXT_MENU_SITE_ENABLED,
   STORAGE_KEY_STORAGE_SCHEMA_VERSION,
   STORAGE_KEY_SCHEMA_VERSION,
   STORAGE_KEY_ENRICHMENT_CACHE_TTL_SECONDS,
@@ -350,6 +361,69 @@ describe("enrichment source enabled storage", () => {
     expect(disabled).toContain("urlscan");
     expect(disabled).not.toContain("abuseipdb");
     expect(disabled).not.toContain("greynoise");
+  });
+});
+
+describe("pivot context menu visibility storage", () => {
+  let store: Record<string, unknown>;
+
+  beforeEach(() => {
+    store = {};
+    stubChromeStorage(store);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("defaults all pivot categories and sites to visible", async () => {
+    await expect(getPivotContextMenuCategoryEnabled()).resolves.toEqual(
+      createDefaultPivotContextMenuCategoryEnabledRecord()
+    );
+    await expect(getPivotContextMenuSiteEnabled()).resolves.toEqual(
+      createDefaultPivotContextMenuSiteEnabledRecord()
+    );
+    await expect(getPivotContextMenuVisibility()).resolves.toEqual({
+      categoryEnabled: createDefaultPivotContextMenuCategoryEnabledRecord(),
+      siteEnabled: createDefaultPivotContextMenuSiteEnabledRecord(),
+    });
+  });
+
+  it("persists category and site toggles", async () => {
+    await setPivotContextMenuCategoryEnabled("community", false);
+    await setPivotContextMenuSiteEnabled("abuseipdb", false);
+    expect(store[STORAGE_KEY_PIVOT_CONTEXT_MENU_CATEGORY_ENABLED]).toMatchObject({
+      community: false,
+      authoritative: true,
+    });
+    expect(store[STORAGE_KEY_PIVOT_CONTEXT_MENU_SITE_ENABLED]).toMatchObject({
+      abuseipdb: false,
+    });
+    await expect(getPivotContextMenuCategoryEnabled()).resolves.toMatchObject({
+      community: false,
+    });
+    await expect(getPivotContextMenuSiteEnabled()).resolves.toMatchObject({
+      abuseipdb: false,
+    });
+  });
+
+  it("normalizes invalid stored records to defaults", () => {
+    expect(normalizePivotContextMenuCategoryEnabledRecord(null)).toEqual(
+      createDefaultPivotContextMenuCategoryEnabledRecord()
+    );
+    expect(normalizePivotContextMenuSiteEnabledRecord(["bad"])).toEqual(
+      createDefaultPivotContextMenuSiteEnabledRecord()
+    );
+    expect(
+      normalizePivotContextMenuSiteEnabledRecord({
+        abuseipdb: false,
+        unknown: false,
+        virustotal: "nope",
+      })
+    ).toMatchObject({
+      abuseipdb: false,
+      virustotal: true,
+    });
   });
 });
 

@@ -1,6 +1,6 @@
 {
   "name": "vera5-extension",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Vera5 browser extension — IOC enrichment overlay",

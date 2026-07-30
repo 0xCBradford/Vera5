@@ -40,8 +40,10 @@ import {
   PIVOT_CONTEXT_MENU_OPEN_ALL_TITLE,
   PIVOT_CONTEXT_MENU_PARENT_ID,
   PIVOT_CONTEXT_MENU_PARENT_TITLE,
+  type PivotContextMenuVisibility,
 } from "../lib/pivots";
 import type { ConnectorSourceClass } from "../lib/connectorDefinition";
+import type { IocType } from "../lib/iocRegex";
 import {
   formatIocLabelDisplay,
   IOC_LABEL_IDS,
@@ -53,14 +55,19 @@ import {
   addStoredIocCollectionMembers,
   listStoredIocCollections,
   STORAGE_KEY_IOC_COLLECTIONS,
-  type IocCollection,
 } from "../lib/iocCollectionStorage";
+import type { IocCollection } from "../lib/iocCollection";
 import { isInvestigationSessionIocPinned } from "../lib/investigationSession";
 import { toggleActiveInvestigationSessionIocPin } from "../lib/investigationSessionStorage";
 import type { IocType } from "../lib/iocRegex";
 import { clearTabScanSnapshot } from "../lib/tabScanSnapshotStorage";
 import { runStorageMigrationOnExtensionUpdate } from "../lib/storageMigration";
-import { setupQuietModeActionBadgeListener } from "../lib/storage";
+import {
+  getPivotContextMenuVisibility,
+  setupQuietModeActionBadgeListener,
+  STORAGE_KEY_PIVOT_CONTEXT_MENU_CATEGORY_ENABLED,
+  STORAGE_KEY_PIVOT_CONTEXT_MENU_SITE_ENABLED,
+} from "../lib/storage";
 import { routeIncomingMessageAsync } from "./messageRouter";
 
 setupQuietModeActionBadgeListener();
@@ -144,14 +151,45 @@ function resolveEnrichSelectionContextMenuActionId(): string {
   );
 }
 
-function registerPivotContextMenus(): void {
+let pivotContextMenuIoc: { type: IocType; value: string } | null = null;
+let pivotContextMenuFilterKey = "";
+let pivotContextMenuUpdateGeneration = 0;
+
+function pivotContextMenuFilterKeyForIoc(
+  ioc: { type: IocType; value: string } | null
+): string {
+  return ioc ? `${ioc.type}|${ioc.value}` : "";
+}
+
+function removePivotContextMenus(): Promise<void> {
+  return new Promise((resolve) => {
+    try {
+      chrome.contextMenus.remove(PIVOT_CONTEXT_MENU_PARENT_ID, () => {
+        void chrome.runtime.lastError;
+        resolve();
+      });
+    } catch {
+      resolve();
+    }
+  });
+}
+
+function registerPivotContextMenus(
+  visibility?: PivotContextMenuVisibility,
+  ioc?: { type: IocType; value: string } | null
+): void {
+  const categories = listPivotContextMenuCategories(visibility, ioc);
+  if (categories.length === 0) {
+    return;
+  }
+
   chrome.contextMenus.create({
     id: PIVOT_CONTEXT_MENU_PARENT_ID,
     title: PIVOT_CONTEXT_MENU_PARENT_TITLE,
     contexts: ["selection"],
   });
 
-  for (const category of listPivotContextMenuCategories()) {
+  for (const category of categories) {
     chrome.contextMenus.create({
       id: category.id,
       parentId: PIVOT_CONTEXT_MENU_PARENT_ID,
@@ -179,6 +217,28 @@ function registerPivotContextMenus(): void {
       });
     }
   }
+}
+
+export async function refreshPivotContextMenusForSelection(
+  selectionText: string
+): Promise<void> {
+  const match = resolveIocFromSelectionText(selectionText);
+  const nextKey = pivotContextMenuFilterKeyForIoc(match);
+  if (nextKey === pivotContextMenuFilterKey) {
+    return;
+  }
+  pivotContextMenuFilterKey = nextKey;
+  pivotContextMenuIoc = match;
+  const generation = ++pivotContextMenuUpdateGeneration;
+  const visibility = await getPivotContextMenuVisibility();
+  if (generation !== pivotContextMenuUpdateGeneration) {
+    return;
+  }
+  await removePivotContextMenus();
+  if (generation !== pivotContextMenuUpdateGeneration) {
+    return;
+  }
+  registerPivotContextMenus(visibility, match);
 }
 
 function registerCaseContextMenus(collections: readonly IocCollection[]): void {
@@ -251,6 +311,7 @@ export async function registerVera5ContextMenus(): Promise<void> {
     (macro) => macro.triggers.context
   );
   const collections = await listStoredIocCollections();
+  const pivotVisibility = await getPivotContextMenuVisibility();
   const enrichMenuId = resolveEnrichSelectionContextMenuActionId();
 
   chrome.contextMenus.removeAll(() => {
@@ -259,7 +320,7 @@ export async function registerVera5ContextMenus(): Promise<void> {
       title: CONTEXT_MENU_ENRICH_SELECTION_TITLE,
       contexts: ["selection"],
     });
-    registerPivotContextMenus();
+    registerPivotContextMenus(pivotVisibility, pivotContextMenuIoc);
     registerCaseContextMenus(collections);
     chrome.contextMenus.create({
       id: OPERATOR_MACRO_CONTEXT_MENU_PARENT_ID,
@@ -418,10 +479,12 @@ async function openAllPivotTabsFromSelection(input: {
     );
     return;
   }
+  const visibility = await getPivotContextMenuVisibility();
   const targets = resolvePivotOpenTargetsForCategory(
     input.sourceClass,
     selectionText,
-    "strict"
+    "strict",
+    visibility
   );
   if (targets.length === 0) {
     await showPivotStatusOnTab(
@@ -559,7 +622,9 @@ if (typeof chrome.storage?.onChanged?.addListener === "function") {
     }
     if (
       !changes[STORAGE_KEY_OPERATOR_MACROS] &&
-      !changes[STORAGE_KEY_IOC_COLLECTIONS]
+      !changes[STORAGE_KEY_IOC_COLLECTIONS] &&
+      !changes[STORAGE_KEY_PIVOT_CONTEXT_MENU_SITE_ENABLED] &&
+      !changes[STORAGE_KEY_PIVOT_CONTEXT_MENU_CATEGORY_ENABLED]
     ) {
       return;
     }

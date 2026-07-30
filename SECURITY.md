@@ -95,7 +95,9 @@ You create API keys in each vendor’s portal and enter them in the Vera5 option
 
 ### Registered enrichment sources (MVP scope)
 
-Twelve sources appear in Vera5 Settings and the on-page overlay registry: **AbuseIPDB**, **OTX**, **VirusTotal**, **URLScan.io**, **GreyNoise**, **Shodan**, **Google Safe Browsing**, **Pulsedive**, **MalwareBazaar**, **Censys**, **ThreatFox**, and **URLhaus**. Only **AbuseIPDB** and **OTX** perform live HTTPS enrichment in this release. Other enabled sources may show missing-key, unsupported-type, or not-implemented status rows; pivot links still appear where the registry defines them for the indicator type. Saved API keys for non-live sources stay in local storage and are not sent to those vendors.
+**Thirteen** sources appear in Vera5 Settings and the on-page overlay registry: **AbuseIPDB**, **OTX**, **VirusTotal**, **URLScan.io**, **GreyNoise**, **Shodan**, **Google Safe Browsing**, **Pulsedive**, **MalwareBazaar**, **Censys**, **ThreatFox**, **URLhaus**, and **RDAP/WHOIS**.
+
+**Live HTTPS enrichment in this release** (when enabled; BYOK where required): **AbuseIPDB** (IPv4), **OTX** (IPv4, domain, URL, MD5, SHA1, SHA256, CVE), **URLScan.io** (domain, URL), **GreyNoise** community (IPv4), **Shodan** (IPv4, domain), **Censys** (IPv4), and **RDAP/WHOIS** (domain; keyless). **VirusTotal** accepts a saved API key and pivot links but does **not** perform live HTTPS enrichment today. Other registered sources may show missing-key, unsupported-type, or not-implemented status rows; pivot links still appear where the registry defines them. Saved API keys for non-live sources stay in local storage and are not sent to those vendors.
 
 ### How vendor requests work
 
@@ -135,8 +137,8 @@ All Vera5-controlled persistence uses the browser’s **local extension storage*
 | Auto-scan enabled | Whether DOM changes trigger rescans. | Off. |
 | Manual-only mode | When on, enrichment fetch requires explicit user action. | On. |
 | Include private IPv4 | Whether private-space IPv4 literals are detected. | Off (default). Options checkbox persists the flag; the scan path reads it on each scan. |
-| Enrichment source enabled | Per-vendor on/off for all twelve registered sources listed above. | All off until you enable. |
-| IOC type enabled | Per-type detection toggles (IPv4, domain, URL, hashes, CVE). | Defaults all MVP types **on**. Options checkboxes persist flags; the scan path omits disabled types. |
+| Enrichment source enabled | Per-vendor on/off for all thirteen registered sources listed above. | All off until you enable. |
+| IOC type enabled | Per-type detection toggles (IPv4, domain, URL, hashes, CVE, email, ASN, CIDR, filepath, onion, and related Options types). | Defaults all supported types **on**. Options checkboxes persist flags; the scan path omits disabled types. |
 | Enrichment cache TTL | Seconds cached responses remain valid (used when cache is populated). | Default 3600. Options exposes a global seconds field and optional per-source overrides. |
 | Settings schema version | Migration marker for stored preferences. | Managed by the extension. |
 
@@ -305,15 +307,17 @@ Use this checklist to confirm consent and hostname controls before live threat-i
 
 ### Outbound query gate order (live enrichment)
 
-When you trigger live enrichment (AbuseIPDB and/or OTX when enabled), the extension evaluates gates in this order:
+When you trigger live enrichment (enabled live connectors for the IOC type), the extension evaluates gates in this order:
 
 | Step | Gate | When blocked |
 |------|------|--------------|
 | 1 | Enabled live sources for the IOC type | Overlay shows a settings guidance message; no vendor call. |
-| 2 | Domain policy enrich gate (default **on**) | Overlay shows that queries are blocked for this site by domain policy; no vendor call and no pre-query disclosure. |
-| 3 | Internal asset enrich gate (default **on**) | Overlay shows that the indicator matches a configured internal asset list; no vendor call and no pre-query disclosure. |
-| 4 | Pre-query disclosure (default **on** until first Settings choice) | Inline notice names enabled vendors and the indicator value; **Cancel** aborts without a vendor call. |
-| 5 | Service worker fetch | HTTPS request with the indicator value and your API key directly to the vendor you enabled. |
+| 2 | Quiet mode (when on) | Live vendor enrich blocked; cached rows and user-initiated pivot navigation remain. |
+| 3 | Domain policy enrich gate (default **on**) | Overlay shows that queries are blocked for this site by domain policy; no vendor call and no pre-query disclosure. |
+| 4 | Internal asset enrich gate (default **on**) | Overlay shows that the indicator matches a configured internal asset list; no vendor call and no pre-query disclosure. |
+| 5 | Known-good skip policy (optional; default **off**) | When enabled and a known-good entry matches, outbound live enrich is skipped; cached enrichment may still display. |
+| 6 | Pre-query disclosure (default **on** until first Settings choice) | Inline notice names enabled vendors and the indicator value; **Cancel** aborts without a vendor call. |
+| 7 | Service worker fetch | HTTPS request with the indicator value and your API key (when required) directly to the vendor you enabled, on an allowlisted host only. |
 
 Only the **indicator value** (plus API fields each vendor requires) is transmitted. Full page HTML is not sent.
 
@@ -329,7 +333,7 @@ Only the **indicator value** (plus API fields each vendor requires) is transmitt
 | Notices disabled | Live enrich skips the inline notice when other gates pass. |
 | No live sources enabled for the IOC type | Disclosure does not run; enrichment stops at the disabled-sources message. |
 
-Disclosure applies only to **live** connector fetches (AbuseIPDB and OTX today). Static pivot links open vendor URLs in your browser separately when you click them.
+Disclosure applies only to **live** connector fetches (AbuseIPDB, OTX, URLScan.io, GreyNoise, Shodan, Censys, and RDAP/WHOIS when enabled for the type). Static pivot links open vendor URLs in your browser separately when you click them.
 
 ### Domain policy — verify
 

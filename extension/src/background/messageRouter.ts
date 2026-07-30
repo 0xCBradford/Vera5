@@ -1,4 +1,5 @@
 import {
+  isUpdatePivotContextMenuForSelectionMessage,
   isVera5Message,
   MESSAGE,
   type MessageResponse,
@@ -100,6 +101,11 @@ export function routeIncomingMessage(raw: unknown): MessageResponse {
       return { ok: false, error: "open extension popup requires async handler" };
     case MESSAGE.OPEN_SITE_PERMISSIONS:
       return handleOpenSitePermissionsMessage();
+    case MESSAGE.UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION:
+      return {
+        ok: false,
+        error: "pivot context menu update requires async handler",
+      };
   }
 }
 
@@ -252,6 +258,17 @@ export async function routeIncomingMessageAsync(
 
   if (raw.type === MESSAGE.OPEN_EXTENSION_POPUP) {
     return handleOpenExtensionPopupMessage(raw);
+  }
+
+  if (raw.type === MESSAGE.UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION) {
+    if (!isUpdatePivotContextMenuForSelectionMessage(raw)) {
+      return { ok: false, error: "invalid pivot context menu update message" };
+    }
+    const { refreshPivotContextMenusForSelection } = await import(
+      "./serviceWorker"
+    );
+    await refreshPivotContextMenusForSelection(raw.selectionText);
+    return { ok: true };
   }
 
   return routeIncomingMessage(raw);

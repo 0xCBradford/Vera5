@@ -42,6 +42,10 @@ const toggleActiveInvestigationSessionIocPin = vi.fn(async () => null);
 const setStoredIocLabel = vi.fn(async () => undefined);
 const addStoredIocCollectionMembers = vi.fn(async () => null);
 const isInvestigationSessionIocPinned = vi.fn(() => false);
+const getPivotContextMenuVisibility = vi.fn(async () => ({
+  categoryEnabled: { authoritative: true, community: true },
+  siteEnabled: {},
+}));
 
 vi.mock("../lib/operatorMacroStorage", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/operatorMacroStorage")>();
@@ -97,6 +101,8 @@ vi.mock("../lib/storage", async (importOriginal) => {
   return {
     ...actual,
     setupQuietModeActionBadgeListener: vi.fn(),
+    getPivotContextMenuVisibility: (...args: unknown[]) =>
+      getPivotContextMenuVisibility(...args),
   };
 });
 
@@ -261,6 +267,9 @@ describe("service worker scan-page command routing", () => {
   const tabsCreate = vi.fn(async () => ({ id: 99 }));
   const scriptingExecuteScript = vi.fn(async () => [{ result: "" }]);
   const contextMenusCreate = vi.fn();
+  const contextMenusRemove = vi.fn((_id: string, callback?: () => void) => {
+    callback?.();
+  });
   const contextMenusRemoveAll = vi.fn((callback?: () => void) => {
     callback?.();
   });
@@ -282,6 +291,10 @@ describe("service worker scan-page command routing", () => {
     tabsCreate.mockReset();
     scriptingExecuteScript.mockReset();
     contextMenusCreate.mockReset();
+    contextMenusRemove.mockReset();
+    contextMenusRemove.mockImplementation((_id: string, callback?: () => void) => {
+      callback?.();
+    });
     contextMenusRemoveAll.mockReset();
     contextMenusRemoveAll.mockImplementation((callback?: () => void) => {
       callback?.();
@@ -301,6 +314,11 @@ describe("service worker scan-page command routing", () => {
     addStoredIocCollectionMembers.mockResolvedValue(null);
     isInvestigationSessionIocPinned.mockReset();
     isInvestigationSessionIocPinned.mockReturnValue(false);
+    getPivotContextMenuVisibility.mockReset();
+    getPivotContextMenuVisibility.mockResolvedValue({
+      categoryEnabled: { authoritative: true, community: true },
+      siteEnabled: {},
+    });
     emitInvestigationSessionMacroRunTimelineEvent.mockReset();
     runStorageMigrationOnExtensionUpdate.mockResolvedValue({
       migrated: false,
@@ -332,6 +350,7 @@ describe("service worker scan-page command routing", () => {
       },
       contextMenus: {
         create: contextMenusCreate,
+        remove: contextMenusRemove,
         removeAll: contextMenusRemoveAll,
         onClicked: {
           addListener: (
@@ -530,6 +549,118 @@ describe("service worker scan-page command routing", () => {
     });
     expect(openOptionsPage).not.toHaveBeenCalled();
     expect(runStorageMigrationOnExtensionUpdate).toHaveBeenCalledTimes(1);
+  });
+
+  it("Phase D: omits hidden pivot categories and sites when registering menus", async () => {
+    getPivotContextMenuVisibility.mockResolvedValue({
+      categoryEnabled: { authoritative: true, community: false },
+      siteEnabled: { abuseipdb: false },
+    });
+    contextMenusCreate.mockClear();
+    contextMenusRemoveAll.mockClear();
+
+    onInstalledCallback!({ reason: "update" });
+
+    await vi.waitFor(() => {
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots",
+        title: "Pivots",
+        contexts: ["selection"],
+      });
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots:cat:authoritative",
+        parentId: "vera5-pivots",
+        title: "Authoritative",
+        contexts: ["selection"],
+      });
+    });
+
+    expect(contextMenusCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:cat:community" })
+    );
+    expect(contextMenusCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:site:abuseipdb" })
+    );
+    expect(contextMenusCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:site:virustotal" })
+    );
+  });
+
+  it("Phase D: rebuilds pivot menus when context-menu visibility prefs change", async () => {
+    expect(storageOnChangedListeners.length).toBeGreaterThan(0);
+    getPivotContextMenuVisibility.mockResolvedValue({
+      categoryEnabled: { authoritative: false, community: true },
+      siteEnabled: {},
+    });
+    contextMenusCreate.mockClear();
+    contextMenusRemoveAll.mockClear();
+
+    for (const listener of storageOnChangedListeners) {
+      listener(
+        {
+          pivotContextMenuCategoryEnabled: {
+            newValue: { authoritative: false, community: true },
+          },
+        },
+        "local"
+      );
+    }
+
+    await vi.waitFor(() => {
+      expect(contextMenusRemoveAll).toHaveBeenCalled();
+      expect(contextMenusCreate).toHaveBeenCalledWith({
+        id: "vera5-pivots:cat:community",
+        parentId: "vera5-pivots",
+        title: "Community",
+        contexts: ["selection"],
+      });
+    });
+    expect(contextMenusCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:cat:authoritative" })
+    );
+  });
+
+  it("Phase E: rebuilds Pivots menu for the current selection IOC type", async () => {
+    const { refreshPivotContextMenusForSelection } = await import("./serviceWorker");
+    contextMenusCreate.mockClear();
+    contextMenusRemove.mockClear();
+
+    await refreshPivotContextMenusForSelection("8.8.8.8");
+
+    expect(contextMenusRemove).toHaveBeenCalledWith(
+      "vera5-pivots",
+      expect.any(Function)
+    );
+    expect(contextMenusCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:site:abuseipdb" })
+    );
+    expect(contextMenusCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:site:urlhaus" })
+    );
+    expect(contextMenusCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:site:malwarebazaar" })
+    );
+    expect(contextMenusCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-case" })
+    );
+
+    contextMenusCreate.mockClear();
+    contextMenusRemove.mockClear();
+    const md5 = "d41d8cd98f00b204e9800998ecf8427e";
+    await refreshPivotContextMenusForSelection(md5);
+
+    expect(contextMenusCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:site:malwarebazaar" })
+    );
+    expect(contextMenusCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:site:virustotal" })
+    );
+    expect(contextMenusCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:site:abuseipdb" })
+    );
+    expect(contextMenusCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ id: "vera5-pivots:site:rdap_whois" })
+    );
   });
 
   it("runs storage migration when the extension updates", () => {

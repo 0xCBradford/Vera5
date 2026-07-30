@@ -10,27 +10,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Nothing yet.
 
-## [0.1.0] — 2026-06-26
+## [0.1.0] — 2026-07-29
 
-First **public MVP** release: **Investigation Mode** for local-first IOC triage in Chromium—scan → tray → enrich with your keys → score → export → sessions and collections—without Vera5-operated enrichment backends.
+First **public MVP** package (manifest **0.1.0**): local-first IOC triage in Chromium—scan → enrich with your keys → score → export → sessions and collections—without Vera5-operated enrichment backends. Notes below describe the **current packaged capability** (documentation catch-up; earlier draft notes understated live connectors and operator surfaces).
 
 ### Added
 
-- **Investigation Mode flow** — On-demand page scan with highlights and on-page overlay; popup **Detected indicators** tray and workspace sidebar; manual and bulk enrich queue; composite risk score with **How this score was computed** reasoning chain; ticket export templates; named investigation sessions; persistent IOC collections.
-- **Live enrichment (BYOK/BYOA)** — Parallel **AbuseIPDB** (IPv4) and **OTX** (multi-type) HTTPS queries when you enable sources and save API keys; indicator values only, never full page content; TTL cache, manual refresh, and rate-limit cooldown handling.
-- **Trust and consent** — Pre-query disclosure before vendor calls; hostname domain policy with sensitive webmail denylist; internal asset lists and enrich gates; analyst workflow presets (SOC, CTI, DFIR); **manual-only enrichment** and **auto-scan off** by default.
-- **Operator workflows** — Command palette (**Ctrl+Shift+K** / **Cmd+Shift+K**); keyboard scan (**Ctrl+Shift+Y** / **Cmd+Shift+Y**) and highlight triage; **Enrich with Vera5** context menu; defang/refang and **Why detected?** provenance; **Recommended next pivots** with source attribution.
-- **Install quick start** — Settings opens on first install; wizard covers install checklist, optional live-source API keys (auto-enables source when saved), manual-only default, trust summary, and pre-query notice choice.
-- **Open-source release** — README, [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md), analyst docs under `docs/`, GitHub issue/PR templates, Chrome Web Store listing draft (`docs/store-listing.md`), packaging script (`scripts/package-extension.ps1` → `release/vera5-0.1.0.zip`), and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled dependencies.
-- **Quality gates** — Pull request CI: lint, unit tests, production dependency audit, Gitleaks secret scan, and Playwright critical browser smokes on unpacked `extension/dist/` with mocked vendor HTTP (no live API calls in CI).
+#### Investigation Mode (core)
+
+- On-demand page scan with highlights and on-page overlay; Chromium **side panel** workspace (Firefox: toolbar popup / optional sidebar); **Detected indicators** tray; composite risk score with **How this score was computed**; ticket export templates; named investigation sessions; persistent IOC collections; investigation history.
+
+#### Live enrichment and connector registry
+
+- **Live BYOK/BYOA HTTPS** when enabled: **AbuseIPDB** (IPv4), **OTX** (multi-type), **URLScan.io** (domain, URL), **GreyNoise** community (IPv4), **Shodan** (IPv4, domain), **Censys** (IPv4), **RDAP/WHOIS** (domain, keyless).
+- **Thirteen** registry sources in Settings/overlay (including pivot-oriented shells). **VirusTotal** accepts a saved key and pivots but does **not** perform live HTTPS enrichment in this release.
+- Connector registry with confidence metadata chips; outbound fetch allowlist for declared vendor hosts; TTL cache, manual refresh, and rate-limit cooldown.
+
+#### Trust and consent
+
+- Pre-query disclosure; domain policy with sensitive webmail denylist; internal asset lists; analyst presets (SOC, CTI, DFIR); **manual-only enrichment** and **auto-scan off** by default; **quiet mode** (blocks live vendor enrich; scan, cache, pivots, and local casework remain).
+
+#### Operator surfaces
+
+- Command palette (**Ctrl+Shift+K** / **Cmd+Shift+K**); keyboard scan (**Ctrl+Shift+Y** / **Cmd+Shift+Y**) and highlight triage.
+- Selection context menu under **Vera5**: **Enrich selection with Vera5**; nested **Pivots** (Authoritative / Community, **Open all**, type-aware filtering, **Settings → Pivots** visibility); **Case** (Open Analyst Lens, Pin, Label, Save to collection); **Run macro on selection**.
+- **Operator macros** — built-in CTI Deep Check and DFIR Triage; custom local macros and key-free macro packs.
+
+#### Casework and local intelligence
+
+- Investigation **notebook** fragments (Observation / Tag / Conclusion / Hypothesis); free-text analyst notes (legacy migrate-on-read).
+- **Noise rules** and **known-good lists** with tray/overlay badges and optional skip-enrich on known-good match.
+- **Appeared alongside** (same-page co-occurrence) and **Appeared across sessions** (local clusters); relationship memory storage/UI (auto-write of edges not fully wired).
+- **Investigation replay** and session **timeline** export appendix; session/collection export (Markdown, JSON, CSV).
+- **Settings packs** and portable **threat profiles** (never API keys); full Settings Backup with optional keys.
+
+#### Detection and pivots
+
+- MVP types plus extended: email, ASN, IPv4 CIDR, file path, onion domain; optional link-attribute scan; defang/refang; **Why detected?**; **Recommended next pivots**; page profile defaults.
+
+#### Browser and quality
+
+- Chromium primary path; **Firefox experimental** temporary add-on (`dist-firefox/`).
+- Install quick start wizard; packaging scripts; PR CI (lint, unit tests, prod audit, Gitleaks, Playwright critical smokes with mocked vendors).
+- Optional **local AI summary** (off by default; localhost-only; no cloud LLM relay). Optional localhost enrich bridge (off by default; **no server implementation in this repository**).
 
 ### Security
 
-- Documented local-first posture: no maintainer API keys, no Vera5 enrichment proxy, no default telemetry; outbound fetch allowlist for declared vendor hosts only.
+- Local-first posture: no maintainer API keys, no Vera5 enrichment proxy, no default telemetry.
+- Stacked outbound gates (enabled sources → quiet mode → domain policy → internal assets → known-good skip → pre-query → allowlisted fetch).
+- `verify:security` post-build checks (CSP hygiene, no `eval`/`new Function`, declared-host allowlist alignment, telemetry-host bans in bundles).
 
 ### Changed
 
-- Manifest and packaged release version set to **0.1.0** (`extension/public/manifest.json`; attach `release/vera5-0.1.0.zip` at GitHub release `v0.1.0`).
+- Manifest and package version aligned at **0.1.0** (`extension/public/manifest.json`, `extension/package.json`). Package with `.\scripts\package-extension.ps1` → `release/vera5-0.1.0.zip`.
 
 ## [0.0.9] — 2026-06-20
 

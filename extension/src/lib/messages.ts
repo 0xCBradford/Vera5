@@ -22,6 +22,8 @@ export const MESSAGE = {
   ENRICH_SELECTION: "ENRICH_SELECTION",
   GET_SELECTION_ACTION_STATE: "GET_SELECTION_ACTION_STATE",
   OPEN_PIVOT_FROM_SELECTION: "OPEN_PIVOT_FROM_SELECTION",
+  UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION:
+    "UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION",
   NAVIGATE_TO_IOC_ANCHOR: "NAVIGATE_TO_IOC_ANCHOR",
   REOPEN_INVESTIGATION_HISTORY: "REOPEN_INVESTIGATION_HISTORY",
   TAB_SCAN_SNAPSHOT: "TAB_SCAN_SNAPSHOT",
@@ -67,6 +69,10 @@ export type EnrichSelectionMessage = {
 export type OpenPivotFromSelectionMessage = {
   type: typeof MESSAGE.OPEN_PIVOT_FROM_SELECTION;
   provider: string;
+  selectionText: string;
+};
+export type UpdatePivotContextMenuForSelectionMessage = {
+  type: typeof MESSAGE.UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION;
   selectionText: string;
 };
 export type GetSelectionActionStateMessage = {
@@ -231,7 +237,8 @@ export type Vera5Message =
   | AddIocsToCollectionMessage
   | RenameIocCollectionMessage
   | DeleteIocCollectionMessage
-  | RemoveIocFromCollectionMessage;
+  | RemoveIocFromCollectionMessage
+  | UpdatePivotContextMenuForSelectionMessage;
 
 export type MessageResponse =
   | { ok: true; payload?: unknown }
@@ -273,6 +280,28 @@ export function openPivotFromSelectionMessage(input: {
     provider: input.provider.trim(),
     selectionText: input.selectionText,
   };
+}
+
+export function updatePivotContextMenuForSelectionMessage(input: {
+  selectionText: string;
+}): UpdatePivotContextMenuForSelectionMessage {
+  return {
+    type: MESSAGE.UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION,
+    selectionText: input.selectionText,
+  };
+}
+
+export function isUpdatePivotContextMenuForSelectionMessage(
+  raw: unknown
+): raw is UpdatePivotContextMenuForSelectionMessage {
+  if (raw === null || typeof raw !== "object" || !("type" in raw)) {
+    return false;
+  }
+  const record = raw as Record<string, unknown>;
+  return (
+    record.type === MESSAGE.UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION &&
+    typeof record.selectionText === "string"
+  );
 }
 
 export function getSelectionActionStateMessage(): GetSelectionActionStateMessage {
@@ -1096,6 +1125,9 @@ export function isVera5Message(raw: unknown): raw is Vera5Message {
   }
   if (type === MESSAGE.OPEN_EXTENSION_POPUP) {
     return isOpenExtensionPopupMessage(raw);
+  }
+  if (type === MESSAGE.UPDATE_PIVOT_CONTEXT_MENU_FOR_SELECTION) {
+    return isUpdatePivotContextMenuForSelectionMessage(raw);
   }
   if (type === MESSAGE.RUN_OPERATOR_MACRO) {
     return isRunOperatorMacroMessage(raw);

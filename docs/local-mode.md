@@ -205,7 +205,7 @@ See [SECURITY.md](../SECURITY.md) for IOC leakage rules and a full list of retai
 | **Static pivots** | Your browser opens a vendor URL containing the indicator. No Vera5 proxy. |
 | **Live enrichment** | When connectors are enabled, the extension calls vendor APIs directly with your key and the indicator value only—not full page content. |
 
-Supported live sources for the MVP (in product order): AbuseIPDB, OTX, URLScan.io, GreyNoise (community tier). At least AbuseIPDB and OTX must work end-to-end for a complete enrichment release; see [architecture.md](architecture.md).
+Supported live sources in the current package: AbuseIPDB, OTX, URLScan.io, GreyNoise (community), Shodan, Censys, and RDAP/WHOIS (domain, keyless). VirusTotal is pivot/key-storage only. See [README.md](../README.md) and [architecture.md](architecture.md).
 
 ## Bring-your-own keys / bring-your-own API
 

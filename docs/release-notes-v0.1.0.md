@@ -2,6 +2,8 @@
 
 Paste the **Release description** section below into a GitHub release for tag `v0.1.0`. Attach `release/vera5-0.1.0.zip` from `scripts/package-extension.ps1` when publishing.
 
+**Normative capability list:** prefer [CHANGELOG.md](../CHANGELOG.md) `[0.1.0]` and [README.md](../README.md) **What works today** over this draft if they disagree. This file is a paste template and was refreshed to match the multi-source live path and Chromium side panel.
+
 ---
 
 ## Suggested release title
@@ -12,22 +14,20 @@ Paste the **Release description** section below into a GitHub release for tag `v
 
 ## Release description (copy from here)
 
-**Vera5 v0.1.0** is the first public MVP snapshot of a local-first Chromium extension for security analysts: detect indicators on pages you browse, triage in a tray and on-page overlay, enrich with your own threat-intelligence keys, score and export results, and track cases with investigation sessions and IOC collections—without routing data through Vera5-operated infrastructure.
+**Vera5 v0.1.0** is the first public MVP snapshot of a local-first Chromium extension for security analysts: detect indicators on pages you browse, triage in the side panel workspace and on-page overlay, enrich with your own threat-intelligence keys, score and export results, and track cases with investigation sessions and IOC collections—without routing data through Vera5-operated infrastructure.
 
 ### Investigation Mode — end-to-end flow
 
 | Stage | What you get |
 |-------|----------------|
-| **Detect** | On-demand scan of visible text on `http://` and `https://` tabs (IPv4, domain, URL, MD5, SHA1, SHA256, CVE). Highlights, type badges, **Why detected?** provenance, defang/refang support, and SOC-style fixture pages under `examples/`. |
-| **Tray** | Popup **Detected indicators** list and optional workspace sidebar: type filters, row navigation to highlights, cached status hints, save-to-collection actions, and bulk selection. |
-| **Queue** | Workspace **Enrich selected (N)** with quota confirmation and sequential bulk enrich; cancel mid-run. Context-menu and palette **Enrich selection** for single IOCs. |
-| **Enrich** | Live HTTPS enrichment from **AbuseIPDB** (IPv4) and **OTX** (multi-type) when you enable sources and supply keys. Manual-only mode on by default; parallel multi-source fetch with per-source attribution. |
-| **Score** | Locally computed composite **Risk score**, **How this score was computed** reasoning chain, and **Sources disagree** callout when vendor bands diverge. |
-| **Templates** | Ticket-oriented export templates (Jira comment, TheHive case note, analyst update, Obsidian note, Markdown report, CSV rows) plus per-indicator Markdown/JSON and filtered-subset copy/export. |
-| **Session** | Named investigation workspace: IOC rollups, **Label** / **Pin** / **Session timeline**, session export (Markdown, JSON, CSV), and **Recent sessions** in local storage. |
-| **Trust** | Pre-query disclosure before vendor calls; hostname domain policy (allow-by-default with sensitive webmail denylist and optional presets); internal asset lists; analyst workflow presets (SOC, CTI, DFIR). |
+| **Detect** | On-demand scan of visible text on `http://` and `https://` tabs (IPv4, domain, URL, hashes, CVE, plus extended types). Highlights, **Why detected?**, defang/refang, fixtures under `examples/`. |
+| **Tray** | Chromium side panel (Firefox popup) **Detected indicators**: type filters, navigation, save-to-collection, macros. |
+| **Enrich** | Live HTTPS when enabled: AbuseIPDB, OTX, URLScan.io, GreyNoise, Shodan, Censys, RDAP/WHOIS. Manual-only on by default; quiet mode available. |
+| **Score / export** | Composite risk score, ticket templates, filtered copy/export, session and collection exports. |
+| **Casework** | Sessions, labels/pins/timeline, notebook fragments, noise rules, known-good lists, operator macros, settings packs / threat profiles. |
+| **Context menu** | Enrich, Pivots, Case, Run macro on selection. |
 
-**Also in this release:** command palette (**Ctrl+Shift+K** / **Cmd+Shift+K**), keyboard triage shortcuts, IOC collections (separate from sessions), install quick-start in Settings, pull-request CI with lint, unit tests, Gitleaks, and Playwright critical smokes (mocked vendors—no live API calls in CI).
+**Also:** command palette, keyboard triage, install quick-start, PR CI with mocked vendor smokes. Firefox is experimental (temporary add-on only).
 
 ### Install (unpacked)
 

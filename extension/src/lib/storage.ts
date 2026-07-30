@@ -14,6 +14,7 @@ import {
 } from "./pageContext";
 import type { PageContextSiteModeOverridesRecord } from "./pageContext";
 import type { PivotProvider } from "./pivots";
+import { PIVOT_PROVIDER_ORDER } from "./pivots";
 import {
   createDefaultDomainPolicy,
   DEFAULT_SENSITIVE_WEBMAIL_DENYLIST_ENTRIES,
@@ -30,8 +31,10 @@ import {
   type InternalAssetVendorLabelEntry,
 } from "./internalAssetPolicy";
 import {
+  CONNECTOR_SOURCE_CLASS,
   normalizeConnectorConfidenceMetadataOverridesRecord,
   type ConnectorConfidenceMetadataOverridesRecord,
+  type ConnectorSourceClass,
 } from "./connectorDefinition";
 import { runStorageMigrationIfNeeded as runStorageMigrationImpl } from "./storageMigration";
 import type { IocType } from "./iocRegex";
@@ -99,6 +102,10 @@ export const STORAGE_KEY_INTERNAL_ASSET_VENDOR_LABELS = "internalAssetVendorLabe
 export const STORAGE_KEY_ANALYST_MODE_PRESET_ID = "analystModePresetId";
 export const STORAGE_KEY_DEFAULT_EXPORT_TEMPLATE_ID = "defaultExportTemplateId";
 export const STORAGE_KEY_PIVOT_EMPHASIS_PROVIDERS = "pivotEmphasisProviders";
+export const STORAGE_KEY_PIVOT_CONTEXT_MENU_SITE_ENABLED =
+  "pivotContextMenuSiteEnabled";
+export const STORAGE_KEY_PIVOT_CONTEXT_MENU_CATEGORY_ENABLED =
+  "pivotContextMenuCategoryEnabled";
 export const STORAGE_KEY_CONNECTOR_CONFIDENCE_METADATA_OVERRIDES =
   "connectorConfidenceMetadataOverrides";
 export const STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES =
@@ -1469,6 +1476,124 @@ export async function setDefaultExportTemplateId(
 export async function getPivotEmphasisProviders(): Promise<PivotProvider[]> {
   const settings = await getVera5Settings();
   return [...settings.pivotEmphasisProviders];
+}
+
+export type PivotContextMenuSiteEnabledRecord = Partial<
+  Record<PivotProvider, boolean>
+>;
+
+export type PivotContextMenuCategoryEnabledRecord = Partial<
+  Record<ConnectorSourceClass, boolean>
+>;
+
+const PIVOT_CONTEXT_MENU_CATEGORY_SETTINGS_ORDER: readonly ConnectorSourceClass[] =
+  [CONNECTOR_SOURCE_CLASS.AUTHORITATIVE, CONNECTOR_SOURCE_CLASS.COMMUNITY];
+
+export function createDefaultPivotContextMenuSiteEnabledRecord(): PivotContextMenuSiteEnabledRecord {
+  const record: PivotContextMenuSiteEnabledRecord = {};
+  for (const provider of PIVOT_PROVIDER_ORDER) {
+    record[provider] = true;
+  }
+  return record;
+}
+
+export function createDefaultPivotContextMenuCategoryEnabledRecord(): PivotContextMenuCategoryEnabledRecord {
+  const record: PivotContextMenuCategoryEnabledRecord = {};
+  for (const sourceClass of PIVOT_CONTEXT_MENU_CATEGORY_SETTINGS_ORDER) {
+    record[sourceClass] = true;
+  }
+  return record;
+}
+
+export function normalizePivotContextMenuSiteEnabledRecord(
+  value: unknown
+): PivotContextMenuSiteEnabledRecord {
+  const defaults = createDefaultPivotContextMenuSiteEnabledRecord();
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return defaults;
+  }
+  const record = value as Record<string, unknown>;
+  const normalized: PivotContextMenuSiteEnabledRecord = { ...defaults };
+  for (const provider of PIVOT_PROVIDER_ORDER) {
+    const entry = record[provider];
+    if (typeof entry === "boolean") {
+      normalized[provider] = entry;
+    }
+  }
+  return normalized;
+}
+
+export function normalizePivotContextMenuCategoryEnabledRecord(
+  value: unknown
+): PivotContextMenuCategoryEnabledRecord {
+  const defaults = createDefaultPivotContextMenuCategoryEnabledRecord();
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return defaults;
+  }
+  const record = value as Record<string, unknown>;
+  const normalized: PivotContextMenuCategoryEnabledRecord = { ...defaults };
+  for (const sourceClass of PIVOT_CONTEXT_MENU_CATEGORY_SETTINGS_ORDER) {
+    const entry = record[sourceClass];
+    if (typeof entry === "boolean") {
+      normalized[sourceClass] = entry;
+    }
+  }
+  return normalized;
+}
+
+export async function getPivotContextMenuSiteEnabled(): Promise<PivotContextMenuSiteEnabledRecord> {
+  const result = await chrome.storage.local.get(
+    STORAGE_KEY_PIVOT_CONTEXT_MENU_SITE_ENABLED
+  );
+  return normalizePivotContextMenuSiteEnabledRecord(
+    result[STORAGE_KEY_PIVOT_CONTEXT_MENU_SITE_ENABLED]
+  );
+}
+
+export async function setPivotContextMenuSiteEnabled(
+  provider: PivotProvider,
+  enabled: boolean
+): Promise<void> {
+  const current = await getPivotContextMenuSiteEnabled();
+  await chrome.storage.local.set({
+    [STORAGE_KEY_PIVOT_CONTEXT_MENU_SITE_ENABLED]: {
+      ...current,
+      [provider]: enabled,
+    },
+  });
+}
+
+export async function getPivotContextMenuCategoryEnabled(): Promise<PivotContextMenuCategoryEnabledRecord> {
+  const result = await chrome.storage.local.get(
+    STORAGE_KEY_PIVOT_CONTEXT_MENU_CATEGORY_ENABLED
+  );
+  return normalizePivotContextMenuCategoryEnabledRecord(
+    result[STORAGE_KEY_PIVOT_CONTEXT_MENU_CATEGORY_ENABLED]
+  );
+}
+
+export async function setPivotContextMenuCategoryEnabled(
+  sourceClass: ConnectorSourceClass,
+  enabled: boolean
+): Promise<void> {
+  const current = await getPivotContextMenuCategoryEnabled();
+  await chrome.storage.local.set({
+    [STORAGE_KEY_PIVOT_CONTEXT_MENU_CATEGORY_ENABLED]: {
+      ...current,
+      [sourceClass]: enabled,
+    },
+  });
+}
+
+export async function getPivotContextMenuVisibility(): Promise<{
+  categoryEnabled: PivotContextMenuCategoryEnabledRecord;
+  siteEnabled: PivotContextMenuSiteEnabledRecord;
+}> {
+  const [categoryEnabled, siteEnabled] = await Promise.all([
+    getPivotContextMenuCategoryEnabled(),
+    getPivotContextMenuSiteEnabled(),
+  ]);
+  return { categoryEnabled, siteEnabled };
 }
 
 export async function applyAnalystModePreset(

@@ -32,6 +32,33 @@ import {
   setupQuietModeBannerStorageListener,
   syncQuietModeBannerWithStorage,
 } from "./quietModeBanner";
+import { updatePivotContextMenuForSelectionMessage } from "../lib/messages";
+
+const PIVOT_CONTEXT_MENU_SELECTION_HINT_MS = 75;
+
+function setupPivotContextMenuSelectionHint(): void {
+  let debounceTimer: number | undefined;
+  let lastSelectionText: string | null = null;
+
+  const flush = (): void => {
+    const selectionText = window.getSelection()?.toString() ?? "";
+    if (selectionText === lastSelectionText) {
+      return;
+    }
+    lastSelectionText = selectionText;
+    void safeRuntimeSendMessage(
+      updatePivotContextMenuForSelectionMessage({ selectionText })
+    );
+  };
+
+  const schedule = (): void => {
+    window.clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(flush, PIVOT_CONTEXT_MENU_SELECTION_HINT_MS);
+  };
+
+  document.addEventListener("selectionchange", schedule);
+  document.addEventListener("mouseup", schedule);
+}
 
 const contentScriptAlreadyInitialized =
   document.documentElement.dataset.vera5ContentInit === "1";
@@ -65,4 +92,5 @@ if (!contentScriptAlreadyInitialized) {
   setupRunOperatorMacroListener();
   setupHoverCardTrigger();
   setupExamplesFixtureBridge();
+  setupPivotContextMenuSelectionHint();
 }

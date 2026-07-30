@@ -624,6 +624,81 @@ describe("pivot context menu catalog", () => {
     });
   });
 
+  it("Phase D: filters categories and sites from the context menu catalog", () => {
+    const withoutCommunity = listPivotContextMenuCategories({
+      categoryEnabled: {
+        [CONNECTOR_SOURCE_CLASS.AUTHORITATIVE]: true,
+        [CONNECTOR_SOURCE_CLASS.COMMUNITY]: false,
+      },
+    });
+    expect(withoutCommunity.map((category) => category.sourceClass)).toEqual([
+      CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+    ]);
+
+    const withoutAbuse = listPivotContextMenuCategories({
+      siteEnabled: { [PIVOT_PROVIDER.ABUSEIPDB]: false },
+    });
+    expect(
+      withoutAbuse
+        .find((category) => category.sourceClass === CONNECTOR_SOURCE_CLASS.AUTHORITATIVE)
+        ?.providers
+    ).not.toContain(PIVOT_PROVIDER.ABUSEIPDB);
+
+    const openAllTargets = resolvePivotOpenTargetsForCategory(
+      CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+      "8.8.8.8",
+      "strict",
+      { siteEnabled: { [PIVOT_PROVIDER.ABUSEIPDB]: false } }
+    );
+    expect(openAllTargets.map((target) => target.provider)).not.toContain(
+      PIVOT_PROVIDER.ABUSEIPDB
+    );
+  });
+
+  it("Phase E: filters menu sites by strict IOC type support", () => {
+    const forIp = listPivotContextMenuCategories(undefined, {
+      type: IOC_TYPE.IPV4,
+      value: "8.8.8.8",
+    });
+    const authoritativeIp = forIp.find(
+      (category) => category.sourceClass === CONNECTOR_SOURCE_CLASS.AUTHORITATIVE
+    );
+    const communityIp = forIp.find(
+      (category) => category.sourceClass === CONNECTOR_SOURCE_CLASS.COMMUNITY
+    );
+    expect(authoritativeIp?.providers).toContain(PIVOT_PROVIDER.ABUSEIPDB);
+    expect(authoritativeIp?.providers).toContain(PIVOT_PROVIDER.RDAP_WHOIS);
+    expect(communityIp?.providers).toContain(PIVOT_PROVIDER.URLHAUS);
+    expect(communityIp?.providers).not.toContain(PIVOT_PROVIDER.MALWAREBAZAAR);
+
+    const md5 = "d41d8cd98f00b204e9800998ecf8427e";
+    const forHash = listPivotContextMenuCategories(undefined, {
+      type: IOC_TYPE.MD5,
+      value: md5,
+    });
+    const authoritativeHash = forHash.find(
+      (category) => category.sourceClass === CONNECTOR_SOURCE_CLASS.AUTHORITATIVE
+    );
+    const communityHash = forHash.find(
+      (category) => category.sourceClass === CONNECTOR_SOURCE_CLASS.COMMUNITY
+    );
+    expect(authoritativeHash?.providers).toContain(PIVOT_PROVIDER.VIRUSTOTAL);
+    expect(authoritativeHash?.providers).not.toContain(PIVOT_PROVIDER.ABUSEIPDB);
+    expect(authoritativeHash?.providers).not.toContain(PIVOT_PROVIDER.RDAP_WHOIS);
+    expect(communityHash?.providers).toContain(PIVOT_PROVIDER.MALWAREBAZAAR);
+    expect(communityHash?.providers).not.toContain(PIVOT_PROVIDER.URLHAUS);
+
+    const ipWithPrefs = listPivotContextMenuCategories(
+      { siteEnabled: { [PIVOT_PROVIDER.ABUSEIPDB]: false } },
+      { type: IOC_TYPE.IPV4, value: "8.8.8.8" }
+    );
+    expect(
+      ipWithPrefs
+        .find((category) => category.sourceClass === CONNECTOR_SOURCE_CLASS.AUTHORITATIVE)
+        ?.providers
+    ).not.toContain(PIVOT_PROVIDER.ABUSEIPDB);
+  });
+
   it("resolves pivot open targets from selection text", () => {
     expect(resolvePivotOpenTarget("virustotal", "8.8.8.8")).toEqual({
       provider: "virustotal",

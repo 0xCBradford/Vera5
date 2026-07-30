@@ -243,25 +243,25 @@ Storage schema migrations preserve connector enable maps and optional API keys; 
 
 ## Initial release exclusions (frozen)
 
-The first shippable extension release is **browser-only enrichment**. The following are explicitly **out of scope** until a documented product revision expands the surface. Implementation, manifest permissions, and public docs must not imply these capabilities ship in the initial release.
+The first shippable extension release is **browser-only enrichment** (plus optional analyst-operated localhost tools). The following remain **out of scope** unless a documented product revision expands the surface.
 
 | Exclusion | Requirement |
 |-----------|-------------|
-| **No Vera5 backend** | No required or default FastAPI (or other) Vera5-operated enrichment service. Optional localhost/self-hosted backend may be explored in a later phase only. |
-| **No LLM features** | No local or cloud LLM summaries, narrative report generation, or AI-driven scoring bundled with enrichment. |
+| **No Vera5-operated backend** | No required or default Vera5-hosted enrichment service. An optional localhost client bridge may call a **separately operated** compatible service; **no server implementation is included in this repository**. |
+| **No cloud LLM** | No Vera5-hosted or cloud LLM relay. Opt-in **local AI summary** (off by default) may POST normalized export JSON to `127.0.0.1` only when the analyst enables it—see [ai-summary.md](ai-summary.md). No AI-driven composite scoring. |
 | **No telemetry** | No usage analytics, crash reporting to Vera5, browsing-history collection, or hidden phone-home endpoints. Any future diagnostics must be opt-in and off by default. |
 
-**Also excluded from the initial release** (aligned with frozen indicator and connector scope above):
+**Also excluded from the initial release:**
 
 - Vera5 user accounts or maintainer-hosted API key relay
-- Firefox store distribution (Chrome unpacked → store-ready first)
+- Firefox Add-ons (AMO) store distribution (experimental temporary add-on only; Chromium is the primary path)
 - MISP, OpenCTI, TheHive, and similar platform connectors as live enrichment sources
-- Phase 2+ indicator types (email, ASN, IPv6, wallets, etc.)
-- Full-page upload or silent exfiltration of page HTML to Vera5 infrastructure (there is no Vera5 enrichment cloud in the initial release)
+- IPv6, cryptocurrency wallets, and other indicator types not listed in README “What works today”
+- Full-page upload or silent exfiltration of page HTML to Vera5 infrastructure (there is no Vera5 enrichment cloud)
 
 ## Extension versioning (frozen)
 
-The Vera5 browser extension uses **[Semantic Versioning 2.0.0](https://semver.org/)** (`MAJOR.MINOR.PATCH`). The canonical version lives in `extension/package.json` and must match the extension manifest `version` field once the manifest ships.
+The Vera5 browser extension uses **[Semantic Versioning 2.0.0](https://semver.org/)** (`MAJOR.MINOR.PATCH`). The canonical version lives in `extension/package.json` and **must match** the extension manifest `version` field.
 
 | Field | Policy |
 |-------|--------|
@@ -271,22 +271,21 @@ The Vera5 browser extension uses **[Semantic Versioning 2.0.0](https://semver.or
 
 **Pre-1.0 behavior:** While `MAJOR` is `0`, treat `MINOR` bumps as the primary milestone marker and document breaking changes in release notes even though SemVer allows API instability below `1.0.0`.
 
-**Current baseline:** `0.0.0` in `extension/package.json` is the pre-1.0 package version while capabilities advance toward the 0.2.x enrichment milestone. Do not tag a public store release until version and sign-off policy align with [Product-Vision.md](../Product-Vision.md).
+**Current baseline:** **0.1.0** in `extension/package.json` and `extension/public/manifest.json` (public MVP package). Record user-visible capability in [CHANGELOG.md](../CHANGELOG.md). Store submission remains separate operator work ([store-listing.md](store-listing.md)).
 
 **Milestone mapping (extension package only)**
 
 | Version line | Capability gate |
 |--------------|-----------------|
-| **0.1.x** | Manifest V3 scaffold, IOC detection, highlight/hover shell, static pivot card; no required live enrichment. |
-| **0.2.x** | At least two live BYOK connectors (AbuseIPDB + OTX minimum), cache with cached/live labeling, options for keys and source toggles. |
-| **0.3.x** | Public OSS readiness: polished README, SECURITY alignment, store submission prep; still no telemetry or required backend. |
+| **0.1.x** | Public MVP: detection, overlay/tray/workspace, multi-source live BYOK enrichment, trust gates, sessions/collections, macros, local casework surfaces documented in README. |
+| **0.2.x** | Incremental connectors, detector types, or operator UX after dogfood—still no telemetry or required Vera5 backend. |
 | **1.0.0** | First stable analyst-facing release after dogfood sign-off; breaking changes thereafter follow strict SemVer MAJOR bumps. |
 
 **Release process rules**
 
 - Bump `extension/package.json` and manifest together in one commit per release.
-- Prefer git annotated tags `v{version}` (e.g. `v0.2.0`) on the commit that sets the version.
-- Record user-visible changes in `CHANGELOG.md` when that file exists; entries describe shipped capability only.
+- Prefer git annotated tags `v{version}` (e.g. `v0.1.0`) on the commit that sets the version.
+- Record user-visible changes in `CHANGELOG.md`; entries describe shipped capability only.
 - Do not encode build metadata in the version string (no `-beta` suffix in `package.json`; use release channels or tags for pre-releases if needed later).
 
 ## Storage schema migration and rollback

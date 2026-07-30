@@ -269,6 +269,8 @@ import {
   getInternalAssetVendorLabels,
   getIocTypeEnabled,
   getManualOnlyMode,
+  getPivotContextMenuCategoryEnabled,
+  getPivotContextMenuSiteEnabled,
   getPreQueryNoticePreferenceConfigured,
   getQuietMode,
   getShowDisabledSourcesInWorkspace,
@@ -280,6 +282,8 @@ import {
   isMaskedApiKeyDisplay,
   maskApiKeyForDisplay,
   readStoredCacheTtlSeconds,
+  createDefaultPivotContextMenuCategoryEnabledRecord,
+  createDefaultPivotContextMenuSiteEnabledRecord,
   setApiKey,
   setAutoScanEnabled,
   setAttributeHrefExtractionEnabled,
@@ -304,9 +308,13 @@ import {
   setInternalAssetVendorLabels,
   setIocTypeEnabled,
   setManualOnlyMode,
+  setPivotContextMenuCategoryEnabled,
+  setPivotContextMenuSiteEnabled,
   setPreQueryNoticePreference,
   setQuietMode,
   setShowDisabledSourcesInWorkspace,
+  type PivotContextMenuCategoryEnabledRecord,
+  type PivotContextMenuSiteEnabledRecord,
   setPageContextSiteModeOverrides,
   clearPageContextSiteModeOverrides,
 } from "../lib/storage";
@@ -330,6 +338,16 @@ import {
 } from "../lib/domainPolicy";
 import { ANALYST_MODE_PRESETS, type AnalystModePresetId } from "../lib/analystModePresets";
 import { normalizeInternalAssetCidrRange } from "../lib/internalAssetPolicy";
+import {
+  CONNECTOR_SOURCE_CLASS,
+  getConnectorSourceClassLabel,
+  type ConnectorSourceClass,
+} from "../lib/connectorDefinition";
+import {
+  listPivotContextMenuCategories,
+  pivotContextMenuSiteTitle,
+  type PivotProvider,
+} from "../lib/pivots";
 
 const API_KEY_FIELD_SLOTS: ApiKeySlot[] = [...OPTIONS_API_KEY_SLOTS, CENSYS_SECRET_API_KEY_SLOT];
 
@@ -399,6 +417,7 @@ const NAV_SECTIONS: { id: string; label: string }[] = [
   { id: "scanning", label: "Scanning" },
   { id: "indicators", label: "Indicator Types" },
   { id: "sources", label: "Enrichment Sources" },
+  { id: "pivots", label: "Pivots" },
   { id: "api-keys", label: "API Keys" },
   { id: "local-ai-summary", label: "Local AI Summary" },
   { id: "trust", label: "Trust & Consent" },
@@ -1675,6 +1694,7 @@ export function Options() {
     indicators: true,
     "private-ipv4": true,
     sources: true,
+    pivots: true,
     "local-ai-summary": true,
     trust: true,
     "operator-macros": true,
@@ -1692,6 +1712,14 @@ export function Options() {
   const [quietModeActive, setQuietModeActiveState] = useState(false);
   const [enrichmentSourceEnabled, setEnrichmentSourceEnabledState] =
     useState<EnrichmentSourceEnabledRecord>(createDefaultSourceEnabledState());
+  const [pivotContextMenuCategoryEnabled, setPivotContextMenuCategoryEnabledState] =
+    useState<PivotContextMenuCategoryEnabledRecord>(
+      createDefaultPivotContextMenuCategoryEnabledRecord()
+    );
+  const [pivotContextMenuSiteEnabled, setPivotContextMenuSiteEnabledState] =
+    useState<PivotContextMenuSiteEnabledRecord>(
+      createDefaultPivotContextMenuSiteEnabledRecord()
+    );
   const [iocTypeEnabled, setIocTypeEnabledState] = useState<IocTypeEnabledRecord>(
     createDefaultIocTypeEnabledState()
   );
@@ -2053,6 +2081,16 @@ export function Options() {
   }, [ready, focusedKnownGoodEntryId, knownGoodEntries]);
 
   useEffect(() => {
+    void Promise.all([
+      getPivotContextMenuCategoryEnabled(),
+      getPivotContextMenuSiteEnabled(),
+    ]).then(([categoryEnabledValue, siteEnabledValue]) => {
+      setPivotContextMenuCategoryEnabledState(categoryEnabledValue);
+      setPivotContextMenuSiteEnabledState(siteEnabledValue);
+    });
+  }, [settingsReloadToken]);
+
+  useEffect(() => {
     setReady(false);
     void Promise.all([
       getAutoScanEnabled(),
@@ -2265,6 +2303,28 @@ export function Options() {
       [sourceId]: checked,
     }));
     void setEnrichmentSourceEnabled(sourceId, checked);
+  };
+
+  const handlePivotContextMenuCategoryToggle = (
+    sourceClass: ConnectorSourceClass,
+    checked: boolean
+  ) => {
+    setPivotContextMenuCategoryEnabledState((current) => ({
+      ...current,
+      [sourceClass]: checked,
+    }));
+    void setPivotContextMenuCategoryEnabled(sourceClass, checked);
+  };
+
+  const handlePivotContextMenuSiteToggle = (
+    provider: PivotProvider,
+    checked: boolean
+  ) => {
+    setPivotContextMenuSiteEnabledState((current) => ({
+      ...current,
+      [provider]: checked,
+    }));
+    void setPivotContextMenuSiteEnabled(provider, checked);
   };
 
   const handleIocTypeToggle = (iocType: IocType, checked: boolean) => {
@@ -4441,6 +4501,85 @@ export function Options() {
               <p className="v5-status v5-status--muted" style={{ marginTop: 12, marginBottom: 0 }}>
                 {ENRICHMENT_SOURCE_OPS_POPUP_GUIDANCE}
               </p>
+            </div>
+          </section>
+
+          <section id="pivots" className="v5-card" aria-labelledby="pivots-heading">
+            <div className="v5-card__head">
+              <h2 id="pivots-heading" className="v5-card__title">
+                <button
+                  type="button"
+                  className="v5-card__toggle"
+                  aria-expanded={!collapsedSections.pivots}
+                  aria-controls="pivots-body"
+                  onClick={() => toggleSection("pivots")}
+                >
+                  <span className="v5-card__toggle-text">Pivots</span>
+                  <span className="v5-card__chevron" aria-hidden="true" />
+                </button>
+              </h2>
+              <p className="v5-card__desc">
+                Choose which categories and intel sites appear under right-click → Pivots. This does
+                not enable or disable live enrichment queries.
+              </p>
+            </div>
+            <div id="pivots-body" className="v5-card__body" hidden={collapsedSections.pivots}>
+              <ToggleRow
+                label={getConnectorSourceClassLabel(CONNECTOR_SOURCE_CLASS.AUTHORITATIVE)}
+                hint="Show the Authoritative submenu (AbuseIPDB, VirusTotal, RDAP WHOIS, and related sites)."
+                ariaLabel="Show Authoritative pivots category"
+                checked={pivotContextMenuCategoryEnabled[CONNECTOR_SOURCE_CLASS.AUTHORITATIVE] !== false}
+                disabled={!ready}
+                onChange={(checked) =>
+                  handlePivotContextMenuCategoryToggle(
+                    CONNECTOR_SOURCE_CLASS.AUTHORITATIVE,
+                    checked
+                  )
+                }
+              />
+              <ToggleRow
+                label={getConnectorSourceClassLabel(CONNECTOR_SOURCE_CLASS.COMMUNITY)}
+                hint="Show the Community submenu (OTX, MalwareBazaar, URLHaus, and related sites)."
+                ariaLabel="Show Community pivots category"
+                checked={pivotContextMenuCategoryEnabled[CONNECTOR_SOURCE_CLASS.COMMUNITY] !== false}
+                disabled={!ready}
+                onChange={(checked) =>
+                  handlePivotContextMenuCategoryToggle(
+                    CONNECTOR_SOURCE_CLASS.COMMUNITY,
+                    checked
+                  )
+                }
+              />
+              {listPivotContextMenuCategories().map((category) => (
+                <div key={category.id} className="v5-sources" style={{ marginTop: 16 }}>
+                  <p className="v5-field__label" style={{ marginBottom: 8 }}>
+                    {category.title} sites
+                  </p>
+                  {category.providers.map((provider) => (
+                    <div key={provider} className="v5-source">
+                      <div className="v5-source__head">
+                        <span className="v5-source__title">
+                          <span className="v5-source__name">
+                            {pivotContextMenuSiteTitle(provider)}
+                          </span>
+                        </span>
+                        <span className="v5-source__spacer" />
+                        <Switch
+                          ariaLabel={`Show ${pivotContextMenuSiteTitle(provider)} in Pivots menu`}
+                          checked={pivotContextMenuSiteEnabled[provider] !== false}
+                          disabled={
+                            !ready ||
+                            pivotContextMenuCategoryEnabled[category.sourceClass] === false
+                          }
+                          onChange={(checked) =>
+                            handlePivotContextMenuSiteToggle(provider, checked)
+                          }
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           </section>
 

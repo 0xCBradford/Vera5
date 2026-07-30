@@ -30,18 +30,18 @@ Vera5 is a local-first browser extension for security analysts who triage indica
 
 **What Vera5 does**
 
-- Scan visible page text on demand for indicators of compromise (IPv4, domain, URL, MD5, SHA1, SHA256, CVE).
-- Highlight matches on the page and list them in a popup **Detected indicators** tray and optional workspace sidebar.
-- Open an on-page triage overlay for copy, export, pivot links, and—when you configure keys—live threat intelligence from sources you enable.
+- Scan visible page text on demand for indicators of compromise (IPv4, domain, URL, MD5, SHA1, SHA256, CVE, plus extended types such as email, ASN, CIDR, file path, and onion when present).
+- Highlight matches on the page and list them in the Chromium **side panel** workspace (or Firefox toolbar popup) **Detected indicators** tray.
+- Open an on-page triage overlay for copy, export, pivot links, notebook fragments, and—when you configure keys—live threat intelligence from sources you enable.
 - Run investigation sessions and IOC collections locally: rollups, labels, pins, session export, and collection export for ticket handoff.
-- Use keyboard shortcuts and a command palette for scan, enrich selection, and tray actions.
+- Use keyboard shortcuts, a command palette, and a selection context menu (**Enrich**, **Pivots**, **Case**, **Run macro**) for scan and triage without opening Settings for every action.
 
 **What Vera5 does not do**
 
 - Vera5 does not operate a shared enrichment backend, team workspace, or cloud sync for your keys or sessions.
 - Vera5 does not collect maintainer telemetry or crash reports by default.
 - Vera5 does not upload full page HTML to Vera5-operated infrastructure (there is none in this release).
-- Only **AbuseIPDB** and **OTX** perform live HTTPS enrichment today. Other registered sources show status rows and pivot links where supported—not live vendor queries unless implemented in a future release.
+- Live HTTPS enrichment today covers **AbuseIPDB**, **OTX**, **URLScan.io**, **GreyNoise** (community), **Shodan**, **Censys**, and **RDAP/WHOIS** when you enable them. **VirusTotal** and other registry shells may show status/pivot rows without live API queries until implemented.
 
 **Bring your own keys (BYOK)**
 
@@ -63,11 +63,12 @@ Manage all trust controls under **Trust & consent** in Vera5 Settings. Gate orde
 
 | Permission | Why Vera5 needs it |
 |------------|-------------------|
-| `storage` | Save your settings, masked API keys, enrichment cache, investigation sessions, and IOC collections locally in the browser. |
+| `storage` | Save your settings, masked API keys, enrichment cache, investigation sessions, IOC collections, macros, notebook fragments, and related preferences locally in the browser. |
 | `activeTab` | Run extension actions on the tab you are viewing when you invoke Vera5. |
-| `scripting` | Inject or update page scripts when needed for on-demand scan and sidebar flows. |
-| `contextMenus` | **Enrich with Vera5** on a text selection. |
-| Host access (`http://*/*`, `https://*/*`) | Read visible text on pages you open for IOC detection. Analyst destinations vary; a narrow allowlist would block legitimate SOC workflows. Only indicator values you enrich leave the browser to vendors you configure—not full pages to Vera5. |
+| `scripting` | Inject or update page scripts when needed for on-demand scan and related page-local flows. |
+| `contextMenus` | Selection menu: **Enrich selection with Vera5**, **Pivots**, **Case**, and **Run macro on selection**. |
+| `sidePanel` | Chromium: persistent extension workspace side panel. |
+| Host access (`http://*/*`, `https://*/*`) | Read visible text on pages you open for IOC detection. Analyst destinations vary; a narrow allowlist would block legitimate SOC workflows. Only indicator values you enrich leave the browser to vendors you configure—not full pages to Vera5. Optional localhost bridge/summary uses loopback only when you enable those features. |
 
 **Getting started**
 
@@ -95,8 +96,8 @@ Paste or adapt these bullets in the store privacy questionnaire. Wording matches
 |-------|------------------|
 | **Data collected by Vera5 maintainers** | None by default. No usage analytics, crash telemetry, or browsing history sent to Vera5-operated servers. |
 | **Data processed locally** | Visible page text for IOC detection; settings; API keys; enrichment cache; investigation sessions; IOC collections; analyst notes—all in local browser storage. |
-| **Data sent to third parties** | Only when **you** trigger live enrichment (or allow automatic fetch when manual-only is off): the **indicator value** and required API fields go **directly** to threat-intelligence vendors **you** enabled (AbuseIPDB and/or OTX today), using **your** API keys. Full page HTML is not sent. |
-| **User control** | Pre-query disclosure, domain allow/deny policy, internal asset lists, per-source toggles, manual-only mode (default on), and auto-scan off by default. |
+| **Data sent to third parties** | Only when **you** trigger live enrichment (or allow automatic fetch when manual-only is off): the **indicator value** and required API fields go **directly** to threat-intelligence vendors **you** enabled (AbuseIPDB, OTX, URLScan.io, GreyNoise, Shodan, Censys, and/or RDAP endpoints as configured), using **your** API keys where required. Full page HTML is not sent. Optional **local AI summary** posts normalized export JSON to `127.0.0.1` only when you enable that feature. |
+| **User control** | Pre-query disclosure, domain allow/deny policy, internal asset lists, quiet mode, per-source toggles, manual-only mode (default on), and auto-scan off by default. |
 | **Sensitive sites** | Default denylist blocks auto-scan and live enrichment on common webmail hosts. Optional presets add banking, health, and HR hostname patterns. |
 | **Pivot links** | Static vendor URLs open in your browser when **you** click them; Vera5 does not proxy that navigation. |
 | **Settings export** | JSON backup you save locally; API keys omitted unless you opt in. |
@@ -111,13 +112,15 @@ When the dashboard asks whether the extension handles personal or sensitive data
 
 Use one paragraph per permission when Chrome Web Store requests justification text.
 
-**storage** — Persist analyst-controlled settings, masked API keys, enrichment cache entries, investigation sessions, IOC collections, and related preferences in local browser storage only. No Vera5 cloud sync.
+**storage** — Persist analyst-controlled settings, masked API keys, enrichment cache entries, investigation sessions, IOC collections, macros, notebook fragments, and related preferences in local browser storage only. No Vera5 cloud sync.
 
 **activeTab** — Operate on the tab the analyst is viewing when they invoke the toolbar action, keyboard shortcut, or context menu, without requesting unrelated tab access up front.
 
-**scripting** — Inject or update content scripts on demand for scan, workspace sidebar, and related page-local triage flows declared in the manifest.
+**scripting** — Inject or update content scripts on demand for scan and related page-local triage flows declared in the manifest.
 
-**contextMenus** — Add **Enrich with Vera5** to the browser context menu when the analyst selects indicator text, using the same trust gates as **Enrich selection**.
+**contextMenus** — Add **Vera5** selection actions (**Enrich selection with Vera5**, nested **Pivots**, **Case**, **Run macro on selection**) when the analyst selects text, using the same trust gates as other enrich paths for live API calls.
+
+**sidePanel** — Chromium only: host the persistent extension workspace side panel.
 
 **Host permissions (`http://*/*`, `https://*/*`)** — Security analysts triage on diverse internal and external HTTP/HTTPS origins (SOC consoles, CTI portals, ticket mirrors). Vera5 reads visible text on pages the analyst opens to detect IOCs. Only indicator values the analyst chooses to enrich are sent to third-party APIs the analyst configured—not full page content to Vera5 infrastructure.
 
@@ -143,9 +146,9 @@ Replace SVG placeholders in [screenshots.md](screenshots.md) with redacted PNG o
 
 Before submitting (operator task):
 
-- [ ] Short and detailed descriptions pasted; no overstated live connector claims beyond AbuseIPDB and OTX.
+- [ ] Short and detailed descriptions pasted; live-connector claims match shipped sources (AbuseIPDB, OTX, URLScan, GreyNoise, Shodan, Censys, RDAP/WHOIS; VT pivot-only).
 - [ ] Single purpose and privacy answers match [SECURITY.md](../SECURITY.md) and [security-model.md](security-model.md).
-- [ ] Permission justifications match [manifest.json](../extension/public/manifest.json).
+- [ ] Permission justifications match [manifest.json](../extension/public/manifest.json) (including `sidePanel` on Chromium).
 - [ ] Screenshots redacted (no real keys, customer IOCs, or inbox content).
 - [ ] Support URL and privacy policy URL set (link to public repo `SECURITY.md` or project policy page when published).
 - [ ] Version in dashboard matches packaged `manifest.json` semver when release task completes.

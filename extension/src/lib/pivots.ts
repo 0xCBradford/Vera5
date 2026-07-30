@@ -470,13 +470,44 @@ export function parsePivotContextMenuOpenAllId(
   return sourceClass as ConnectorSourceClass;
 }
 
-export function listPivotContextMenuCategories(): PivotContextMenuCategory[] {
+export type PivotContextMenuVisibility = {
+  categoryEnabled?: Partial<Record<ConnectorSourceClass, boolean>>;
+  siteEnabled?: Partial<Record<PivotProvider, boolean>>;
+};
+
+export function isPivotContextMenuCategoryVisible(
+  sourceClass: ConnectorSourceClass,
+  visibility?: PivotContextMenuVisibility
+): boolean {
+  return visibility?.categoryEnabled?.[sourceClass] !== false;
+}
+
+export function isPivotContextMenuSiteVisible(
+  provider: PivotProvider,
+  visibility?: PivotContextMenuVisibility
+): boolean {
+  return visibility?.siteEnabled?.[provider] !== false;
+}
+
+export function listPivotContextMenuCategories(
+  visibility?: PivotContextMenuVisibility,
+  ioc?: { type: IocType; value: string } | null
+): PivotContextMenuCategory[] {
   const buckets = new Map<ConnectorSourceClass, PivotProvider[]>();
   for (const sourceClass of PIVOT_CONTEXT_MENU_CATEGORY_ORDER) {
     buckets.set(sourceClass, []);
   }
 
   for (const provider of PIVOT_PROVIDER_ORDER) {
+    if (!isPivotContextMenuSiteVisible(provider, visibility)) {
+      continue;
+    }
+    if (
+      ioc &&
+      buildPivotUrl(provider, ioc.type, ioc.value, "strict") === null
+    ) {
+      continue;
+    }
     const sourceClass =
       ENRICHMENT_SOURCE_CONFIDENCE_METADATA_DEFAULTS[provider]?.sourceClass ??
       CONNECTOR_SOURCE_CLASS.COMMUNITY;
@@ -489,6 +520,9 @@ export function listPivotContextMenuCategories(): PivotContextMenuCategory[] {
   }
 
   return PIVOT_CONTEXT_MENU_CATEGORY_ORDER.flatMap((sourceClass) => {
+    if (!isPivotContextMenuCategoryVisible(sourceClass, visibility)) {
+      return [];
+    }
     const providers = buckets.get(sourceClass) ?? [];
     if (providers.length === 0) {
       return [];
@@ -576,9 +610,11 @@ export function resolvePivotOpenTarget(
 export function resolvePivotOpenTargetsForCategory(
   sourceClass: ConnectorSourceClass,
   selectionText: string,
-  mode: EnrichmentPivotUrlMode = "strict"
+  mode: EnrichmentPivotUrlMode = "strict",
+  visibility?: PivotContextMenuVisibility
 ): PivotOpenTarget[] {
-  const category = listPivotContextMenuCategories().find(
+  const match = resolveIocFromSelectionText(selectionText);
+  const category = listPivotContextMenuCategories(visibility, match).find(
     (entry) => entry.sourceClass === sourceClass
   );
   if (!category) {

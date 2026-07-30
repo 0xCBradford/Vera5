@@ -176,6 +176,34 @@ Optional workspace snapshot export builds a vault folder with an index note, a t
 
 Copy the exported root folder into your vault (or open it as a vault). Obsidian resolves wikilinks relative to that vault root. No API keys or raw vendor secrets are included in package notes.
 
+## Operator-visible vs library-only exports
+
+Use this table when advancing copy/export UX. Prefer wiring thin Options/workspace controls for library-only builders before inventing new formats.
+
+| Surface | Operator-visible today | Notes |
+|---------|------------------------|-------|
+| Per-IOC Markdown / JSON / ticket templates | Overlay **Copy** / **Export** / **Template** row; palette filtered copy | Templates: Jira, TheHive, Analyst update, Obsidian, Markdown report, CSV rows |
+| Session MD / JSON / CSV | Extension workspace session export | Full Markdown can append **Session notebook** |
+| Collection MD / JSON / CSV | Workspace **IOC collections** | `schemaVersion` + redaction; never API keys |
+| Timeline appendix | Workspace timeline export | Ticket templates or versioned JSON |
+| Investigation replay transcript | Workspace **Investigation replay** | Markdown / Obsidian / Analyst update shapes |
+| Settings Backup | Options **Settings Backup** | Keys optional |
+| Settings packs / threat profiles | Options **Settings Backup** | Never API keys; diff preview |
+| Noise rules / known-good list JSON | Options export controls | Known-good **Import** UI is thinner than Noise rules—priority handoff gap |
+| Workspace snapshot / correlation pack / connector profile JSON | **Library helpers only** (no dedicated Options/workspace export button) | Documented in code; do not claim UI until wired |
+
+### Next advancements (reassessment — not yet built)
+
+1. **Known-good Import** — Mirror Noise rules JSON/CSV import (add-only / replace-all) so list handoff is bidirectional.
+2. **Demote or wire library-only packs** — Either add thin workspace actions for correlation pack / workspace snapshot, or keep them contributor-only and omit from analyst docs.
+3. **Notebook + ticket templates** — Optional append of Indicator-scope notebook fragments on template copy (session Markdown already appends session notebook).
+4. **Filtered copy + side panel** — Bind palette “filtered” copy to the Chromium side panel tray filter (docs should not require a separate in-page sidebar).
+5. **Threat profile export matrix** — Document recommended SOC / CTI / DFIR profile presets (default template + quiet mode) without a marketplace.
+
+## IOC collections (where data lives)
+
+Collections are **local-only** in `chrome.storage.local` (see `iocCollectionStorage.ts`). Create and manage them from the extension workspace; save members from the overlay, tray, or selection context menu **Case → Save to collection**. There is no Vera5 cloud sync and no separate “ongoing vs later review” queue in this release—use collection names or Labels for that workflow until a dedicated status feature ships.
+
 ## Related documentation
 
 - [Analyst workflows](analyst-workflows.md) — overlay triage, cache, and score interpretation

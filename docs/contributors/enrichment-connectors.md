@@ -6,10 +6,15 @@ Live enrichment uses **bring-your-own API keys**. The background worker calls ve
 
 | Order | Source | Module | Indicator types (current) |
 |------:|--------|--------|---------------------------|
-| 1 | AbuseIPDB | `abuseipdbConnector.ts` | IPv4 |
-| 2 | AlienVault OTX | `otxConnector.ts` | IPv4, domain, URL, MD5, SHA1, SHA256, CVE |
+| 1 | AbuseIPDB | `lib/abuseipdbConnector.ts` | IPv4 |
+| 2 | AlienVault OTX | `lib/otxConnector.ts` | IPv4, domain, URL, MD5, SHA1, SHA256, CVE |
+| 3 | URLScan.io | `lib/urlscanConnector.ts` | Domain, URL |
+| 4 | GreyNoise (community) | `lib/greynoiseConnector.ts` | IPv4 |
+| 5 | Shodan | `lib/shodanConnector.ts` | IPv4, domain |
+| 6 | Censys | `lib/censysConnector.ts` | IPv4 |
+| 7 | RDAP/WHOIS | `lib/rdapWhoisConnector.ts` | Domain (keyless) |
 
-Orchestration: `extension/src/background/enrichmentHandler.ts` with policy in `enrichmentPolicy.ts` and request wiring in `enrichmentRequest.ts`.
+Orchestration: `extension/src/background/enrichmentHandler.ts` with policy in `enrichmentPolicy.ts` and request wiring in `enrichmentRequest.ts`. **VirusTotal** remains pivot/key-storage only (`liveConnector: false`).
 
 ## Parallel multi-source fetch
 
@@ -53,9 +58,9 @@ sequenceDiagram
 
 Vendor JSON is normalized for display and scoring in `enrichmentVendorNormalize.ts`. Raw JSON can be shown in the overlay with redaction via `enrichmentRawResponse.ts`.
 
-## Pivot-only sources
+## Pivot-oriented / non-live registry shells
 
-URLScan.io and GreyNoise have settings slots and static pivots (`pivots.ts`) but **no live API** in the current release. Do not document them as live connectors until implemented.
+Google Safe Browsing, Pulsedive, MalwareBazaar, ThreatFox, URLhaus, and VirusTotal (live off) may appear in Settings and pivot menus without a live HTTPS enrich path in this release. Document them as shells/pivots until `liveConnector: true` and a connector module ship.
 
 ## Connector confidence metadata — reliability tier
 

@@ -12,10 +12,10 @@ Everything below assumes the **production on-page overlay** (content script on t
 |---------|-----------------|
 | **On-page overlay** | After **Scan page**, click a highlight to open the hover card, enrich with **›**, read Live/Cached badges, copy values, and follow pivot links. Assign **Label**, **Pin**, and read **Session timeline** on the card when an investigation session is active. Use **Notebook** for typed investigation fragments (**Observation**, **Tag**, **Conclusion**, **Hypothesis**) on Indicator / Session / Page scopes, and free-text **Analyst notes** when you still use the legacy note field. Use **Save to collection…** to add an indicator to a persistent collection. |
 | **Command palette** | Keyboard-driven actions on the active tab: scan, enrich selection, open history, source health, tray export, clear highlights, and settings. See [Operator UX: command palette and quick actions](#operator-ux-command-palette-and-quick-actions). |
-| **Toolbar popup** | Turn the extension and highlights on or off, run **Scan page** / **Scan selection** / **Enrich selection**, manage the **Investigation session** (title, rollups, **Notebook fragments**, export, recent sessions, **Promote session to collection…**), review **Investigation history**, **Detected indicators** (**Save to collection…**, **Add filtered to collection…**), manage **IOC collections**, and read **Source operations** (cache, cooldown, per-source status, vendor quota hints). |
-| **Workspace sidebar** | Optional on-page tray from **Open sidebar** in the popup: filter indicators, **Save to collection…**, **Add filtered to collection…**, **Run macro…** on a row, **Run macro on filtered…** for the active type filter, copy subsets, and export templates while staying on the alert page. Pinned session indicators sort to the top. |
-| **Context menu** | Right-click selected text → **Enrich selection with Vera5** when the selection contains a detectable indicator. Uses the same trust gates and enrich pipeline as palette **Enrich selection**. |
-| **Settings (options) page** | Configure API keys, enable sources, set manual-only and auto-scan, clear the enrichment cache, export or import settings. Source health details live in the popup **Source operations** section—not a duplicate panel here. |
+| **Toolbar popup / side panel** | Chromium: persistent **side panel** workspace. Firefox: toolbar popup (and optional sidebar). Turn the extension and highlights on or off, run **Scan page** / **Scan selection** / **Enrich selection**, manage the **Investigation session**, review **Investigation history**, **Detected indicators**, **IOC collections**, and **Source operations**. |
+| **Workspace sidebar** | Optional on-page tray from **Open sidebar** where available: filter indicators and run tray actions while staying on the alert page. Chromium analysts should prefer the native side panel as the primary workspace. |
+| **Context menu** | Right-click selected text under **Vera5**: **Enrich selection with Vera5** (same trust gates as palette **Enrich selection**), **Pivots** (type-matched Authoritative / Community sites and **Open all**; customize visibility in **Settings → Pivots**), **Case** (Open Analyst Lens, Pin, Label, Save to collection), and **Run macro on selection** for context-enabled macros. |
+| **Settings (options) page** | Configure API keys, enable sources, **Pivots** menu visibility, manual-only and auto-scan, quiet mode, cache, trust policy, **Noise rules**, **Known-good lists**, correlation/relationship memory, **Operator Macros**, and **Settings Backup** (packs and threat profiles). |
 | **React hover card** | Unit tests and `npm run dev` only. It is **not** shown on live page tabs. It exercises the same local scoring rules as the overlay; unit tests may also show per-source contribution chips the overlay does not render. |
 
 ## Operator UX: command palette and quick actions
@@ -50,14 +50,22 @@ Open the palette with `Ctrl+Shift+K` / `Cmd+Shift+K`, or run **Open command pale
 
 Tray export commands read the on-page workspace filter state. Open the **workspace sidebar** and set a type filter before running **Copy filtered Markdown** or **Export tray subset** if you need a subset rather than every detected IOC.
 
-### Context menu enrich
+### Context menu (selection)
 
-1. Select text that contains an indicator (for example an IPv4 address or domain in alert prose).
-2. Right-click the selection.
-3. Choose **Enrich selection with Vera5**.
+Right-click selected text to use Vera5 without opening the side panel or popup.
 
-Vera5 validates the selection, applies the same domain and internal-asset gates as hover enrich, and opens the hover card when allowed. On denylisted hosts, the card shows the domain-policy blocked message and does not call vendors—matching palette **Enrich selection** behavior.
+1. Select text that contains an indicator (for example an IPv4 address, domain, URL, or hash).
+2. Right-click the selection → **Vera5**.
+3. Choose an action:
 
+| Menu | What it does |
+|------|----------------|
+| **Enrich selection with Vera5** | Validates the selection, applies domain and internal-asset gates, and opens the on-page overlay for enrichment when allowed. On denylisted hosts, the card shows the domain-policy blocked message and does not call vendors—matching palette **Enrich selection**. |
+| **Pivots** → **Authoritative** / **Community** | Opens nested intel sites for the selection. The menu filters to sites that strictly support the detected indicator type (and sites you left enabled under **Settings → Pivots**). **Open all** opens every matching site in that category in new tabs (strict type match only). Single-site clicks may use a broader browse fallback when the vendor page still accepts the value. Unsupported or empty opens show a short on-page Vera5 notice. |
+| **Case** | **Open Analyst Lens** (same enrich path as Enrich selection), **Pin indicator**, **Label** (including clear), and **Save to collection** (lists local collections). |
+| **Run macro on selection** | Runs a context-enabled operator macro on the selection through the same on-page runner as the palette. |
+
+Pivot menu items open vendor pages in new tabs (user-initiated navigation). They are not background API enrichment and are not blocked by quiet mode the way live connector fetches are.
 ### Popup quick actions (without the palette)
 
 | Control | Location | Effect |
@@ -97,7 +105,7 @@ For HTTP 429 behavior and vendor-specific quotas, see [api-integrations.md](api-
 | Goal | Suggested approach |
 |------|-------------------|
 | Scan without leaving the keyboard | `Ctrl+Shift+Y` or palette **Scan page**. |
-| Enrich prose you highlighted in a ticket | Context menu **Enrich selection with Vera5** or palette **Enrich selection**. |
+| Enrich prose you highlighted in a ticket | Context menu **Enrich selection with Vera5**, **Pivots**, or **Case**; or palette **Enrich selection**. |
 | Return to yesterday’s enrich on this alert page | Popup or palette **Open history** → click row → rescan if highlight missing. |
 | Check AbuseIPDB cooldown before bulk enrich | Palette **Source health** or expand **Source operations** in the popup. |
 | Export filtered tray IOCs to a ticket | Set sidebar filter → palette **Copy filtered Markdown**. |
