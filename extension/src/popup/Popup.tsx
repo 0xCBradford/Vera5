@@ -1,18 +1,17 @@
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type ReactNode,
 } from "react";
 import {
   navigateToIocAnchorMessage,
   enrichIocMessage,
   enrichSelectionMessage,
   getSelectionActionStateMessage,
-  reopenInvestigationHistoryMessage,
   runOperatorMacroMessage,
   scanPageMessage,
   scanSelectionMessage,
@@ -44,8 +43,6 @@ import {
   buildTabScanCountSummaryText,
   buildTrayRowNavigationAriaLabel,
   filterTabScanSummaryEntries,
-  findTabScanSummaryEntryForCollectionMember,
-  findTabScanSummaryEntryForIndicatorValue,
   formatTrayRowEnrichmentHint,
   IOC_TYPE_TRAY_LABEL,
   listIocTypesPresentInSummaryForPageContext,
@@ -189,59 +186,18 @@ import {
 import { openExtensionSitePermissionsPage } from "../lib/extensionSitePermissions";
 import {
   DEFAULT_INVESTIGATION_SESSION_TITLE,
-  buildInvestigationSessionIocCountText,
-  buildInvestigationSessionTypeBreakdownText,
-  buildInvestigationSessionActivitySummaryText,
-  INVESTIGATION_SESSION_EMPTY_STATE_TEXT,
   listInvestigationSessionIocMembers,
   normalizeInvestigationSessionIocTimelineKey,
-  normalizeInvestigationSessionTitle,
   type InvestigationSession,
 } from "../lib/investigationSession";
 import {
   requestActiveInvestigationSession,
-  requestArchiveInvestigationSession,
-  requestCreateInvestigationSession,
-  requestDeleteInvestigationSession,
   requestRecentInvestigationSessions,
-  requestRenameInvestigationSession,
   requestReopenInvestigationSession,
-  requestUpdateInvestigationSessionTitle,
   resolveActiveTabPageUrl,
 } from "../lib/investigationSessionClient";
 import {
-  buildInvestigationSessionExportInput,
-  copyInvestigationSessionExportToClipboard,
-  downloadInvestigationSessionExportFile,
-  INVESTIGATION_SESSION_EXPORT_IOC_ONLY_DESCRIPTION,
-  INVESTIGATION_SESSION_EXPORT_IOC_ONLY_LABEL,
-  INVESTIGATION_SESSION_EXPORT_SCOPE,
-  type InvestigationSessionExportFormat,
-} from "../lib/investigationSessionExport";
-import {
-  copyInvestigationTimelineExportAppendixToClipboard,
-  copyInvestigationTimelineExportJsonToClipboard,
-  downloadInvestigationTimelineExportAppendixFile,
-  downloadInvestigationTimelineExportJsonFile,
-  INVESTIGATION_TIMELINE_MARKDOWN_TEMPLATE_IDS,
-  resolveInvestigationTimelineExportCopyFeedback,
-  resolveInvestigationTimelineExportDownloadFeedback,
-  resolveInvestigationTimelineJsonExportCopyFeedback,
-  resolveInvestigationTimelineJsonExportDownloadFeedback,
-  SESSION_TIMELINE_COPY_APPENDIX_LABEL,
-  SESSION_TIMELINE_COPY_JSON_LABEL,
-  SESSION_TIMELINE_DOWNLOAD_APPENDIX_LABEL,
-  SESSION_TIMELINE_DOWNLOAD_JSON_LABEL,
-  SESSION_TIMELINE_EXPORT_GROUP_ARIA_LABEL,
-  SESSION_TIMELINE_EXPORT_SECTION_LABEL,
-  SESSION_TIMELINE_EXPORT_TEMPLATE_LABEL,
-  SESSION_TIMELINE_JSON_EXPORT_GROUP_ARIA_LABEL,
-  type InvestigationTimelineMarkdownTemplateId,
-  type InvestigationTimelineExportInput,
-} from "../lib/investigationTimelineExport";
-import {
   listStoredInvestigationSessions,
-  recordActiveInvestigationSessionExportEvent,
 } from "../lib/investigationSessionStorage";
 import {
   copyTrayTemplateExportToClipboard,
@@ -251,75 +207,9 @@ import {
   type ExportTemplateId,
 } from "../lib/exportTemplates";
 import {
-  NOTEBOOK_FRAGMENT_ADD_LABEL,
-  NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL,
-  NOTEBOOK_FRAGMENT_BODY_PLACEHOLDER,
-  NOTEBOOK_FRAGMENT_BODY_REQUIRED_ERROR,
-  NOTEBOOK_FRAGMENT_CANCEL_LABEL,
-  NOTEBOOK_FRAGMENT_DELETE_CONFIRM_TEXT,
-  NOTEBOOK_FRAGMENT_DELETE_LABEL,
-  NOTEBOOK_FRAGMENT_DELETED_FEEDBACK,
-  NOTEBOOK_FRAGMENT_EDIT_LABEL,
-  NOTEBOOK_FRAGMENT_SAVE_LABEL,
-  NOTEBOOK_FRAGMENT_SAVED_FEEDBACK,
-  NOTEBOOK_FRAGMENT_TEXT_ONLY_EMPTY_HINT,
-  NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL,
-  POPUP_SESSION_NOTEBOOK_EMPTY_TEXT,
-  POPUP_SESSION_NOTEBOOK_LIST_ARIA_LABEL,
-  POPUP_SESSION_NOTEBOOK_SEARCH_LABEL,
-  POPUP_SESSION_NOTEBOOK_SEARCH_NO_MATCHES_TEXT,
-  POPUP_SESSION_NOTEBOOK_SEARCH_PLACEHOLDER,
-  POPUP_SESSION_NOTEBOOK_SECTION_LABEL,
-  addNotebookFragmentForSession,
-  buildNotebookFragmentEmptyStateView,
-  defaultNotebookFragmentType,
-  deleteNotebookFragment,
-  editNotebookFragment,
-  filterPopupSessionNotebookTimelineRowsBySearchText,
-  listNotebookFragmentTypeOptions,
-  loadPopupSessionNotebookFragmentTimeline,
-  type PopupSessionNotebookTimelineRow,
-} from "../lib/hoverCardNotebook";
-import {
-  STORAGE_KEY_NOTEBOOK_FRAGMENTS,
   getNotebookFragmentsStore,
   type NotebookFragmentsStore,
 } from "../lib/notebookFragmentStorage";
-import {
-  appendNotebookFragmentMarkdownLite,
-  type NotebookFragmentType,
-} from "../lib/notebookFragment";
-import {
-  buildTimelineEventNavigationAriaLabel,
-  buildTimelineEventRowAriaLabel,
-  createDefaultTimelineEventFilter,
-  filterTimelineEvents,
-  formatTimelineEventIocLabel,
-  formatTimelineEventTimestamp,
-  formatTimelineEventTypeLabel,
-  isTimelineEventNavigable,
-  listTimelineEventIocFilterOptions,
-  readTimelineEventFilterDateTimeLocal,
-  SESSION_TIMELINE_EMPTY_TEXT,
-  SESSION_TIMELINE_FILTER_ALL_IOCS_LABEL,
-  SESSION_TIMELINE_FILTER_ALL_TYPES_LABEL,
-  SESSION_TIMELINE_FILTER_GROUP_ARIA_LABEL,
-  SESSION_TIMELINE_FILTER_NO_MATCHES_TEXT,
-  SESSION_TIMELINE_IOC_FILTER_LABEL,
-  SESSION_TIMELINE_LIST_ARIA_LABEL,
-  SESSION_TIMELINE_SECTION_LABEL,
-  SESSION_TIMELINE_TIME_RANGE_END_LABEL,
-  SESSION_TIMELINE_TIME_RANGE_START_LABEL,
-  SESSION_TIMELINE_TYPE_FILTER_LABEL,
-  sortTimelineEventsChronologically,
-  TIMELINE_EVENT_IOC_FILTER_ALL,
-  TIMELINE_EVENT_IOC_FILTER_SESSION_SCOPE,
-  TIMELINE_EVENT_TYPE_FILTER_ALL,
-  TIMELINE_EVENT_TYPE_ORDER,
-  timelineEventHasSessionScopeEntries,
-  type TimelineEvent,
-  type TimelineEventTypeFilter,
-} from "../lib/timelineEvent";
 import {
   buildReplaySegmentDetailView,
   buildReplayStepJumpAriaLabel,
@@ -328,7 +218,6 @@ import {
   downloadInvestigationReplayTranscriptFile,
   formatReplayStepListLabel,
   formatReplayStepPositionLabel,
-  ingestReplaySegmentsFromInvestigationSession,
   INVESTIGATION_REPLAY_COPY_TRANSCRIPT_LABEL,
   INVESTIGATION_REPLAY_DETAIL_ARIA_LABEL,
   INVESTIGATION_REPLAY_DETAIL_ACTION_LABEL,
@@ -368,95 +257,44 @@ import {
 } from "../lib/enrichmentExport";
 import { copyTextToClipboard } from "../lib/copyText";
 import {
-  buildInvestigationHistoryRowAriaLabel,
-  buildInvestigationHistorySessionLinkSummary,
-  countInvestigationHistoryEntriesForSession,
-  formatInvestigationHistoryTimestamp,
-  INVESTIGATION_HISTORY_CLEAR_CONFIRM_MESSAGE,
-  isInvestigationHistoryEntryLinkedToActiveSession,
-  resolveInvestigationHistoryClearFeedback,
-  resolveInvestigationHistoryReopenFeedback,
-  resolveInvestigationHistorySessionTitle,
   type InvestigationHistoryEntry,
 } from "../lib/investigationHistory";
 import {
   listInvestigationHistoryEntries,
-  clearInvestigationHistory,
 } from "../lib/investigationHistoryStorage";
 import {
   buildAddFilteredToCollectionActionLabel,
-  buildIocCollectionSummaryLine,
-  buildPromoteSessionToCollectionActionLabel,
   formatAddFilteredToCollectionFeedback,
-  formatPromoteSessionToCollectionFeedback,
   formatSaveToCollectionFeedback,
   IOC_COLLECTION_ADD_FILTERED_HEADING,
   IOC_COLLECTION_CREATE_NEW_LABEL,
-  IOC_COLLECTION_MANAGER_EMPTY_TEXT,
-  IOC_COLLECTION_MANAGER_LIST_ARIA_LABEL,
-  IOC_COLLECTION_MANAGER_SECTION_LABEL,
-  IOC_COLLECTION_MEMBERS_EMPTY_TEXT,
-  IOC_COLLECTION_MEMBERS_HEADING,
-  IOC_COLLECTION_DELETE_LABEL,
-  IOC_COLLECTION_HIDE_MEMBERS_LABEL,
   IOC_COLLECTION_NEW_NAME_PLACEHOLDER,
   IOC_COLLECTION_NO_COLLECTIONS_TEXT,
   IOC_COLLECTION_PICKER_HEADING,
-  IOC_COLLECTION_PROMOTE_SESSION_BUTTON_LABEL,
-  IOC_COLLECTION_PROMOTE_SESSION_HEADING,
-  IOC_COLLECTION_REMOVE_MEMBER_LABEL,
-  IOC_COLLECTION_RENAME_LABEL,
   IOC_COLLECTION_SAVE_TO_COLLECTION_ACTION_LABEL,
   IOC_COLLECTION_SAVE_TO_NEW_LABEL,
-  IOC_COLLECTION_VIEW_MEMBERS_LABEL,
+  buildIocCollectionMemberDedupeKey,
   normalizeIocCollectionName,
-  sortIocCollectionsForDisplay,
   type IocCollection,
-  type IocCollectionMember,
 } from "../lib/iocCollection";
-import {
-  buildIocCollectionExportInput,
-  downloadIocCollectionExportCsvFile,
-  downloadIocCollectionExportJsonFile,
-  downloadIocCollectionExportMarkdownFile,
-  formatIocCollectionExportCsvFeedback,
-  formatIocCollectionExportJsonFeedback,
-  formatIocCollectionExportMarkdownFeedback,
-  IOC_COLLECTION_EXPORT_CSV_LABEL,
-  IOC_COLLECTION_EXPORT_JSON_LABEL,
-  IOC_COLLECTION_EXPORT_MARKDOWN_LABEL,
-} from "../lib/iocCollectionExport";
 import {
   requestAddIocToCollection,
   requestAddIocsToCollection,
   requestCreateIocCollection,
-  requestDeleteIocCollection,
   requestListIocCollections,
-  requestRemoveIocFromCollection,
-  requestRenameIocCollection,
 } from "../lib/iocCollectionClient";
 import {
-  clearEnrichmentCacheForSource,
   readStoredEnrichmentSourceResult,
   STORAGE_KEY_ENRICHMENT_CACHE,
 } from "../lib/cache";
 import { requestEnrichmentSourceOps } from "../lib/enrichmentSourceOpsClient";
 import {
-  formatEnrichmentCacheClearedAtLabel,
-  formatEnrichmentSourceCacheEntryCountLabel,
-  formatEnrichmentSourceLastErrorLabel,
-  formatEnrichmentSourceLastStatusLabel,
-  formatEnrichmentSourceOpsCooldownLabel,
-  resolveEnrichmentSourceClearCacheFeedback,
-  ENRICHMENT_SOURCE_OPS_SECTION_TITLE,
-  type EnrichmentSourceOpsRow,
   type EnrichmentSourceOpsSnapshot,
 } from "../lib/enrichmentSourceOps";
-import { clearPopupPanelFocus, POPUP_PANEL, readPopupPanelFocus } from "../lib/popupPanelFocus";
+import { clearPopupPanelFocus, readPopupPanelFocus } from "../lib/popupPanelFocus";
 import { VERA5_COLOR, VERA5_FONT, VERA5_RADIUS, VERA5_SPACE } from "../lib/theme";
 import {
   resolveWorkspaceTrayView,
-  resolveCollectionMemberOpenFeedback,
   resolveTrayNavigationFeedback,
 } from "../lib/workspaceTrayState";
 import {
@@ -1337,1068 +1175,9 @@ function RunMacroOnFilteredPanel({
   );
 }
 
-function PromoteSessionToCollectionPanel({
-  session,
-  open,
-  onToggle,
-  feedback,
-  onFeedback,
-}: {
-  session: InvestigationSession;
-  open: boolean;
-  onToggle: () => void;
-  feedback: string | null;
-  onFeedback: (message: string | null) => void;
-}) {
-  const sessionMembers = listInvestigationSessionIocMembers(session);
-  const [collectionName, setCollectionName] = useState(session.title);
 
-  useEffect(() => {
-    setCollectionName(session.title);
-  }, [session.id, session.title]);
 
-  const handlePromote = async () => {
-    if (sessionMembers.length === 0) {
-      onFeedback(
-        formatPromoteSessionToCollectionFeedback({
-          collectionName: collectionName.trim() || session.title,
-          addedCount: 0,
-          duplicateCount: 0,
-          totalCount: 0,
-        })
-      );
-      return;
-    }
 
-    const created = await requestCreateIocCollection({ name: collectionName });
-    if (!created) {
-      onFeedback("Could not create collection.");
-      return;
-    }
-
-    const result = await requestAddIocsToCollection({
-      collectionId: created.id,
-      members: sessionMembers,
-    });
-    if (!result) {
-      onFeedback("Collection created, but session indicators were not saved.");
-      return;
-    }
-
-    onFeedback(
-      formatPromoteSessionToCollectionFeedback({
-        collectionName: result.collection.name,
-        addedCount: result.addedCount,
-        duplicateCount: result.duplicateCount,
-        totalCount: result.totalCount,
-      })
-    );
-  };
-
-  const canPromote = normalizeIocCollectionName(collectionName) !== null;
-
-  return (
-    <div style={{ marginTop: 10, marginBottom: 10 }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        disabled={sessionMembers.length === 0}
-        style={{
-          border: `1px solid ${POPUP_THEME.border}`,
-          borderRadius: 6,
-          backgroundColor: POPUP_THEME.buttonBg,
-          color: POPUP_THEME.accent,
-          cursor: sessionMembers.length === 0 ? "not-allowed" : "pointer",
-          fontSize: 12,
-          fontWeight: 600,
-          padding: "6px 10px",
-          width: "100%",
-          opacity: sessionMembers.length === 0 ? 0.65 : 1,
-        }}
-      >
-        {buildPromoteSessionToCollectionActionLabel(sessionMembers.length)}
-      </button>
-      {open ? (
-        <div
-          role="group"
-          aria-label={IOC_COLLECTION_PROMOTE_SESSION_HEADING}
-          style={{
-            marginTop: 6,
-            padding: "8px 10px",
-            borderRadius: 6,
-            border: `1px solid ${POPUP_THEME.border}`,
-            backgroundColor: POPUP_THEME.surface,
-          }}
-        >
-          <p
-            style={{
-              margin: "0 0 8px",
-              fontSize: 12,
-              fontWeight: 700,
-              color: POPUP_THEME.accentText,
-            }}
-          >
-            {IOC_COLLECTION_PROMOTE_SESSION_HEADING}
-          </p>
-          <p style={{ margin: "0 0 8px", fontSize: 12, color: POPUP_THEME.muted }}>
-            {buildInvestigationSessionIocCountText(sessionMembers.length)}
-          </p>
-          <label
-            style={{
-              display: "block",
-              fontSize: 12,
-              color: POPUP_THEME.text,
-              marginBottom: 6,
-            }}
-          >
-            {IOC_COLLECTION_CREATE_NEW_LABEL}
-            <input
-              type="text"
-              value={collectionName}
-              onChange={(event) => setCollectionName(event.target.value)}
-              placeholder={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
-              aria-label={IOC_COLLECTION_NEW_NAME_PLACEHOLDER}
-              style={{
-                display: "block",
-                width: "100%",
-                marginTop: 4,
-                padding: "6px 8px",
-                borderRadius: 6,
-                border: `1px solid ${POPUP_THEME.border}`,
-                backgroundColor: POPUP_THEME.buttonBg,
-                color: POPUP_THEME.text,
-                boxSizing: "border-box",
-              }}
-            />
-          </label>
-          <button
-            type="button"
-            disabled={!canPromote}
-            onClick={() => void handlePromote()}
-            style={{
-              ...buttonStyle,
-              width: "100%",
-              cursor: canPromote ? "pointer" : "not-allowed",
-              opacity: canPromote ? 1 : 0.65,
-            }}
-          >
-            {IOC_COLLECTION_PROMOTE_SESSION_BUTTON_LABEL}
-          </button>
-          {feedback ? (
-            <p
-              aria-live="polite"
-              style={{
-                margin: "8px 0 0",
-                fontSize: 12,
-                color: POPUP_THEME.muted,
-                lineHeight: 1.4,
-              }}
-            >
-              {feedback}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function InvestigationSessionTimelinePanel({
-  sessionId,
-  sessionTitle,
-  sessionPageUrl,
-  events,
-  onActivateEvent,
-  navigationMessage,
-}: {
-  sessionId: string;
-  sessionTitle: string;
-  sessionPageUrl: string;
-  events: readonly TimelineEvent[];
-  onActivateEvent?: (event: TimelineEvent) => void;
-  navigationMessage?: string | null;
-}) {
-  const [filter, setFilter] = useState(createDefaultTimelineEventFilter);
-  const [timeRangeStartInput, setTimeRangeStartInput] = useState("");
-  const [timeRangeEndInput, setTimeRangeEndInput] = useState("");
-  const [exportTemplateId, setExportTemplateId] =
-    useState<InvestigationTimelineMarkdownTemplateId>("markdown-report");
-  const [timelineExportMessage, setTimelineExportMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    setFilter(createDefaultTimelineEventFilter());
-    setTimeRangeStartInput("");
-    setTimeRangeEndInput("");
-    setExportTemplateId("markdown-report");
-    setTimelineExportMessage(null);
-  }, [sessionId]);
-
-  const iocOptions = useMemo(() => listTimelineEventIocFilterOptions(events), [events]);
-  const showSessionScopeOption = useMemo(
-    () => timelineEventHasSessionScopeEntries(events),
-    [events]
-  );
-  const filteredEvents = useMemo(() => filterTimelineEvents(events, filter), [events, filter]);
-
-  const buildTimelineExportInput = (): InvestigationTimelineExportInput => ({
-    session: {
-      id: sessionId,
-      title: sessionTitle,
-      pageUrl: sessionPageUrl,
-    },
-    events: filteredEvents,
-  });
-
-  const handleCopyTimelineAppendix = () => {
-    const exportInput = buildTimelineExportInput();
-
-    void (async () => {
-      const copied = await copyInvestigationTimelineExportAppendixToClipboard(
-        exportTemplateId,
-        exportInput
-      );
-      setTimelineExportMessage(
-        resolveInvestigationTimelineExportCopyFeedback({
-          copied,
-          eventCount: filteredEvents.length,
-          templateId: exportTemplateId,
-        })
-      );
-    })();
-  };
-
-  const handleDownloadTimelineAppendix = () => {
-    const exportInput = buildTimelineExportInput();
-
-    const downloaded = downloadInvestigationTimelineExportAppendixFile(
-      exportTemplateId,
-      exportInput
-    );
-    setTimelineExportMessage(
-      resolveInvestigationTimelineExportDownloadFeedback({
-        downloaded,
-        eventCount: filteredEvents.length,
-        templateId: exportTemplateId,
-      })
-    );
-  };
-
-  const handleCopyTimelineJson = () => {
-    const exportInput = buildTimelineExportInput();
-
-    void (async () => {
-      const copied = await copyInvestigationTimelineExportJsonToClipboard(exportInput);
-      setTimelineExportMessage(
-        resolveInvestigationTimelineJsonExportCopyFeedback({
-          copied,
-          eventCount: filteredEvents.length,
-        })
-      );
-    })();
-  };
-
-  const handleDownloadTimelineJson = () => {
-    const exportInput = buildTimelineExportInput();
-
-    const downloaded = downloadInvestigationTimelineExportJsonFile(exportInput);
-    setTimelineExportMessage(
-      resolveInvestigationTimelineJsonExportDownloadFeedback({
-        downloaded,
-        eventCount: filteredEvents.length,
-      })
-    );
-  };
-
-  const filterFieldStyle: CSSProperties = {
-    display: "block",
-    width: "100%",
-    marginTop: 4,
-    padding: "6px 8px",
-    borderRadius: 6,
-    border: `1px solid ${POPUP_THEME.border}`,
-    backgroundColor: POPUP_THEME.buttonBg,
-    color: POPUP_THEME.text,
-    boxSizing: "border-box",
-    fontSize: 12,
-  };
-
-  const renderTimelineEvent = (event: TimelineEvent, index: number) => {
-    const navigable = isTimelineEventNavigable(event) && onActivateEvent !== undefined;
-
-    return (
-      <li
-        key={`${event.timestamp}-${event.type}-${event.iocKey}-${index}`}
-        role={navigable ? "button" : undefined}
-        tabIndex={navigable ? 0 : undefined}
-        aria-label={
-          navigable
-            ? buildTimelineEventNavigationAriaLabel(event)
-            : buildTimelineEventRowAriaLabel(event)
-        }
-        onClick={
-          navigable
-            ? () => {
-                onActivateEvent?.(event);
-              }
-            : undefined
-        }
-        onKeyDown={
-          navigable
-            ? (keyboardEvent) => {
-                if (keyboardEvent.key !== "Enter" && keyboardEvent.key !== " ") {
-                  return;
-                }
-                keyboardEvent.preventDefault();
-                onActivateEvent?.(event);
-              }
-            : undefined
-        }
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-          padding: "6px 8px",
-          borderRadius: 6,
-          backgroundColor: POPUP_THEME.trayRowBg,
-          fontSize: 12,
-          lineHeight: 1.4,
-          cursor: navigable ? "pointer" : "default",
-        }}
-      >
-        <span style={{ color: POPUP_THEME.muted }}>
-          {formatTimelineEventTimestamp(event.timestamp)}
-        </span>
-        <span style={{ color: POPUP_THEME.text }}>
-          {formatTimelineEventTypeLabel(event.type)} ·{" "}
-          <span style={{ fontFamily: VERA5_FONT.mono, wordBreak: "break-all" }}>
-            {formatTimelineEventIocLabel(event.iocKey)}
-          </span>
-        </span>
-        {event.sourceAttributionSummary ? (
-          <span style={{ color: POPUP_THEME.muted }}>{event.sourceAttributionSummary}</span>
-        ) : null}
-        {event.templateId ? (
-          <span style={{ color: POPUP_THEME.muted }}>
-            Template: {getExportTemplateLabel(event.templateId)}
-          </span>
-        ) : null}
-      </li>
-    );
-  };
-
-  return (
-    <div style={{ marginTop: 10, marginBottom: 10 }}>
-      <h3
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          margin: "0 0 8px",
-          color: POPUP_THEME.accentText,
-        }}
-      >
-        {SESSION_TIMELINE_SECTION_LABEL}
-      </h3>
-      {events.length === 0 ? (
-        <p style={{ ...trayStatusStyle(), margin: 0 }} aria-live="polite">
-          {SESSION_TIMELINE_EMPTY_TEXT}
-        </p>
-      ) : (
-        <>
-          <div
-            role="group"
-            aria-label={SESSION_TIMELINE_FILTER_GROUP_ARIA_LABEL}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 8,
-              marginBottom: 8,
-            }}
-          >
-            <label
-              style={{
-                display: "block",
-                fontSize: 12,
-                color: POPUP_THEME.text,
-              }}
-            >
-              {SESSION_TIMELINE_IOC_FILTER_LABEL}
-              <select
-                value={filter.iocKey}
-                aria-label={SESSION_TIMELINE_IOC_FILTER_LABEL}
-                onChange={(event) => {
-                  setFilter((current) => ({
-                    ...current,
-                    iocKey: event.target.value,
-                  }));
-                }}
-                style={filterFieldStyle}
-              >
-                <option value={TIMELINE_EVENT_IOC_FILTER_ALL}>
-                  {SESSION_TIMELINE_FILTER_ALL_IOCS_LABEL}
-                </option>
-                {showSessionScopeOption ? (
-                  <option value={TIMELINE_EVENT_IOC_FILTER_SESSION_SCOPE}>Session scope</option>
-                ) : null}
-                {iocOptions.map((iocKey) => (
-                  <option key={iocKey} value={iocKey}>
-                    {iocKey}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label
-              style={{
-                display: "block",
-                fontSize: 12,
-                color: POPUP_THEME.text,
-              }}
-            >
-              {SESSION_TIMELINE_TYPE_FILTER_LABEL}
-              <select
-                value={filter.eventType}
-                aria-label={SESSION_TIMELINE_TYPE_FILTER_LABEL}
-                onChange={(event) => {
-                  setFilter((current) => ({
-                    ...current,
-                    eventType: event.target.value as TimelineEventTypeFilter,
-                  }));
-                }}
-                style={filterFieldStyle}
-              >
-                <option value={TIMELINE_EVENT_TYPE_FILTER_ALL}>
-                  {SESSION_TIMELINE_FILTER_ALL_TYPES_LABEL}
-                </option>
-                {TIMELINE_EVENT_TYPE_ORDER.map((type) => (
-                  <option key={type} value={type}>
-                    {formatTimelineEventTypeLabel(type)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label
-              style={{
-                display: "block",
-                fontSize: 12,
-                color: POPUP_THEME.text,
-              }}
-            >
-              {SESSION_TIMELINE_TIME_RANGE_START_LABEL}
-              <input
-                type="datetime-local"
-                value={timeRangeStartInput}
-                aria-label={SESSION_TIMELINE_TIME_RANGE_START_LABEL}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setTimeRangeStartInput(value);
-                  setFilter((current) => ({
-                    ...current,
-                    timeRangeStart: readTimelineEventFilterDateTimeLocal(value),
-                  }));
-                }}
-                style={filterFieldStyle}
-              />
-            </label>
-            <label
-              style={{
-                display: "block",
-                fontSize: 12,
-                color: POPUP_THEME.text,
-              }}
-            >
-              {SESSION_TIMELINE_TIME_RANGE_END_LABEL}
-              <input
-                type="datetime-local"
-                value={timeRangeEndInput}
-                aria-label={SESSION_TIMELINE_TIME_RANGE_END_LABEL}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setTimeRangeEndInput(value);
-                  setFilter((current) => ({
-                    ...current,
-                    timeRangeEnd: readTimelineEventFilterDateTimeLocal(value),
-                  }));
-                }}
-                style={filterFieldStyle}
-              />
-            </label>
-          </div>
-          {filteredEvents.length === 0 ? (
-            <p style={{ ...trayStatusStyle(), margin: 0 }} aria-live="polite">
-              {SESSION_TIMELINE_FILTER_NO_MATCHES_TEXT}
-            </p>
-          ) : (
-            <>
-              <ol
-                aria-label={SESSION_TIMELINE_LIST_ARIA_LABEL}
-                style={{
-                  listStyle: "none",
-                  margin: 0,
-                  padding: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 6,
-                  maxHeight: 220,
-                  overflowY: "auto",
-                }}
-              >
-                {filteredEvents.map((event, index) => renderTimelineEvent(event, index))}
-              </ol>
-              {navigationMessage ? (
-                <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "8px 0 0" }}>
-                  {navigationMessage}
-                </p>
-              ) : null}
-            </>
-          )}
-          <div style={{ marginTop: 10 }}>
-            <h4
-              style={{
-                fontSize: 12,
-                fontWeight: 700,
-                margin: "0 0 8px",
-                color: POPUP_THEME.accentText,
-              }}
-            >
-              {SESSION_TIMELINE_EXPORT_SECTION_LABEL}
-            </h4>
-            <label
-              style={{
-                display: "block",
-                fontSize: 12,
-                color: POPUP_THEME.text,
-                marginBottom: 8,
-              }}
-            >
-              {SESSION_TIMELINE_EXPORT_TEMPLATE_LABEL}
-              <select
-                value={exportTemplateId}
-                aria-label={SESSION_TIMELINE_EXPORT_TEMPLATE_LABEL}
-                onChange={(event) => {
-                  setTimelineExportMessage(null);
-                  setExportTemplateId(
-                    event.target.value as InvestigationTimelineMarkdownTemplateId
-                  );
-                }}
-                style={filterFieldStyle}
-              >
-                {INVESTIGATION_TIMELINE_MARKDOWN_TEMPLATE_IDS.map((templateId) => (
-                  <option key={templateId} value={templateId}>
-                    {getExportTemplateLabel(templateId)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div
-              role="group"
-              aria-label={SESSION_TIMELINE_EXPORT_GROUP_ARIA_LABEL}
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 6,
-                marginBottom: timelineExportMessage ? 8 : 0,
-              }}
-            >
-              <button
-                type="button"
-                disabled={filteredEvents.length === 0}
-                onClick={handleCopyTimelineAppendix}
-                style={sessionActionButtonStyle()}
-              >
-                {SESSION_TIMELINE_COPY_APPENDIX_LABEL}
-              </button>
-              <button
-                type="button"
-                disabled={filteredEvents.length === 0}
-                onClick={handleDownloadTimelineAppendix}
-                style={sessionActionButtonStyle()}
-              >
-                {SESSION_TIMELINE_DOWNLOAD_APPENDIX_LABEL}
-              </button>
-            </div>
-            <div
-              role="group"
-              aria-label={SESSION_TIMELINE_JSON_EXPORT_GROUP_ARIA_LABEL}
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 6,
-                marginTop: 8,
-                marginBottom: timelineExportMessage ? 8 : 0,
-              }}
-            >
-              <button
-                type="button"
-                disabled={filteredEvents.length === 0}
-                onClick={handleCopyTimelineJson}
-                style={sessionActionButtonStyle()}
-              >
-                {SESSION_TIMELINE_COPY_JSON_LABEL}
-              </button>
-              <button
-                type="button"
-                disabled={filteredEvents.length === 0}
-                onClick={handleDownloadTimelineJson}
-                style={sessionActionButtonStyle()}
-              >
-                {SESSION_TIMELINE_DOWNLOAD_JSON_LABEL}
-              </button>
-            </div>
-            {timelineExportMessage ? (
-              <p aria-live="polite" style={{ ...trayStatusStyle(), margin: 0 }}>
-                {timelineExportMessage}
-              </p>
-            ) : null}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function NotebookFragmentMarkdownBody({ body, title }: { body: string; title?: string }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return;
-    }
-    appendNotebookFragmentMarkdownLite(container, body, document);
-  }, [body]);
-
-  return (
-    <div
-      ref={containerRef}
-      title={title}
-      style={{
-        color: POPUP_THEME.text,
-        wordBreak: "break-word",
-        fontSize: 12,
-        lineHeight: 1.45,
-      }}
-    />
-  );
-}
-
-function InvestigationSessionNotebookTimelinePanel({ sessionId }: { sessionId: string }) {
-  const [rows, setRows] = useState<PopupSessionNotebookTimelineRow[]>([]);
-  const [loaded, setLoaded] = useState(false);
-  const [draftType, setDraftType] = useState<NotebookFragmentType>(defaultNotebookFragmentType);
-  const [draftBody, setDraftBody] = useState("");
-  const [editingFragmentId, setEditingFragmentId] = useState<string | null>(null);
-  const [editType, setEditType] = useState<NotebookFragmentType>(defaultNotebookFragmentType);
-  const [editBody, setEditBody] = useState("");
-  const [feedback, setFeedback] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-
-  useEffect(() => {
-    setSearchQuery("");
-  }, [sessionId]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const refresh = () => {
-      void loadPopupSessionNotebookFragmentTimeline(sessionId)
-        .then((view) => {
-          if (cancelled) {
-            return;
-          }
-          setRows(view.fragments);
-          setLoaded(true);
-        })
-        .catch(() => {
-          if (cancelled) {
-            return;
-          }
-          setRows([]);
-          setLoaded(true);
-        });
-    };
-
-    setLoaded(false);
-    refresh();
-
-    const onChanged = chrome.storage?.onChanged;
-    if (!onChanged?.addListener) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const listener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => {
-      if (areaName !== "local" || !changes[STORAGE_KEY_NOTEBOOK_FRAGMENTS]) {
-        return;
-      }
-      refresh();
-    };
-    onChanged.addListener(listener);
-    return () => {
-      cancelled = true;
-      onChanged.removeListener?.(listener);
-    };
-  }, [sessionId]);
-
-  const reloadRows = async (): Promise<void> => {
-    try {
-      const view = await loadPopupSessionNotebookFragmentTimeline(sessionId);
-      setRows(view.fragments);
-      setLoaded(true);
-    } catch {
-      setRows([]);
-      setLoaded(true);
-    }
-  };
-
-  const handleAdd = () => {
-    if (busy) {
-      return;
-    }
-    setBusy(true);
-    void (async () => {
-      const result = await addNotebookFragmentForSession({
-        sessionId,
-        type: draftType,
-        body: draftBody,
-      });
-      setBusy(false);
-      if (!result.ok) {
-        setFeedback(result.error);
-        return;
-      }
-      setDraftBody("");
-      setDraftType(defaultNotebookFragmentType());
-      setFeedback(NOTEBOOK_FRAGMENT_SAVED_FEEDBACK);
-      await reloadRows();
-    })();
-  };
-
-  const handleSaveEdit = () => {
-    if (!editingFragmentId || busy) {
-      return;
-    }
-    setBusy(true);
-    void (async () => {
-      const result = await editNotebookFragment({
-        fragmentId: editingFragmentId,
-        type: editType,
-        body: editBody,
-      });
-      setBusy(false);
-      if (!result.ok) {
-        setFeedback(result.error);
-        return;
-      }
-      setEditingFragmentId(null);
-      setFeedback(NOTEBOOK_FRAGMENT_SAVED_FEEDBACK);
-      await reloadRows();
-    })();
-  };
-
-  const handleDelete = (row: PopupSessionNotebookTimelineRow) => {
-    if (busy) {
-      return;
-    }
-    const confirmed =
-      typeof window.confirm === "function"
-        ? window.confirm(NOTEBOOK_FRAGMENT_DELETE_CONFIRM_TEXT)
-        : true;
-    if (!confirmed) {
-      return;
-    }
-    setBusy(true);
-    void (async () => {
-      const result = await deleteNotebookFragment(row.fragmentId);
-      setBusy(false);
-      if (!result.ok) {
-        setFeedback(result.error);
-        return;
-      }
-      if (editingFragmentId === row.fragmentId) {
-        setEditingFragmentId(null);
-      }
-      setFeedback(NOTEBOOK_FRAGMENT_DELETED_FEEDBACK);
-      await reloadRows();
-    })();
-  };
-
-  const typeOptions = listNotebookFragmentTypeOptions();
-  const filteredRows = filterPopupSessionNotebookTimelineRowsBySearchText(rows, searchQuery);
-  const searchActive = searchQuery.trim().length > 0;
-  const filterFieldStyle: CSSProperties = {
-    display: "block",
-    width: "100%",
-    marginTop: 4,
-    boxSizing: "border-box",
-    fontSize: 12,
-    padding: "6px 8px",
-    borderRadius: 6,
-    border: `1px solid ${POPUP_THEME.border}`,
-    backgroundColor: POPUP_THEME.surface,
-    color: POPUP_THEME.text,
-  };
-
-  return (
-    <div id="popup-session-notebook" style={{ marginTop: 10, marginBottom: 10 }}>
-      <h3
-        style={{
-          fontSize: 12,
-          fontWeight: 700,
-          margin: "0 0 8px",
-          color: POPUP_THEME.accentText,
-        }}
-      >
-        {POPUP_SESSION_NOTEBOOK_SECTION_LABEL}
-      </h3>
-      {loaded && rows.length > 0 ? (
-        <label
-          style={{
-            display: "block",
-            fontSize: 12,
-            color: POPUP_THEME.text,
-            marginBottom: 8,
-          }}
-        >
-          {POPUP_SESSION_NOTEBOOK_SEARCH_LABEL}
-          <input
-            type="search"
-            value={searchQuery}
-            placeholder={POPUP_SESSION_NOTEBOOK_SEARCH_PLACEHOLDER}
-            aria-label={POPUP_SESSION_NOTEBOOK_SEARCH_LABEL}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            style={filterFieldStyle}
-          />
-        </label>
-      ) : null}
-      {!loaded ? null : rows.length === 0 ? (
-        <div
-          role="status"
-          data-vera5-notebook-empty="true"
-          aria-live="polite"
-          style={{ margin: 0 }}
-        >
-          <p style={{ ...trayStatusStyle(), margin: 0 }}>{POPUP_SESSION_NOTEBOOK_EMPTY_TEXT}</p>
-          <p style={{ ...trayStatusStyle(), margin: "4px 0 0" }}>
-            {NOTEBOOK_FRAGMENT_TEXT_ONLY_EMPTY_HINT}
-          </p>
-        </div>
-      ) : filteredRows.length === 0 ? (
-        <p
-          role="status"
-          data-vera5-notebook-empty={searchActive ? "search" : "true"}
-          style={{ ...trayStatusStyle(), margin: 0 }}
-          aria-live="polite"
-        >
-          {searchActive
-            ? POPUP_SESSION_NOTEBOOK_SEARCH_NO_MATCHES_TEXT
-            : buildNotebookFragmentEmptyStateView({
-                primaryText: POPUP_SESSION_NOTEBOOK_EMPTY_TEXT,
-              }).composedText}
-        </p>
-      ) : (
-        <ol
-          aria-label={POPUP_SESSION_NOTEBOOK_LIST_ARIA_LABEL}
-          style={{
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-            display: "flex",
-            flexDirection: "column",
-            gap: 6,
-            maxHeight: 220,
-            overflowY: "auto",
-          }}
-        >
-          {filteredRows.map((row) => (
-            <li
-              key={row.fragmentId}
-              title={row.hint}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 2,
-                padding: "6px 8px",
-                border: `1px solid ${POPUP_THEME.border}`,
-                borderRadius: 6,
-                backgroundColor: POPUP_THEME.surface,
-                fontSize: 12,
-                lineHeight: 1.45,
-              }}
-            >
-              {editingFragmentId === row.fragmentId ? (
-                <>
-                  <label style={{ color: POPUP_THEME.text }}>
-                    {NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL}
-                    <select
-                      aria-label={NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL}
-                      value={editType}
-                      onChange={(event) => setEditType(event.target.value as NotebookFragmentType)}
-                      style={filterFieldStyle}
-                    >
-                      {typeOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label style={{ color: POPUP_THEME.text, marginTop: 6 }}>
-                    {NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL}
-                    <textarea
-                      aria-label={NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL}
-                      value={editBody}
-                      rows={3}
-                      onChange={(event) => setEditBody(event.target.value)}
-                      style={{ ...filterFieldStyle, resize: "vertical" }}
-                    />
-                  </label>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 6,
-                      marginTop: 6,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={handleSaveEdit}
-                      style={sessionActionButtonStyle()}
-                    >
-                      {NOTEBOOK_FRAGMENT_SAVE_LABEL}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => setEditingFragmentId(null)}
-                      style={sessionActionButtonStyle()}
-                    >
-                      {NOTEBOOK_FRAGMENT_CANCEL_LABEL}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <span style={{ color: POPUP_THEME.muted }}>{row.createdAtLabel}</span>
-                  <span style={{ color: POPUP_THEME.text }}>
-                    {row.typeLabel}
-                    {row.showStatusBadge && row.statusBadgeLabel ? (
-                      <span
-                        style={{
-                          marginLeft: 6,
-                          fontSize: 10,
-                          fontWeight: 700,
-                          color: POPUP_THEME.accentText,
-                        }}
-                      >
-                        {row.statusBadgeLabel}
-                      </span>
-                    ) : null}
-                  </span>
-                  <NotebookFragmentMarkdownBody body={row.fullBody} title={row.fullBody} />
-                  {row.authorLabel ? (
-                    <span style={{ color: POPUP_THEME.muted }}>{row.authorLabel}</span>
-                  ) : null}
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: 6,
-                      marginTop: 6,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label={`${NOTEBOOK_FRAGMENT_EDIT_LABEL} ${row.typeLabel}`}
-                      onClick={() => {
-                        setEditingFragmentId(row.fragmentId);
-                        setEditType(row.type);
-                        setEditBody(row.fullBody);
-                        setFeedback(null);
-                      }}
-                      style={sessionActionButtonStyle()}
-                    >
-                      {NOTEBOOK_FRAGMENT_EDIT_LABEL}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      aria-label={`${NOTEBOOK_FRAGMENT_DELETE_LABEL} ${row.typeLabel}`}
-                      onClick={() => handleDelete(row)}
-                      style={sessionActionButtonStyle()}
-                    >
-                      {NOTEBOOK_FRAGMENT_DELETE_LABEL}
-                    </button>
-                  </div>
-                </>
-              )}
-            </li>
-          ))}
-        </ol>
-      )}
-      <div role="group" aria-label="Add notebook fragment" style={{ marginTop: 10 }}>
-        <label
-          style={{
-            display: "block",
-            fontSize: 12,
-            color: POPUP_THEME.text,
-            marginBottom: 8,
-          }}
-        >
-          {NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL}
-          <select
-            aria-label={NOTEBOOK_FRAGMENT_TYPE_FIELD_LABEL}
-            value={draftType}
-            onChange={(event) => setDraftType(event.target.value as NotebookFragmentType)}
-            style={filterFieldStyle}
-          >
-            {typeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label
-          style={{
-            display: "block",
-            fontSize: 12,
-            color: POPUP_THEME.text,
-            marginBottom: 8,
-          }}
-        >
-          {NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL}
-          <textarea
-            aria-label={NOTEBOOK_FRAGMENT_BODY_FIELD_LABEL}
-            value={draftBody}
-            rows={3}
-            placeholder={NOTEBOOK_FRAGMENT_BODY_PLACEHOLDER}
-            onChange={(event) => setDraftBody(event.target.value)}
-            style={{ ...filterFieldStyle, resize: "vertical" }}
-          />
-        </label>
-        <button
-          type="button"
-          disabled={busy || draftBody.trim().length === 0}
-          onClick={handleAdd}
-          style={sessionActionButtonStyle()}
-          title={draftBody.trim().length === 0 ? NOTEBOOK_FRAGMENT_BODY_REQUIRED_ERROR : undefined}
-        >
-          {NOTEBOOK_FRAGMENT_ADD_LABEL}
-        </button>
-      </div>
-      {feedback ? (
-        <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "8px 0 0" }}>
-          {feedback}
-        </p>
-      ) : null}
-    </div>
-  );
-}
 
 export function InvestigationReplayPanel({
   sessionId,
@@ -2777,523 +1556,6 @@ export function InvestigationReplayPanel({
   );
 }
 
-function CollectionsManagerPanel({ embedded = false }: { embedded?: boolean } = {}) {
-  const [collections, setCollections] = useState<IocCollection[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expandedCollectionId, setExpandedCollectionId] = useState<string | null>(null);
-  const [renamingCollectionId, setRenamingCollectionId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState("");
-  const [navigationMessage, setNavigationMessage] = useState<string | null>(null);
-  const [exportMessage, setExportMessage] = useState<string | null>(null);
-  const [collectionsCollapsed, setCollectionsCollapsed] = useState(true);
-
-  const refreshCollections = async () => {
-    const list = await requestListIocCollections();
-    setCollections(sortIocCollectionsForDisplay(list));
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    void requestListIocCollections().then((list) => {
-      if (!cancelled) {
-        setCollections(sortIocCollectionsForDisplay(list));
-        setLoading(false);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const handleToggleMembers = (collectionId: string) => {
-    setExpandedCollectionId((current) => (current === collectionId ? null : collectionId));
-  };
-
-  const handleStartRenameCollection = (collection: IocCollection) => {
-    setRenamingCollectionId(collection.id);
-    setRenameDraft(collection.name);
-    setExpandedCollectionId(null);
-  };
-
-  const handleCancelRenameCollection = () => {
-    setRenamingCollectionId(null);
-    setRenameDraft("");
-  };
-
-  const handleSaveRenameCollection = (collectionId: string) => {
-    const normalizedName = normalizeIocCollectionName(renameDraft);
-    if (!normalizedName) {
-      handleCancelRenameCollection();
-      return;
-    }
-
-    void (async () => {
-      const updated = await requestRenameIocCollection({
-        collectionId,
-        name: normalizedName,
-      });
-      handleCancelRenameCollection();
-      if (updated) {
-        await refreshCollections();
-      }
-    })();
-  };
-
-  const handleDeleteCollection = (collectionId: string) => {
-    void (async () => {
-      const deleted = await requestDeleteIocCollection(collectionId);
-      if (!deleted) {
-        return;
-      }
-      if (expandedCollectionId === collectionId) {
-        setExpandedCollectionId(null);
-      }
-      if (renamingCollectionId === collectionId) {
-        handleCancelRenameCollection();
-      }
-      await refreshCollections();
-    })();
-  };
-
-  const handleRemoveMember = (collectionId: string, member: IocCollectionMember) => {
-    void (async () => {
-      const result = await requestRemoveIocFromCollection({
-        collectionId,
-        member,
-      });
-      if (result) {
-        await refreshCollections();
-      }
-    })();
-  };
-
-  const handleOpenCollectionMember = (member: IocCollectionMember) => {
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
-      if (!tab?.id) {
-        setNavigationMessage(
-          resolveCollectionMemberOpenFeedback({
-            tabId: undefined,
-            summary: null,
-            member,
-            entryFound: false,
-          })
-        );
-        return;
-      }
-
-      const summary = await requestTabScanSummaryForActiveTab();
-      const entry = summary ? findTabScanSummaryEntryForCollectionMember(summary, member) : null;
-      const preNavigationFeedback = resolveCollectionMemberOpenFeedback({
-        tabId: tab.id,
-        summary,
-        member,
-        entryFound: entry !== null,
-      });
-      if (preNavigationFeedback || !entry) {
-        setNavigationMessage(preNavigationFeedback);
-        return;
-      }
-
-      try {
-        const response = await chrome.tabs.sendMessage(
-          tab.id,
-          navigateToIocAnchorMessage(entry.anchorId)
-        );
-        setNavigationMessage(
-          resolveCollectionMemberOpenFeedback({
-            tabId: tab.id,
-            summary,
-            member,
-            entryFound: true,
-            response,
-          })
-        );
-      } catch {
-        setNavigationMessage(
-          resolveCollectionMemberOpenFeedback({
-            tabId: tab.id,
-            summary,
-            member,
-            entryFound: true,
-            sendFailed: true,
-          })
-        );
-      }
-    });
-  };
-
-  const handleExportCollectionMarkdown = (collection: IocCollection) => {
-    void (async () => {
-      const input = await buildIocCollectionExportInput({ collection });
-      const downloaded = downloadIocCollectionExportMarkdownFile(input, document);
-      setExportMessage(
-        formatIocCollectionExportMarkdownFeedback({
-          collectionName: collection.name,
-          success: downloaded,
-        })
-      );
-    })();
-  };
-
-  const handleExportCollectionJson = (collection: IocCollection) => {
-    void (async () => {
-      const input = await buildIocCollectionExportInput({ collection });
-      const downloaded = downloadIocCollectionExportJsonFile(input, document);
-      setExportMessage(
-        formatIocCollectionExportJsonFeedback({
-          collectionName: collection.name,
-          success: downloaded,
-        })
-      );
-    })();
-  };
-
-  const handleExportCollectionCsv = (collection: IocCollection) => {
-    void (async () => {
-      const input = await buildIocCollectionExportInput({ collection });
-      const downloaded = downloadIocCollectionExportCsvFile(input, document);
-      setExportMessage(
-        formatIocCollectionExportCsvFeedback({
-          collectionName: collection.name,
-          success: downloaded,
-        })
-      );
-    })();
-  };
-
-  return (
-    <section
-      aria-label={IOC_COLLECTION_MANAGER_SECTION_LABEL}
-      style={{
-        marginTop: 10,
-        borderTop: `1px solid ${POPUP_THEME.border}`,
-        paddingTop: 10,
-      }}
-    >
-      <h2
-        className={embedded ? "vera5-visually-hidden" : "vera5-casework-panel-title"}
-        style={{ margin: "0 0 6px" }}
-      >
-        {embedded ? (
-          IOC_COLLECTION_MANAGER_SECTION_LABEL
-        ) : (
-          <button
-            type="button"
-            onClick={() => setCollectionsCollapsed((value) => !value)}
-            aria-expanded={!collectionsCollapsed}
-            aria-controls="popup-collections-body"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 8,
-              width: "100%",
-              padding: 0,
-              border: "none",
-              background: "transparent",
-              color: POPUP_THEME.text,
-              fontFamily: "inherit",
-              fontSize: 13,
-              fontWeight: 600,
-              textAlign: "left",
-              cursor: "pointer",
-            }}
-          >
-            <span>{IOC_COLLECTION_MANAGER_SECTION_LABEL}</span>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-              style={{
-                flex: "0 0 auto",
-                color: POPUP_THEME.muted,
-                transform: collectionsCollapsed ? "rotate(-90deg)" : "rotate(0deg)",
-                transition: "transform 0.15s ease",
-              }}
-            >
-              <path
-                d="M6 9l6 6 6-6"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-        )}
-      </h2>
-      <div id="popup-collections-body" hidden={!embedded && collectionsCollapsed}>
-        {loading ? (
-          <p style={trayStatusStyle()} aria-live="polite">
-            Loading collections…
-          </p>
-        ) : collections.length === 0 ? (
-          <p style={trayStatusStyle()} aria-live="polite">
-            {IOC_COLLECTION_MANAGER_EMPTY_TEXT}
-          </p>
-        ) : (
-          <ul
-            aria-label={IOC_COLLECTION_MANAGER_LIST_ARIA_LABEL}
-            style={{
-              listStyle: "none",
-              margin: 0,
-              padding: 0,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              maxHeight: 240,
-              overflowY: "auto",
-            }}
-          >
-            {collections.map((collection) => {
-              const isExpanded = expandedCollectionId === collection.id;
-              const isRenaming = renamingCollectionId === collection.id;
-
-              return (
-                <li
-                  key={collection.id}
-                  style={{
-                    border: `1px solid ${POPUP_THEME.border}`,
-                    borderRadius: 6,
-                    padding: 8,
-                    backgroundColor: POPUP_THEME.trayRowBg,
-                  }}
-                >
-                  {isRenaming ? (
-                    <>
-                      <input
-                        type="text"
-                        value={renameDraft}
-                        onChange={(event) => setRenameDraft(event.target.value)}
-                        aria-label={`Rename ${collection.name}`}
-                        style={{
-                          display: "block",
-                          width: "100%",
-                          marginBottom: 8,
-                          padding: "6px 8px",
-                          borderRadius: 6,
-                          border: `1px solid ${POPUP_THEME.border}`,
-                          backgroundColor: POPUP_THEME.buttonBg,
-                          color: POPUP_THEME.text,
-                          boxSizing: "border-box",
-                        }}
-                      />
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                        <button
-                          type="button"
-                          onClick={() => handleSaveRenameCollection(collection.id)}
-                          style={sessionActionButtonStyle()}
-                        >
-                          Save
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleCancelRenameCollection}
-                          style={sessionActionButtonStyle()}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 600,
-                          color: POPUP_THEME.text,
-                          wordBreak: "break-word",
-                          marginBottom: 4,
-                        }}
-                      >
-                        {collection.name}
-                      </div>
-                      <p
-                        style={{
-                          fontSize: 11,
-                          margin: "0 0 8px",
-                          color: POPUP_THEME.muted,
-                          lineHeight: 1.45,
-                        }}
-                      >
-                        {buildIocCollectionSummaryLine(collection)}
-                      </p>
-                      <div
-                        style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => handleToggleMembers(collection.id)}
-                          style={sessionActionButtonStyle()}
-                          aria-expanded={isExpanded}
-                        >
-                          {isExpanded
-                            ? IOC_COLLECTION_HIDE_MEMBERS_LABEL
-                            : IOC_COLLECTION_VIEW_MEMBERS_LABEL}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleStartRenameCollection(collection)}
-                          style={sessionActionButtonStyle()}
-                        >
-                          {IOC_COLLECTION_RENAME_LABEL}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCollection(collection.id)}
-                          style={sessionActionButtonStyle()}
-                        >
-                          {IOC_COLLECTION_DELETE_LABEL}
-                        </button>
-                        <details style={{ width: "100%" }}>
-                          <summary style={trayDemotedDetailsSummaryStyle()}>Export</summary>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 6,
-                              flexWrap: "wrap",
-                              marginTop: 6,
-                            }}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => handleExportCollectionMarkdown(collection)}
-                              style={sessionActionButtonStyle()}
-                            >
-                              {IOC_COLLECTION_EXPORT_MARKDOWN_LABEL}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleExportCollectionJson(collection)}
-                              style={sessionActionButtonStyle()}
-                            >
-                              {IOC_COLLECTION_EXPORT_JSON_LABEL}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleExportCollectionCsv(collection)}
-                              style={sessionActionButtonStyle()}
-                            >
-                              {IOC_COLLECTION_EXPORT_CSV_LABEL}
-                            </button>
-                          </div>
-                        </details>
-                      </div>
-                      {isExpanded ? (
-                        <div style={{ marginTop: 8 }}>
-                          <div
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 600,
-                              color: POPUP_THEME.accentText,
-                              marginBottom: 6,
-                            }}
-                          >
-                            {IOC_COLLECTION_MEMBERS_HEADING}
-                          </div>
-                          {collection.members.length === 0 ? (
-                            <p style={{ ...trayStatusStyle(), margin: 0 }}>
-                              {IOC_COLLECTION_MEMBERS_EMPTY_TEXT}
-                            </p>
-                          ) : (
-                            <ul
-                              style={{
-                                listStyle: "none",
-                                margin: 0,
-                                padding: 0,
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 6,
-                              }}
-                            >
-                              {collection.members.map((member) => (
-                                <li
-                                  key={`${member.iocType}:${member.value}`}
-                                  style={{
-                                    display: "flex",
-                                    alignItems: "flex-start",
-                                    justifyContent: "space-between",
-                                    gap: 8,
-                                    borderTop: `1px solid ${POPUP_THEME.border}`,
-                                    paddingTop: 6,
-                                  }}
-                                >
-                                  <button
-                                    type="button"
-                                    onClick={() => handleOpenCollectionMember(member)}
-                                    aria-label={buildTrayRowNavigationAriaLabel(member.value)}
-                                    style={{
-                                      fontSize: 11,
-                                      color: POPUP_THEME.text,
-                                      wordBreak: "break-all",
-                                      flex: 1,
-                                      textAlign: "left",
-                                      padding: 0,
-                                      border: "none",
-                                      background: "transparent",
-                                      cursor: "pointer",
-                                    }}
-                                  >
-                                    <span style={{ color: POPUP_THEME.muted }}>
-                                      {IOC_TYPE_TRAY_LABEL[member.iocType]}:{" "}
-                                    </span>
-                                    {member.value}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveMember(collection.id, member)}
-                                    style={sessionActionButtonStyle()}
-                                  >
-                                    {IOC_COLLECTION_REMOVE_MEMBER_LABEL}
-                                  </button>
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </div>
-                      ) : null}
-                    </>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {navigationMessage ? (
-          <p
-            role="alert"
-            aria-live="polite"
-            style={{
-              fontSize: 12,
-              margin: "8px 0 0",
-              color: POPUP_THEME.error,
-              lineHeight: 1.5,
-            }}
-          >
-            {navigationMessage}
-          </p>
-        ) : null}
-        {exportMessage ? (
-          <p
-            aria-live="polite"
-            style={{
-              fontSize: 12,
-              margin: navigationMessage ? "6px 0 0" : "8px 0 0",
-              color: POPUP_THEME.muted,
-              lineHeight: 1.5,
-            }}
-          >
-            {exportMessage}
-          </p>
-        ) : null}
-      </div>
-    </section>
-  );
-}
 
 function WhyDetectedTrayDetails({ entry }: { entry: TabScanSummaryEntry }) {
   const view = buildWhyDetectedView({
@@ -3853,189 +2115,6 @@ function CorrelationClusterTrayDetails({
 type AnalystNoteSaveStatus = "idle" | "saving" | "saved";
 type DetailEnrichState = "idle" | "enriching";
 
-function IndicatorDetailPane({
-  entry,
-  enrichmentStatus,
-  note,
-  noteStatus,
-  enrichState,
-  onNoteChange,
-  onShowOnPage,
-  onEnrich,
-  onClear,
-}: {
-  entry: TabScanSummaryEntry;
-  enrichmentStatus: TrayEntryEnrichmentStatus | undefined;
-  note: string;
-  noteStatus: AnalystNoteSaveStatus;
-  enrichState: DetailEnrichState;
-  onNoteChange: (value: string) => void;
-  onShowOnPage: () => void;
-  onEnrich: () => void;
-  onClear: () => void;
-}) {
-  const noteStatusLabel =
-    noteStatus === "saving" ? "Saving…" : noteStatus === "saved" ? "Saved" : "";
-
-  return (
-    <section
-      className="vera5-inspector-pane"
-      aria-label="Indicator details"
-      data-vera5-detail-pane="true"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 10,
-        marginBottom: 10,
-        padding: 10,
-        borderRadius: 8,
-        border: `1px solid ${POPUP_THEME.border}`,
-        backgroundColor: POPUP_THEME.surface,
-      }}
-    >
-      <div
-        className="vera5-inspector-identity"
-        style={{ display: "flex", alignItems: "flex-start", gap: 8 }}
-      >
-        <span
-          className="vera5-ioc-type-badge"
-          aria-hidden="true"
-          style={{
-            flexShrink: 0,
-            padding: "1px 6px",
-            borderRadius: 4,
-            backgroundColor: POPUP_THEME.buttonBg,
-            color: POPUP_THEME.muted,
-            fontSize: 10,
-            fontWeight: 700,
-          }}
-        >
-          {IOC_TYPE_TRAY_LABEL[entry.type]}
-        </span>
-        <span
-          className="vera5-inspector-value"
-          style={{ display: "flex", flex: 1, minWidth: 0 }}
-        >
-          <TrayIndicatorValue entry={entry} />
-        </span>
-        <button
-          className="vera5-inspector-close"
-          type="button"
-          aria-label="Close indicator details"
-          onClick={onClear}
-          style={{
-            flexShrink: 0,
-            border: "none",
-            background: "transparent",
-            color: POPUP_THEME.muted,
-            cursor: "pointer",
-            fontSize: 16,
-            lineHeight: 1,
-            padding: 0,
-          }}
-        >
-          ×
-        </button>
-      </div>
-
-      <div
-        className="vera5-inspector-status-row"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 8,
-        }}
-      >
-        <span className="vera5-inspector-status" style={{ fontSize: 11, color: POPUP_THEME.muted }}>
-          {enrichmentStatus ? (
-            <span
-              className="vera5-ioc-status-badge"
-              data-vera5-status-tone={enrichmentStatus.status}
-              style={trayEnrichmentHintStyle(enrichmentStatus.badgeText)}
-            >
-              {formatTrayRowEnrichmentHint(enrichmentStatus)}
-            </span>
-          ) : (
-            "Not enriched yet"
-          )}
-        </span>
-        <button
-          className="vera5-inspector-enrich"
-          type="button"
-          onClick={onEnrich}
-          disabled={enrichState === "enriching"}
-          style={{
-            flexShrink: 0,
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: `1px solid ${POPUP_THEME.border}`,
-            backgroundColor: POPUP_THEME.buttonBg,
-            color: POPUP_THEME.text,
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: enrichState === "enriching" ? "default" : "pointer",
-          }}
-        >
-          {enrichState === "enriching" ? "Enriching…" : "Enrich"}
-        </button>
-      </div>
-
-      <label
-        className="vera5-inspector-notes"
-        style={{ display: "flex", flexDirection: "column", gap: 4 }}
-      >
-        <span style={{ fontSize: 11, fontWeight: 600, color: POPUP_THEME.muted }}>
-          {HOVER_CARD_ANALYST_NOTES_LABEL}
-        </span>
-        <textarea
-          data-vera5-analyst-note="true"
-          value={note}
-          onChange={(event) => onNoteChange(event.target.value)}
-          placeholder={HOVER_CARD_ANALYST_NOTES_PLACEHOLDER}
-          rows={3}
-          style={{
-            width: "100%",
-            resize: "vertical",
-            boxSizing: "border-box",
-            padding: 6,
-            borderRadius: 6,
-            border: `1px solid ${POPUP_THEME.border}`,
-            backgroundColor: POPUP_THEME.page,
-            color: POPUP_THEME.text,
-            fontFamily: VERA5_FONT.sans,
-            fontSize: 12,
-            lineHeight: 1.4,
-          }}
-        />
-        <span aria-live="polite" style={{ fontSize: 10, color: POPUP_THEME.muted, minHeight: 12 }}>
-          {noteStatusLabel}
-        </span>
-      </label>
-
-      <div className="vera5-inspector-actions" style={{ display: "flex", gap: 8 }}>
-        <button
-          className="vera5-inspector-show-on-page"
-          type="button"
-          onClick={onShowOnPage}
-          style={{
-            padding: "4px 10px",
-            borderRadius: 6,
-            border: `1px solid ${POPUP_THEME.border}`,
-            backgroundColor: POPUP_THEME.buttonBg,
-            color: POPUP_THEME.text,
-            fontSize: 11,
-            fontWeight: 600,
-            cursor: "pointer",
-          }}
-        >
-          Show on page
-        </button>
-      </div>
-    </section>
-  );
-}
-
 type IntelSourceAvailability = {
   enabled: boolean;
   configured: boolean;
@@ -4163,6 +2242,539 @@ export function orderIntelFeedVendorSourceIds(
       return left.originalIndex - right.originalIndex;
     })
     .map((entry) => entry.sourceId);
+}
+
+/**
+ * Malware-intelligence pivot sources, in the priority order used to pick a
+ * default when "Search malware intelligence" is activated. Values are
+ * EnrichmentSourceId literals so this stays valid without extra imports.
+ */
+const INVESTIGATION_MALWARE_INTEL_SOURCE_IDS: readonly EnrichmentSourceId[] = [
+  "virustotal",
+  "otx",
+  "threatfox",
+  "malwarebazaar",
+  "urlhaus",
+];
+
+type InvestigationRelatedLine = { id: string; tone: "info" | "muted"; text: string };
+
+type InvestigationSourceButton = {
+  sourceId: EnrichmentSourceId;
+  label: string;
+  link: PivotLink;
+  configured: boolean;
+};
+
+/** Restrained inline glyphs — no icon dependency is added for this module. */
+function InvestigationGlyph({ name }: { name: string }) {
+  const common = {
+    width: 14,
+    height: 14,
+    viewBox: "0 0 16 16",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.5,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+  switch (name) {
+    case "compass":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8" r="6.25" />
+          <path d="M10.6 5.4 6.9 6.9 5.4 10.6 9.1 9.1z" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "malware":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="8.5" r="3.5" />
+          <path d="M8 5V2.5M4.9 6 3 4.4M11.1 6 13 4.4M4.5 8.5H2M13.5 8.5H11.5M5 11l-1.6 1.6M11 11l1.6 1.6" />
+        </svg>
+      );
+    case "detections":
+      return (
+        <svg {...common}>
+          <circle cx="7" cy="7" r="4.25" />
+          <path d="M10.2 10.2 13.5 13.5" />
+        </svg>
+      );
+    case "infra":
+      return (
+        <svg {...common}>
+          <rect x="2.25" y="2.5" width="11.5" height="4" rx="1" />
+          <rect x="2.25" y="9.5" width="11.5" height="4" rx="1" />
+          <path d="M4.5 4.5h.01M4.5 11.5h.01" />
+        </svg>
+      );
+    case "campaign":
+      return (
+        <svg {...common}>
+          <path d="M3 6.5v3l7 3V3.5z" />
+          <path d="M10 5.5c1.6 0 2.8 1.1 2.8 2.5S11.6 10.5 10 10.5" />
+          <path d="M4.5 9.5v2.2c0 .6.5 1 1 1h.6" />
+        </svg>
+      );
+    case "clipboard":
+      return (
+        <svg {...common}>
+          <rect x="3.5" y="2.75" width="9" height="11" rx="1.25" />
+          <path d="M6 2.75V2a.75.75 0 0 1 .75-.75h2.5A.75.75 0 0 1 10 2v.75" />
+        </svg>
+      );
+    case "mitre":
+      return (
+        <svg {...common}>
+          <path d="M2.5 13.5V4l5.5-2 5.5 2v9.5" />
+          <path d="M8 2v11.5M5.25 5.2v8.3M10.75 5.2v8.3" />
+        </svg>
+      );
+    case "family":
+      return (
+        <svg {...common}>
+          <circle cx="8" cy="4" r="1.75" />
+          <circle cx="4" cy="11.5" r="1.75" />
+          <circle cx="12" cy="11.5" r="1.75" />
+          <path d="M8 5.75v2.5M6.7 9.2 5.1 10.4M9.3 9.2l1.6 1.2" />
+        </svg>
+      );
+    case "cve":
+      return (
+        <svg {...common}>
+          <path d="M8 2 3 4v3.2c0 3 2.1 5.4 5 6.3 2.9-.9 5-3.3 5-6.3V4z" />
+          <path d="M8 6v2.5M8 10.5h.01" />
+        </svg>
+      );
+    case "chevron":
+      return (
+        <svg {...common}>
+          <path d="M6 4l4 4-4 4" />
+        </svg>
+      );
+    case "dot":
+    default:
+      return (
+        <svg width={8} height={8} viewBox="0 0 8 8" aria-hidden="true">
+          <circle cx="4" cy="4" r="3" fill="currentColor" />
+        </svg>
+      );
+  }
+}
+
+function InvestigationActionTile({
+  glyph,
+  label,
+  disabled,
+  reason,
+  onActivate,
+}: {
+  glyph: string;
+  label: string;
+  disabled: boolean;
+  reason?: string;
+  onActivate?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="vera5-ip-action"
+      data-vera5-disabled={disabled ? "true" : undefined}
+      disabled={disabled}
+      onClick={disabled ? undefined : onActivate}
+      title={disabled ? reason : undefined}
+      aria-label={disabled && reason ? `${label} — ${reason}` : label}
+    >
+      <span className="vera5-ip-action-icon" aria-hidden="true">
+        <InvestigationGlyph name={glyph} />
+      </span>
+      <span className="vera5-ip-action-label">{label}</span>
+    </button>
+  );
+}
+
+function InvestigationConditionalRow({
+  glyph,
+  label,
+  available,
+  status,
+  children,
+}: {
+  glyph: string;
+  label: string;
+  available: boolean;
+  status: string;
+  children?: ReactNode;
+}) {
+  if (!available) {
+    return (
+      <div className="vera5-ip-cond-row" data-vera5-available="false">
+        <span className="vera5-ip-cond-icon" aria-hidden="true">
+          <InvestigationGlyph name={glyph} />
+        </span>
+        <span className="vera5-ip-cond-label">{label}</span>
+        <span className="vera5-ip-cond-status">{status}</span>
+      </div>
+    );
+  }
+  if (!children) {
+    return (
+      <div className="vera5-ip-cond-row" data-vera5-available="true">
+        <span className="vera5-ip-cond-icon" aria-hidden="true">
+          <InvestigationGlyph name={glyph} />
+        </span>
+        <span className="vera5-ip-cond-label">{label}</span>
+        <span className="vera5-ip-cond-status">{status}</span>
+      </div>
+    );
+  }
+  return (
+    <details className="vera5-ip-cond-row vera5-ip-cond-row--interactive" data-vera5-available="true">
+      <summary>
+        <span className="vera5-ip-cond-icon" aria-hidden="true">
+          <InvestigationGlyph name={glyph} />
+        </span>
+        <span className="vera5-ip-cond-label">{label}</span>
+        <span className="vera5-ip-cond-status">{status}</span>
+        <span className="vera5-ip-cond-chevron" aria-hidden="true">
+          <InvestigationGlyph name="chevron" />
+        </span>
+      </summary>
+      <div className="vera5-ip-cond-body">{children}</div>
+    </details>
+  );
+}
+
+/**
+ * INVESTIGATION PATHS — the single lower-right analyst module. It reads the
+ * shared selected-IOC state, reuses the existing pivot/research utilities, the
+ * Show-on-page handler, vendor-enablement availability, and derives Related
+ * Context strictly from real local data. It never triggers enrichment.
+ */
+function InvestigationPaths({
+  entry,
+  loading,
+  availability,
+  pageIndicatorCount,
+  priorSightingCount,
+  suppressed,
+  onReviewDetections,
+}: {
+  entry: TabScanSummaryEntry | null;
+  loading: boolean;
+  availability: IntelSourceAvailabilityRecord;
+  pageIndicatorCount: number;
+  priorSightingCount: number;
+  suppressed: boolean;
+  onReviewDetections: () => void;
+}) {
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [collectionMembership, setCollectionMembership] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCopyFeedback(null);
+  }, [entry?.value]);
+
+  useEffect(() => {
+    if (!entry) {
+      setCollectionMembership(null);
+      return;
+    }
+    let cancelled = false;
+    const key = buildIocCollectionMemberDedupeKey({ iocType: entry.type, value: entry.value });
+    void requestListIocCollections()
+      .then((list) => {
+        if (cancelled) {
+          return;
+        }
+        const count = list.filter((collection) =>
+          collection.members.some((member) => buildIocCollectionMemberDedupeKey(member) === key)
+        ).length;
+        setCollectionMembership(count);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCollectionMembership(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entry]);
+
+  const sourceButtons = useMemo<InvestigationSourceButton[]>(() => {
+    if (!entry) {
+      return [];
+    }
+    const pivotByProvider = new Map(
+      getPivotLinks(entry.type, entry.value, { showDisabledSources: true }).map((link) => [
+        link.provider,
+        link,
+      ])
+    );
+    return ENRICHMENT_SOURCE_ORDER.reduce<InvestigationSourceButton[]>((acc, sourceId) => {
+      const avail = availability[sourceId];
+      if (!avail?.enabled) {
+        return acc;
+      }
+      const link = pivotByProvider.get(sourceId);
+      if (!link) {
+        return acc;
+      }
+      acc.push({ sourceId, label: link.label, link, configured: avail.configured !== false });
+      return acc;
+    }, []);
+  }, [entry, availability]);
+
+  const malwareIntelActionable = useMemo(
+    () =>
+      sourceButtons.filter(
+        (source) =>
+          source.configured && INVESTIGATION_MALWARE_INTEL_SOURCE_IDS.includes(source.sourceId)
+      ),
+    [sourceButtons]
+  );
+
+  const relatedLines = useMemo<InvestigationRelatedLine[]>(() => {
+    if (!entry) {
+      return [];
+    }
+    const lines: InvestigationRelatedLine[] = [];
+    const additionalOnPage = Math.max(pageIndicatorCount - 1, 0);
+    if (additionalOnPage > 0) {
+      lines.push({
+        id: "cooccurrence",
+        tone: "info",
+        text: `Appears with ${additionalOnPage} other indicator${
+          additionalOnPage === 1 ? "" : "s"
+        } on this page`,
+      });
+    }
+    if (priorSightingCount > 0) {
+      lines.push({
+        id: "sightings",
+        tone: "info",
+        text: `Previously enriched ${priorSightingCount} time${
+          priorSightingCount === 1 ? "" : "s"
+        } locally`,
+      });
+    }
+    if (collectionMembership && collectionMembership > 0) {
+      lines.push({
+        id: "collections",
+        tone: "info",
+        text: `Member of ${collectionMembership} collection${
+          collectionMembership === 1 ? "" : "s"
+        }`,
+      });
+    }
+    if (suppressed) {
+      lines.push({
+        id: "suppressed",
+        tone: "muted",
+        text: "Suppressed by a noise rule on this page",
+      });
+    }
+    // Structured relationship analysis does not exist in the data model yet, so
+    // this is reported as unavailable — never as a confirmed "none found".
+    if (lines.length < 3) {
+      lines.push({
+        id: "infra",
+        tone: "muted",
+        text: "Related infrastructure unavailable",
+      });
+    }
+    return lines.slice(0, 3);
+  }, [entry, pageIndicatorCount, priorSightingCount, collectionMembership, suppressed]);
+
+  const isCve = entry?.type === "cve";
+
+  const handleCopy = () => {
+    if (!entry) {
+      return;
+    }
+    void copyTextToClipboard(entry.value).then((copied) => {
+      setCopyFeedback(copied ? "Copied selected IOC." : "Could not copy IOC.");
+    });
+  };
+
+  return (
+    <section
+      className="vera5-investigation-paths"
+      aria-label="Investigation paths"
+      data-ioc-type={entry?.type}
+    >
+      <header className="vera5-ip-header">
+        <span className="vera5-ip-header-icon" aria-hidden="true">
+          <InvestigationGlyph name="compass" />
+        </span>
+        <h2 className="vera5-ip-title">Investigation Paths</h2>
+        <span className="vera5-ip-header-chevron" aria-hidden="true">
+          <InvestigationGlyph name="chevron" />
+        </span>
+      </header>
+
+      <div className="vera5-ip-scroll">
+        <section className="vera5-ip-group" aria-label="Selected IOC">
+          <div className="vera5-ip-group-label">Selected IOC</div>
+          {entry ? (
+            <>
+              <div className="vera5-ip-selected">
+                <span className="vera5-ioc-type-badge" aria-hidden="true">
+                  {IOC_TYPE_TRAY_LABEL[entry.type]}
+                </span>
+                <span className="vera5-ip-selected-value">
+                  <TrayIndicatorValue entry={entry} />
+                </span>
+                <button
+                  type="button"
+                  className="vera5-ip-copy"
+                  aria-label="Copy selected IOC"
+                  onClick={handleCopy}
+                >
+                  <InvestigationGlyph name="clipboard" />
+                </button>
+              </div>
+              <span aria-live="polite" className="vera5-ip-copy-feedback">
+                {copyFeedback ?? ""}
+              </span>
+            </>
+          ) : (
+            <p className="vera5-ip-empty">No indicator selected</p>
+          )}
+        </section>
+
+        <section className="vera5-ip-group" aria-label="Recommended actions">
+          <div className="vera5-ip-group-label">Recommended Actions</div>
+          <div className="vera5-ip-actions">
+            <InvestigationActionTile
+              glyph="malware"
+              label="Search malware intelligence"
+              disabled={!entry || malwareIntelActionable.length === 0}
+              reason={
+                !entry
+                  ? "Select an indicator first"
+                  : "No enabled malware-intelligence source for this indicator"
+              }
+              onActivate={() => {
+                if (malwareIntelActionable[0]) {
+                  openIntelPivot(malwareIntelActionable[0].link);
+                }
+              }}
+            />
+            <InvestigationActionTile
+              glyph="detections"
+              label="Review detections"
+              disabled={!entry}
+              reason="Select an indicator first"
+              onActivate={onReviewDetections}
+            />
+            <InvestigationActionTile
+              glyph="infra"
+              label="Find related infrastructure"
+              disabled
+              reason="No related infrastructure data available"
+            />
+            <InvestigationActionTile
+              glyph="campaign"
+              label="Check campaign associations"
+              disabled
+              reason="No campaign association data available"
+            />
+          </div>
+        </section>
+
+        <section className="vera5-ip-group" aria-label="Intelligence sources">
+          <div className="vera5-ip-group-label">Intelligence Sources</div>
+          {!entry ? (
+            <p className="vera5-ip-empty">No indicator selected</p>
+          ) : sourceButtons.length === 0 ? (
+            <p className="vera5-ip-empty">
+              {loading ? "Resolving sources…" : "No enabled sources apply to this indicator"}
+            </p>
+          ) : (
+            <div className="vera5-ip-sources">
+              {sourceButtons.map((source) =>
+                source.configured ? (
+                  <button
+                    key={source.sourceId}
+                    type="button"
+                    className="vera5-ip-source"
+                    onClick={() => openIntelPivot(source.link)}
+                    aria-label={`Open ${source.label} for the selected indicator`}
+                  >
+                    {source.label}
+                  </button>
+                ) : (
+                  <button
+                    key={source.sourceId}
+                    type="button"
+                    className="vera5-ip-source"
+                    data-vera5-disabled="true"
+                    disabled
+                    title="API key required in Settings"
+                    aria-label={`${source.label} — API key required in Settings`}
+                  >
+                    {source.label}
+                  </button>
+                )
+              )}
+            </div>
+          )}
+        </section>
+
+        <section className="vera5-ip-group" aria-label="Related context">
+          <div className="vera5-ip-group-label">Related Context</div>
+          {!entry ? (
+            <p className="vera5-ip-empty">Select an indicator to view related context</p>
+          ) : (
+            <ul className="vera5-ip-context">
+              {relatedLines.map((line) => (
+                <li key={line.id} className="vera5-ip-context-line" data-vera5-tone={line.tone}>
+                  <span className="vera5-ip-context-dot" aria-hidden="true">
+                    <InvestigationGlyph name="dot" />
+                  </span>
+                  <span>{line.text}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="vera5-ip-group" aria-label="Conditional intelligence">
+          <div className="vera5-ip-group-label">Conditional Intelligence</div>
+          <div className="vera5-ip-conditional">
+            <InvestigationConditionalRow
+              glyph="mitre"
+              label="MITRE ATT&CK"
+              available={false}
+              status="No ATT&CK mappings available"
+            />
+            <InvestigationConditionalRow
+              glyph="family"
+              label="Malware family / campaign"
+              available={false}
+              status="No family or campaign association available"
+            />
+            <InvestigationConditionalRow
+              glyph="cve"
+              label="CVE / CVSS"
+              available={Boolean(isCve && entry)}
+              status={isCve && entry ? entry.value : "No CVE association"}
+            >
+              {isCve && entry ? (
+                <p className="vera5-ip-cond-note">
+                  {entry.value} is tracked as a CVE indicator. CVSS, EPSS, and CISA KEV context are
+                  not available in local enrichment.
+                </p>
+              ) : undefined}
+            </InvestigationConditionalRow>
+          </div>
+        </section>
+      </div>
+    </section>
+  );
 }
 
 function IntelFeedPanel({
@@ -5002,34 +3614,7 @@ function sessionActionButtonStyle(): CSSProperties {
   };
 }
 
-function sourceOpsStatusColor(statusLabel: string): string {
-  if (
-    statusLabel === "OK" ||
-    statusLabel === "Cached" ||
-    statusLabel === "Disabled" ||
-    statusLabel === "Skipped"
-  ) {
-    return POPUP_THEME.muted;
-  }
-  if (statusLabel === "Rate limited") {
-    return POPUP_THEME.error;
-  }
-  if (statusLabel === "No recent activity") {
-    return POPUP_THEME.muted;
-  }
-  return POPUP_THEME.error;
-}
 
-const INVESTIGATION_SESSION_EXPORT_ACTIONS: readonly {
-  format: InvestigationSessionExportFormat;
-  label: string;
-}[] = [
-  { format: "markdown", label: "Markdown" },
-  { format: "json", label: "JSON" },
-  { format: "csv", label: "CSV" },
-];
-
-type CaseworkView = "session" | "history" | "collections" | "sources";
 
 const POPUP_SIDE_PANEL_SPLIT_MIN_PX = 560;
 const SELECTED_INTEL_ANCHOR_BY_TAB = new Map<number, string>();
@@ -5052,8 +3637,6 @@ export function Popup() {
   const [typeFilter, setTypeFilter] = useState<IocTypeFilter>("all");
   const [trayFilterReady, setTrayFilterReady] = useState(false);
   const [trayNavigationMessage, setTrayNavigationMessage] = useState<string | null>(null);
-  const [timelineNavigationMessage, setTimelineNavigationMessage] = useState<string | null>(null);
-  const [replayNavigationMessage, setReplayNavigationMessage] = useState<string | null>(null);
   const [trayEnrichmentStatuses, setTrayEnrichmentStatuses] = useState<
     Record<string, TrayEntryEnrichmentStatus>
   >({});
@@ -5069,30 +3652,14 @@ export function Popup() {
   const [selectionEnrichMessage, setSelectionEnrichMessage] = useState<string | null>(null);
   const [textSelectionAvailable, setTextSelectionAvailable] = useState(false);
   const [selectionEnrichAvailable, setSelectionEnrichAvailable] = useState(false);
-  const [sessionTitle, setSessionTitle] = useState(DEFAULT_INVESTIGATION_SESSION_TITLE);
+  const [, setSessionTitle] = useState(DEFAULT_INVESTIGATION_SESSION_TITLE);
   const [sessionTitleReady, setSessionTitleReady] = useState(false);
   const [activeSession, setActiveSession] = useState<InvestigationSession | null>(null);
   const [recentSessions, setRecentSessions] = useState<InvestigationSession[]>([]);
-  const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
-  const [renameDraft, setRenameDraft] = useState("");
-  const [sessionExportMessage, setSessionExportMessage] = useState<string | null>(null);
-  const [sessionExportIocOnly, setSessionExportIocOnly] = useState(false);
   const [sourceOps, setSourceOps] = useState<EnrichmentSourceOpsSnapshot | null>(null);
-  const [sourceOpsReady, setSourceOpsReady] = useState(false);
-  const [clearingSourceCacheId, setClearingSourceCacheId] = useState<string | null>(null);
-  const [sourceOpsClearFeedback, setSourceOpsClearFeedback] = useState<string | null>(null);
-  const [caseworkView, setCaseworkView] = useState<CaseworkView>("session");
-  const [sessionTimelineOpen, setSessionTimelineOpen] = useState(false);
-  const [sessionNotebookOpen, setSessionNotebookOpen] = useState(false);
-  const [sessionReplayOpen, setSessionReplayOpen] = useState(false);
-  const [sessionExportOpen, setSessionExportOpen] = useState(false);
-  const [recentSessionsOpen, setRecentSessionsOpen] = useState(false);
+  const [, setSourceOpsReady] = useState(false);
   const [historyEntries, setHistoryEntries] = useState<InvestigationHistoryEntry[]>([]);
-  const [historyReady, setHistoryReady] = useState(false);
-  const [historyNavigationMessage, setHistoryNavigationMessage] = useState<string | null>(null);
-  const [historyClearConfirmOpen, setHistoryClearConfirmOpen] = useState(false);
-  const [historyClearing, setHistoryClearing] = useState(false);
-  const [historyClearFeedback, setHistoryClearFeedback] = useState<string | null>(null);
+  const [, setHistoryReady] = useState(false);
   const [saveToCollectionAnchorId, setSaveToCollectionAnchorId] = useState<string | null>(null);
   const [saveToCollectionFeedback, setSaveToCollectionFeedback] = useState<string | null>(null);
   const [addFilteredToCollectionOpen, setAddFilteredToCollectionOpen] = useState(false);
@@ -5103,10 +3670,6 @@ export function Popup() {
   const [runMacroTrayFeedback, setRunMacroTrayFeedback] = useState<string | null>(null);
   const [runMacroOnFilteredOpen, setRunMacroOnFilteredOpen] = useState(false);
   const [runMacroOnFilteredFeedback, setRunMacroOnFilteredFeedback] = useState<string | null>(null);
-  const [promoteSessionToCollectionOpen, setPromoteSessionToCollectionOpen] = useState(false);
-  const [promoteSessionToCollectionFeedback, setPromoteSessionToCollectionFeedback] = useState<
-    string | null
-  >(null);
   const [trayPageCoOccurrenceIndex, setTrayPageCoOccurrenceIndex] =
     useState<PageIocCoOccurrenceIndex | null>(null);
   const [trayCorrelationClusters, setTrayCorrelationClusters] = useState<CorrelationCluster[]>([]);
@@ -5263,12 +3826,9 @@ export function Popup() {
       .catch(() => {
         setKnownGoodEntries([]);
       });
+    // Casework tabs were removed from the side panel; still consume any stored
+    // panel-focus request so it does not persist across opens.
     void readPopupPanelFocus().then((panel) => {
-      if (panel === POPUP_PANEL.INVESTIGATION_HISTORY) {
-        setCaseworkView("history");
-      } else if (panel === POPUP_PANEL.SOURCE_OPERATIONS) {
-        setCaseworkView("sources");
-      }
       if (panel) {
         void clearPopupPanelFocus();
       }
@@ -5620,59 +4180,41 @@ export function Popup() {
     );
   }, [trayNoisePartition.active, knownGoodEntries, activeSession]);
   const suppressedTrayEntries = trayNoisePartition.suppressed;
+  // INVESTIGATION PATHS — derived strictly from real local state.
+  const investigationPageIndicatorCount = scanSummary?.entries.length ?? 0;
+  const investigationPriorSightingCount = useMemo(() => {
+    if (!selectedDetailEntry) {
+      return 0;
+    }
+    return historyEntries.filter(
+      (candidate) =>
+        candidate.iocType === selectedDetailEntry.type &&
+        candidate.ioc === selectedDetailEntry.value
+    ).length;
+  }, [historyEntries, selectedDetailEntry]);
+  const investigationSelectedSuppressed = useMemo(() => {
+    if (!selectedDetailEntry) {
+      return false;
+    }
+    return suppressedTrayEntries.some(
+      ({ entry }) => entry.anchorId === selectedDetailEntry.anchorId
+    );
+  }, [suppressedTrayEntries, selectedDetailEntry]);
   const whyStillVisibleTooltip = useMemo(
     () => buildWhyStillVisibleTooltip(suppressedTrayEntries.map(({ entry }) => entry)),
     [suppressedTrayEntries]
   );
 
-  const sessionIocCountText = useMemo(
-    () => buildInvestigationSessionIocCountText(activeSession?.totalIocCount ?? 0),
-    [activeSession]
-  );
 
-  const sessionTypeBreakdownText = useMemo(() => {
-    if (!activeSession) {
-      return "";
-    }
-    return buildInvestigationSessionTypeBreakdownText(activeSession);
-  }, [activeSession]);
 
-  const sessionActivitySummaryText = useMemo(() => {
-    if (!activeSession) {
-      return "";
-    }
-    return buildInvestigationSessionActivitySummaryText(activeSession);
-  }, [activeSession]);
 
-  const sessionTimelineEvents = useMemo(() => {
-    if (!activeSession?.timelineEvents?.length) {
-      return [];
-    }
-    return sortTimelineEventsChronologically(activeSession.timelineEvents);
-  }, [activeSession]);
 
-  const sessionReplaySegments = useMemo(() => {
-    if (!activeSession) {
-      return [];
-    }
-    return ingestReplaySegmentsFromInvestigationSession(activeSession);
-  }, [activeSession]);
 
   const intelSourceEntries = useMemo(
     () => buildHoverCardSourceEntries(intelSourceResults),
     [intelSourceResults]
   );
 
-  const investigationSessionTitlesById = useMemo(() => {
-    const titlesById = new Map<string, string>();
-    for (const session of recentSessions) {
-      titlesById.set(session.id, session.title);
-    }
-    if (activeSession) {
-      titlesById.set(activeSession.id, activeSession.title);
-    }
-    return titlesById;
-  }, [recentSessions, activeSession]);
 
   const trayCorrelationSessionsById = useMemo(() => {
     const byId = new Map<string, CorrelationClusterSessionLookup>();
@@ -5702,14 +4244,6 @@ export function Popup() {
     return byId;
   }, [trayCorrelationSessions, recentSessions, activeSession]);
 
-  const activeSessionHistoryLinkSummary = useMemo(() => {
-    if (!activeSession) {
-      return null;
-    }
-    return buildInvestigationHistorySessionLinkSummary(
-      countInvestigationHistoryEntriesForSession(historyEntries, activeSession.id)
-    );
-  }, [activeSession, historyEntries]);
 
   const handleToggle = (checked: boolean) => {
     setEnabled(checked);
@@ -5737,131 +4271,10 @@ export function Popup() {
     openExtensionSitePermissionsPage();
   };
 
-  const handleNewSession = () => {
-    if (!ready) {
-      return;
-    }
 
-    void (async () => {
-      const pageUrl = await resolveActiveTabPageUrl();
-      const normalizedTitle =
-        normalizeInvestigationSessionTitle(sessionTitle) ?? DEFAULT_INVESTIGATION_SESSION_TITLE;
-      const session = await requestCreateInvestigationSession({
-        title: normalizedTitle,
-        pageUrl,
-      });
-      if (session) {
-        applyActiveInvestigationSession(session);
-        await refreshInvestigationSessionState();
-      }
-    })();
-  };
 
-  const resolveActiveSessionExportInput = async () => {
-    if (!activeSession) {
-      return null;
-    }
 
-    return buildInvestigationSessionExportInput({
-      session: activeSession,
-      entries: scanSummary?.entries ?? [],
-      exportScope: sessionExportIocOnly
-        ? INVESTIGATION_SESSION_EXPORT_SCOPE.IOC_ONLY
-        : INVESTIGATION_SESSION_EXPORT_SCOPE.FULL,
-    });
-  };
 
-  const handleCopySessionExport = (format: InvestigationSessionExportFormat) => {
-    if (!ready || !sessionTitleReady || !activeSession) {
-      return;
-    }
-
-    void (async () => {
-      const input = await resolveActiveSessionExportInput();
-      if (!input) {
-        return;
-      }
-
-      const copied = await copyInvestigationSessionExportToClipboard(input, format);
-      if (copied) {
-        void recordActiveInvestigationSessionExportEvent({
-          iocs: input.records.map((record) => ({
-            value: record.ioc,
-            type: record.iocType,
-          })),
-        });
-      }
-
-      const label = INVESTIGATION_SESSION_EXPORT_ACTIONS.find(
-        (action) => action.format === format
-      )?.label;
-      setSessionExportMessage(
-        copied
-          ? `Copied session ${label ?? format} export.`
-          : `Could not copy session ${label ?? format} export.`
-      );
-    })();
-  };
-
-  const handleDownloadSessionExport = (format: InvestigationSessionExportFormat) => {
-    if (!ready || !sessionTitleReady || !activeSession) {
-      return;
-    }
-
-    void (async () => {
-      const input = await resolveActiveSessionExportInput();
-      if (!input) {
-        return;
-      }
-
-      const downloaded = downloadInvestigationSessionExportFile(input, format, document);
-      if (downloaded) {
-        void recordActiveInvestigationSessionExportEvent({
-          iocs: input.records.map((record) => ({
-            value: record.ioc,
-            type: record.iocType,
-          })),
-        });
-      }
-
-      const label = INVESTIGATION_SESSION_EXPORT_ACTIONS.find(
-        (action) => action.format === format
-      )?.label;
-      setSessionExportMessage(
-        downloaded
-          ? `Downloaded session ${label ?? format} export.`
-          : `Could not download session ${label ?? format} export.`
-      );
-    })();
-  };
-
-  const handleSessionTitleBlur = () => {
-    if (!ready || !sessionTitleReady) {
-      return;
-    }
-
-    const normalizedTitle = normalizeInvestigationSessionTitle(sessionTitle);
-    if (!normalizedTitle) {
-      void refreshInvestigationSessionState();
-      return;
-    }
-
-    void (async () => {
-      if (!activeSession || activeSession.title === normalizedTitle) {
-        if (!activeSession) {
-          setSessionTitle(normalizedTitle);
-        }
-        return;
-      }
-
-      const updated = await requestUpdateInvestigationSessionTitle(normalizedTitle);
-      if (updated) {
-        await refreshInvestigationSessionState();
-        return;
-      }
-      applyActiveInvestigationSession(activeSession);
-    })();
-  };
 
   const handleReopenSession = (sessionId: string) => {
     if (!ready || !sessionTitleReady) {
@@ -5876,165 +4289,26 @@ export function Popup() {
     })();
   };
 
+  // Casework's visible session/replay panels were removed from the side panel.
+  // Relationship links still reopen the prior session in state for future
+  // Workspace views; the dead scroll-to-panel behavior is dropped.
   const handleOpenRelationshipPriorSession = (sessionId: string) => {
-    setCaseworkView("session");
     handleReopenSession(sessionId);
-    window.requestAnimationFrame(() => {
-      document
-        .getElementById("popup-investigation-session")
-        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
   };
 
   const handleOpenRelationshipPriorSessionReplay = (sessionId: string) => {
-    setCaseworkView("session");
-    setSessionReplayOpen(true);
     handleReopenSession(sessionId);
-    window.requestAnimationFrame(() => {
-      document
-        .getElementById("popup-investigation-replay")
-        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
   };
 
-  const handleStartRenameSession = (session: InvestigationSession) => {
-    setRenamingSessionId(session.id);
-    setRenameDraft(session.title);
-  };
 
-  const handleCancelRenameSession = () => {
-    setRenamingSessionId(null);
-    setRenameDraft("");
-  };
 
-  const handleSaveRenameSession = (sessionId: string) => {
-    const normalizedTitle = normalizeInvestigationSessionTitle(renameDraft);
-    if (!normalizedTitle) {
-      handleCancelRenameSession();
-      return;
-    }
 
-    void (async () => {
-      const session = await requestRenameInvestigationSession({
-        sessionId,
-        title: normalizedTitle,
-      });
-      handleCancelRenameSession();
-      if (session) {
-        await refreshInvestigationSessionState();
-      }
-    })();
-  };
 
-  const handleArchiveSession = (sessionId: string) => {
-    if (!ready || !sessionTitleReady) {
-      return;
-    }
 
-    void (async () => {
-      await requestArchiveInvestigationSession(sessionId);
-      await refreshInvestigationSessionState();
-    })();
-  };
 
-  const handleDeleteSession = (sessionId: string) => {
-    if (!ready || !sessionTitleReady) {
-      return;
-    }
 
-    void (async () => {
-      await requestDeleteInvestigationSession(sessionId);
-      await refreshInvestigationSessionState();
-    })();
-  };
 
-  const handleHistoryRowActivate = (entry: InvestigationHistoryEntry) => {
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
-      if (!tab?.id) {
-        setHistoryNavigationMessage(
-          resolveInvestigationHistoryReopenFeedback({
-            tabId: undefined,
-            ioc: entry.ioc,
-            pageOrigin: entry.pageOrigin,
-          })
-        );
-        return;
-      }
-      try {
-        const response = await chrome.tabs.sendMessage(
-          tab.id,
-          reopenInvestigationHistoryMessage({
-            ioc: entry.ioc,
-            iocType: entry.iocType,
-            pageOrigin: entry.pageOrigin,
-          })
-        );
-        setHistoryNavigationMessage(
-          resolveInvestigationHistoryReopenFeedback({
-            tabId: tab.id,
-            response,
-            ioc: entry.ioc,
-            pageOrigin: entry.pageOrigin,
-          })
-        );
-      } catch {
-        setHistoryNavigationMessage(
-          resolveInvestigationHistoryReopenFeedback({
-            tabId: tab.id,
-            sendFailed: true,
-            ioc: entry.ioc,
-            pageOrigin: entry.pageOrigin,
-          })
-        );
-      }
-    });
-  };
 
-  const handleRequestClearHistory = () => {
-    setHistoryClearConfirmOpen(true);
-    setHistoryClearFeedback(null);
-  };
-
-  const handleCancelClearHistory = () => {
-    setHistoryClearConfirmOpen(false);
-  };
-
-  const handleConfirmClearHistory = () => {
-    void (async () => {
-      setHistoryClearing(true);
-      const cleared = await clearInvestigationHistory();
-      setHistoryClearing(false);
-      setHistoryClearConfirmOpen(false);
-      if (cleared) {
-        await refreshInvestigationHistoryState();
-        setHistoryClearFeedback(resolveInvestigationHistoryClearFeedback(true));
-        setHistoryNavigationMessage(null);
-        return;
-      }
-      setHistoryClearFeedback(resolveInvestigationHistoryClearFeedback(false));
-    })();
-  };
-
-  const handleClearSourceCache = (row: EnrichmentSourceOpsRow) => {
-    void (async () => {
-      setClearingSourceCacheId(row.sourceId);
-      setSourceOpsClearFeedback(null);
-      try {
-        const removedCount = await clearEnrichmentCacheForSource(row.sourceId);
-        await refreshSourceOps();
-        setSourceOpsClearFeedback(
-          resolveEnrichmentSourceClearCacheFeedback({
-            sourceDisplayName: row.displayName,
-            removedCount,
-          })
-        );
-      } catch {
-        setSourceOpsClearFeedback(`Could not clear cache for ${row.displayName}. Try again.`);
-      } finally {
-        setClearingSourceCacheId(null);
-      }
-    })();
-  };
 
   const sendNavigateToIocAnchor = (input: {
     anchorId: string;
@@ -6078,14 +4352,9 @@ export function Popup() {
   const handleOpenRelationshipNotebookLink = (link: RelationshipNotebookFragmentLink) => {
     const action = link.action;
     if (action.kind === "open_session_notebook") {
-      setCaseworkView("session");
-      setSessionNotebookOpen(true);
+      // Notebook panel was removed from the side panel; still reopen the session
+      // so its data is active for future Workspace views.
       handleReopenSession(action.sessionId);
-      window.requestAnimationFrame(() => {
-        document
-          .getElementById("popup-session-notebook")
-          ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      });
       return;
     }
 
@@ -6098,16 +4367,7 @@ export function Popup() {
         value: relatedEntry.value,
         iocType: relatedEntry.type,
       });
-      return;
     }
-
-    setCaseworkView("session");
-    setSessionNotebookOpen(true);
-    window.requestAnimationFrame(() => {
-      document
-        .getElementById("popup-session-notebook")
-        ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
   };
 
   const navigateToTrayEntry = (entry: TabScanSummaryEntry) => {
@@ -6118,37 +4378,6 @@ export function Popup() {
     });
   };
 
-  const navigateToTimelineEntry = (entry: TabScanSummaryEntry) => {
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
-      if (!tab?.id) {
-        setTimelineNavigationMessage(
-          resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: entry.value })
-        );
-        return;
-      }
-      try {
-        const response = await chrome.tabs.sendMessage(
-          tab.id,
-          navigateToIocAnchorMessage(entry.anchorId)
-        );
-        setTimelineNavigationMessage(
-          resolveTrayNavigationFeedback({
-            tabId: tab.id,
-            response,
-            indicatorValue: entry.value,
-          })
-        );
-      } catch {
-        setTimelineNavigationMessage(
-          resolveTrayNavigationFeedback({
-            tabId: tab.id,
-            sendFailed: true,
-            indicatorValue: entry.value,
-          })
-        );
-      }
-    });
-  };
 
   // Activating a tray row both opens the detail pane (the side panel's primary
   // analyst surface) and highlights the indicator on the page.
@@ -6157,78 +4386,8 @@ export function Popup() {
     navigateToTrayEntry(entry);
   };
 
-  const handleTimelineEventActivate = (event: TimelineEvent) => {
-    if (!isTimelineEventNavigable(event)) {
-      return;
-    }
 
-    const entry = findTabScanSummaryEntryForIndicatorValue(scanSummary, event.iocKey);
-    if (!entry) {
-      setTimelineNavigationMessage(
-        scanSummary
-          ? `${event.iocKey} is not on the current page. Scan again to refresh the list.`
-          : `Scan this page to locate ${event.iocKey} on the page.`
-      );
-      return;
-    }
 
-    setSelectedDetailEntry(entry);
-    navigateToTimelineEntry(entry);
-  };
-
-  const navigateToReplayEntry = (entry: TabScanSummaryEntry) => {
-    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
-      if (!tab?.id) {
-        setReplayNavigationMessage(
-          resolveTrayNavigationFeedback({ tabId: undefined, indicatorValue: entry.value })
-        );
-        return;
-      }
-      try {
-        const response = await chrome.tabs.sendMessage(
-          tab.id,
-          navigateToIocAnchorMessage(entry.anchorId, {
-            iocType: entry.type,
-            value: entry.value,
-            enrichmentTrigger: "none",
-          })
-        );
-        setReplayNavigationMessage(
-          resolveTrayNavigationFeedback({
-            tabId: tab.id,
-            response,
-            indicatorValue: entry.value,
-          })
-        );
-      } catch {
-        setReplayNavigationMessage(
-          resolveTrayNavigationFeedback({
-            tabId: tab.id,
-            sendFailed: true,
-            indicatorValue: entry.value,
-          })
-        );
-      }
-    });
-  };
-
-  const handleReplaySegmentActivate = (segment: ReplaySegment) => {
-    if (!isReplaySegmentNavigable(segment)) {
-      return;
-    }
-
-    const entry = findTabScanSummaryEntryForIndicatorValue(scanSummary, segment.iocKey);
-    if (!entry) {
-      setReplayNavigationMessage(
-        scanSummary
-          ? `${segment.iocKey} is not on the current page. Scan again to refresh the list.`
-          : `Scan this page to locate ${segment.iocKey} on the page.`
-      );
-      return;
-    }
-
-    navigateToReplayEntry(entry);
-  };
 
   const handleAnalystNoteChange = (value: string) => {
     const entry = selectedDetailEntry;
@@ -6247,12 +4406,6 @@ export function Popup() {
     }, 300);
   };
 
-  const handleClearSelectedDetail = () => {
-    if (scanSummary) {
-      SELECTED_INTEL_ANCHOR_BY_TAB.delete(scanSummary.tabId);
-    }
-    setSelectedDetailEntry(null);
-  };
 
   // Force a fresh enrichment for the selected indicator, then refresh the tray
   // badges from cache. Routed through the background service worker so the side
@@ -7428,801 +5581,20 @@ export function Popup() {
             </section>
           ) : null}
         </div>
-        <div className="vera5-popup-detail" aria-label="Indicator detail and casework">
-          {selectedDetailEntry ? (
-            <aside className="vera5-popup-inspector" aria-label="Selected indicator inspector">
-              <IndicatorDetailPane
-                entry={selectedDetailEntry}
-                enrichmentStatus={trayEnrichmentStatuses[selectedDetailEntry.anchorId]}
-                note={analystNote}
-                noteStatus={analystNoteStatus}
-                enrichState={detailEnrichState}
-                onNoteChange={handleAnalystNoteChange}
-                onShowOnPage={() => navigateToTrayEntry(selectedDetailEntry)}
-                onEnrich={handleEnrichSelectedDetail}
-                onClear={handleClearSelectedDetail}
-              />
-            </aside>
-          ) : null}
-          <div className="vera5-popup-casework" aria-label="Casework">
-            <div className="vera5-casework-header">
-              <div className="vera5-section-kicker">Casework</div>
-              <div className="vera5-casework-tabs" role="tablist" aria-label="Casework tools">
-                {(
-                  [
-                    ["session", "Session", "popup-investigation-body"],
-                    ["history", "History", "popup-history-body"],
-                    ["collections", "Collections", "popup-collections-body"],
-                    ["sources", "Sources", "popup-source-ops-body"],
-                  ] as const
-                ).map(([view, label, controls]) => (
-                  <button
-                    key={view}
-                    type="button"
-                    role="tab"
-                    aria-selected={caseworkView === view}
-                    aria-controls={controls}
-                    onClick={() => setCaseworkView(view)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <section
-              className="vera5-casework-panel"
-              id="popup-investigation-session"
-              aria-label="Investigation session"
-              hidden={caseworkView !== "session"}
-              style={{
-                marginTop: 14,
-                borderTop: `1px solid ${POPUP_THEME.border}`,
-                paddingTop: 12,
-              }}
-            >
-              <h2 className="vera5-visually-hidden">Investigation session</h2>
-              <div id="popup-investigation-body">
-                {!activeSession && sessionTitleReady ? (
-                  <p style={trayStatusStyle()} aria-live="polite">
-                    {INVESTIGATION_SESSION_EMPTY_STATE_TEXT}
-                  </p>
-                ) : null}
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: 12,
-                    color: POPUP_THEME.text,
-                    marginBottom: 8,
-                  }}
-                >
-                  Session title
-                  <input
-                    type="text"
-                    value={sessionTitle}
-                    disabled={!ready || !sessionTitleReady}
-                    onChange={(event) => setSessionTitle(event.target.value)}
-                    onBlur={handleSessionTitleBlur}
-                    aria-label="Session title"
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      marginTop: 4,
-                      padding: "8px 10px",
-                      borderRadius: 6,
-                      border: `1px solid ${POPUP_THEME.border}`,
-                      backgroundColor: POPUP_THEME.buttonBg,
-                      color: POPUP_THEME.text,
-                      boxSizing: "border-box",
-                    }}
-                  />
-                </label>
-                {activeSession ? (
-                  <>
-                    <p
-                      aria-live="polite"
-                      className="vera5-session-facts"
-                      style={{
-                        fontSize: 12,
-                        margin: "0 0 10px",
-                        color: POPUP_THEME.text,
-                        lineHeight: 1.5,
-                      }}
-                    >
-                      {[sessionIocCountText, sessionTypeBreakdownText, sessionActivitySummaryText]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                    <PromoteSessionToCollectionPanel
-                      session={activeSession}
-                      open={promoteSessionToCollectionOpen}
-                      onToggle={() => {
-                        setPromoteSessionToCollectionFeedback(null);
-                        setPromoteSessionToCollectionOpen((current) => !current);
-                      }}
-                      feedback={promoteSessionToCollectionFeedback}
-                      onFeedback={setPromoteSessionToCollectionFeedback}
-                    />
-                    <details
-                      className="vera5-session-disclosure"
-                      open={sessionTimelineOpen}
-                      onToggle={(event) => setSessionTimelineOpen(event.currentTarget.open)}
-                    >
-                      <summary>Timeline · {sessionTimelineEvents.length}</summary>
-                      <div className="vera5-session-disclosure-body">
-                        <InvestigationSessionTimelinePanel
-                          sessionId={activeSession.id}
-                          sessionTitle={activeSession.title}
-                          sessionPageUrl={activeSession.pageUrl}
-                          events={sessionTimelineEvents}
-                          onActivateEvent={handleTimelineEventActivate}
-                          navigationMessage={timelineNavigationMessage}
-                        />
-                      </div>
-                    </details>
-                    <details
-                      className="vera5-session-disclosure"
-                      open={sessionNotebookOpen}
-                      onToggle={(event) => setSessionNotebookOpen(event.currentTarget.open)}
-                    >
-                      <summary>Notebook</summary>
-                      <div className="vera5-session-disclosure-body">
-                        <InvestigationSessionNotebookTimelinePanel sessionId={activeSession.id} />
-                      </div>
-                    </details>
-                    <details
-                      className="vera5-session-disclosure vera5-session-disclosure--intel"
-                      open={sessionReplayOpen}
-                      onToggle={(event) => setSessionReplayOpen(event.currentTarget.open)}
-                    >
-                      <summary>Replay · {sessionReplaySegments.length}</summary>
-                      <div className="vera5-session-disclosure-body">
-                        <InvestigationReplayPanel
-                          sessionId={activeSession.id}
-                          sessionTitle={activeSession.title}
-                          sessionPageUrl={activeSession.pageUrl}
-                          segments={sessionReplaySegments}
-                          onActivateSegment={handleReplaySegmentActivate}
-                          navigationMessage={replayNavigationMessage}
-                          resolveSessionMemoryRecords={async () => {
-                            const input = await resolveActiveSessionExportInput();
-                            return input?.records ?? [];
-                          }}
-                        />
-                      </div>
-                    </details>
-                  </>
-                ) : null}
-                <button
-                  className="vera5-casework-new-session"
-                  type="button"
-                  disabled={!ready || !sessionTitleReady}
-                  onClick={handleNewSession}
-                  style={{
-                    ...buttonStyle,
-                    marginBottom: 0,
-                    cursor: ready && sessionTitleReady ? "pointer" : "not-allowed",
-                    opacity: ready && sessionTitleReady ? 1 : 0.65,
-                  }}
-                >
-                  New session
-                </button>
-                {activeSession ? (
-                  <details
-                    className="vera5-session-disclosure"
-                    open={sessionExportOpen}
-                    onToggle={(event) => setSessionExportOpen(event.currentTarget.open)}
-                  >
-                    <summary>Export</summary>
-                    <div className="vera5-session-disclosure-body">
-                      <label
-                        title={INVESTIGATION_SESSION_EXPORT_IOC_ONLY_DESCRIPTION}
-                        style={{
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: 8,
-                          marginBottom: 8,
-                          fontSize: 12,
-                          color: POPUP_THEME.text,
-                          cursor: ready && sessionTitleReady ? "pointer" : "not-allowed",
-                          opacity: ready && sessionTitleReady ? 1 : 0.65,
-                        }}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={sessionExportIocOnly}
-                          disabled={!ready || !sessionTitleReady}
-                          onChange={(event) => {
-                            setSessionExportIocOnly(event.target.checked);
-                          }}
-                          aria-label={INVESTIGATION_SESSION_EXPORT_IOC_ONLY_LABEL}
-                          style={{ marginTop: 2 }}
-                        />
-                        <span style={{ fontWeight: 600 }}>
-                          {INVESTIGATION_SESSION_EXPORT_IOC_ONLY_LABEL}
-                        </span>
-                      </label>
-                      <div
-                        role="group"
-                        aria-label="Copy session export"
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 6,
-                          marginBottom: 8,
-                        }}
-                      >
-                        {INVESTIGATION_SESSION_EXPORT_ACTIONS.map(({ format, label }) => (
-                          <button
-                            key={`copy-${format}`}
-                            type="button"
-                            disabled={!ready || !sessionTitleReady}
-                            onClick={() => handleCopySessionExport(format)}
-                            style={sessionActionButtonStyle()}
-                          >
-                            Copy {label}
-                          </button>
-                        ))}
-                      </div>
-                      <div
-                        role="group"
-                        aria-label="Download session export"
-                        style={{
-                          display: "flex",
-                          flexWrap: "wrap",
-                          gap: 6,
-                          marginBottom: sessionExportMessage ? 8 : 0,
-                        }}
-                      >
-                        {INVESTIGATION_SESSION_EXPORT_ACTIONS.map(({ format, label }) => (
-                          <button
-                            key={`download-${format}`}
-                            type="button"
-                            disabled={!ready || !sessionTitleReady}
-                            onClick={() => handleDownloadSessionExport(format)}
-                            style={sessionActionButtonStyle()}
-                          >
-                            Download {label}
-                          </button>
-                        ))}
-                      </div>
-                      {sessionExportMessage ? (
-                        <p aria-live="polite" style={trayStatusStyle()}>
-                          {sessionExportMessage}
-                        </p>
-                      ) : null}
-                    </div>
-                  </details>
-                ) : null}
-                {recentSessions.length > 0 ? (
-                  <details
-                    className="vera5-session-disclosure"
-                    open={recentSessionsOpen}
-                    onToggle={(event) => setRecentSessionsOpen(event.currentTarget.open)}
-                  >
-                    <summary>Recent · {recentSessions.length}</summary>
-                    <div className="vera5-session-disclosure-body">
-                      <ul
-                        aria-label="Recent investigation sessions"
-                        style={{
-                          listStyle: "none",
-                          margin: 0,
-                          padding: 0,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 8,
-                          maxHeight: 180,
-                          overflowY: "auto",
-                        }}
-                      >
-                        {recentSessions.map((session) => {
-                          const isActive = activeSession?.id === session.id;
-                          const breakdown = buildInvestigationSessionTypeBreakdownText(session);
-                          const isRenaming = renamingSessionId === session.id;
-
-                          return (
-                            <li
-                              key={session.id}
-                              style={{
-                                border: `1px solid ${isActive ? POPUP_THEME.accent : POPUP_THEME.border}`,
-                                borderRadius: 6,
-                                padding: 8,
-                                backgroundColor: POPUP_THEME.trayRowBg,
-                              }}
-                            >
-                              {isRenaming ? (
-                                <>
-                                  <input
-                                    type="text"
-                                    value={renameDraft}
-                                    onChange={(event) => setRenameDraft(event.target.value)}
-                                    aria-label={`Rename ${session.title}`}
-                                    style={{
-                                      display: "block",
-                                      width: "100%",
-                                      marginBottom: 8,
-                                      padding: "6px 8px",
-                                      borderRadius: 6,
-                                      border: `1px solid ${POPUP_THEME.border}`,
-                                      backgroundColor: POPUP_THEME.buttonBg,
-                                      color: POPUP_THEME.text,
-                                      boxSizing: "border-box",
-                                    }}
-                                  />
-                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleSaveRenameSession(session.id)}
-                                      style={sessionActionButtonStyle()}
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={handleCancelRenameSession}
-                                      style={sessionActionButtonStyle()}
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </>
-                              ) : (
-                                <>
-                                  <div
-                                    style={{
-                                      display: "flex",
-                                      justifyContent: "space-between",
-                                      gap: 8,
-                                      marginBottom: 4,
-                                    }}
-                                  >
-                                    <strong
-                                      style={{
-                                        fontSize: 12,
-                                        color: POPUP_THEME.text,
-                                        wordBreak: "break-word",
-                                      }}
-                                    >
-                                      {session.title}
-                                    </strong>
-                                    {isActive ? (
-                                      <span
-                                        style={{
-                                          flexShrink: 0,
-                                          fontSize: 10,
-                                          fontWeight: 700,
-                                          color: POPUP_THEME.accent,
-                                        }}
-                                      >
-                                        Active
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                  <p
-                                    style={{
-                                      fontSize: 11,
-                                      margin: "0 0 4px",
-                                      color: POPUP_THEME.muted,
-                                      lineHeight: 1.45,
-                                    }}
-                                  >
-                                    {buildInvestigationSessionIocCountText(session.totalIocCount)}
-                                  </p>
-                                  {breakdown ? (
-                                    <p
-                                      style={{
-                                        fontSize: 11,
-                                        margin: "0 0 8px",
-                                        color: POPUP_THEME.text,
-                                        lineHeight: 1.45,
-                                      }}
-                                    >
-                                      {breakdown}
-                                    </p>
-                                  ) : null}
-                                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                                    {!isActive ? (
-                                      <button
-                                        type="button"
-                                        onClick={() => handleReopenSession(session.id)}
-                                        style={sessionActionButtonStyle()}
-                                      >
-                                        Reopen
-                                      </button>
-                                    ) : null}
-                                    <button
-                                      type="button"
-                                      onClick={() => handleStartRenameSession(session)}
-                                      style={sessionActionButtonStyle()}
-                                    >
-                                      Rename
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleArchiveSession(session.id)}
-                                      style={sessionActionButtonStyle()}
-                                    >
-                                      Archive
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteSession(session.id)}
-                                      style={sessionActionButtonStyle()}
-                                    >
-                                      Delete
-                                    </button>
-                                  </div>
-                                </>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  </details>
-                ) : (
-                  <p style={{ ...trayStatusStyle(), marginTop: 12 }}>No saved sessions yet.</p>
-                )}
-              </div>
-            </section>
-            <div id="popup-advanced-body" className="vera5-casework-tools">
-              <section
-                className="vera5-casework-panel"
-                aria-label="Investigation history"
-                hidden={caseworkView !== "history"}
-                style={{
-                  marginTop: 0,
-                  borderTop: "none",
-                  paddingTop: 0,
-                }}
-              >
-                <h2 className="vera5-visually-hidden">Investigation history</h2>
-                <div id="popup-history-body">
-                  {!historyReady ? (
-                    <p style={trayStatusStyle()} aria-live="polite">
-                      Loading history…
-                    </p>
-                  ) : historyEntries.length === 0 ? (
-                    <p style={trayStatusStyle()} aria-live="polite">
-                      No enriched indicators yet.
-                    </p>
-                  ) : (
-                    <>
-                      {historyNavigationMessage ? (
-                        <p
-                          role="alert"
-                          aria-live="polite"
-                          style={{
-                            fontSize: 12,
-                            margin: "0 0 10px",
-                            color: POPUP_THEME.error,
-                            lineHeight: 1.5,
-                          }}
-                        >
-                          {historyNavigationMessage}
-                        </p>
-                      ) : null}
-                      {activeSessionHistoryLinkSummary ? (
-                        <p style={{ ...trayStatusStyle(), margin: "0 0 10px" }} aria-live="polite">
-                          {activeSessionHistoryLinkSummary}
-                        </p>
-                      ) : null}
-                      <ul
-                        aria-label="Recent investigation history"
-                        style={{
-                          listStyle: "none",
-                          margin: 0,
-                          padding: 0,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 6,
-                          maxHeight: 180,
-                          overflowY: "auto",
-                        }}
-                      >
-                        {historyEntries.map((entry) => {
-                          const sessionTitle = resolveInvestigationHistorySessionTitle(
-                            entry,
-                            investigationSessionTitlesById
-                          );
-                          const linkedToActiveSession =
-                            isInvestigationHistoryEntryLinkedToActiveSession(
-                              entry,
-                              activeSession?.id
-                            );
-
-                          return (
-                            <li
-                              key={entry.id}
-                              role="button"
-                              tabIndex={0}
-                              data-vera5-history-entry="true"
-                              data-vera5-type={entry.iocType}
-                              data-vera5-value={entry.ioc}
-                              data-vera5-session-id={entry.sessionId ?? undefined}
-                              aria-label={buildInvestigationHistoryRowAriaLabel(
-                                entry,
-                                sessionTitle
-                              )}
-                              onClick={() => handleHistoryRowActivate(entry)}
-                              onKeyDown={(event) => {
-                                if (event.key !== "Enter" && event.key !== " ") {
-                                  return;
-                                }
-                                event.preventDefault();
-                                handleHistoryRowActivate(entry);
-                              }}
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                gap: 4,
-                                padding: "6px 8px",
-                                borderRadius: 6,
-                                border: linkedToActiveSession
-                                  ? `1px solid ${POPUP_THEME.accent}`
-                                  : "1px solid transparent",
-                                backgroundColor: POPUP_THEME.trayRowBg,
-                                fontSize: 12,
-                                lineHeight: 1.4,
-                                cursor: "pointer",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontFamily: "monospace",
-                                  wordBreak: "break-all",
-                                  color: POPUP_THEME.text,
-                                }}
-                              >
-                                {entry.ioc}
-                              </span>
-                              <span style={{ color: POPUP_THEME.muted, fontSize: 11 }}>
-                                {entry.pageOrigin}
-                              </span>
-                              {sessionTitle ? (
-                                <span
-                                  style={{
-                                    color: linkedToActiveSession
-                                      ? POPUP_THEME.accentText
-                                      : POPUP_THEME.muted,
-                                    fontSize: 11,
-                                  }}
-                                >
-                                  {linkedToActiveSession
-                                    ? "Linked to this session"
-                                    : `Session: ${sessionTitle}`}
-                                </span>
-                              ) : null}
-                              <span style={{ color: POPUP_THEME.muted, fontSize: 11 }}>
-                                {formatInvestigationHistoryTimestamp(entry.enrichedAt)}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                      {historyClearFeedback ? (
-                        <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "10px 0 0" }}>
-                          {historyClearFeedback}
-                        </p>
-                      ) : null}
-                      {historyClearConfirmOpen ? (
-                        <div
-                          role="group"
-                          aria-label="Confirm clear investigation history"
-                          style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 8,
-                            marginTop: 10,
-                          }}
-                        >
-                          <p style={{ ...trayStatusStyle(), margin: 0 }}>
-                            {INVESTIGATION_HISTORY_CLEAR_CONFIRM_MESSAGE}
-                          </p>
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            <button
-                              type="button"
-                              disabled={historyClearing}
-                              onClick={handleConfirmClearHistory}
-                              style={sessionActionButtonStyle()}
-                            >
-                              {historyClearing ? "Clearing…" : "Confirm clear"}
-                            </button>
-                            <button
-                              type="button"
-                              disabled={historyClearing}
-                              onClick={handleCancelClearHistory}
-                              style={sessionActionButtonStyle()}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={!historyReady || historyClearing}
-                          onClick={handleRequestClearHistory}
-                          style={{
-                            ...sessionActionButtonStyle(),
-                            marginTop: 10,
-                          }}
-                        >
-                          Clear history
-                        </button>
-                      )}
-                    </>
-                  )}
-                </div>
-              </section>
-              <div className="vera5-casework-panel" hidden={caseworkView !== "collections"}>
-                <CollectionsManagerPanel embedded />
-              </div>
-              <section
-                className="vera5-casework-panel"
-                aria-label={ENRICHMENT_SOURCE_OPS_SECTION_TITLE}
-                hidden={caseworkView !== "sources"}
-                style={{
-                  marginTop: 10,
-                  borderTop: `1px solid ${POPUP_THEME.border}`,
-                  paddingTop: 10,
-                }}
-              >
-                <h2 className="vera5-visually-hidden">{ENRICHMENT_SOURCE_OPS_SECTION_TITLE}</h2>
-                <div id="popup-source-ops-body">
-                  {!sourceOpsReady ? (
-                    <p style={trayStatusStyle()} aria-live="polite">
-                      Loading source status…
-                    </p>
-                  ) : !sourceOps ? (
-                    <p style={trayStatusStyle()} aria-live="polite">
-                      Source status unavailable.
-                    </p>
-                  ) : (
-                    <>
-                      <div className="vera5-source-overview" aria-live="polite">
-                        <span
-                          data-vera5-source-health={
-                            sourceOps.globalCooldownActive ? "error" : "healthy"
-                          }
-                        >
-                          {formatEnrichmentSourceOpsCooldownLabel(sourceOps)}
-                        </span>
-                        <span>
-                          Cleared {formatEnrichmentCacheClearedAtLabel(sourceOps.lastCacheClearAt)}
-                        </span>
-                        <span>{sourceOps.totalCacheEntryCount} cached</span>
-                      </div>
-                      <details className="vera5-source-guidance">
-                        <summary>Quota guidance</summary>
-                        <p>
-                          Vendor quota hints are orientation only; confirm effective limits in each
-                          vendor account.
-                        </p>
-                      </details>
-                      {sourceOpsClearFeedback ? (
-                        <p aria-live="polite" style={{ ...trayStatusStyle(), margin: "0 0 10px" }}>
-                          {sourceOpsClearFeedback}
-                        </p>
-                      ) : null}
-                      <ul
-                        aria-label="Enrichment source status"
-                        style={{
-                          listStyle: "none",
-                          margin: 0,
-                          padding: 0,
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 6,
-                          maxHeight: 220,
-                          overflowY: "auto",
-                        }}
-                      >
-                        {sourceOps.sources.map((row) => {
-                          const statusLabel = formatEnrichmentSourceLastStatusLabel(row.lastStatus);
-                          const lastErrorLabel = formatEnrichmentSourceLastErrorLabel(
-                            row.lastStatus
-                          );
-                          const sourceHealth =
-                            lastErrorLabel || statusLabel === "Rate limited"
-                              ? "error"
-                              : statusLabel === "OK" || statusLabel === "Cached"
-                                ? "healthy"
-                                : "neutral";
-                          return (
-                            <li
-                              key={row.sourceId}
-                              className="vera5-source-row"
-                              data-vera5-source-health={sourceHealth}
-                              title={`Vendor quota: ${row.quotaHint}`}
-                              style={{
-                                border: `1px solid ${POPUP_THEME.border}`,
-                                borderRadius: 6,
-                                padding: "6px 8px",
-                                backgroundColor: POPUP_THEME.trayRowBg,
-                                display: "grid",
-                                gridTemplateColumns: "minmax(0, 1fr) auto",
-                                gap: 8,
-                                alignItems: "start",
-                              }}
-                            >
-                              <div style={{ minWidth: 0 }}>
-                                <div
-                                  className="vera5-source-status"
-                                  style={{
-                                    fontSize: 12,
-                                    fontWeight: 600,
-                                    color: POPUP_THEME.text,
-                                    wordBreak: "break-word",
-                                  }}
-                                >
-                                  {row.displayName}
-                                </div>
-                                <div
-                                  style={{
-                                    fontSize: 11,
-                                    color: sourceOpsStatusColor(statusLabel),
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  {statusLabel}
-                                </div>
-                                {lastErrorLabel ? (
-                                  <div
-                                    style={{
-                                      fontSize: 11,
-                                      color: POPUP_THEME.error,
-                                      marginTop: 2,
-                                    }}
-                                  >
-                                    Error: {lastErrorLabel}
-                                  </div>
-                                ) : null}
-                              </div>
-                              <div
-                                style={{
-                                  display: "flex",
-                                  flexDirection: "column",
-                                  alignItems: "flex-end",
-                                  gap: 6,
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    flexShrink: 0,
-                                    fontSize: 11,
-                                    color: POPUP_THEME.muted,
-                                    whiteSpace: "nowrap",
-                                    textAlign: "right",
-                                  }}
-                                >
-                                  {formatEnrichmentSourceCacheEntryCountLabel(row.cacheEntryCount)}
-                                </span>
-                                <button
-                                  type="button"
-                                  disabled={
-                                    !sourceOpsReady ||
-                                    row.cacheEntryCount === 0 ||
-                                    clearingSourceCacheId === row.sourceId
-                                  }
-                                  onClick={() => handleClearSourceCache(row)}
-                                  aria-label={`Clear cache for ${row.displayName}`}
-                                  style={sessionActionButtonStyle()}
-                                >
-                                  {clearingSourceCacheId === row.sourceId
-                                    ? "Clearing…"
-                                    : "Clear cache"}
-                                </button>
-                              </div>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </>
-                  )}
-                </div>
-              </section>
-            </div>
-          </div>
+        <div className="vera5-popup-detail" aria-label="Investigation paths">
+          <InvestigationPaths
+            entry={selectedDetailEntry}
+            loading={intelFeedLoading || detailEnrichState === "enriching"}
+            availability={intelSourceAvailability}
+            pageIndicatorCount={investigationPageIndicatorCount}
+            priorSightingCount={investigationPriorSightingCount}
+            suppressed={investigationSelectedSuppressed}
+            onReviewDetections={() => {
+              if (selectedDetailEntry) {
+                navigateToTrayEntry(selectedDetailEntry);
+              }
+            }}
+          />
         </div>
       </div>
       <footer className="vera5-workspace-footer" role="contentinfo" aria-label="Workspace status">
