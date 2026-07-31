@@ -1,6 +1,9 @@
 /**
  * @vitest-environment happy-dom
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -50,10 +53,12 @@ import * as storage from "../lib/storage";
 import {
   POPUP_QUIET_MODE_STATUS_LABEL,
   POPUP_STATUS_STRIP_ARIA_LABEL,
+  STORAGE_KEY_API_KEYS,
   STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED,
   STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_QUIET_MODE,
 } from "../lib/storage";
+import { TEST_FIXTURE_GENERIC_API_KEY } from "../lib/fixtureSecrets";
 
 const sampleCollection = createIocCollection({
   id: "vera5-col-popup-test",
@@ -781,7 +786,7 @@ describe("Popup IOC tray", () => {
 
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain(
-        "Scan this page to list detected indicators."
+        "Scan the current page to detect indicators."
       );
     });
     expect(mounted?.container.textContent).toContain("SCAN PAGE");
@@ -813,14 +818,22 @@ describe("Popup IOC tray", () => {
     const detail = mounted?.container.querySelector(".vera5-popup-detail");
     const investigation = mounted?.container.querySelector(".vera5-investigation-paths");
     const workspace = mounted?.container.querySelector(".vera5-popup-workspace");
+    const chassis = mounted?.container.querySelector(".vera5-workspace-chassis");
     const commandSection = mounted?.container.querySelector(".vera5-command-section");
     const intelSection = mounted?.container.querySelector(".vera5-intel-feed-section");
     const intelFeed = mounted?.container.querySelector(".vera5-intel-feed");
     const header = mounted?.container.querySelector(".vera5-command-header");
+    const footer = mounted?.container.querySelector(".vera5-workspace-footer");
     expect(triage).not.toBeNull();
     expect(detail).not.toBeNull();
     expect(investigation).not.toBeNull();
     expect(commandSection).not.toBeNull();
+    // Phase 9 — chassis wraps Scan + workspace; navbar/footer stay outside.
+    expect(chassis).not.toBeNull();
+    expect(chassis?.contains(commandSection as Node)).toBe(true);
+    expect(chassis?.contains(workspace as Node)).toBe(true);
+    expect(chassis?.contains(header as Node)).toBe(false);
+    expect(chassis?.contains(footer as Node)).toBe(false);
     expect(header?.textContent).toContain("How-To");
     expect(header?.textContent).toContain("How-ToSettingsPermissions");
     expect(header?.querySelector("img")?.getAttribute("src")).toBe("icons/logo-mark.png");
@@ -860,7 +873,7 @@ describe("Popup IOC tray", () => {
     expect(commandSection?.querySelector(".vera5-section-divider")).not.toBeNull();
     expect(mounted?.container.querySelector(".vera5-workspace-footer")).not.toBeNull();
     expect(intelFeed).not.toBeNull();
-    expect(intelFeed?.textContent).toContain("Select an indicator");
+    expect(intelFeed?.textContent).toContain("Scan the current page to detect indicators.");
     expect(triage?.textContent).not.toContain("Extension enabled");
     expect(triage?.textContent).not.toContain("SCAN PAGE");
     expect(triage?.textContent).toContain("Detected indicators");
@@ -869,9 +882,47 @@ describe("Popup IOC tray", () => {
       "Investigation Paths"
     );
     expect(investigation?.querySelector(".vera5-section-divider")).not.toBeNull();
-    expect(investigation?.textContent).toContain("No indicator selected");
+    expect(investigation?.textContent).toContain("Scan the current page to detect indicators.");
+    expect(investigation?.textContent).not.toContain("No indicator selected");
+    expect(investigation?.querySelector(".vera5-ip-group--inset")).not.toBeNull();
+    expect(investigation?.querySelectorAll(".vera5-ip-group--open").length).toBeGreaterThanOrEqual(3);
+    const lowerPair = investigation?.querySelector(".vera5-ip-lower-pair");
+    expect(lowerPair).not.toBeNull();
+    expect(lowerPair?.querySelector('[aria-label="Related context"]')).not.toBeNull();
+    expect(lowerPair?.querySelector('[aria-label="Conditional intelligence"]')).not.toBeNull();
+    const mainEl = main as HTMLElement | null;
+    expect(mainEl?.style.containerName).toBe("vera5-workspace");
+    expect(mainEl?.style.containerType).toBe("inline-size");
+    const emptyIntel = intelFeed?.querySelector(".vera5-intel-feed-body--empty");
+    expect(emptyIntel).not.toBeNull();
+    expect(emptyIntel?.textContent).toContain("Scan the current page to detect indicators.");
+    expect(emptyIntel?.querySelector(".vera5-intel-empty-actions")).not.toBeNull();
+    expect(triage?.querySelector(".vera5-section-title")?.textContent).toContain(
+      "Detected indicators"
+    );
     expect(mounted?.container.querySelector(".vera5-popup-casework")).toBeNull();
     expect(mounted?.container.querySelector('[role="tab"][aria-controls="popup-investigation-body"]')).toBeNull();
+  });
+
+  it("defines Phase 6 compact/standard/expanded workspace breakpoints in tokens", () => {
+    const tokensPath = join(dirname(fileURLToPath(import.meta.url)), "../styles/tokens.css");
+    const tokens = readFileSync(tokensPath, "utf8");
+    expect(tokens).toContain("Phase 6 — adaptive workspace widths");
+    expect(tokens).toContain("--ws-compact-max: 679px");
+    expect(tokens).toContain("--ws-expanded-min: 1050px");
+    expect(tokens).toContain("--ws-wide-min: 1400px");
+    expect(tokens).toContain("--scan-command-max: 1080px");
+    expect(tokens).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
+    expect(tokens).toContain("@container vera5-workspace (min-width: 1050px)");
+    expect(tokens).toContain("@container vera5-workspace (min-width: 1400px)");
+    expect(tokens).toContain("@container vera5-workspace (max-width: 679px)");
+    expect(tokens).toContain("@container vera5-ip (min-width: 480px)");
+    expect(tokens).toContain("@container vera5-ip (min-width: 560px)");
+    expect(tokens).toContain("repeat(4, minmax(var(--vendor-card-min), 1fr))");
+    expect(tokens).toContain("max-width: var(--scan-command-max)");
+    expect(tokens).toContain("max-width: var(--intel-empty-max)");
+    expect(tokens).toContain("white-space: nowrap");
+    expect(tokens).toContain("container-name: vera5-ip");
   });
 
   it("preserves header utility handlers and functional switch persistence", async () => {
@@ -1205,13 +1256,67 @@ describe("Popup IOC tray", () => {
     expect(abuse?.getAttribute("data-vera5-source-status")).toBe("error");
     expect(abuse?.textContent).toContain("AbuseIPDB rate limit reached.");
     expect(virustotal?.getAttribute("data-vera5-source-status")).toBe("not-configured");
-    expect(virustotal?.textContent).toContain("Not configured");
-    expect(virustotal?.textContent).toContain("API key required in Settings");
+    expect(virustotal?.textContent).toContain("Missing configuration");
+    expect(virustotal?.textContent).toContain("API key required");
     expect(virustotal?.textContent).not.toContain("0/100");
     const vtSignal = virustotal?.querySelector(".vera5-intel-source-signal")?.textContent ?? "";
     const vtState = virustotal?.querySelector(".vera5-intel-source-state-label")?.textContent ?? "";
-    expect(vtState).toBe("Not configured");
+    expect(vtState).toBe("Missing configuration");
     expect(vtSignal).not.toBe(vtState);
+  });
+
+  it("shows Not queried and Not scored when an IOC is selected without enrichment", async () => {
+    stubChrome({
+      initialSummary: sampleSummary,
+      localStore: {
+        [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+          abuseipdb: true,
+          otx: true,
+          virustotal: true,
+        },
+        [STORAGE_KEY_API_KEYS]: {
+          abuseipdb: TEST_FIXTURE_GENERIC_API_KEY,
+          otx: TEST_FIXTURE_GENERIC_API_KEY,
+          virustotal: TEST_FIXTURE_GENERIC_API_KEY,
+        },
+      },
+    });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '[data-vera5-tray-entry="true"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(".vera5-intel-feed")?.getAttribute("data-vera5-intel-value")
+      ).toBe("8.8.8.8");
+    });
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(
+          '.vera5-intel-source-card[data-vera5-presentation-kind="not_queried"]'
+        )
+      ).not.toBeNull();
+    });
+    const feed = mounted?.container.querySelector(".vera5-intel-feed");
+    const score = feed?.querySelector(".vera5-intel-feed-score");
+    expect(score?.getAttribute("data-vera5-composite-state")).toBe("not_scored");
+    expect(score?.textContent).toContain("Not scored");
+    expect(score?.textContent).not.toContain("0/100");
+    const notQueried = feed?.querySelector(
+      '.vera5-intel-source-card[data-vera5-presentation-kind="not_queried"]'
+    );
+    expect(notQueried?.textContent).toContain("Not queried");
+    expect(notQueried?.textContent).not.toContain("Available for enrichment");
+    expect(notQueried?.textContent).not.toContain("Run Enrich to query this source");
+    expect(notQueried?.getAttribute("title")).toBe("Available for enrichment");
+    expect(feed?.querySelector(".vera5-intel-feed-enrich")?.textContent).toContain("Enrich");
   });
 
   it("does not duplicate pivot-only state text on vendor cards", async () => {
@@ -1256,8 +1361,10 @@ describe("Popup IOC tray", () => {
     const state = pivotCard?.querySelector(".vera5-intel-source-state-label")?.textContent ?? "";
     const signal = pivotCard?.querySelector(".vera5-intel-source-signal")?.textContent ?? "";
     expect(state).toBe("Pivot only");
-    expect(signal).toBe("External research available");
-    expect(signal).not.toBe("Pivot only");
+    expect(signal.trim()).toBe("");
+    expect(pivotCard?.textContent).not.toContain("External research available");
+    expect(pivotCard?.getAttribute("title")).toBe("External research available");
+    expect(pivotCard?.querySelectorAll(".vera5-intel-source-state-label")).toHaveLength(1);
   });
 
   it("maps vendor score boundaries to the required visual bands", async () => {
@@ -3032,7 +3139,7 @@ describe("Popup IOC tray", () => {
 
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain(
-        "Scan this page to list detected indicators."
+        "Scan the current page to detect indicators."
       );
     });
 
@@ -3042,10 +3149,43 @@ describe("Popup IOC tray", () => {
     scanButton?.click();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("No indicators detected on this page.");
+      expect(mounted?.container.textContent).toContain(
+        "No supported indicators were detected on this page."
+      );
     });
+    expect(mounted!.container.textContent).not.toContain("Select an indicator below");
     expect(mounted!.container.textContent).toContain("Settings");
     expect(mounted!.container.textContent).toContain("Permissions");
+  });
+
+  it("shows detected count and selection instruction when indicators exist but none is selected", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("3 indicators detected");
+    });
+    const emptyIntel = mounted?.container.querySelector(".vera5-intel-feed-body--empty");
+    expect(emptyIntel?.textContent).toContain(
+      "Select an indicator below to assemble vendor evidence, scoring, and investigation paths."
+    );
+    expect(mounted?.container.textContent).toContain("All (3)");
+    expect(emptyIntel?.querySelectorAll("button:disabled").length).toBeGreaterThan(0);
+  });
+
+  it("keeps Detected Indicators title intact with Collections & macros utility", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+    const triage = mounted?.container.querySelector(".vera5-triage-section");
+    const heading = triage?.querySelector(".vera5-triage-heading-row .vera5-section-title");
+    expect(heading?.textContent).toContain("Detected indicators");
+    expect(heading?.textContent).not.toMatch(/Detected\s*$/);
+    expect(triage?.querySelector(".vera5-tray-case-tools")).not.toBeNull();
+    expect(triage?.textContent).toContain(POPUP_TRAY_CASE_TOOLS_SUMMARY);
   });
 });
 
@@ -3107,10 +3247,20 @@ describe("Investigation Paths module", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.querySelector(".vera5-investigation-paths")).not.toBeNull();
+      expect(mounted?.container.textContent).toContain("No indicator selected");
+      expect(mounted?.container.textContent).toContain("3 indicators detected");
     });
     const module = mounted?.container.querySelector(".vera5-investigation-paths");
     expect(module?.textContent).toContain("No indicator selected");
+    expect(module?.textContent).toContain(
+      "Select an indicator from Detected Indicators to begin investigation."
+    );
+    // Primary absence message once — not repeated under Sources / Related Context.
+    expect(module?.textContent?.match(/No indicator selected/g)?.length).toBe(1);
+    expect(module?.textContent).toContain("Sources become available after selecting an indicator.");
+    expect(module?.textContent).toContain("Context becomes available after selection.");
+    expect(module?.textContent).toContain("Awaiting selection");
+    expect(module?.textContent).not.toContain("No ATT&CK mappings available");
     expect(module?.querySelector(".vera5-ip-copy")).toBeNull();
     expect(investigationActionByLabel("Search malware intelligence")?.disabled).toBe(true);
     expect(investigationActionByLabel("Review detections")?.disabled).toBe(true);
@@ -3200,8 +3350,12 @@ describe("Investigation Paths module", () => {
     expect(cveRow?.getAttribute("data-vera5-available")).toBe("true");
     expect(cveRow?.tagName).toBe("DETAILS");
     const module = mounted?.container.querySelector(".vera5-investigation-paths");
-    expect(module?.textContent).toContain("No ATT&CK mappings available");
-    expect(module?.textContent).toContain("No family or campaign association available");
+    expect(module?.textContent).toContain("Not evaluated");
+    expect(module?.textContent).not.toContain("No ATT&CK mappings available");
+    expect(module?.textContent).not.toContain("No family or campaign association available");
+    expect(module?.textContent).toContain(
+      "is tracked as a CVE indicator. CVSS, EPSS, and CISA KEV context are not available in local enrichment."
+    );
   });
 });
 

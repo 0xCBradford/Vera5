@@ -117,8 +117,9 @@
   --font-wordmark: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-display: var(--font-wordmark);
 
-  /* Side-panel intelligence grid (Phase 5 densified) */
+  /* Side-panel intelligence grid (Phase 5 densified; Phase 8 ops height) */
   --intel-card-height: 108px;
+  --intel-card-height-ops: 86px;
   --intel-summary-min: 112px;
   --panel-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 
@@ -243,8 +244,10 @@
   --focus-color: var(--accent);
   --focus-outline-width: 2px;
   --focus-outline-offset: 2px;
-  --disabled-opacity: 0.55;
-  --disabled-saturate: 0.7;
+  /* Phase 8 — disabled labels stay readable; controls remain clearly inactive. */
+  --disabled-opacity: 0.72;
+  --disabled-saturate: 0.82;
+  --text-disabled: color-mix(in srgb, var(--text-secondary) 82%, var(--text-primary));
 
   /* Phase 2 — major-section architecture (extends Phase 1; no second system) */
   --section-pad-x: var(--sp-6); /* 16px */
@@ -258,6 +261,23 @@
     linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 84%, #0c1420), var(--elev-section));
   --section-shadow: var(--highlight-top), var(--shadow-low);
 
+  /*
+   * Phase 9 — soft metallic workspace chassis (canvas only).
+   * Rollback: set --surface-chassis-fill to var(--surface-page), or remove
+   * .vera5-workspace-chassis sidepanel rules. Do not reuse for cards/fields.
+   */
+  --surface-chassis: #BEC3C9;
+  --surface-chassis-top: #C2C7CC;
+  --surface-chassis-bottom: #B8BEC5;
+  --surface-chassis-fill: linear-gradient(
+    180deg,
+    var(--surface-chassis-top) 0%,
+    var(--surface-chassis-bottom) 100%
+  );
+  --ws-chassis-gutter: var(--sp-4); /* 10px — Standard baseline */
+  --section-border-chassis: color-mix(in srgb, var(--state-blue) 18%, var(--border-hard));
+  --section-shadow-chassis: var(--highlight-top), 0 2px 8px rgba(5, 10, 16, 0.22);
+
   /* Phase 3 — control families (extends Phase 1/2; no second system) */
   --ctrl-h-compact: 32px;
   --ctrl-h-standard: 38px;
@@ -266,6 +286,35 @@
   --ctrl-h-icon: 28px;
   --status-dot: 6px;
   --ctrl-gap-icon: 6px;
+
+  /* ----------------------------------------------------------------
+   * Phase 6 — adaptive workspace widths (container: vera5-workspace)
+   *
+   * Canonical breakpoints (px = container inline size). Custom properties
+   * cannot be referenced inside @container conditions; keep these values
+   * synchronized with the @container blocks at the end of this file.
+   *
+   * COMPACT:   ≤679px   — narrow side panel; controlled wrapping
+   * STANDARD:  680–1049 — Phase 5 baseline (default rules below)
+   * EXPANDED:  ≥1050px  — selective internal max-widths + denser grids
+   * VERY WIDE: ≥1400px  — optional 5-column vendor evidence grid
+   *
+   * Chosen where Scan/Intel/IOC rows begin to stretch, toggle labels
+   * disconnect from switches, and vendor cards waste horizontal space.
+   * Density refinements at 559 / 399 / 339 remain compact sub-steps.
+   * ---------------------------------------------------------------- */
+  --ws-compact-max: 679px;
+  --ws-standard-min: 680px;
+  --ws-expanded-min: 1050px;
+  --ws-wide-min: 1400px;
+  --scan-command-max: 1080px;
+  --intel-summary-max: 1120px;
+  --intel-empty-max: 720px;
+  --triage-filter-max: 640px;
+  --prose-max: 62ch;
+  --tech-value-max: 56ch;
+  --vendor-card-min: 220px;
+  --ip-source-tile-min: 132px;
 
   /* ----------------------------------------------------------------
    * Back-compat aliases: the settings page (options.css) consumes the
@@ -696,6 +745,7 @@
 .vera5-popup [role="button"][aria-disabled="true"],
 .vera5-popup [role="switch"]:disabled {
   cursor: not-allowed;
+  color: var(--text-disabled);
   opacity: var(--disabled-opacity);
   filter: saturate(var(--disabled-saturate));
 }
@@ -714,10 +764,34 @@
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  background:
-    radial-gradient(120% 80% at 100% 0%, rgba(34, 199, 169, 0.04), transparent 45%),
-    radial-gradient(90% 60% at 0% 100%, rgba(255, 178, 36, 0.05), transparent 42%),
-    var(--surface-page) !important;
+  /* Dark frame for navbar/footer; chassis paints only the middle canvas. */
+  padding: 0 !important;
+  background: var(--surface-page) !important;
+  --section-border: var(--section-border-chassis);
+  --section-shadow: var(--section-shadow-chassis);
+  --ws-chassis-gutter: var(--sp-4); /* Standard: ~10px */
+}
+
+/* Phase 9 — passthrough outside sidepanel; metallic canvas inside sidepanel. */
+.vera5-workspace-chassis {
+  display: contents;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-workspace-chassis {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--ws-chassis-gutter);
+  background: var(--surface-chassis-fill);
+  background-color: var(--surface-chassis);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-workspace-chassis > .vera5-popup-workspace {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /*
@@ -775,7 +849,7 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-section-subtitle {
   margin: 0;
-  max-width: 48ch;
+  max-width: min(48ch, var(--prose-max));
   color: var(--text-secondary);
   font-size: var(--fs-xs);
   font-weight: var(--fw-body);
@@ -877,7 +951,9 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
-  margin: 0 0 var(--sp-5);
+  margin: 0;
+  padding: 0 var(--ws-chassis-gutter) var(--sp-3);
+  background: var(--surface-page);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-status-chip {
@@ -935,8 +1011,9 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-header {
   min-height: 46px;
-  padding: 2px 2px 12px;
+  padding: 2px var(--ws-chassis-gutter) 12px;
   border-bottom-color: var(--command-border-soft);
+  background: var(--surface-page);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-header h1 {
@@ -1020,9 +1097,18 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
   min-width: 0;
   margin-bottom: 0 !important;
   padding-top: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row .vera5-section-identity {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section > .vera5-section-divider {
@@ -1031,7 +1117,8 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section h2,
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section .vera5-section-title {
-  min-width: 0;
+  flex: 0 0 auto;
+  min-width: max-content;
   margin: 0 !important;
   color: var(--accent) !important;
   font-size: var(--fs-heading) !important;
@@ -1039,11 +1126,13 @@
   letter-spacing: var(--ls-heading) !important;
   line-height: var(--lh-tight);
   text-transform: uppercase !important;
+  white-space: nowrap;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-tray-case-tools {
   position: relative;
   z-index: 6;
+  flex: 0 0 auto;
   padding: 0;
   border: 0;
   background: none;
@@ -1055,8 +1144,8 @@
   min-height: var(--ctrl-h-compact);
   align-items: center;
   justify-content: center;
-  gap: var(--ctrl-gap-icon);
-  padding: 6px 10px;
+  gap: 5px;
+  padding: 5px 8px;
   border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 28%, var(--border-soft));
   border-radius: var(--r-compact);
   background:
@@ -1079,9 +1168,15 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-tray-case-tools > summary svg {
-  flex: 0 0 14px;
+  flex: 0 0 13px;
+  width: 13px;
+  height: 13px;
   stroke: color-mix(in srgb, var(--state-blue) 74%, var(--text-primary));
   stroke-width: 1.25;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-tray-case-tools-label {
+  font-size: var(--fs-micro);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-tray-case-tools > summary:hover {
@@ -1344,6 +1439,7 @@
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-queue-value {
   display: -webkit-box;
   min-width: 0;
+  max-width: min(100%, var(--tech-value-max));
   max-height: 2.7em;
   overflow: hidden;
   color: var(--text-primary) !important;
@@ -1515,6 +1611,8 @@
   border-radius: var(--r-major);
   background: var(--section-surface);
   box-shadow: var(--section-shadow);
+  container-type: inline-size;
+  container-name: vera5-ip;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-header {
@@ -1568,19 +1666,37 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--sp-3);
+  gap: 0;
   min-height: 0;
   padding: var(--sp-4) var(--section-pad-x) var(--section-pad-y);
   overflow-x: hidden;
   overflow-y: auto;
 }
 
+/* Phase 8 — Selected IOC keeps an inset surface; other groups are open + dividers. */
 .vera5-popup[data-host="sidepanel"] .vera5-ip-group {
   min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group--inset {
   padding: 9px 10px 10px;
   border: 1px solid var(--border-soft);
   border-radius: var(--r-sm);
   background: color-mix(in srgb, var(--surface-page) 60%, var(--surface-1));
+  max-width: min(100%, calc(var(--tech-value-max) + 7rem));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group--open {
+  padding: var(--sp-3) 0 0;
+  margin: 0;
+  border: 0;
+  border-top: var(--bw-thin) solid var(--divider-quiet);
+  border-radius: 0;
+  background: transparent;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group--inset + .vera5-ip-group--open {
+  margin-top: var(--sp-3);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-group-label {
@@ -1594,21 +1710,23 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-empty {
   margin: 0;
-  color: var(--text-low);
+  max-width: var(--prose-max);
+  color: var(--text-disabled);
   font-size: var(--fs-micro);
   line-height: 1.4;
 }
 
-/* Selected IOC */
 .vera5-popup[data-host="sidepanel"] .vera5-ip-selected {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 9px;
+  max-width: 100%;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-selected-value {
   min-width: 0;
+  max-width: var(--tech-value-max);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -1620,6 +1738,39 @@
   line-height: var(--lh-value);
   overflow-wrap: anywhere;
   word-break: break-all;
+}
+
+/* Related Context + Conditional Intelligence share a row only when IP is wide. */
+.vera5-popup[data-host="sidepanel"] .vera5-ip-lower-pair {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-lower-pair > .vera5-ip-group {
+  min-width: 0;
+}
+
+@container vera5-ip (min-width: 480px) {
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-lower-pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--sp-3);
+    align-items: start;
+    border-top: var(--bw-thin) solid var(--divider-quiet);
+    padding-top: var(--sp-3);
+    margin-top: 0;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-lower-pair > .vera5-ip-group--open {
+    border-top: 0;
+    padding-top: 0;
+  }
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-context-line > span:last-child {
+  max-width: var(--prose-max);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-copy {
@@ -1721,13 +1872,16 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-action[data-vera5-disabled="true"] {
   border-color: var(--border-soft);
-  background: color-mix(in srgb, var(--surface-page) 72%, var(--surface-1));
-  color: var(--text-low);
+  background: color-mix(in srgb, var(--surface-page) 68%, var(--surface-1));
+  box-shadow: none;
+  color: var(--text-disabled);
   cursor: not-allowed;
+  opacity: 1;
+  filter: none;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-action[data-vera5-disabled="true"] .vera5-ip-action-icon {
-  color: var(--text-low);
+  color: color-mix(in srgb, var(--text-disabled) 88%, var(--accent));
 }
 
 /* Intelligence Sources — rectangular source tiles (not capsules) */
@@ -1777,12 +1931,13 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-source[data-vera5-disabled="true"] {
-  border-color: color-mix(in srgb, var(--state-config-missing) 38%, var(--border-soft));
-  background: color-mix(in srgb, var(--state-config-missing) 10%, var(--surface-2));
-  color: color-mix(in srgb, var(--state-config-missing) 72%, var(--text-secondary));
+  border-color: color-mix(in srgb, var(--state-config-missing) 42%, var(--border-soft));
+  background: color-mix(in srgb, var(--state-config-missing) 12%, var(--surface-2));
+  box-shadow: none;
+  color: color-mix(in srgb, var(--state-config-missing) 78%, var(--text-secondary));
   cursor: not-allowed;
-  opacity: var(--disabled-opacity);
-  filter: saturate(var(--disabled-saturate));
+  opacity: 1;
+  filter: none;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-source .vera5-status {
@@ -1849,18 +2004,29 @@
   height: 8px;
 }
 
-/* Conditional Intelligence */
+/* Conditional Intelligence — one disclosure group with row dividers (Phase 8). */
 .vera5-popup[data-host="sidepanel"] .vera5-ip-conditional {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
+  min-width: 0;
+  border: var(--bw-thin) solid var(--border-soft);
+  border-radius: var(--r-compact);
+  background: color-mix(in srgb, var(--surface-page) 72%, var(--surface-1));
+  overflow: hidden;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row,
 .vera5-popup[data-host="sidepanel"] .vera5-disclosure-row {
-  border: var(--bw-thin) solid var(--border-soft);
-  border-radius: var(--r-compact);
-  background: color-mix(in srgb, var(--surface-page) 68%, var(--surface-1));
+  border: 0;
+  border-top: var(--bw-thin) solid var(--divider-quiet);
+  border-radius: 0;
+  background: transparent;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row:first-child,
+.vera5-popup[data-host="sidepanel"] .vera5-disclosure-row:first-child {
+  border-top: 0;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row:not(.vera5-ip-cond-row--interactive) {
@@ -1871,7 +2037,7 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row[data-vera5-available="false"] {
-  color: var(--text-low);
+  color: var(--text-disabled);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row--interactive > summary {
@@ -1910,7 +2076,11 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row[data-vera5-available="false"] .vera5-ip-cond-label {
-  color: var(--text-secondary);
+  color: var(--text-disabled);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row[data-vera5-available="false"] .vera5-ip-cond-status {
+  color: color-mix(in srgb, var(--text-disabled) 88%, var(--text-low));
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-status {
@@ -1946,6 +2116,7 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-note {
   margin: 0;
+  max-width: var(--prose-max);
   color: var(--text-secondary);
   font-size: var(--fs-micro);
   line-height: 1.45;
@@ -2001,17 +2172,18 @@
 .vera5-popup[data-host="sidepanel"] .vera5-command-section {
   position: relative;
   isolation: isolate;
-  margin: 8px 0 10px;
+  margin: 0 0 var(--section-gap);
   padding: var(--section-pad-y) var(--section-pad-x);
   gap: var(--section-gap);
   overflow: hidden;
-  border: var(--bw-thin) solid var(--command-border);
+  /* Outer edge only — do not redefine --command-border for inner Scan controls. */
+  border: var(--bw-thin) solid rgba(96, 128, 178, 0.26);
   border-radius: var(--command-radius);
   background:
     linear-gradient(180deg, var(--command-surface-raised), var(--command-bg) 62%, var(--command-surface));
   box-shadow:
     inset 0 1px 0 rgba(235, 243, 255, 0.06),
-    var(--command-shadow);
+    0 2px 8px rgba(5, 10, 16, 0.22);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-section-header {
@@ -2058,8 +2230,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 10px;
   min-width: 0;
   min-height: 42px;
   padding: 6px 12px !important;
@@ -2088,7 +2260,7 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-toggle-label {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   color: var(--command-text);
   font-family: var(--font-ui);
@@ -2313,15 +2485,24 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-secondary-command:disabled {
-  border-color: color-mix(in srgb, var(--command-gold) 34%, var(--command-border)) !important;
+  border-color: color-mix(in srgb, var(--command-border) 88%, var(--command-muted)) !important;
   background:
-    linear-gradient(180deg, rgba(126, 85, 17, 0.1), rgba(70, 45, 5, 0.08)),
-    var(--command-surface) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 214, 111, 0.04) !important;
-  color: color-mix(in srgb, var(--command-gold-light) 54%, var(--command-muted)) !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 58%),
+    color-mix(in srgb, var(--command-surface) 92%, #0a1018) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+  color: color-mix(in srgb, var(--command-muted) 72%, var(--command-text)) !important;
   cursor: not-allowed !important;
-  filter: saturate(var(--disabled-saturate));
-  opacity: var(--disabled-opacity) !important;
+  filter: none;
+  opacity: 1 !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-secondary-command:disabled .vera5-secondary-command-icon {
+  opacity: 0.78;
+  filter: saturate(0.85);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-secondary-command:disabled .vera5-secondary-command-copy small {
+  color: color-mix(in srgb, var(--command-muted) 80%, var(--command-text)) !important;
 }
 
 /* Secondary-action accents: same family, restrained semantic edge/icon tone */
@@ -2440,6 +2621,13 @@
   line-height: 1.35;
 }
 
+.vera5-popup[data-host="sidepanel"] .vera5-workspace-footer {
+  margin-top: 0;
+  padding: 7px var(--ws-chassis-gutter);
+  /* Opaque dark lower frame — no chassis bleed through translucency. */
+  background: linear-gradient(180deg, #111927 0%, #080c13 100%);
+}
+
 .vera5-workspace-footer-meta {
   display: flex;
   flex-wrap: wrap;
@@ -2554,8 +2742,9 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-left: var(--bw-thin) solid var(--divider-standard);
-  padding-left: var(--section-gap);
+  /* Phase 9: column seam is the chassis grid gap only (no stacked light gutter). */
+  border-left: 0;
+  padding-left: 0;
   padding-right: 0;
 }
 
@@ -2820,15 +3009,47 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  min-height: 48px;
-  gap: var(--section-gap);
+  width: 100%;
+  max-width: 100%;
+  min-height: 40px;
+  gap: var(--sp-3);
+  padding-block: 2px;
+}
+
+.vera5-intel-empty-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 
 .vera5-intel-feed-body--empty p,
 .vera5-intel-feed--empty .vera5-intel-feed-body--empty p {
   margin: 0;
+  max-width: var(--prose-max);
   color: var(--text-secondary);
   font-size: var(--fs-micro);
+}
+
+.vera5-intel-enrichment-status {
+  margin: 2px 0 0;
+  max-width: var(--prose-max);
+  color: var(--text-secondary);
+  font-size: var(--fs-nano);
+  font-weight: var(--fw-medium);
+  line-height: 1.3;
+  text-align: center;
+}
+
+.vera5-ip-empty-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.vera5-ip-empty--secondary {
+  color: var(--text-secondary);
 }
 
 /* Legacy empty modifier kept for tests; layout is on the body region. */
@@ -2884,9 +3105,13 @@
 
 .vera5-intel-empty-actions button:disabled,
 .vera5-intel-export-actions button:disabled {
+  border-color: color-mix(in srgb, var(--border-soft) 88%, var(--text-secondary));
+  background: color-mix(in srgb, var(--surface-page) 70%, var(--surface-1));
+  box-shadow: none;
+  color: var(--text-disabled);
   cursor: not-allowed;
-  filter: saturate(var(--disabled-saturate));
-  opacity: var(--disabled-opacity);
+  filter: none;
+  opacity: 1;
 }
 
 .vera5-intel-export-actions button:hover:not(:disabled),
@@ -2912,6 +3137,8 @@
   grid-template-columns: minmax(168px, 0.92fr) minmax(132px, 0.72fr) minmax(300px, 2fr);
   gap: 8px;
   align-items: stretch;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -3225,15 +3452,16 @@
   line-height: 1.25;
 }
 
-/* Source evidence grid — equal footprint cards, wraps into rows. */
+/* Source evidence grid — Phase 6: STANDARD default = 3 columns. */
 .vera5-intel-feed-sources {
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: var(--intel-card-height);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: minmax(var(--intel-card-height-ops), auto);
   gap: 7px;
   min-width: 0;
   align-items: stretch;
+  justify-content: start;
 }
 
 .vera5-intel-source-card {
@@ -3241,14 +3469,14 @@
   --source-tint: #111926;
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(28px, 1fr) auto;
-  gap: 4px;
+  grid-template-rows: auto minmax(22px, 1fr) auto;
+  gap: 3px;
   box-sizing: border-box;
   min-width: 0;
-  height: var(--intel-card-height);
-  min-height: var(--intel-card-height);
-  max-height: var(--intel-card-height);
-  padding: 8px 9px 8px;
+  height: auto;
+  min-height: var(--intel-card-height-ops);
+  max-height: none;
+  padding: 7px 9px 7px;
   border: 1px solid color-mix(in srgb, var(--source-accent) 58%, var(--border-soft));
   border-radius: var(--r-md);
   background:
@@ -3261,9 +3489,19 @@
   overflow: hidden;
 }
 
+.vera5-intel-source-card[data-vera5-score-band] {
+  height: var(--intel-card-height);
+  min-height: var(--intel-card-height);
+  max-height: var(--intel-card-height);
+  grid-template-rows: auto minmax(28px, 1fr) auto;
+  gap: 4px;
+  padding: 8px 9px 8px;
+}
+
 .vera5-intel-source-card[data-vera5-info-open="true"] {
   z-index: 30;
   overflow: visible;
+  max-height: none;
 }
 
 .vera5-intel-source-header {
@@ -3535,9 +3773,147 @@
   min-width: 0;
 }
 
-@container vera5-workspace (max-width: 899px) {
+/*
+ * Phase 6 modes (vera5-workspace container):
+ * COMPACT ≤679 · STANDARD 680–1049 · EXPANDED ≥1050 · VERY WIDE ≥1400
+ */
+
+@container vera5-workspace (min-width: 1050px) {
+  .vera5-popup[data-host="sidepanel"] {
+    --ws-chassis-gutter: var(--sp-5); /* Expanded: ~12px */
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-scan-primary,
+  .vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-scan-secondary,
+  .vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-command-toggle-rail {
+    width: 100%;
+    max-width: var(--scan-command-max);
+    margin-inline: auto;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-command-toggle {
+    justify-content: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 300px;
+    margin-inline: auto;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-summary-row {
+    max-width: var(--intel-summary-max);
+    grid-template-columns: minmax(230px, 0.85fr) minmax(180px, 0.55fr) minmax(400px, 1.5fr);
+    justify-content: start;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-body--empty {
+    max-width: var(--intel-empty-max);
+    grid-template-columns: minmax(0, 1fr) auto;
+    justify-content: start;
+    gap: 12px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-empty-actions {
+    justify-content: flex-start;
+  }
+
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-sources {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(var(--vendor-card-min), 1fr));
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-popup-workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-triage-filters,
+  .vera5-popup[data-host="sidepanel"] .vera5-segmented {
+    max-width: var(--triage-filter-max);
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ioc-queue-value {
+    max-width: min(100%, var(--tech-value-max));
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-section-subtitle {
+    max-width: min(52ch, var(--prose-max));
+  }
+}
+
+@container vera5-workspace (min-width: 1400px) {
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-sources {
+    grid-template-columns: repeat(5, minmax(200px, 1fr));
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-scan-primary,
+  .vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-scan-secondary,
+  .vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-command-toggle-rail {
+    max-width: 1180px;
+  }
+}
+
+@container vera5-ip (min-width: 560px) {
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-sources {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--ip-source-tile-min), 1fr));
+    gap: var(--sp-2);
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-source {
+    width: 100%;
+    max-width: none;
+    justify-content: flex-start;
+  }
+}
+
+@container vera5-workspace (max-width: 679px) {
+  .vera5-popup[data-host="sidepanel"] {
+    --ws-chassis-gutter: var(--sp-3); /* Compact: ~8px */
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-command-header h1 {
+    flex-wrap: wrap;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-header-utilities {
+    width: 100%;
+    margin-left: 0 !important;
+    justify-content: flex-start;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row .vera5-section-identity {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row .vera5-section-identity {
+    flex: 1 0 100%;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row .vera5-section-title {
+    white-space: nowrap;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row .vera5-section-utilities,
+  .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row .vera5-tray-case-tools {
+    flex: 1 0 100%;
+    justify-content: flex-start;
+    margin-top: 2px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row .vera5-tray-case-tools > summary {
+    justify-content: flex-start;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-body--empty {
+    max-width: 100%;
   }
 }
 
@@ -3610,7 +3986,7 @@
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-popup-detail {
-    padding-left: 10px;
+    padding-left: 0;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-summary-row {
@@ -3633,16 +4009,7 @@
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-sources {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-sources {
-    grid-auto-rows: 118px;
-  }
-
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-source-card {
-    height: 118px;
-    min-height: 118px;
-    max-height: 118px;
+    grid-auto-rows: minmax(var(--intel-card-height-ops), auto);
   }
 }
 

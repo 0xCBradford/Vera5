@@ -298,6 +298,18 @@ import {
   resolveTrayNavigationFeedback,
 } from "../lib/workspaceTrayState";
 import {
+  WORKSPACE_STATE_COPY,
+  resolveCanonicalDetectedCount,
+  resolveCompositeScorePresentation,
+  resolveDetectedIndicatorsStatusCopy,
+  resolveEnrichmentPresentation,
+  resolveEnrichmentStatusLine,
+  resolveIntelFeedUnselectedCopy,
+  resolveInvestigationPathsSelectionCopy,
+  resolveScanPresentation,
+  resolveVendorCardPresentation,
+} from "../lib/workspacePresentationState";
+import {
   ENRICHMENT_ASSESSMENT_KIND,
   ENRICHMENT_SOURCE_ORDER,
   enrichmentSourceSupportsIocType,
@@ -2364,6 +2376,7 @@ function InvestigationPaths({
   pageIndicatorCount,
   priorSightingCount,
   suppressed,
+  scanPresentation,
   onReviewDetections,
 }: {
   entry: TabScanSummaryEntry | null;
@@ -2372,10 +2385,15 @@ function InvestigationPaths({
   pageIndicatorCount: number;
   priorSightingCount: number;
   suppressed: boolean;
+  scanPresentation: ReturnType<typeof resolveScanPresentation>;
   onReviewDetections: () => void;
 }) {
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [collectionMembership, setCollectionMembership] = useState<number | null>(null);
+  const selectionCopy = resolveInvestigationPathsSelectionCopy({
+    scan: scanPresentation,
+    hasSelection: Boolean(entry),
+  });
 
   useEffect(() => {
     setCopyFeedback(null);
@@ -2487,7 +2505,7 @@ function InvestigationPaths({
       lines.push({
         id: "infra",
         tone: "muted",
-        text: "Related infrastructure unavailable",
+        text: WORKSPACE_STATE_COPY.related.unavailable,
       });
     }
     return lines.slice(0, 3);
@@ -2526,7 +2544,7 @@ function InvestigationPaths({
       <hr className="vera5-section-divider" aria-hidden="true" />
 
       <div className="vera5-ip-scroll">
-        <section className="vera5-ip-group" aria-label="Selected IOC">
+        <section className="vera5-ip-group vera5-ip-group--inset" aria-label="Selected IOC">
           <div className="vera5-ip-group-label">Selected IOC</div>
           {entry ? (
             <>
@@ -2554,11 +2572,18 @@ function InvestigationPaths({
               </span>
             </>
           ) : (
-            <p className="vera5-ip-empty">No indicator selected</p>
+            <div className="vera5-ip-empty-block">
+              <p className="vera5-ip-empty">{selectionCopy.selectedPrimary}</p>
+              {selectionCopy.selectedSecondary ? (
+                <p className="vera5-ip-empty vera5-ip-empty--secondary">
+                  {selectionCopy.selectedSecondary}
+                </p>
+              ) : null}
+            </div>
           )}
         </section>
 
-        <section className="vera5-ip-group" aria-label="Recommended actions">
+        <section className="vera5-ip-group vera5-ip-group--open" aria-label="Recommended actions">
           <div className="vera5-ip-group-label">Recommended Actions</div>
           <div className="vera5-ip-actions">
             <InvestigationActionTile
@@ -2567,7 +2592,7 @@ function InvestigationPaths({
               disabled={!entry || malwareIntelActionable.length === 0}
               reason={
                 !entry
-                  ? "Select an indicator first"
+                  ? selectionCopy.actionDisabledReason
                   : "No enabled malware-intelligence source for this indicator"
               }
               onActivate={() => {
@@ -2580,28 +2605,36 @@ function InvestigationPaths({
               glyph="detections"
               label="Review detections"
               disabled={!entry}
-              reason="Select an indicator first"
+              reason={selectionCopy.actionDisabledReason}
               onActivate={onReviewDetections}
             />
             <InvestigationActionTile
               glyph="infra"
               label="Find related infrastructure"
               disabled
-              reason="No related infrastructure data available"
+              reason={
+                entry
+                  ? WORKSPACE_STATE_COPY.related.unavailable
+                  : selectionCopy.actionDisabledReason
+              }
             />
             <InvestigationActionTile
               glyph="campaign"
               label="Check campaign associations"
               disabled
-              reason="No campaign association data available"
+              reason={
+                entry
+                  ? "Campaign context unavailable"
+                  : selectionCopy.actionDisabledReason
+              }
             />
           </div>
         </section>
 
-        <section className="vera5-ip-group" aria-label="Intelligence sources">
+        <section className="vera5-ip-group vera5-ip-group--open" aria-label="Intelligence sources">
           <div className="vera5-ip-group-label">Intelligence Sources</div>
           {!entry ? (
-            <p className="vera5-ip-empty">No indicator selected</p>
+            <p className="vera5-ip-empty">{selectionCopy.sourcesPlaceholder}</p>
           ) : sourceButtons.length === 0 ? (
             <p className="vera5-ip-empty">
               {loading ? "Resolving sources…" : "No enabled sources apply to this indicator"}
@@ -2627,13 +2660,13 @@ function InvestigationPaths({
                     className="vera5-ip-source"
                     data-vera5-disabled="true"
                     disabled
-                    title="API key required in Settings"
-                    aria-label={`${source.label} — API key required in Settings`}
+                    title={WORKSPACE_STATE_COPY.source.missingConfigurationSupport}
+                    aria-label={`${source.label} — ${WORKSPACE_STATE_COPY.source.missingConfiguration}`}
                   >
                     <VendorMark sourceId={source.sourceId} size="xs" />
                     <span>{source.label}</span>
                     <span className="vera5-status" data-vera5-status="config">
-                      Missing key
+                      {WORKSPACE_STATE_COPY.source.missingConfiguration}
                     </span>
                   </button>
                 )
@@ -2642,54 +2675,69 @@ function InvestigationPaths({
           )}
         </section>
 
-        <section className="vera5-ip-group" aria-label="Related context">
-          <div className="vera5-ip-group-label">Related Context</div>
-          {!entry ? (
-            <p className="vera5-ip-empty">Select an indicator to view related context</p>
-          ) : (
-            <ul className="vera5-ip-context">
-              {relatedLines.map((line) => (
-                <li key={line.id} className="vera5-ip-context-line" data-vera5-tone={line.tone}>
-                  <span className="vera5-ip-context-dot" aria-hidden="true">
-                    <InvestigationGlyph name="dot" />
-                  </span>
-                  <span>{line.text}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
+        <div className="vera5-ip-lower-pair">
+          <section className="vera5-ip-group vera5-ip-group--open" aria-label="Related context">
+            <div className="vera5-ip-group-label">Related Context</div>
+            {!entry ? (
+              <p className="vera5-ip-empty">{selectionCopy.contextPlaceholder}</p>
+            ) : (
+              <ul className="vera5-ip-context">
+                {relatedLines.map((line) => (
+                  <li key={line.id} className="vera5-ip-context-line" data-vera5-tone={line.tone}>
+                    <span className="vera5-ip-context-dot" aria-hidden="true">
+                      <InvestigationGlyph name="dot" />
+                    </span>
+                    <span>{line.text}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-        <section className="vera5-ip-group" aria-label="Conditional intelligence">
-          <div className="vera5-ip-group-label">Conditional Intelligence</div>
-          <div className="vera5-ip-conditional">
-            <InvestigationConditionalRow
-              glyph="mitre"
-              label="MITRE ATT&CK"
-              available={false}
-              status="No ATT&CK mappings available"
-            />
-            <InvestigationConditionalRow
-              glyph="family"
-              label="Malware family / campaign"
-              available={false}
-              status="No family or campaign association available"
-            />
-            <InvestigationConditionalRow
-              glyph="cve"
-              label="CVE / CVSS"
-              available={Boolean(isCve && entry)}
-              status={isCve && entry ? entry.value : "No CVE association"}
-            >
-              {isCve && entry ? (
-                <p className="vera5-ip-cond-note">
-                  {entry.value} is tracked as a CVE indicator. CVSS, EPSS, and CISA KEV context are
-                  not available in local enrichment.
-                </p>
-              ) : undefined}
-            </InvestigationConditionalRow>
-          </div>
-        </section>
+          <section className="vera5-ip-group vera5-ip-group--open" aria-label="Conditional intelligence">
+            <div className="vera5-ip-group-label">Conditional Intelligence</div>
+            <div className="vera5-ip-conditional">
+              <InvestigationConditionalRow
+                glyph="mitre"
+                label="MITRE ATT&CK"
+                available={false}
+                status={
+                  entry
+                    ? WORKSPACE_STATE_COPY.selection.notEvaluated
+                    : selectionCopy.conditionalStatus
+                }
+              />
+              <InvestigationConditionalRow
+                glyph="family"
+                label="Malware family / campaign"
+                available={false}
+                status={
+                  entry
+                    ? WORKSPACE_STATE_COPY.selection.notEvaluated
+                    : selectionCopy.conditionalStatus
+                }
+              />
+              <InvestigationConditionalRow
+                glyph="cve"
+                label="CVE / CVSS"
+                available={Boolean(isCve && entry)}
+                status={
+                  isCve && entry
+                    ? entry.value
+                    : entry
+                      ? WORKSPACE_STATE_COPY.selection.notEvaluated
+                      : selectionCopy.conditionalStatus
+                }
+              >
+                {isCve && entry ? (
+                  <p className="vera5-ip-cond-note">
+                    {entry.value} {WORKSPACE_STATE_COPY.conditional.cveUnavailable}
+                  </p>
+                ) : undefined}
+              </InvestigationConditionalRow>
+            </div>
+          </section>
+        </div>
       </div>
     </section>
   );
@@ -2700,6 +2748,8 @@ function IntelFeedPanel({
   loading,
   sourceEntries,
   availability,
+  scanPresentation,
+  detectedCount,
   onEnrich,
   note,
   noteStatus,
@@ -2709,6 +2759,8 @@ function IntelFeedPanel({
   loading: boolean;
   sourceEntries: readonly HoverCardSourceEntry[];
   availability: IntelSourceAvailabilityRecord;
+  scanPresentation: ReturnType<typeof resolveScanPresentation>;
+  detectedCount: number;
   onEnrich: () => void;
   note: string;
   noteStatus: AnalystNoteSaveStatus;
@@ -2725,6 +2777,10 @@ function IntelFeedPanel({
   }, [entry?.value]);
 
   if (!entry) {
+    const unselected = resolveIntelFeedUnselectedCopy({
+      scan: scanPresentation,
+      detectedCount,
+    });
     return (
       <section className="vera5-intel-feed-section" aria-label="Intel feed">
         <div className="vera5-intel-feed vera5-intel-feed--empty">
@@ -2752,8 +2808,15 @@ function IntelFeedPanel({
             </div>
           </header>
           <hr className="vera5-section-divider" aria-hidden="true" />
-          <div className="vera5-intel-feed-body--empty">
-            <p>Select an indicator to assemble vendor evidence, scoring, and pivots.</p>
+          <div
+            className="vera5-intel-feed-body--empty"
+            data-vera5-scan-presentation={scanPresentation}
+            aria-live="polite"
+          >
+            <div className="vera5-intel-empty-copy">
+              <p>{unselected.primary}</p>
+              {unselected.secondary ? <p>{unselected.secondary}</p> : null}
+            </div>
             <div className="vera5-intel-empty-actions" aria-label="Unavailable intelligence exports">
               <button type="button" disabled>
                 <VeraIcon icon={VeraUiIcons.copy} size="xs" />
@@ -2802,28 +2865,20 @@ function IntelFeedPanel({
   });
   const compositeScore =
     riskView.score.compositeSignal === null ? null : Math.round(riskView.score.compositeSignal);
-  const compositeScoreBand =
-    compositeScore === null
-      ? "pending"
-      : compositeScore >= 65
-        ? "red"
-        : compositeScore >= 30
-          ? "orange"
-          : compositeScore >= 15
-            ? "yellow"
-            : compositeScore >= 1
-              ? "gold"
-              : "zero";
-  const compositeVerdict =
-    compositeScore === null || compositeScore === 0
-      ? "NO SCORE"
-      : compositeScore >= 65
-        ? "CRITICAL"
-        : compositeScore >= 30
-          ? "HIGH"
-          : compositeScore >= 15
-            ? "SUSPICIOUS"
-            : "LOW";
+  const enrichmentPresentation = resolveEnrichmentPresentation({
+    hasSelection: true,
+    loading,
+    applicableSourceIds,
+    sourceEntryById,
+    availability,
+  });
+  const compositePresentation = resolveCompositeScorePresentation({
+    compositeScore,
+    enrichment: enrichmentPresentation,
+  });
+  const enrichmentStatusLine = resolveEnrichmentStatusLine(enrichmentPresentation);
+  const compositeScoreBand = compositePresentation.scoreBand;
+  const compositeVerdict = compositePresentation.verdict;
   const sourceDisagreement = riskView.score.disagreement;
   const successfulSources = sourceEntries.filter((source) => source.status === "ok");
   const intelligenceAvailable = successfulSources.length > 0;
@@ -3009,11 +3064,10 @@ function IntelFeedPanel({
             className="vera5-intel-feed-score"
             data-vera5-risk-label={riskView.score.label}
             data-vera5-score-band={compositeScoreBand}
-            aria-label={
-              compositeScore === null
-                ? "VERA5 score unavailable"
-                : `VERA5 score ${compositeScore} out of 100, ${compositeVerdict}`
-            }
+            data-vera5-composite-state={compositePresentation.kind}
+            data-vera5-enrichment-state={enrichmentPresentation}
+            aria-label={compositePresentation.ariaLabel}
+            aria-busy={loading || undefined}
           >
             <span>VERA5 SCORE</span>
             <div
@@ -3022,17 +3076,24 @@ function IntelFeedPanel({
               style={
                 {
                   "--vera5-score-angle":
-                    compositeScore === null ? "0deg" : `${compositeScore * 1.8}deg`,
+                    compositePresentation.meterValue === null
+                      ? "0deg"
+                      : `${compositePresentation.meterValue * 1.8}deg`,
                 } as CSSProperties
               }
             >
               <span />
             </div>
             <strong>
-              {compositeScore === null ? "—" : compositeScore}
-              {compositeScore === null ? null : <span>/100</span>}
+              {compositePresentation.meterValue === null ? "—" : compositePresentation.meterValue}
+              {compositePresentation.meterValue === null ? null : <span>/100</span>}
             </strong>
             <small>{compositeVerdict}</small>
+            {enrichmentStatusLine ? (
+              <p className="vera5-intel-enrichment-status" aria-live="polite">
+                {enrichmentStatusLine}
+              </p>
+            ) : null}
           </div>
 
           <section className="vera5-intel-findings-card" aria-label="Findings and export">
@@ -3196,56 +3257,31 @@ function IntelFeedPanel({
               source?.status === "ok"
                 ? (assessment?.verdict ?? source.detail ?? "")
                 : "";
-            const sourceState =
-              scoreBand ??
-              (sourceLoading
-                ? "loading"
-                : status === "ok"
-                  ? /no (?:report|data)|not found/i.test(okDetail)
-                    ? "no-report"
-                    : "neutral"
-                  : status === "skipped"
-                    ? "no-data"
-                    : status);
+            const vendorPresentation = resolveVendorCardPresentation({
+              source,
+              loading,
+              cardStatus: status,
+              numericScore: scoreValue,
+              okDetail,
+            });
+            const sourceState = scoreBand ?? vendorPresentation.sourceState;
             /* Primary operational/score label — shown once in the card center (or risk in header). */
             const stateLabel =
               riskLabel ??
-              (sourceLoading
-                ? "Loading"
-                : status === "pivot-only"
-                  ? "Pivot only"
-                  : status === "disabled"
-                    ? "Disabled"
-                    : status === "not-configured"
-                      ? "Not configured"
-                      : status === "error"
-                        ? "Request error"
-                        : sourceState === "no-report"
-                          ? "No report"
-                          : status === "not-enriched"
-                            ? "No data yet"
-                            : source?.badgeText ?? "No score");
+              (vendorPresentation.stateLabel ||
+                source?.badgeText ||
+                WORKSPACE_STATE_COPY.source.unavailable);
             /*
              * Supporting line only when it adds distinct information.
              * Never repeat the primary stateLabel (Pivot only / Disabled / etc.).
              */
-            const signalText = sourceLoading
-              ? "Loading vendor intelligence…"
-              : status === "ok"
+            const signalText =
+              vendorPresentation.kind === "scored"
                 ? okDetail
-                : status === "error"
-                  ? (source?.detail ?? "")
-                  : status === "pivot-only"
-                    ? "External research available"
-                    : status === "not-configured"
-                      ? "API key required in Settings"
-                      : status === "not-enriched"
-                        ? "Run Enrich to query this source"
-                        : status === "disabled"
-                          ? ""
-                          : source?.detail && source.detail !== stateLabel
-                            ? source.detail
-                            : "";
+                : vendorPresentation.signalText &&
+                    vendorPresentation.signalText !== stateLabel
+                  ? vendorPresentation.signalText
+                  : "";
             const sourceDetailsOpen = openInfoId === sourceId;
             return (
               <article
@@ -3254,10 +3290,18 @@ function IntelFeedPanel({
                 data-vera5-source-id={sourceId}
                 data-vera5-source-status={status}
                 data-vera5-source-state={sourceState}
+                data-vera5-presentation-kind={vendorPresentation.kind}
                 data-vera5-assessment-kind={definition.assessmentKind}
                 data-vera5-score-band={scoreBand}
                 data-vera5-info-open={sourceDetailsOpen}
-                title={source?.detail ?? definition.description}
+                aria-busy={sourceLoading || undefined}
+                title={
+                  vendorPresentation.kind === "pivot_only"
+                    ? WORKSPACE_STATE_COPY.source.pivotSupport
+                    : vendorPresentation.kind === "not_queried"
+                      ? WORKSPACE_STATE_COPY.enrichment.availableForEnrichment
+                      : (source?.detail ?? definition.description)
+                }
               >
                 <div className="vera5-intel-source-header">
                   <div>
@@ -4118,6 +4162,8 @@ export function Popup() {
   }, []);
 
   const trayView = resolvePopupTrayView({ enabled, scanState, scanSummary });
+  const scanPresentation = resolveScanPresentation({ scanState, trayView, scanSummary });
+  const detectedCount = resolveCanonicalDetectedCount(scanSummary);
   const activePageContextBadgeLabel = resolveActivePageContextBadgeLabel(activePageContextType);
   const activePageContextSourceLabel = resolvePageContextSourceStatusLabel(activePageContextSource);
   const activePageContextOverrideActive = activePageContextSource === "override";
@@ -4779,7 +4825,7 @@ export function Popup() {
         fontFamily: VERA5_FONT.sans,
         backgroundColor: POPUP_THEME.page,
         color: POPUP_THEME.text,
-        // Permanent three-panel workspace; container queries only compact density.
+        // Phase 6: workspace container for compact / standard / expanded queries.
         containerType: "inline-size",
         containerName: "vera5-workspace",
         ["--vera5-workspace-split-min" as string]: `${POPUP_SIDE_PANEL_SPLIT_MIN_PX}px`,
@@ -4895,6 +4941,7 @@ export function Popup() {
           ) : null}
         </div>
       ) : null}
+      <div className="vera5-workspace-chassis">
       <section className="vera5-command-section" aria-label="Scan and extension controls">
         <header className="vera5-section-header">
           <div className="vera5-section-identity">
@@ -5025,8 +5072,8 @@ export function Popup() {
           </button>
         </div>
         {scanState === "error" ? (
-          <p style={{ fontSize: 12, margin: 0, color: POPUP_THEME.error }}>
-            Scan failed. Reload the tab and try again.
+          <p style={{ fontSize: 12, margin: 0, color: POPUP_THEME.error }} role="status">
+            {WORKSPACE_STATE_COPY.scan.error} {WORKSPACE_STATE_COPY.scan.errorDetail}
           </p>
         ) : null}
         {selectionEnrichMessage ? (
@@ -5041,6 +5088,8 @@ export function Popup() {
           loading={intelFeedLoading || detailEnrichState === "enriching"}
           sourceEntries={intelSourceEntries}
           availability={intelSourceAvailability}
+          scanPresentation={scanPresentation}
+          detectedCount={detectedCount}
           onEnrich={handleEnrichSelectedDetail}
           note={analystNote}
           noteStatus={analystNoteStatus}
@@ -5142,17 +5191,9 @@ export function Popup() {
                 ) : null}
               </div>
               <hr className="vera5-section-divider" aria-hidden="true" />
-              {trayView === "prompt" ? (
-                <p style={trayStatusStyle()}>Scan this page to list detected indicators.</p>
-              ) : null}
-              {trayView === "scanning" ? (
+              {trayView === "prompt" || trayView === "scanning" || trayView === "empty" ? (
                 <p style={trayStatusStyle()} aria-live="polite">
-                  Scanning page…
-                </p>
-              ) : null}
-              {trayView === "empty" ? (
-                <p style={trayStatusStyle()} aria-live="polite">
-                  No indicators detected on this page.
+                  {resolveDetectedIndicatorsStatusCopy(scanPresentation)}
                 </p>
               ) : null}
               {trayView === "results" && scanSummary ? (
@@ -5334,6 +5375,7 @@ export function Popup() {
             pageIndicatorCount={investigationPageIndicatorCount}
             priorSightingCount={investigationPriorSightingCount}
             suppressed={investigationSelectedSuppressed}
+            scanPresentation={scanPresentation}
             onReviewDetections={() => {
               if (selectedDetailEntry) {
                 navigateToTrayEntry(selectedDetailEntry);
@@ -5341,6 +5383,7 @@ export function Popup() {
             }}
           />
         </div>
+      </div>
       </div>
       <footer className="vera5-workspace-footer" role="contentinfo" aria-label="Workspace status">
         <div className="vera5-workspace-footer-meta">
