@@ -12,7 +12,10 @@ import {
   createErrorSourceResult,
   createOkSourceResult,
 } from "../lib/enrichment";
-import { ENRICHMENT_SOURCE } from "../lib/enrichmentSourceRegistry";
+import {
+  ENRICHMENT_ASSESSMENT_KIND,
+  ENRICHMENT_SOURCE,
+} from "../lib/enrichmentSourceRegistry";
 import { createEmptyEnrichmentCache, STORAGE_KEY_ENRICHMENT_CACHE } from "../lib/cache";
 import { buildEnrichmentSourceOpsRows } from "../lib/enrichmentSourceOps";
 import { buildTabScanSummary } from "../lib/tabScanSummary";
@@ -47,7 +50,13 @@ import {
   InvestigationReplayPanel,
   POPUP_TRAY_CASE_TOOLS_SUMMARY,
   POPUP_TRAY_ROW_ACTIONS_SUMMARY,
+  orderIntelFeedVendorSourceIds,
+  resolveIntelVendorNumericScore,
+  resolveIntelVendorSortGroup,
 } from "./Popup";
+import type { HoverCardSourceEntry } from "../lib/hoverCardEnrichment";
+import type { EnrichmentSourceId } from "../lib/enrichmentSourceRegistry";
+import { ENRICHMENT_SOURCE_ORDER } from "../lib/enrichmentSourceRegistry";
 import * as copyText from "../lib/copyText";
 import { REPLAY_SEGMENT_ACTION, createReplaySegment } from "../lib/replaySegment";
 import * as storage from "../lib/storage";
@@ -61,6 +70,7 @@ import {
 import {
   INVESTIGATION_TIMELINE_EXPORT_APPENDIX_HEADING,
   INVESTIGATION_TIMELINE_EXPORT_SCHEMA_VERSION,
+  SESSION_TIMELINE_JSON_EXPORT_GROUP_ARIA_LABEL,
 } from "../lib/investigationTimelineExport";
 
 const sampleCollection = createIocCollection({
@@ -243,6 +253,7 @@ function stubChrome(options: {
   localStore?: Record<string, unknown>;
   sessionStore?: Record<string, unknown>;
   pageContext?: TabPageContextRecord | null;
+  sidePanelAvailable?: boolean;
 }): void {
   const collections = [...(options.collections ?? [])];
   // Prefer the caller object when provided so tests can assert persisted writes.
@@ -251,6 +262,13 @@ function stubChrome(options: {
   const sessionStore = options.sessionStore ?? {};
   storageOnChangedListeners.length = 0;
   vi.stubGlobal("chrome", {
+    ...(options.sidePanelAvailable === false
+      ? {}
+      : {
+          sidePanel: {
+            open: vi.fn(),
+          },
+        }),
     storage: {
       onChanged: {
         addListener: (
@@ -580,6 +598,211 @@ function openTrayDemotedDetails(
   return details ?? null;
 }
 
+describe("Intel Feed vendor display ordering", () => {
+  function scoredEntry(
+    sourceId: EnrichmentSourceId,
+    signal: number
+  ): HoverCardSourceEntry {
+    return {
+      sourceId,
+      label: sourceId,
+      status: "ok",
+      badgeText: "Cached",
+      detail: `${signal} risk signal`,
+      metadataChips: [],
+      assessment: {
+        kind: ENRICHMENT_ASSESSMENT_KIND.RISK,
+        signal,
+        verdict: `${signal} risk signal`,
+        evidence: [],
+      },
+    };
+  }
+
+  function errorEntry(sourceId: EnrichmentSourceId): HoverCardSourceEntry {
+    return {
+      sourceId,
+      label: sourceId,
+      status: "error",
+      badgeText: "Error",
+      detail: "Request failed",
+      metadataChips: [],
+    };
+  }
+
+  it("detects 0 as a valid numeric score and null/NaN as missing", () => {
+    expect(resolveIntelVendorNumericScore(scoredEntry(ENRICHMENT_SOURCE.OTX, 0))).toBe(0);
+    expect(resolveIntelVendorNumericScore(scoredEntry(ENRICHMENT_SOURCE.OTX, 56))).toBe(56);
+    expect(
+      resolveIntelVendorNumericScore({
+        sourceId: ENRICHMENT_SOURCE.OTX,
+        label: "OTX",
+        status: "ok",
+        badgeText: "Cached",
+        detail: "ok",
+        metadataChips: [],
+        assessment: {
+          kind: ENRICHMENT_ASSESSMENT_KIND.RISK,
+          signal: Number.NaN,
+          verdict: "bad",
+          evidence: [],
+        },
+      })
+    ).toBeNull();
+    expect(resolveIntelVendorNumericScore(undefined)).toBeNull();
+    expect(resolveIntelVendorNumericScore(errorEntry(ENRICHMENT_SOURCE.SHODAN))).toBeNull();
+    expect(resolveIntelVendorSortGroup("ok", 0)).toBe(0);
+    expect(resolveIntelVendorSortGroup("error", null)).toBe(1);
+    expect(resolveIntelVendorSortGroup("pivot-only", null)).toBe(2);
+    expect(resolveIntelVendorSortGroup("disabled", null)).toBe(3);
+  });
+
+  it("orders scored results descending with 0 ahead of non-scored states (scenarios A/B/E)", () => {
+    const sourceIds = [
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.OTX,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.URLSCAN,
+      ENRICHMENT_SOURCE.SHODAN,
+      ENRICHMENT_SOURCE.PULSEDIVE,
+      ENRICHMENT_SOURCE.CENSYS,
+    ] as const;
+    const sourceEntryById = new Map<EnrichmentSourceId, HoverCardSourceEntry>([
+      [ENRICHMENT_SOURCE.ABUSEIPDB, scoredEntry(ENRICHMENT_SOURCE.ABUSEIPDB, 57)],
+      [ENRICHMENT_SOURCE.OTX, scoredEntry(ENRICHMENT_SOURCE.OTX, 0)],
+      [ENRICHMENT_SOURCE.VIRUSTOTAL, scoredEntry(ENRICHMENT_SOURCE.VIRUSTOTAL, 100)],
+      [ENRICHMENT_SOURCE.URLSCAN, scoredEntry(ENRICHMENT_SOURCE.URLSCAN, 82)],
+      [ENRICHMENT_SOURCE.SHODAN, errorEntry(ENRICHMENT_SOURCE.SHODAN)],
+    ]);
+    const availability = {
+      [ENRICHMENT_SOURCE.ABUSEIPDB]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.OTX]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.VIRUSTOTAL]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.URLSCAN]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.SHODAN]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.PULSEDIVE]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.CENSYS]: { enabled: false, configured: false },
+    };
+
+    expect(orderIntelFeedVendorSourceIds(sourceIds, sourceEntryById, availability)).toEqual([
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.URLSCAN,
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.OTX,
+      ENRICHMENT_SOURCE.SHODAN,
+      ENRICHMENT_SOURCE.PULSEDIVE,
+      ENRICHMENT_SOURCE.CENSYS,
+    ]);
+  });
+
+  it("keeps equal scores and equal states in stable registry order (scenario D)", () => {
+    const sourceIds = [
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.OTX,
+    ] as const;
+    const sourceEntryById = new Map<EnrichmentSourceId, HoverCardSourceEntry>([
+      [ENRICHMENT_SOURCE.ABUSEIPDB, scoredEntry(ENRICHMENT_SOURCE.ABUSEIPDB, 100)],
+      [ENRICHMENT_SOURCE.VIRUSTOTAL, scoredEntry(ENRICHMENT_SOURCE.VIRUSTOTAL, 100)],
+      [ENRICHMENT_SOURCE.OTX, scoredEntry(ENRICHMENT_SOURCE.OTX, 100)],
+    ]);
+    const availability = {
+      [ENRICHMENT_SOURCE.ABUSEIPDB]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.VIRUSTOTAL]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.OTX]: { enabled: true, configured: true },
+    };
+    const first = orderIntelFeedVendorSourceIds(sourceIds, sourceEntryById, availability);
+    const second = orderIntelFeedVendorSourceIds(sourceIds, sourceEntryById, availability);
+    expect(first).toEqual([
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.OTX,
+    ]);
+    expect(second).toEqual(first);
+  });
+
+  it("places selected vendors ahead of unselected disabled vendors (scenario C)", () => {
+    const sourceIds = [
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.OTX,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.GREYNOISE,
+      ENRICHMENT_SOURCE.SHODAN,
+    ] as const;
+    const sourceEntryById = new Map<EnrichmentSourceId, HoverCardSourceEntry>([
+      [ENRICHMENT_SOURCE.VIRUSTOTAL, scoredEntry(ENRICHMENT_SOURCE.VIRUSTOTAL, 40)],
+      [ENRICHMENT_SOURCE.ABUSEIPDB, scoredEntry(ENRICHMENT_SOURCE.ABUSEIPDB, 90)],
+    ]);
+    const availability = {
+      [ENRICHMENT_SOURCE.ABUSEIPDB]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.OTX]: { enabled: false, configured: false },
+      [ENRICHMENT_SOURCE.VIRUSTOTAL]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.GREYNOISE]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.SHODAN]: { enabled: false, configured: false },
+    };
+
+    expect(orderIntelFeedVendorSourceIds(sourceIds, sourceEntryById, availability)).toEqual([
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.GREYNOISE,
+      ENRICHMENT_SOURCE.OTX,
+      ENRICHMENT_SOURCE.SHODAN,
+    ]);
+  });
+
+  it("keeps progressive loading and errors after completed scores (scenario F)", () => {
+    const sourceIds = ENRICHMENT_SOURCE_ORDER.filter((sourceId) =>
+      [
+        ENRICHMENT_SOURCE.ABUSEIPDB,
+        ENRICHMENT_SOURCE.OTX,
+        ENRICHMENT_SOURCE.VIRUSTOTAL,
+        ENRICHMENT_SOURCE.SHODAN,
+        ENRICHMENT_SOURCE.PULSEDIVE,
+        ENRICHMENT_SOURCE.CENSYS,
+      ].includes(sourceId)
+    );
+    const sourceEntryById = new Map<EnrichmentSourceId, HoverCardSourceEntry>([
+      [ENRICHMENT_SOURCE.VIRUSTOTAL, scoredEntry(ENRICHMENT_SOURCE.VIRUSTOTAL, 71)],
+      [ENRICHMENT_SOURCE.SHODAN, errorEntry(ENRICHMENT_SOURCE.SHODAN)],
+    ]);
+    const availability = Object.fromEntries(
+      sourceIds.map((sourceId) => [
+        sourceId,
+        {
+          enabled: sourceId !== ENRICHMENT_SOURCE.CENSYS,
+          configured: sourceId !== ENRICHMENT_SOURCE.CENSYS,
+        },
+      ])
+    );
+
+    expect(orderIntelFeedVendorSourceIds(sourceIds, sourceEntryById, availability)).toEqual([
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.OTX,
+      ENRICHMENT_SOURCE.SHODAN,
+      ENRICHMENT_SOURCE.PULSEDIVE,
+      ENRICHMENT_SOURCE.CENSYS,
+    ]);
+  });
+
+  it("does not mutate the input source id list", () => {
+    const sourceIds = [
+      ENRICHMENT_SOURCE.ABUSEIPDB,
+      ENRICHMENT_SOURCE.VIRUSTOTAL,
+    ] as EnrichmentSourceId[];
+    const snapshot = [...sourceIds];
+    const sourceEntryById = new Map<EnrichmentSourceId, HoverCardSourceEntry>([
+      [ENRICHMENT_SOURCE.VIRUSTOTAL, scoredEntry(ENRICHMENT_SOURCE.VIRUSTOTAL, 10)],
+      [ENRICHMENT_SOURCE.ABUSEIPDB, scoredEntry(ENRICHMENT_SOURCE.ABUSEIPDB, 90)],
+    ]);
+    orderIntelFeedVendorSourceIds(sourceIds, sourceEntryById, {
+      [ENRICHMENT_SOURCE.ABUSEIPDB]: { enabled: true, configured: true },
+      [ENRICHMENT_SOURCE.VIRUSTOTAL]: { enabled: true, configured: true },
+    });
+    expect(sourceIds).toEqual(snapshot);
+  });
+});
+
 describe("Popup IOC tray", () => {
   let mounted: { container: HTMLDivElement; root: Root } | null = null;
   let writeText: ReturnType<typeof vi.fn>;
@@ -611,11 +834,14 @@ describe("Popup IOC tray", () => {
         "Scan this page to list detected indicators."
       );
     });
-    expect(mounted?.container.textContent).toContain("Scan page");
-    expect(mounted?.container.textContent).toContain("Scan selection");
-    expect(mounted?.container.textContent).toContain("Enrich selection");
+    expect(mounted?.container.textContent).toContain("SCAN PAGE");
+    expect(mounted?.container.textContent).toContain("SCAN SELECTION");
+    expect(mounted?.container.textContent).toContain("ENRICH SELECTION");
     expect(mounted?.container.textContent).toContain("Settings");
     expect(mounted?.container.querySelector(".vera5-command-section")).not.toBeNull();
+    expect(
+      mounted?.container.querySelectorAll(".vera5-intel-empty-actions button:disabled")
+    ).toHaveLength(5);
     const main = mounted?.container.querySelector("main.vera5-popup");
     expect(main?.getAttribute("data-host")).toBe("sidepanel");
     expect(mounted?.container.querySelector(".vera5-popup-triage")).not.toBeNull();
@@ -627,7 +853,7 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("Scan page");
+      expect(mounted?.container.textContent).toContain("SCAN PAGE");
     });
     const main = mounted?.container.querySelector("main.vera5-popup");
     expect(main?.getAttribute("data-host")).toBe("sidepanel");
@@ -644,12 +870,30 @@ describe("Popup IOC tray", () => {
     expect(casework).not.toBeNull();
     expect(commandSection).not.toBeNull();
     expect(header?.textContent).toContain("How-To");
-    expect(header?.textContent).not.toContain("Settings");
-    expect(header?.textContent).not.toContain("Permissions");
+    expect(header?.textContent).toContain("How-ToSettingsPermissions");
+    expect(header?.querySelector("img")?.getAttribute("src")).toBe("icons/logo-mark.png");
+    expect(
+      header?.querySelector<HTMLAnchorElement>(".vera5-howto-button")?.getAttribute("href")
+    ).toBe("https://www.vera5.io/how-to");
     expect(commandSection?.textContent).toContain("Extension enabled");
-    expect(commandSection?.textContent).toContain("Scan page");
-    expect(commandSection?.textContent).toContain("Settings");
-    expect(commandSection?.textContent).toContain("Permissions");
+    expect(commandSection?.textContent).toContain("SCAN PAGE");
+    expect(commandSection?.textContent).not.toContain("Settings");
+    expect(commandSection?.textContent).not.toContain("Permissions");
+    expect(header?.querySelectorAll(".vera5-command-utility-button")).toHaveLength(2);
+    expect(commandSection?.querySelectorAll('.vera5-command-toggle[role="switch"]')).toHaveLength(3);
+    expect(commandSection?.querySelectorAll(".vera5-command-utility-button")).toHaveLength(0);
+    const scanPageButton = commandSection?.querySelector<HTMLButtonElement>(".vera5-scan-page-cta");
+    expect(scanPageButton?.textContent).toContain("SCAN PAGE[Detect IOCs on this page]");
+    expect(scanPageButton?.querySelector(".vera5-scan-page-icon")).not.toBeNull();
+    expect(commandSection?.querySelector(".vera5-scan-primary-hint")).toBeNull();
+    expect(commandSection?.querySelectorAll(".vera5-secondary-command")).toHaveLength(2);
+    expect(commandSection?.querySelector(".vera5-secondary-command--enrich svg")).not.toBeNull();
+    const popout = commandSection?.querySelector<HTMLButtonElement>(
+      '.vera5-command-toggle[aria-label="On-Page Popout"]'
+    );
+    expect(popout?.disabled).toBe(true);
+    expect(popout?.getAttribute("aria-checked")).toBe("false");
+    expect(popout?.getAttribute("aria-disabled")).toBe("true");
     expect(workspace?.children[0]).toBe(intelSection);
     expect(workspace?.children[1]).toBe(triage);
     expect(workspace?.children[2]).toBe(detail);
@@ -662,7 +906,7 @@ describe("Popup IOC tray", () => {
     expect(intelFeed).not.toBeNull();
     expect(intelFeed?.textContent).toContain("Select an indicator");
     expect(triage?.textContent).not.toContain("Extension enabled");
-    expect(triage?.textContent).not.toContain("Scan page");
+    expect(triage?.textContent).not.toContain("SCAN PAGE");
     expect(triage?.textContent).toContain("Detected indicators");
     expect(casework?.textContent).toContain("Investigation session");
     expect(casework?.textContent).toContain("Casework");
@@ -672,6 +916,64 @@ describe("Popup IOC tray", () => {
         ?.querySelector('[role="tab"][aria-controls="popup-investigation-body"]')
         ?.getAttribute("aria-selected")
     ).toBe("true");
+  });
+
+  it("preserves header utility handlers and functional switch persistence", async () => {
+    const setExtensionEnabled = vi
+      .spyOn(storage, "setExtensionEnabled")
+      .mockResolvedValue(undefined);
+    const setHighlightEnabled = vi
+      .spyOn(storage, "setHighlightEnabled")
+      .mockResolvedValue(undefined);
+    stubChrome({ initialSummary: null });
+    mounted = renderPopup();
+
+    const settings = mounted.container.querySelector<HTMLButtonElement>(
+      'header [aria-label="Open Vera5 Settings"]'
+    );
+    const permissions = mounted.container.querySelector<HTMLButtonElement>(
+      'header [aria-label="Open site permissions"]'
+    );
+    const extensionSwitch = mounted.container.querySelector<HTMLButtonElement>(
+      '.vera5-command-toggle[aria-label="Extension enabled"]'
+    );
+    const highlightSwitch = mounted.container.querySelector<HTMLButtonElement>(
+      '.vera5-command-toggle[aria-label="Highlight indicators"]'
+    );
+
+    await vi.waitFor(() => {
+      expect(settings?.disabled).toBe(false);
+      expect(permissions?.disabled).toBe(false);
+      expect(extensionSwitch?.disabled).toBe(false);
+      expect(highlightSwitch?.disabled).toBe(false);
+    });
+
+    settings?.click();
+    permissions?.click();
+    highlightSwitch?.click();
+
+    expect(chrome.runtime.openOptionsPage).toHaveBeenCalledTimes(1);
+    expect(chrome.tabs.create).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(setHighlightEnabled).toHaveBeenCalledWith(false);
+    });
+
+    extensionSwitch?.click();
+    await vi.waitFor(() => {
+      expect(setExtensionEnabled).toHaveBeenCalledWith(false);
+    });
+  });
+
+  it("does not mark the shared Firefox sidebar entry as a Chrome side panel", async () => {
+    stubChrome({ initialSummary: null, sidePanelAvailable: false });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.textContent).toContain("SCAN PAGE");
+    });
+    expect(
+      mounted?.container.querySelector("main.vera5-popup")?.getAttribute("data-host")
+    ).toBe("firefox-sidebar");
   });
 
   it("keeps selected IOC intelligence visible across Casework tabs", async () => {
@@ -717,25 +1019,129 @@ describe("Popup IOC tray", () => {
     const summaryRow = feed?.querySelector(".vera5-intel-feed-summary-row");
     const sourcesGrid = feed?.querySelector(".vera5-intel-feed-sources");
     expect(summaryRow).not.toBeNull();
-    expect(summaryRow?.querySelector(".vera5-intel-feed-command")).not.toBeNull();
-    expect(summaryRow?.querySelector(".vera5-intel-feed-score")).not.toBeNull();
-    expect(summaryRow?.querySelector(".vera5-intel-feed-summary")).not.toBeNull();
+    const targetCard = summaryRow?.querySelector(".vera5-intel-feed-command");
+    const scoreCard = summaryRow?.querySelector(".vera5-intel-feed-score");
+    expect(targetCard).not.toBeNull();
+    expect(targetCard?.querySelector(".vera5-intel-feed-enrich")).not.toBeNull();
+    expect(targetCard?.querySelector(".vera5-intel-feed-pivots")).not.toBeNull();
+    expect(targetCard?.querySelector(".vera5-intel-pivot-label")?.textContent).toBe("Research");
+    expect(scoreCard).not.toBeNull();
+    expect(scoreCard?.querySelector(".vera5-intel-score-meter")).not.toBeNull();
+    expect(scoreCard?.getAttribute("data-vera5-score-band")).toBe("pending");
+    const findings = summaryRow?.querySelector(".vera5-intel-findings-card");
+    expect(findings?.querySelector("h3")?.textContent).toBe("Findings & Export");
+    expect(findings?.textContent).toContain("Copy Summary");
+    expect(findings?.textContent).toContain("Copy IOC");
+    expect(findings?.textContent).toContain("Export Markdown");
+    expect(findings?.textContent).toContain("Export JSON");
+    expect(findings?.textContent).toContain("More Formats");
+    expect(findings?.textContent).toContain("Jira comment");
+    expect(findings?.textContent).toContain("TheHive case note");
+    expect(findings?.textContent).toContain("Obsidian note");
+    expect(findings?.textContent).toContain("CSV rows");
+    expect(findings?.textContent).toContain("+ Add analyst note");
+    expect(summaryRow?.querySelector(".vera5-intel-feed-summary")).toBeNull();
     expect(sourcesGrid).not.toBeNull();
-    expect(sourcesGrid?.querySelector(".vera5-intel-feed-pivots")).not.toBeNull();
-    expect(sourcesGrid?.querySelector(".vera5-intel-pivot-label")?.textContent).toBe("Pivot");
+    expect(sourcesGrid?.querySelector(".vera5-intel-feed-pivots")).toBeNull();
     expect(feed?.children[0]).toBe(summaryRow);
     expect(feed?.children[1]).toBe(sourcesGrid);
+    expect(
+      sourcesGrid
+        ?.querySelector('.vera5-intel-source-card[data-vera5-source-id="abuseipdb"]')
+        ?.getAttribute("data-vera5-score-band")
+    ).toBe("red");
+    const abuseCard = sourcesGrid?.querySelector(
+      '.vera5-intel-source-card[data-vera5-source-id="abuseipdb"]'
+    );
+    expect(abuseCard?.querySelector(".vera5-intel-source-header")?.textContent).toContain(
+      "AbuseIPDB[CRITICAL]"
+    );
+    expect(abuseCard?.querySelector(".vera5-intel-source-score")?.textContent).toBe("74/100");
+    expect(abuseCard?.querySelector(":scope > small")).toBeNull();
+    const abuseInfoButton = abuseCard?.querySelector<HTMLButtonElement>(
+      '[aria-label="View AbuseIPDB details"]'
+    );
+    expect(abuseInfoButton).not.toBeNull();
+    flushSync(() => {
+      abuseInfoButton?.click();
+    });
+    expect(abuseInfoButton?.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      abuseCard?.querySelector<HTMLElement>(".vera5-intel-source-details")?.hidden
+    ).toBe(false);
+    expect(abuseCard?.querySelector(".vera5-intel-source-details")?.textContent).toContain(
+      "Updated"
+    );
+    expect(
+      sourcesGrid?.querySelector('.vera5-intel-source-card[data-vera5-source-status="pivot-only"]')
+    ).not.toBeNull();
     const sourceIds = Array.from(feed?.querySelectorAll(".vera5-intel-source-card") ?? []).map(
       (card) => card.getAttribute("data-vera5-source-id")
     );
-    expect(sourceIds.slice(0, 6)).toEqual([
-      "abuseipdb",
-      "otx",
-      "virustotal",
-      "greynoise",
-      "shodan",
-      "pulsedive",
-    ]);
+    // Scored cards first, then pivot-only, then disabled/unselected live sources.
+    expect(sourceIds[0]).toBe("abuseipdb");
+    expect(sourceIds.slice(0, 3)).toEqual(["abuseipdb", "pulsedive", "threatfox"]);
+    expect(sourceIds.indexOf("abuseipdb")).toBeLessThan(sourceIds.indexOf("otx"));
+    expect(sourceIds.indexOf("pulsedive")).toBeLessThan(sourceIds.indexOf("otx"));
+    expect(sourceIds.indexOf("otx")).toBeLessThan(sourceIds.indexOf("virustotal"));
+
+    const compositeInfoButton = mounted?.container.querySelector<HTMLButtonElement>(
+      '.vera5-intel-feed-title-row [aria-label="View composite score details"]'
+    );
+    expect(compositeInfoButton?.getAttribute("aria-expanded")).toBe("false");
+    flushSync(() => {
+      compositeInfoButton?.click();
+    });
+    expect(compositeInfoButton?.getAttribute("aria-expanded")).toBe("true");
+    expect(
+      mounted?.container.querySelector<HTMLElement>(".vera5-intel-composite-details")?.hidden
+    ).toBe(false);
+
+    writeText.mockClear();
+    const copyIoc = Array.from(
+      findings?.querySelectorAll<HTMLButtonElement>("button") ?? []
+    ).find((button) => button.textContent === "Copy IOC");
+    flushSync(() => {
+      copyIoc?.click();
+    });
+    await vi.waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("8.8.8.8");
+    });
+
+    writeText.mockClear();
+    const copySummary = Array.from(
+      findings?.querySelectorAll<HTMLButtonElement>("button") ?? []
+    ).find((button) => button.textContent === "Copy Summary");
+    flushSync(() => {
+      copySummary?.click();
+    });
+    await vi.waitFor(() => {
+      expect(writeText.mock.calls[0]?.[0]).toContain("Vera5 IOC Summary");
+    });
+
+    writeText.mockClear();
+    const moreFormats = Array.from(
+      findings?.querySelectorAll<HTMLButtonElement>("button") ?? []
+    ).find((button) => button.textContent === "More Formats");
+    flushSync(() => {
+      moreFormats?.click();
+    });
+    const copyJira = Array.from(
+      findings?.querySelectorAll<HTMLButtonElement>(".vera5-intel-more-formats button") ?? []
+    ).find((button) => button.textContent === "Copy Jira comment");
+    flushSync(() => {
+      copyJira?.click();
+    });
+    await vi.waitFor(() => {
+      expect(writeText.mock.calls[0]?.[0]).toContain("8.8.8.8");
+    });
+
+    flushSync(() => {
+      (findings?.querySelector(".vera5-intel-analyst-note > summary") as HTMLElement | null)?.click();
+    });
+    expect(
+      findings?.querySelector<HTMLTextAreaElement>(".vera5-intel-analyst-note textarea")
+    ).not.toBeNull();
 
     flushSync(() => {
       const nextIoc = Array.from(
@@ -841,6 +1247,248 @@ describe("Popup IOC tray", () => {
     expect(virustotal?.textContent).not.toContain("0/100");
   });
 
+  it("maps vendor score boundaries to the required visual bands", async () => {
+    const fetchedAt = Date.now();
+    const scoredSources = [
+      [ENRICHMENT_SOURCE.ABUSEIPDB, 65, "red", "CRITICAL"],
+      [ENRICHMENT_SOURCE.OTX, 64, "orange", "HIGH"],
+      [ENRICHMENT_SOURCE.VIRUSTOTAL, 29, "yellow", "SUSPICIOUS"],
+      [ENRICHMENT_SOURCE.PULSEDIVE, 14, "gold", "LOW"],
+    ] as const;
+    stubChrome({
+      initialSummary: sampleSummary,
+      localStore: {
+        [STORAGE_KEY_ENRICHMENT_CACHE]: Object.fromEntries(
+          scoredSources.map(([sourceId, signal]) => [
+            `8.8.8.8|${sourceId}`,
+            {
+              fetchedAt,
+              payload: createOkSourceResult({
+                sourceId,
+                summary: `${signal} risk signal`,
+                fetchedAt: new Date(fetchedAt).toISOString(),
+                assessment: {
+                  kind: ENRICHMENT_ASSESSMENT_KIND.RISK,
+                  signal,
+                  verdict: `${signal} risk signal`,
+                  evidence: [`Normalized test signal: ${signal}`],
+                },
+              }),
+            },
+          ])
+        ),
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '[data-vera5-tray-entry="true"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+
+    await vi.waitFor(() => {
+      scoredSources.forEach(([sourceId, signal, band, label]) => {
+        const card = mounted?.container.querySelector(
+          `.vera5-intel-source-card[data-vera5-source-id="${sourceId}"]`
+        );
+        expect(card?.getAttribute("data-vera5-score-band")).toBe(band);
+        expect(card?.querySelector(".vera5-intel-source-header")?.textContent).toContain(
+          `[${label}]`
+        );
+        expect(card?.querySelector(".vera5-intel-source-score")?.textContent).toBe(
+          `${signal}/100`
+        );
+      });
+    });
+  });
+
+  it("orders Intel Feed vendor cards by score then operational, pivot-only, and disabled states", async () => {
+    const fetchedAt = Date.now();
+    stubChrome({
+      initialSummary: sampleSummary,
+      localStore: {
+        [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+          abuseipdb: true,
+          otx: true,
+          virustotal: true,
+          greynoise: true,
+          shodan: true,
+          pulsedive: true,
+          censys: false,
+        },
+        [STORAGE_KEY_ENRICHMENT_CACHE]: {
+          "8.8.8.8|virustotal": {
+            fetchedAt,
+            payload: createOkSourceResult({
+              sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
+              summary: "89 risk signal",
+              fetchedAt: new Date(fetchedAt).toISOString(),
+              assessment: {
+                kind: ENRICHMENT_ASSESSMENT_KIND.RISK,
+                signal: 89,
+                verdict: "High risk signal",
+                evidence: ["Normalized test signal: 89"],
+              },
+            }),
+          },
+          "8.8.8.8|abuseipdb": {
+            fetchedAt,
+            payload: createOkSourceResult({
+              sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
+              summary: "23 risk signal",
+              fetchedAt: new Date(fetchedAt).toISOString(),
+              assessment: {
+                kind: ENRICHMENT_ASSESSMENT_KIND.RISK,
+                signal: 23,
+                verdict: "Suspicious signal",
+                evidence: ["Normalized test signal: 23"],
+              },
+            }),
+          },
+          "8.8.8.8|otx": {
+            fetchedAt,
+            payload: createOkSourceResult({
+              sourceId: ENRICHMENT_SOURCE.OTX,
+              summary: "0 risk signal",
+              fetchedAt: new Date(fetchedAt).toISOString(),
+              assessment: {
+                kind: ENRICHMENT_ASSESSMENT_KIND.RISK,
+                signal: 0,
+                verdict: "Low risk signal",
+                evidence: ["Normalized test signal: 0"],
+              },
+            }),
+          },
+          "8.8.8.8|shodan": {
+            fetchedAt,
+            payload: createErrorSourceResult({
+              sourceId: ENRICHMENT_SOURCE.SHODAN,
+              errorCode: "upstream_error",
+              errorMessage: "Shodan request failed.",
+              fetchedAt: new Date(fetchedAt).toISOString(),
+            }),
+          },
+        },
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '[data-vera5-tray-entry="true"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+
+    await vi.waitFor(() => {
+      const otx = mounted?.container.querySelector(
+        '.vera5-intel-source-card[data-vera5-source-id="otx"]'
+      );
+      expect(otx?.querySelector(".vera5-intel-source-score")?.textContent).toBe("0/100");
+    });
+
+    const sourceIds = Array.from(
+      mounted!.container.querySelectorAll(".vera5-intel-source-card")
+    ).map((card) => card.getAttribute("data-vera5-source-id"));
+
+    expect(sourceIds.indexOf("virustotal")).toBeLessThan(sourceIds.indexOf("abuseipdb"));
+    expect(sourceIds.indexOf("abuseipdb")).toBeLessThan(sourceIds.indexOf("otx"));
+    expect(sourceIds.indexOf("otx")).toBeLessThan(sourceIds.indexOf("greynoise"));
+    expect(sourceIds.indexOf("greynoise")).toBeLessThan(sourceIds.indexOf("shodan"));
+    expect(sourceIds.indexOf("shodan")).toBeLessThan(sourceIds.indexOf("pulsedive"));
+    expect(sourceIds.indexOf("pulsedive")).toBeLessThan(sourceIds.indexOf("censys"));
+    expect(
+      mounted?.container
+        .querySelector('.vera5-intel-source-card[data-vera5-source-id="otx"]')
+        ?.getAttribute("data-vera5-source-status")
+    ).toBe("ok");
+    expect(
+      mounted?.container
+        .querySelector('.vera5-intel-source-card[data-vera5-source-id="censys"]')
+        ?.getAttribute("data-vera5-source-status")
+    ).toBe("disabled");
+    expect(
+      mounted?.container
+        .querySelector('.vera5-intel-source-card[data-vera5-source-id="pulsedive"]')
+        ?.getAttribute("data-vera5-source-status")
+    ).toBe("pivot-only");
+  });
+
+  it("shows source disagreement only through the Intel Feed warning and details control", async () => {
+    const fetchedAt = Date.now();
+    const sourceSignals = [
+      [ENRICHMENT_SOURCE.ABUSEIPDB, 95],
+      [ENRICHMENT_SOURCE.OTX, 15],
+    ] as const;
+    stubChrome({
+      initialSummary: sampleSummary,
+      localStore: {
+        [STORAGE_KEY_ENRICHMENT_CACHE]: Object.fromEntries(
+          sourceSignals.map(([sourceId, signal]) => [
+            `8.8.8.8|${sourceId}`,
+            {
+              fetchedAt,
+              payload: createOkSourceResult({
+                sourceId,
+                summary: `${signal} risk signal`,
+                fetchedAt: new Date(fetchedAt).toISOString(),
+                assessment: {
+                  kind: ENRICHMENT_ASSESSMENT_KIND.RISK,
+                  signal,
+                  verdict: `${signal} risk signal`,
+                  evidence: [`Normalized test signal: ${signal}`],
+                },
+              }),
+            },
+          ])
+        ),
+      },
+    });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '[data-vera5-tray-entry="true"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(
+          '[aria-label="Source disagreement requires analyst review"]'
+        )
+      ).not.toBeNull();
+    });
+    expect(mounted?.container.querySelector(".vera5-intel-feed-summary")).toBeNull();
+
+    const infoButton = mounted?.container.querySelector<HTMLButtonElement>(
+      '.vera5-intel-feed-title-row [aria-label="View composite score details"]'
+    );
+    flushSync(() => {
+      infoButton?.click();
+    });
+    const details = mounted?.container.querySelector<HTMLElement>(
+      ".vera5-intel-composite-details"
+    );
+    expect(details?.hidden).toBe(false);
+    expect(details?.textContent).toContain("Source disagreement requires analyst review.");
+  });
+
   it("shows investigation session empty state when no session is active", async () => {
     stubChrome({
       initialSummary: null,
@@ -927,7 +1575,7 @@ describe("Popup IOC tray", () => {
 
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("Detected indicators");
-      expect(mounted?.container.textContent).toContain("Scan page");
+      expect(mounted?.container.textContent).toContain("SCAN PAGE");
     });
     const sessionTab = mounted?.container.querySelector(
       '[role="tab"][aria-controls="popup-investigation-body"]'
@@ -976,7 +1624,7 @@ describe("Popup IOC tray", () => {
     ).toBe(true);
   });
 
-  it("collapses tray collection and macro controls by default", async () => {
+  it("places case tools in the Chrome tray header without inline row details", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
 
@@ -1002,9 +1650,10 @@ describe("Popup IOC tray", () => {
     ) as HTMLDetailsElement | null;
 
     expect(caseTools?.open).toBe(false);
-    expect(rowActions?.open).toBe(false);
-    expect(context?.open).toBe(false);
-    expect(context?.querySelector(".vera5-tray-why-detected")).not.toBeNull();
+    expect(caseTools?.closest(".vera5-triage-heading-row")).not.toBeNull();
+    expect(rowActions).toBeUndefined();
+    expect(context).toBeNull();
+    expect(mounted?.container.textContent).not.toContain("Generic page");
   });
 
   it("shows session export copy and download actions when a session is active", async () => {
@@ -1947,9 +2596,11 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("Copy JSON");
     });
 
-    const copyButton = Array.from(mounted!.container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Copy JSON"
-    );
+    const copyButton = Array.from(
+      mounted!.container.querySelectorAll(
+        `[role="group"][aria-label="${SESSION_TIMELINE_JSON_EXPORT_GROUP_ARIA_LABEL}"] button`
+      )
+    ).find((button) => button.textContent === "Copy JSON");
     expect(copyButton).toBeDefined();
     copyButton?.click();
 
@@ -2001,7 +2652,8 @@ describe("Popup IOC tray", () => {
       );
       expect(filterGroup?.getAttribute("aria-label")).toContain("3 indicators · 1 CVE · 2 IP");
     });
-    expect(mounted.container.textContent).toContain("Generic page");
+    expect(mounted.container.textContent).not.toContain("Generic page");
+    expect(mounted.container.querySelector(".vera5-triage-filters")).not.toBeNull();
     expect(mounted.container.textContent).toContain("All (3)");
     expect(mounted.container.textContent).toContain("IP (2)");
     expect(mounted.container.textContent).toContain("CVE (1)");
@@ -2011,6 +2663,13 @@ describe("Popup IOC tray", () => {
     const firstRow = mounted.container.querySelector<HTMLElement>("[data-vera5-tray-entry='true']");
     expect(firstRow?.dataset.vera5RuleId).toBe("ioc.regex.ipv4");
     expect(firstRow?.dataset.vera5SourceTextHint).toBe("Contact 8.8.8.8 for details.");
+    expect(firstRow?.dataset.iocType).toBe("ipv4");
+    expect(firstRow?.getAttribute("aria-pressed")).toBe("true");
+    expect(firstRow?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("IP");
+    expect(firstRow?.querySelector(".vera5-ioc-queue-value")?.textContent).toBe("8.8.8.8");
+    expect(firstRow?.querySelector(".vera5-ioc-status-badge")).toBeNull();
+    expect(firstRow?.querySelector(".vera5-tray-row-actions")).toBeNull();
+    expect(firstRow?.querySelector(".vera5-tray-context")).toBeNull();
   });
 
   it("moves noise-rule matches into a collapsed Suppressed tray section", async () => {
@@ -2065,6 +2724,13 @@ describe("Popup IOC tray", () => {
     expect(activeRows.map((row) => row.dataset.vera5Value)).toEqual(["8.8.8.8", "CVE-2021-44228"]);
     expect(suppressedRows.map((row) => row.dataset.vera5Value)).toEqual(["192.0.2.1"]);
     expect(suppressedSection?.contains(suppressedRows[0]!)).toBe(true);
+    expect(suppressedRows[0]?.dataset.iocType).toBe("ipv4");
+    expect(suppressedRows[0]?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("IP");
+    expect(suppressedRows[0]?.querySelector(".vera5-ioc-queue-value")?.textContent).toBe(
+      "192.0.2.1"
+    );
+    expect(suppressedRows[0]?.querySelector(".vera5-tray-row-actions")).toBeNull();
+    expect(suppressedRows[0]?.querySelector(".vera5-tray-context")).toBeNull();
 
     const whyStillVisible = suppressedSection?.querySelector(
       "[data-vera5-why-still-visible-tooltip='true']"
@@ -2076,7 +2742,7 @@ describe("Popup IOC tray", () => {
     expect(whyStillVisible?.getAttribute("title")).toContain("Source context: 192.0.2.1");
   });
 
-  it("shows known benign badge on tray rows that match known-good entries", async () => {
+  it("preserves known-good row metadata without rendering an inline badge", async () => {
     const { STORAGE_KEY_KNOWN_GOOD_LIST, KNOWN_GOOD_LIST_STORE_SCHEMA_VERSION } =
       await import("../lib/knownGoodStorage");
     const { createKnownGoodEntry } = await import("../lib/knownGood");
@@ -2100,22 +2766,18 @@ describe("Popup IOC tray", () => {
     });
     mounted = renderPopup();
 
-    await vi.waitFor(() => {
-      expect(
-        mounted?.container.querySelector("[data-vera5-known-good-badge='true']")?.textContent
-      ).toBe("Known benign");
+    const badgedRow = await vi.waitFor(() => {
+      const row = mounted!.container.querySelector<HTMLElement>(
+        "[data-vera5-tray-entry='true'][data-vera5-value='8.8.8.8']"
+      );
+      expect(row?.dataset.vera5KnownGoodEntryId).toBe("kg-tray-badge");
+      return row;
     });
-
-    const badgedRow = mounted!.container.querySelector<HTMLElement>(
-      "[data-vera5-tray-entry='true'][data-vera5-value='8.8.8.8']"
-    );
     expect(badgedRow?.dataset.vera5KnownGoodEntryId).toBe("kg-tray-badge");
     expect(badgedRow?.dataset.vera5KnownGoodCategory).toBe("cdn");
     expect(badgedRow?.dataset.vera5KnownGoodMatchType).toBe("ip");
     expect(badgedRow?.dataset.vera5KnownGoodPattern).toBe("8.8.8.8");
-    expect(
-      badgedRow?.querySelector("[data-vera5-known-good-badge='true']")?.getAttribute("title")
-    ).toContain("CDN · IP · 8.8.8.8");
+    expect(badgedRow?.querySelector("[data-vera5-known-good-badge='true']")).toBeNull();
   });
 
   it("sorts known-good matches below active investigation IOCs in the tray", async () => {
@@ -2146,11 +2808,8 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(
         mounted?.container.querySelector(
-          "[data-vera5-tray-entry='true'][data-vera5-value='192.0.2.1'][data-vera5-known-good-badge]"
-        ) ||
-          mounted?.container.querySelector(
-            "[data-vera5-tray-entry='true'][data-vera5-value='192.0.2.1'] [data-vera5-known-good-badge='true']"
-          )
+          "[data-vera5-tray-entry='true'][data-vera5-value='192.0.2.1'][data-vera5-known-good-entry-id='kg-tray-sort']"
+        )
       ).not.toBeNull();
     });
 
@@ -2166,7 +2825,7 @@ describe("Popup IOC tray", () => {
     ]);
   });
 
-  it("shows active page context badge in the IOC tray header", async () => {
+  it("keeps the active page context badge in the Firefox tray header", async () => {
     stubChrome({
       initialSummary: sampleSummary,
       pageContext: {
@@ -2177,6 +2836,7 @@ describe("Popup IOC tray", () => {
         classifiedAt: sampleSummary.scannedAt,
         tabId: 7,
       },
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2192,7 +2852,7 @@ describe("Popup IOC tray", () => {
     expect(badge?.getAttribute("title")).toContain("auto-detected");
   });
 
-  it("shows override active state and resets to auto-detect from the tray header", async () => {
+  it("keeps page-profile override reset behavior in the Firefox tray header", async () => {
     stubChrome({
       initialSummary: sampleSummary,
       pageContext: {
@@ -2208,6 +2868,7 @@ describe("Popup IOC tray", () => {
           "example.com": PAGE_CONTEXT_TYPE.CTI_PLATFORM,
         },
       },
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2246,6 +2907,7 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2287,6 +2949,7 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2349,6 +3012,7 @@ describe("Popup IOC tray", () => {
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
       recentSessions: [sampleActiveSession, priorSession],
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2420,6 +3084,7 @@ describe("Popup IOC tray", () => {
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
       recentSessions: [sampleActiveSession, priorSession!],
+      sidePanelAvailable: false,
       localStore: {
         [STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]: {
           "example.com": PAGE_CONTEXT_TYPE.CASE_TICKET,
@@ -2497,6 +3162,7 @@ describe("Popup IOC tray", () => {
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
       recentSessions: [sampleActiveSession, priorSession!],
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2588,6 +3254,7 @@ describe("Popup IOC tray", () => {
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
       recentSessions: [sampleActiveSession, priorSession],
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2663,6 +3330,7 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2717,6 +3385,7 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2751,6 +3420,7 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2807,6 +3477,7 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2852,6 +3523,7 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2887,6 +3559,7 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2916,6 +3589,7 @@ describe("Popup IOC tray", () => {
       initialSummary: sampleSummary,
       activeSession: sampleActiveSession,
       navigateResponse: { ok: false, error: "highlight not found" },
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
 
@@ -2958,7 +3632,7 @@ describe("Popup IOC tray", () => {
     expect(emailRow?.textContent).toContain("EML");
   });
 
-  it("shows source-attributed enrichment hints without blocking tray navigation", async () => {
+  it("keeps source-attributed status data out of compact rows without blocking navigation", async () => {
     vi.spyOn(tabScanSummary, "loadTrayEntryEnrichmentStatuses").mockResolvedValue({
       "vera5-hl-1": {
         badgeText: "Cached",
@@ -2975,19 +3649,25 @@ describe("Popup IOC tray", () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("OTX · Cached");
+      expect(
+        Array.from(mounted?.container.querySelectorAll('[role="button"]') ?? []).some(
+          (element) =>
+            element.getAttribute("aria-label") === "View 8.8.8.8 on page. OTX · Cached"
+        )
+      ).toBe(true);
     });
-    expect(mounted.container.textContent).toContain("AbuseIPDB · Error");
+    expect(mounted.container.querySelector(".vera5-popup-triage")?.textContent).not.toContain(
+      "OTX · Cached"
+    );
+    expect(mounted.container.querySelector(".vera5-popup-triage")?.textContent).not.toContain(
+      "AbuseIPDB · Error"
+    );
 
     const cachedRow = Array.from(mounted.container.querySelectorAll('[role="button"]')).find(
       (element) => element.getAttribute("aria-label") === "View 8.8.8.8 on page. OTX · Cached"
     );
     expect(cachedRow).toBeDefined();
-    const cachedHint = Array.from(cachedRow?.querySelectorAll('[aria-hidden="true"]') ?? []).find(
-      (element) => element.textContent === "OTX · Cached"
-    ) as HTMLElement | undefined;
-    expect(cachedHint).toBeDefined();
-    expect(cachedHint?.style.pointerEvents).toBe("none");
+    expect(cachedRow?.querySelector(".vera5-ioc-status-badge")).toBeNull();
 
     cachedRow?.click();
 
@@ -3049,6 +3729,9 @@ describe("Popup IOC tray", () => {
     expect(pane).not.toBeNull();
     expect(pane?.closest(".vera5-popup-inspector")).not.toBeNull();
     expect(row?.getAttribute("data-vera5-selected")).toBe("true");
+    expect(row?.getAttribute("aria-pressed")).toBe("true");
+    expect(row?.querySelector(".vera5-tray-row-actions")).toBeNull();
+    expect(row?.querySelector(".vera5-tray-context")).toBeNull();
     const workspaceChildren = Array.from(
       mounted.container.querySelector(".vera5-popup-workspace")?.children ?? []
     );
@@ -3150,7 +3833,8 @@ describe("Popup IOC tray", () => {
     });
     mounted = renderPopup();
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("Generic page");
+      expect(mounted?.container.textContent).toContain("Detected indicators");
+      expect(mounted?.container.textContent).not.toContain("Generic page");
     });
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
@@ -3232,6 +3916,7 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       collections: [sampleCollection],
+      sidePanelAvailable: false,
     });
     mounted = renderPopup();
     await vi.waitFor(() => {
@@ -3305,7 +3990,7 @@ describe("Popup IOC tray", () => {
   });
 
   it("opens Run macro… on a tray row and sends a selection run to the active tab", async () => {
-    stubChrome({ initialSummary: sampleSummary });
+    stubChrome({ initialSummary: sampleSummary, sidePanelAvailable: false });
     mounted = renderPopup();
     await vi.waitFor(() => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
@@ -3647,7 +4332,7 @@ describe("Popup IOC tray", () => {
     });
 
     const exportButton = Array.from(mounted.container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Export Markdown"
+      (button) => button.textContent === "Export Markdown" && !button.disabled
     );
     expect(exportButton).toBeDefined();
     flushSync(() => {
@@ -3696,7 +4381,7 @@ describe("Popup IOC tray", () => {
     });
 
     const exportButton = Array.from(mounted.container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Export JSON"
+      (button) => button.textContent === "Export JSON" && !button.disabled
     );
     expect(exportButton).toBeDefined();
     flushSync(() => {
@@ -3810,7 +4495,8 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
-    const buttonLabels = Array.from(mounted.container.querySelectorAll("button")).map(
+    const tray = mounted.container.querySelector(".vera5-popup-triage");
+    const buttonLabels = Array.from(tray?.querySelectorAll("button") ?? []).map(
       (button) => button.textContent
     );
     expect(buttonLabels).not.toContain("Copy all");
@@ -3875,9 +4561,8 @@ describe("Popup IOC tray", () => {
       );
     });
 
-    const scanButton = Array.from(mounted!.container.querySelectorAll("button")).find(
-      (button) => button.textContent === "Scan page"
-    );
+    const scanButton =
+      mounted!.container.querySelector<HTMLButtonElement>(".vera5-scan-page-cta");
     expect(scanButton).toBeDefined();
     scanButton?.click();
 
