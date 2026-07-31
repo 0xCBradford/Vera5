@@ -32,6 +32,18 @@ The production build minifies and ships the following npm production dependencie
 | Project | https://github.com/facebook/react |
 | Use in Vera5 | Popup and options UI rendering |
 
+### Phosphor Icons (React)
+
+| Field | Value |
+|-------|-------|
+| Package | `@phosphor-icons/react` |
+| Version | see `extension/package.json` |
+| License | MIT |
+| Project | https://github.com/phosphor-icons/react |
+| Use in Vera5 | Chrome side-panel UI icons (tree-shaken per-icon imports; no CDN) |
+
+Visual-asset inventory and vendor-fallback decisions: [extension/public/icons/ATTRIBUTION.md](extension/public/icons/ATTRIBUTION.md).
+
 ### MIT License (React / React DOM)
 
 ```
@@ -77,6 +89,10 @@ File names and usage: [extension/public/fonts/README.md](extension/public/fonts/
 ## Third-party threat-intelligence services (not bundled)
 
 Live enrichment connectors call vendor APIs over HTTPS when **you** enable them and supply **your** API keys. Vera5 does not redistribute vendor SDKs, datasets, or maintainer API credentials. Service terms and privacy policies are owned by each vendor; see [docs/api-integrations.md — Vendor terms, privacy, and acceptable use](docs/api-integrations.md#vendor-terms-privacy-and-acceptable-use). Vera5 source code includes connector modules and pivot link templates only.
+
+### Trademark notice (source identification)
+
+Third-party names and logos are trademarks of their respective owners. Their inclusion identifies supported intelligence sources and does not imply endorsement, partnership, certification, sponsorship, or affiliation. Vera5 does not currently ship third-party vendor logo files; source identity in the UI uses the vendor display name plus a neutral category icon. See [extension/public/icons/ATTRIBUTION.md](extension/public/icons/ATTRIBUTION.md).
 
 ---
 

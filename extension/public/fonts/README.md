@@ -3,8 +3,10 @@
 CSP forbids remote/CDN fonts, so the brand typefaces must ship locally as `woff2`
 in this folder. The extension references them via `@font-face` in
 `src/styles/tokens.css` using extension-relative paths (`/fonts/...`).
+Injected content UI resolves the same files through `chrome.runtime.getURL`.
 
-Drop these exact files here (until then, the UI falls back to system fonts):
+These Latin-subset woff2 files are checked in for Phase 1. The UI falls back to
+the system stack if a face is missing.
 
 | File                          | Family          | Weight | Used for                         |
 | ----------------------------- | --------------- | ------ | -------------------------------- |
@@ -17,6 +19,9 @@ Drop these exact files here (until then, the UI falls back to system fonts):
 
 Sources (SIL Open Font License):
 
-- Inter: https://github.com/rsms/inter (subset to the four weights above)
+- Inter: https://github.com/rsms/inter (latin subset, four weights)
 - JetBrains Mono: https://github.com/JetBrains/JetBrainsMono
 - Space Grotesk: https://github.com/floriankarsten/space-grotesk
+
+Do not load fonts from a runtime CDN. Replace faces in-place if a fuller
+glyph coverage subset is needed later.

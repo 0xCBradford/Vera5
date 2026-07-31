@@ -117,10 +117,155 @@
   --font-wordmark: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-display: var(--font-wordmark);
 
-  /* Side-panel intelligence grid */
-  --intel-card-height: 96px;
-  --intel-card-min: 148px;
+  /* Side-panel intelligence grid (Phase 5 densified) */
+  --intel-card-height: 108px;
+  --intel-summary-min: 112px;
   --panel-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+
+  /* ================================================================
+   * PHASE 1 DESIGN FOUNDATION — a scale layer built on the tokens
+   * above. Additive and value-preserving except that sub-legible 10px
+   * metadata is lifted to the 11px minimum. Existing tokens are reused,
+   * never duplicated. Do not add a competing second system below this.
+   * ================================================================ */
+
+  /* Font families (canonical stacks; robust local fallbacks, no CDN) */
+  --font-sans: var(--font-ui);
+
+  /* Type scale (px) */
+  --fs-badge: 6.5px; /* size-constrained IOC-type square only */
+  --fs-nano: 8px; /* constrained micro pips */
+  --fs-pico: 9px; /* constrained responsive micro */
+  --fs-micro: 11px; /* meaningful metadata minimum */
+  --fs-xs: 11.5px; /* small support text */
+  --fs-sm: 12px; /* standard body / labels */
+  --fs-md: 12.5px; /* dense body emphasis */
+  --fs-value: 13px; /* technical / IOC values, control labels */
+  --fs-title: 13.5px; /* card & vendor titles */
+  --fs-heading: 14px; /* major section headings */
+  --fs-heading-lg: 15px;
+  --fs-score-sm: 22px; /* score in narrow layouts */
+  --fs-score: 30px; /* primary score value */
+
+  /* Font weights (only 400/500/600/700 faces are bundled) */
+  --fw-body: 400;
+  --fw-medium: 500;
+  --fw-strong: 600;
+  --fw-bold: 700;
+
+  /* Line heights */
+  --lh-score: 1;
+  --lh-control: 1.15;
+  --lh-tight: 1.2;
+  --lh-label: 1.25;
+  --lh-value: 1.35;
+  --lh-body: 1.45;
+  --lh-multiline: 1.5;
+
+  /* Letter spacing */
+  --ls-normal: 0;
+  --ls-button: 0.01em;
+  --ls-label: 0.06em;
+  --ls-heading: 0.11em;
+
+  /* Spacing scale (2px rhythm) — coexists with the legacy --s-* names */
+  --sp-0: 2px;
+  --sp-1: 4px;
+  --sp-2: 6px;
+  --sp-3: 8px;
+  --sp-4: 10px;
+  --sp-5: 12px;
+  --sp-6: 16px;
+  --sp-7: 20px;
+  --sp-8: 24px;
+
+  /* Border widths */
+  --bw-thin: 1px;
+  --bw-strong: 2px;
+
+  /* Dividers */
+  --divider-quiet: var(--border-hairline);
+  --divider-standard: var(--border-soft);
+  --divider-strong: var(--border-hard);
+  --divider-active: var(--border-accent);
+
+  /* Radius families */
+  --r-xs: 4px;
+  --r-compact: var(--r-sm); /* 6px */
+  --r-card: var(--r-md); /* 10px */
+  --r-major: var(--r-lg); /* 14px */
+  --r-pill: 999px;
+
+  /* Surface / elevation model (maps onto the existing surfaces) */
+  --elev-canvas: var(--surface-page);
+  --elev-section: var(--surface-1);
+  --elev-raised: var(--surface-raised);
+  --elev-inset: color-mix(in srgb, var(--surface-page) 78%, var(--surface-2));
+  --elev-overlay: var(--surface-raised);
+  --surface-hover: var(--surface-2);
+  --surface-selected: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+
+  /* Shadows / glows */
+  --shadow-selected: 0 0 0 1px var(--border-accent), 0 6px 18px rgba(0, 0, 0, 0.3);
+  --shadow-overlay: var(--shadow-high);
+  --focus-glow: 0 0 0 2px rgba(255, 178, 36, 0.35);
+
+  /* Icon sizing */
+  --icon-xs: 14px;
+  --icon-sm: 16px;
+  --icon-md: 18px;
+  --icon-lg: 20px;
+  --icon-xl: 24px;
+
+  /* Semantic score families (aliases to the locked scoring palette) */
+  --score-critical: var(--score-red);
+  --score-high: var(--score-orange);
+  --score-suspicious: var(--score-yellow);
+  --score-low: var(--score-gold);
+  --score-zero: #9a8f6b; /* valid 0/100 result — desaturated gold */
+
+  /* Semantic states */
+  --state-info: var(--state-blue);
+  --state-pivot: var(--state-blue);
+  --state-success: var(--terminal-teal);
+  --state-warning: var(--accent);
+  --state-error: var(--signal-red);
+  --state-config-missing: var(--deep-violet);
+  --state-unavailable: #5b6675; /* blue-gray — distinct from --score-zero */
+  --state-disabled: var(--text-low);
+
+  /* Text roles */
+  --text-muted: var(--text-low);
+  --text-inverse: var(--on-accent);
+
+  /* Interaction */
+  --t-active: 90ms;
+  --focus-color: var(--accent);
+  --focus-outline-width: 2px;
+  --focus-outline-offset: 2px;
+  --disabled-opacity: 0.55;
+  --disabled-saturate: 0.7;
+
+  /* Phase 2 — major-section architecture (extends Phase 1; no second system) */
+  --section-pad-x: var(--sp-6); /* 16px */
+  --section-pad-y: var(--sp-5); /* 12px */
+  --section-header-pad-y: var(--sp-3); /* 8px */
+  --section-header-min-h: 34px;
+  --section-gap: var(--sp-5); /* 12px */
+  --section-border: color-mix(in srgb, var(--state-blue) 26%, var(--border-hard));
+  --section-surface:
+    radial-gradient(120% 90% at 100% 0%, rgba(77, 141, 255, 0.07), transparent 56%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 84%, #0c1420), var(--elev-section));
+  --section-shadow: var(--highlight-top), var(--shadow-low);
+
+  /* Phase 3 — control families (extends Phase 1/2; no second system) */
+  --ctrl-h-compact: 32px;
+  --ctrl-h-standard: 38px;
+  --ctrl-h-source: 36px;
+  --ctrl-h-segment: 30px;
+  --ctrl-h-icon: 28px;
+  --status-dot: 6px;
+  --ctrl-gap-icon: 6px;
 
   /* ----------------------------------------------------------------
    * Back-compat aliases: the settings page (options.css) consumes the
@@ -224,8 +369,13 @@
   box-shadow: 0 6px 20px rgba(255, 178, 36, 0.3);
 }
 .v5-btn:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: var(--focus-outline-width) solid var(--focus-color);
+  outline-offset: var(--focus-outline-offset);
+}
+.v5-btn:disabled {
+  cursor: not-allowed;
+  opacity: var(--disabled-opacity);
+  filter: saturate(var(--disabled-saturate));
 }
 @media (prefers-reduced-motion: reduce) {
   .v5-btn {
@@ -259,9 +409,12 @@
   min-height: 100%;
   padding: 14px !important;
   overflow-x: hidden;
-  background: var(--surface-page) !important;
-  font-size: 13px;
-  line-height: 1.45;
+  background: var(--elev-canvas) !important;
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-body);
+  line-height: var(--lh-body);
 }
 
 .vera5-popup *,
@@ -376,9 +529,10 @@
 .vera5-triage-section > div:first-child h2 {
   margin: 0 0 8px;
   color: var(--accent) !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.08em;
+  font-size: var(--fs-heading) !important;
+  font-weight: var(--fw-bold) !important;
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
   text-transform: uppercase;
 }
 
@@ -389,7 +543,7 @@
   border-radius: var(--r-sm) !important;
   background: color-mix(in srgb, var(--surface-2) 76%, transparent) !important;
   color: var(--text-secondary) !important;
-  font-size: 11px !important;
+  font-size: var(--fs-micro) !important;
   font-weight: 600 !important;
 }
 
@@ -476,7 +630,7 @@
 
 .vera5-ioc-queue > [data-vera5-tray-entry="true"] details > summary {
   color: var(--text-secondary) !important;
-  font-size: 11px !important;
+  font-size: var(--fs-micro) !important;
 }
 
 .vera5-tray-context {
@@ -529,11 +683,21 @@
 .vera5-popup button:focus-visible,
 .vera5-popup a:focus-visible,
 .vera5-popup [role="button"]:focus-visible,
+.vera5-popup [role="switch"]:focus-visible,
+.vera5-popup [role="tab"]:focus-visible,
 .vera5-popup summary:focus-visible,
 .vera5-popup input:focus-visible,
 .vera5-popup textarea:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: var(--focus-outline-width) solid var(--focus-color);
+  outline-offset: var(--focus-outline-offset);
+}
+
+.vera5-popup button:disabled,
+.vera5-popup [role="button"][aria-disabled="true"],
+.vera5-popup [role="switch"]:disabled {
+  cursor: not-allowed;
+  opacity: var(--disabled-opacity);
+  filter: saturate(var(--disabled-saturate));
 }
 
 /*
@@ -556,6 +720,202 @@
     var(--surface-page) !important;
 }
 
+/*
+ * Phase 2 — shared major-section architecture.
+ * Scan / Intel Feed / Detected Indicators / Investigation Paths
+ * share header anatomy, divider, and surface padding. Controls inside
+ * each section are intentionally untouched.
+ */
+.vera5-popup[data-host="sidepanel"] .vera5-section-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-width: 0;
+  min-height: var(--section-header-min-h);
+  padding: var(--section-header-pad-y) 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-identity {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-icon svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ctrl-gap-icon);
+  margin: 0;
+  min-width: 0;
+  color: var(--accent);
+  font-family: var(--font-ui);
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
+  text-transform: uppercase;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-subtitle {
+  margin: 0;
+  max-width: 48ch;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-body);
+  line-height: var(--lh-body);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-utilities {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-divider {
+  flex: 0 0 auto;
+  height: 0;
+  margin: 0;
+  border: 0;
+  border-top: var(--bw-thin) solid var(--divider-standard);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-divider--content {
+  border-top-color: var(--divider-quiet);
+}
+
+/*
+ * Phase 3 — VERA5 control families.
+ * Maps existing control selectors onto shared height/radius/typography/
+ * interaction rules. Does not redesign card surfaces or Phase 2 chrome.
+ */
+.vera5-popup[data-host="sidepanel"] .vera5-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-control);
+  letter-spacing: 0.02em;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status::before {
+  content: "";
+  flex: 0 0 var(--status-dot);
+  width: var(--status-dot);
+  height: var(--status-dot);
+  border-radius: 50%;
+  background: var(--state-unavailable);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="success"]::before,
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="live"]::before,
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="ready"]::before {
+  background: var(--state-success);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--state-success) 45%, transparent);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="info"]::before,
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="pivot"]::before,
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="cached"]::before {
+  background: var(--state-info);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="warning"]::before {
+  background: var(--state-warning);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="error"]::before {
+  background: var(--state-error);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="config"]::before {
+  background: var(--state-config-missing);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="disabled"]::before,
+.vera5-popup[data-host="sidepanel"] .vera5-status[data-vera5-status="unavailable"]::before {
+  background: var(--state-disabled);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-risk-label {
+  flex-shrink: 0;
+  color: var(--source-accent, var(--accent));
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.04em;
+  line-height: var(--lh-tight);
+  text-transform: uppercase;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0 0 var(--sp-5);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: var(--bw-thin) solid var(--border-soft);
+  border-radius: var(--r-compact);
+  background: var(--elev-raised);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.03em;
+  line-height: var(--lh-control);
+  text-transform: uppercase;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status-chip::before {
+  content: "";
+  width: var(--status-dot);
+  height: var(--status-dot);
+  border-radius: 50%;
+  background: var(--state-info);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status-chip--warning {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-soft));
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  color: var(--accent);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-status-chip--warning::before {
+  background: var(--state-warning);
+}
+
 .vera5-popup[data-host="sidepanel"] .vera5-command-header,
 .vera5-popup[data-host="sidepanel"] .vera5-command-section {
   --command-bg: #080d16;
@@ -569,7 +929,7 @@
   --command-violet: #9671ff;
   --command-text: #f5f8fd;
   --command-muted: #93a1b7;
-  --command-radius: 12px;
+  --command-radius: var(--r-major);
   --command-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
 }
 
@@ -605,19 +965,21 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 34px;
-  padding: 7px 12px !important;
-  border: 1px solid color-mix(in srgb, var(--command-gold) 44%, var(--command-border)) !important;
-  border-radius: 8px !important;
+  gap: var(--ctrl-gap-icon);
+  min-height: var(--ctrl-h-compact);
+  padding: 6px 10px !important;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--command-gold) 44%, var(--command-border)) !important;
+  border-radius: var(--r-compact) !important;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 46%),
     var(--command-surface) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
   color: var(--command-gold-light) !important;
-  font-size: 11px !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.02em !important;
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm) !important;
+  font-weight: var(--fw-strong) !important;
+  letter-spacing: var(--ls-button) !important;
+  line-height: var(--lh-control);
   transition:
     border-color var(--t-hover) var(--ease-out),
     background-color var(--t-hover) var(--ease-out),
@@ -639,32 +1001,43 @@
   outline-offset: 2px;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-header-action svg {
-  flex: 0 0 13px;
-  width: 13px;
-  height: 13px;
+.vera5-popup[data-host="sidepanel"] .vera5-header-action svg,
+.vera5-popup[data-host="sidepanel"] .vera5-header-action .vera5-ui-icon {
+  flex: 0 0 var(--icon-xs);
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section {
   --ioc-type-color: #8793a8;
   margin-top: 0 !important;
-  padding: 12px !important;
-  border-top: 2px solid color-mix(in srgb, var(--accent) 72%, var(--border-hard)) !important;
+  padding: var(--section-pad-y) var(--section-pad-x) !important;
+  border: var(--bw-thin) solid var(--section-border) !important;
+  border-radius: var(--r-major);
+  background: var(--section-surface);
+  box-shadow: var(--section-shadow);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row {
   position: relative;
   min-width: 0;
-  margin-bottom: 9px !important;
+  margin-bottom: 0 !important;
+  padding-top: 0;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section h2 {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section > .vera5-section-divider {
+  margin-bottom: var(--sp-3);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section h2,
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section .vera5-section-title {
   min-width: 0;
   margin: 0 !important;
   color: var(--accent) !important;
-  font-size: 11px !important;
-  font-weight: 800 !important;
-  letter-spacing: 0.12em !important;
+  font-size: var(--fs-heading) !important;
+  font-weight: var(--fw-bold) !important;
+  letter-spacing: var(--ls-heading) !important;
+  line-height: var(--lh-tight);
   text-transform: uppercase !important;
 }
 
@@ -679,25 +1052,26 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-tray-case-tools > summary {
   display: inline-flex;
-  min-height: 28px;
+  min-height: var(--ctrl-h-compact);
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 4px 8px;
-  border: 1px solid color-mix(in srgb, var(--state-blue) 28%, var(--border-soft));
-  border-radius: var(--r-sm);
+  gap: var(--ctrl-gap-icon);
+  padding: 6px 10px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 28%, var(--border-soft));
+  border-radius: var(--r-compact);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), transparent 52%),
-    color-mix(in srgb, var(--surface-2) 84%, var(--surface-page));
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.035),
-    0 2px 7px rgba(0, 0, 0, 0.2);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 46%),
+    var(--elev-raised);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
   color: var(--text-secondary) !important;
-  font-size: 10px;
-  font-weight: 650;
-  line-height: 1;
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-strong);
+  letter-spacing: var(--ls-button);
+  line-height: var(--lh-control);
   list-style: none;
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-tray-case-tools > summary::-webkit-details-marker {
@@ -742,83 +1116,80 @@
     0 12px 28px rgba(0, 0, 0, 0.46);
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-filters {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-filters,
+.vera5-popup[data-host="sidepanel"] .vera5-segmented {
   display: flex !important;
   width: 100%;
   min-width: 0;
   align-items: stretch;
   gap: 0 !important;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 2px;
-  border: 1px solid color-mix(in srgb, var(--state-blue) 20%, var(--border-soft));
-  border-radius: var(--r-sm);
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 20%, var(--border-soft));
+  border-radius: var(--r-compact);
   background: color-mix(in srgb, var(--surface-page) 72%, var(--surface-1));
   box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.32);
+  scrollbar-width: thin;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-filters > button {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-filters > button,
+.vera5-popup[data-host="sidepanel"] .vera5-segmented > button {
   --ioc-type-color: #8793a8;
   position: relative;
   flex: 1 1 64px;
-  min-height: 30px;
+  min-height: var(--ctrl-h-segment);
   min-width: 54px;
   margin: 0;
   padding: 4px 7px !important;
-  border: 1px solid color-mix(in srgb, var(--ioc-type-color) 28%, var(--border-soft)) !important;
-  border-radius: 3px !important;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--ioc-type-color) 22%, var(--surface-2)),
-      color-mix(in srgb, var(--ioc-type-color) 11%, var(--surface-page))
-    ) !important;
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--ioc-type-color) 15%, transparent);
-  color: var(--text-primary) !important;
-  font-size: 10px !important;
-  font-weight: 700 !important;
+  border: var(--bw-thin) solid transparent !important;
+  border-radius: calc(var(--r-compact) - 2px) !important;
+  background: transparent !important;
+  box-shadow: none;
+  color: var(--text-secondary) !important;
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm) !important;
+  font-weight: var(--fw-strong) !important;
   letter-spacing: 0.025em;
-  line-height: 1.15;
+  line-height: var(--lh-control);
   text-transform: uppercase;
   transition:
     border-color var(--t-hover) var(--ease-out),
     background var(--t-hover) var(--ease-out),
     box-shadow var(--t-hover) var(--ease-out),
-    transform var(--t-hover) var(--ease-out);
+    color var(--t-hover) var(--ease-out);
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-filters > button:hover {
-  border-color: color-mix(in srgb, var(--ioc-type-color) 55%, var(--border-soft)) !important;
-  background:
-    linear-gradient(
-      180deg,
-      color-mix(in srgb, var(--ioc-type-color) 30%, var(--surface-2)),
-      color-mix(in srgb, var(--ioc-type-color) 15%, var(--surface-page))
-    ) !important;
+.vera5-popup[data-host="sidepanel"] .vera5-triage-filters > button:hover,
+.vera5-popup[data-host="sidepanel"] .vera5-segmented > button:hover {
+  border-color: color-mix(in srgb, var(--ioc-type-color) 34%, transparent) !important;
+  background: color-mix(in srgb, var(--ioc-type-color) 14%, transparent) !important;
+  color: var(--text-primary) !important;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-filters > button[aria-pressed="true"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-filters > button[aria-pressed="true"],
+.vera5-popup[data-host="sidepanel"] .vera5-segmented > button[aria-pressed="true"] {
   z-index: 1;
-  border-color: color-mix(in srgb, var(--ioc-type-color) 82%, white) !important;
+  border-color: color-mix(in srgb, var(--ioc-type-color) 70%, white) !important;
   background:
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--ioc-type-color) 72%, white) 0%,
-      color-mix(in srgb, var(--ioc-type-color) 72%, #172235) 42%,
-      color-mix(in srgb, var(--ioc-type-color) 42%, #09111d) 100%
+      color-mix(in srgb, var(--ioc-type-color) 68%, white) 0%,
+      color-mix(in srgb, var(--ioc-type-color) 58%, #172235) 48%,
+      color-mix(in srgb, var(--ioc-type-color) 38%, #09111d) 100%
     ) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.38),
-    inset 0 -2px 4px rgba(0, 0, 0, 0.26),
-    0 3px 7px rgba(0, 0, 0, 0.28),
-    0 0 10px color-mix(in srgb, var(--ioc-type-color) 22%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -1px 3px rgba(0, 0, 0, 0.22);
   color: #fff !important;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.48);
-  transform: translateY(-1px);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.42);
+  transform: none;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-filters > button:focus-visible {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-filters > button:focus-visible,
+.vera5-popup[data-host="sidepanel"] .vera5-segmented > button:focus-visible {
   z-index: 2;
-  outline: 2px solid color-mix(in srgb, var(--ioc-type-color) 72%, white);
+  outline: var(--focus-outline-width) solid color-mix(in srgb, var(--ioc-type-color) 72%, white);
   outline-offset: 1px;
 }
 
@@ -836,7 +1207,7 @@
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-queue > [data-vera5-tray-entry="true"] {
   --ioc-type-color: #8793a8;
   min-width: 0;
-  min-height: 44px;
+  min-height: 40px;
   box-sizing: border-box;
   gap: 9px !important;
   padding: 5px 8px 5px 9px !important;
@@ -881,16 +1252,18 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-type-badge {
   display: inline-flex;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
   box-sizing: border-box;
-  flex: 0 0 34px;
+  flex: 0 0 30px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   padding: 2px !important;
   border: 1px solid color-mix(in srgb, var(--ioc-type-color) 72%, white) !important;
-  border-radius: 5px !important;
+  border-radius: var(--r-compact) !important;
   background:
     linear-gradient(
       145deg,
@@ -901,18 +1274,71 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.24),
     0 2px 6px color-mix(in srgb, var(--ioc-type-color) 16%, transparent);
   color: #fff !important;
-  font-size: 8px !important;
+  font-family: var(--font-ui);
+  font-size: var(--fs-nano) !important;
   font-weight: 850 !important;
   letter-spacing: 0 !important;
   line-height: 1;
   text-align: center;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.52);
+  text-transform: uppercase;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 46%;
+  min-height: 20px;
+  padding: 2px 6px !important;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 28%, var(--border-soft)) !important;
+  border-radius: var(--r-compact) !important;
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro) !important;
+  font-weight: var(--fw-strong) !important;
+  letter-spacing: 0.02em;
+  line-height: var(--lh-tight);
+  text-transform: none;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-status-badge::before {
+  content: "";
+  flex: 0 0 var(--status-dot);
+  width: var(--status-dot);
+  height: var(--status-dot);
+  border-radius: 50%;
+  background: var(--state-info);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-status-badge[data-vera5-status-tone="live"]::before,
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-status-badge[data-vera5-status-tone="success"]::before {
+  background: var(--state-success);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-status-badge[data-vera5-status-tone="error"] {
+  border-color: color-mix(in srgb, var(--signal-red) 36%, var(--border-soft)) !important;
+  color: color-mix(in srgb, var(--signal-red) 78%, var(--text-primary)) !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-status-badge[data-vera5-status-tone="error"]::before {
+  background: var(--state-error);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-status-badge[data-vera5-status-tone="skipped"] {
+  border-color: color-mix(in srgb, var(--state-white) 20%, var(--border-soft)) !important;
+  color: var(--text-low) !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-status-badge[data-vera5-status-tone="skipped"]::before {
+  background: var(--state-disabled);
 }
 
 .vera5-popup[data-host="sidepanel"] [data-ioc-type="sha256"] .vera5-ioc-type-badge,
 .vera5-popup[data-host="sidepanel"] [data-ioc-type="sha1"] .vera5-ioc-type-badge,
 .vera5-popup[data-host="sidepanel"] [data-ioc-type="filepath"] .vera5-ioc-type-badge {
-  font-size: 6.5px !important;
+  font-size: var(--fs-badge) !important;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-queue-value {
@@ -922,9 +1348,9 @@
   overflow: hidden;
   color: var(--text-primary) !important;
   font-family: var(--font-mono) !important;
-  font-size: 12px !important;
-  font-weight: 650 !important;
-  line-height: 1.35;
+  font-size: var(--fs-value) !important;
+  font-weight: var(--fw-medium) !important;
+  line-height: var(--lh-value);
   overflow-wrap: anywhere;
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
@@ -947,9 +1373,19 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-suppressed-section > summary {
-  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  padding: 6px 8px;
+  border-radius: var(--r-compact);
   color: var(--text-secondary) !important;
-  line-height: 1.3;
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-control);
+  cursor: pointer;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-suppressed-section > summary:focus-visible {
@@ -959,7 +1395,7 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-suppressed-hint {
   color: var(--text-low) !important;
-  font-size: 10px !important;
+  font-size: var(--fs-micro) !important;
   line-height: 1.4 !important;
 }
 
@@ -1075,25 +1511,26 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border: 1px solid color-mix(in srgb, var(--state-blue) 26%, var(--border-hard));
-  border-radius: var(--r-md);
-  background:
-    radial-gradient(120% 90% at 100% 0%, rgba(77, 141, 255, 0.08), transparent 56%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 82%, #0c1420), var(--surface-1));
-  box-shadow:
-    inset 0 1px 0 rgba(245, 247, 250, 0.05),
-    0 0 18px rgba(77, 141, 255, 0.05),
-    var(--shadow-med);
+  border: var(--bw-thin) solid var(--section-border);
+  border-radius: var(--r-major);
+  background: var(--section-surface);
+  box-shadow: var(--section-shadow);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-header {
   display: flex;
   flex: 0 0 auto;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 11px;
-  border-bottom: 1px solid color-mix(in srgb, var(--state-blue) 20%, var(--border-soft));
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  min-height: var(--section-header-min-h);
+  padding: var(--section-header-pad-y) var(--section-pad-x);
+  border-bottom: 0;
   background: linear-gradient(180deg, rgba(255, 178, 36, 0.05), transparent 70%);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-investigation-paths > .vera5-section-divider {
+  margin: 0 var(--section-pad-x);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-header-icon {
@@ -1104,8 +1541,8 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-header-icon svg,
 .vera5-popup[data-host="sidepanel"] .vera5-ip-header-chevron svg {
-  width: 15px;
-  height: 15px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-title {
@@ -1113,9 +1550,11 @@
   min-width: 0;
   margin: 0;
   color: var(--accent);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.13em;
+  font-family: var(--font-ui);
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
   text-transform: uppercase;
 }
 
@@ -1129,9 +1568,9 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--sp-3);
   min-height: 0;
-  padding: 10px;
+  padding: var(--sp-4) var(--section-pad-x) var(--section-pad-y);
   overflow-x: hidden;
   overflow-y: auto;
 }
@@ -1147,7 +1586,7 @@
 .vera5-popup[data-host="sidepanel"] .vera5-ip-group-label {
   margin-bottom: 7px;
   color: color-mix(in srgb, var(--text-secondary) 82%, var(--state-blue));
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: 0.11em;
   text-transform: uppercase;
@@ -1156,7 +1595,7 @@
 .vera5-popup[data-host="sidepanel"] .vera5-ip-empty {
   margin: 0;
   color: var(--text-low);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   line-height: 1.4;
 }
 
@@ -1176,9 +1615,9 @@
   overflow: hidden;
   color: var(--text-primary);
   font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: var(--fs-value);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-value);
   overflow-wrap: anywhere;
   word-break: break-all;
 }
@@ -1188,12 +1627,12 @@
   flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: var(--ctrl-h-icon);
+  height: var(--ctrl-h-icon);
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border-hard));
-  border-radius: var(--r-sm);
-  background: var(--surface-2);
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 30%, var(--border-hard));
+  border-radius: var(--r-compact);
+  background: var(--elev-raised);
   color: var(--accent-hover);
   cursor: pointer;
   transition:
@@ -1202,8 +1641,8 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-copy svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-copy:hover {
@@ -1213,10 +1652,15 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-copy-feedback {
   display: block;
-  min-height: 12px;
-  margin-top: 5px;
+  margin-top: 4px;
   color: var(--terminal-teal);
-  font-size: 10px;
+  font-size: var(--fs-micro);
+  line-height: var(--lh-tight);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-copy-feedback:empty {
+  display: none;
+  margin: 0;
 }
 
 /* Recommended Actions */
@@ -1229,17 +1673,20 @@
 .vera5-popup[data-host="sidepanel"] .vera5-ip-action {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-height: 46px;
-  padding: 9px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border-hard));
-  border-radius: var(--r-sm);
+  gap: var(--ctrl-gap-icon);
+  min-height: 36px;
+  padding: 7px 9px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 26%, var(--border-hard));
+  border-radius: var(--r-card);
   background:
     linear-gradient(180deg, rgba(255, 178, 36, 0.06), transparent 60%),
-    var(--surface-2);
+    var(--elev-raised);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
-  font-size: 11px;
-  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-control);
   text-align: left;
   cursor: pointer;
   transition:
@@ -1283,39 +1730,64 @@
   color: var(--text-low);
 }
 
-/* Intelligence Sources */
+/* Intelligence Sources — rectangular source tiles (not capsules) */
 .vera5-popup[data-host="sidepanel"] .vera5-ip-sources {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: var(--sp-2);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-source {
-  min-height: 28px;
-  padding: 5px 10px;
-  border: 1px solid color-mix(in srgb, var(--state-blue) 30%, var(--border-soft));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--state-blue) 12%, var(--surface-2));
-  color: color-mix(in srgb, var(--state-blue) 74%, var(--text-primary));
-  font-size: 11px;
-  font-weight: 650;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ctrl-gap-icon);
+  min-height: var(--ctrl-h-source);
+  padding: 6px 10px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 30%, var(--border-soft));
+  border-radius: var(--r-compact);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 58%),
+    color-mix(in srgb, var(--state-blue) 10%, var(--elev-raised));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-control);
   cursor: pointer;
   transition:
     border-color var(--t-hover) var(--ease-out),
-    background-color var(--t-hover) var(--ease-out);
+    background-color var(--t-hover) var(--ease-out),
+    box-shadow var(--t-hover) var(--ease-out);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-source:hover:not([data-vera5-disabled="true"]) {
   border-color: color-mix(in srgb, var(--state-blue) 52%, var(--border-soft));
-  background: color-mix(in srgb, var(--state-blue) 20%, var(--surface-2));
-  color: var(--text-primary);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 58%),
+    color-mix(in srgb, var(--state-blue) 18%, var(--elev-raised));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 10px rgba(77, 141, 255, 0.1);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-source:focus-visible {
+  outline: var(--focus-outline-width) solid var(--focus-color);
+  outline-offset: var(--focus-outline-offset);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-source[data-vera5-disabled="true"] {
-  border-color: color-mix(in srgb, var(--signal-red) 34%, var(--border-soft));
-  background: color-mix(in srgb, var(--signal-red) 8%, var(--surface-2));
-  color: color-mix(in srgb, var(--signal-red) 68%, var(--text-secondary));
+  border-color: color-mix(in srgb, var(--state-config-missing) 38%, var(--border-soft));
+  background: color-mix(in srgb, var(--state-config-missing) 10%, var(--surface-2));
+  color: color-mix(in srgb, var(--state-config-missing) 72%, var(--text-secondary));
   cursor: not-allowed;
+  opacity: var(--disabled-opacity);
+  filter: saturate(var(--disabled-saturate));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-source .vera5-status {
+  font-size: var(--fs-pico);
+  text-transform: uppercase;
 }
 
 /* Related Context */
@@ -1333,7 +1805,7 @@
   align-items: flex-start;
   gap: 7px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   line-height: 1.4;
 }
 
@@ -1346,6 +1818,26 @@
   flex: 0 0 auto;
   margin-top: 3px;
   color: var(--state-blue);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-context-dot-mark {
+  display: block;
+  width: var(--status-dot);
+  height: var(--status-dot);
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-source .vera5-vendor-mark {
+  flex: 0 0 var(--icon-xs);
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  color: currentColor;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-source .vera5-vendor-mark svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-context-line[data-vera5-tone="muted"] .vera5-ip-context-dot {
@@ -1364,9 +1856,10 @@
   gap: 6px;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row {
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r-sm);
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row,
+.vera5-popup[data-host="sidepanel"] .vera5-disclosure-row {
+  border: var(--bw-thin) solid var(--border-soft);
+  border-radius: var(--r-compact);
   background: color-mix(in srgb, var(--surface-page) 68%, var(--surface-1));
 }
 
@@ -1412,7 +1905,7 @@
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-label {
   flex: 0 0 auto;
   color: var(--text-primary);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 650;
 }
 
@@ -1425,7 +1918,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--text-low);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1454,7 +1947,7 @@
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-note {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   line-height: 1.45;
 }
 
@@ -1508,16 +2001,25 @@
 .vera5-popup[data-host="sidepanel"] .vera5-command-section {
   position: relative;
   isolation: isolate;
-  margin: 10px 0 12px;
-  padding: 16px;
+  margin: 8px 0 10px;
+  padding: var(--section-pad-y) var(--section-pad-x);
+  gap: var(--section-gap);
   overflow: hidden;
-  border: 1px solid var(--command-border);
+  border: var(--bw-thin) solid var(--command-border);
   border-radius: var(--command-radius);
   background:
     linear-gradient(180deg, var(--command-surface-raised), var(--command-bg) 62%, var(--command-surface));
   box-shadow:
     inset 0 1px 0 rgba(235, 243, 255, 0.06),
     var(--command-shadow);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-section-header {
+  padding-top: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-section-divider {
+  margin: calc(var(--section-header-pad-y) * -1) 0 0;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-section::before {
@@ -1543,7 +2045,7 @@
   margin: 0 !important;
   padding: 3px;
   border: 1px solid var(--command-border-soft);
-  border-radius: 10px;
+  border-radius: var(--r-card);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 56%),
     color-mix(in srgb, var(--command-bg) 88%, #111a28);
@@ -1557,10 +2059,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
-  min-height: 46px;
-  padding: 7px 14px !important;
+  min-height: 42px;
+  padding: 6px 12px !important;
   border: 0 !important;
   border-radius: 6px !important;
   background: transparent !important;
@@ -1581,18 +2083,26 @@
 .vera5-popup[data-host="sidepanel"] .vera5-command-toggle:disabled {
   color: var(--command-muted) !important;
   cursor: not-allowed !important;
-  opacity: 0.58 !important;
+  opacity: var(--disabled-opacity) !important;
+  filter: saturate(var(--disabled-saturate));
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-toggle-label {
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--command-text);
-  font-size: 12px;
-  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-strong);
   letter-spacing: 0.01em;
+  line-height: var(--lh-control);
+  text-align: left;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-toggle-track {
+  position: relative;
   box-sizing: border-box;
+  flex: 0 0 auto;
   width: 44px !important;
   height: 24px !important;
   border-radius: 999px !important;
@@ -1610,10 +2120,13 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-toggle-thumb {
+  position: absolute;
+  display: block;
   top: 2px !important;
   left: 2px !important;
   width: 18px !important;
   height: 18px !important;
+  border-radius: 50%;
   border: 1px solid rgba(219, 229, 241, 0.28);
   background:
     radial-gradient(circle at 34% 28%, #d9e0e8 0%, #9ca7b4 30%, #586473 72%, #36414e 100%) !important;
@@ -1673,9 +2186,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 13px;
-  min-height: 66px;
-  padding: 9px 18px !important;
+  gap: 12px;
+  min-height: 58px;
+  padding: 8px 16px !important;
   border: 1px solid color-mix(in srgb, var(--command-gold-light) 68%, #b9800f) !important;
   border-radius: var(--command-radius) !important;
   background:
@@ -1694,9 +2207,10 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-scan-page-icon {
-  flex: 0 0 26px;
-  width: 26px;
-  height: 26px;
+  flex: 0 0 var(--icon-xl);
+  width: var(--icon-xl);
+  height: var(--icon-xl);
+  color: inherit;
   filter: drop-shadow(0 1px 0 rgba(255, 248, 210, 0.34));
 }
 
@@ -1710,14 +2224,14 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-scan-page-copy strong {
-  font-size: 15px;
+  font-size: var(--fs-heading-lg);
   font-weight: 800;
   letter-spacing: 0.075em;
   line-height: 1.1;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-scan-page-copy small {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.015em;
   line-height: 1.25;
@@ -1743,26 +2257,26 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-scan-primary .vera5-scan-page-cta:disabled {
-  opacity: 0.52 !important;
-  filter: grayscale(0.32) saturate(0.6);
+  opacity: var(--disabled-opacity) !important;
+  filter: grayscale(0.32) saturate(var(--disabled-saturate));
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-scan-secondary {
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px !important;
+  gap: 10px !important;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-scan-secondary > .v5-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 11px;
+  gap: 10px;
   min-width: 0;
-  min-height: 64px;
-  padding: 10px 16px !important;
-  border: 1px solid color-mix(in srgb, var(--command-gold) 72%, var(--command-border)) !important;
-  border-radius: 10px !important;
+  min-height: 50px;
+  padding: 7px 12px !important;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--command-gold) 72%, var(--command-border)) !important;
+  border-radius: var(--r-card) !important;
   background:
     linear-gradient(180deg, rgba(255, 214, 111, 0.16), rgba(120, 72, 0, 0.1) 62%, transparent),
     var(--command-surface) !important;
@@ -1770,6 +2284,7 @@
     inset 0 1px 0 rgba(255, 236, 172, 0.12),
     0 0 13px rgba(255, 178, 36, 0.09) !important;
   color: var(--command-gold-light) !important;
+  font-family: var(--font-ui);
   text-align: center;
   transition:
     border-color var(--t-hover) var(--ease-out),
@@ -1805,23 +2320,82 @@
   box-shadow: inset 0 1px 0 rgba(255, 214, 111, 0.04) !important;
   color: color-mix(in srgb, var(--command-gold-light) 54%, var(--command-muted)) !important;
   cursor: not-allowed !important;
-  filter: saturate(0.45);
-  opacity: 0.52 !important;
+  filter: saturate(var(--disabled-saturate));
+  opacity: var(--disabled-opacity) !important;
+}
+
+/* Secondary-action accents: same family, restrained semantic edge/icon tone */
+.vera5-popup[data-host="sidepanel"] .vera5-secondary-command--scan {
+  border-color: color-mix(in srgb, var(--command-blue) 48%, var(--command-border)) !important;
+  background:
+    linear-gradient(180deg, rgba(77, 141, 255, 0.14), rgba(20, 40, 72, 0.12) 62%, transparent),
+    var(--command-surface) !important;
+  color: color-mix(in srgb, var(--command-blue) 72%, #e8f0ff) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(180, 210, 255, 0.1),
+    0 0 12px rgba(77, 141, 255, 0.08) !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-secondary-command--scan:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--command-blue) 72%, var(--command-border)) !important;
+  background:
+    linear-gradient(180deg, rgba(77, 141, 255, 0.2), rgba(28, 52, 90, 0.16) 64%, transparent),
+    var(--command-surface-raised) !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-secondary-command--scan .vera5-secondary-command-icon {
+  border-color: color-mix(in srgb, var(--command-blue) 50%, var(--command-border));
+  background:
+    radial-gradient(circle at 50% 15%, rgba(77, 141, 255, 0.18), transparent 62%),
+    rgba(11, 17, 26, 0.62);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-secondary-command--enrich {
+  border-color: color-mix(in srgb, var(--command-violet) 52%, var(--command-border)) !important;
+  background:
+    linear-gradient(180deg, rgba(150, 113, 255, 0.16), rgba(52, 32, 96, 0.12) 62%, transparent),
+    var(--command-surface) !important;
+  color: color-mix(in srgb, var(--command-violet) 70%, #f0eaff) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(210, 190, 255, 0.1),
+    0 0 12px rgba(150, 113, 255, 0.09) !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-secondary-command--enrich:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--command-violet) 76%, var(--command-border)) !important;
+  background:
+    linear-gradient(180deg, rgba(150, 113, 255, 0.22), rgba(64, 40, 112, 0.16) 64%, transparent),
+    var(--command-surface-raised) !important;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-secondary-command--enrich .vera5-secondary-command-icon {
+  border-color: color-mix(in srgb, var(--command-violet) 54%, var(--command-border));
+  background:
+    radial-gradient(circle at 50% 15%, rgba(150, 113, 255, 0.2), transparent 62%),
+    rgba(11, 17, 26, 0.62);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-secondary-command-icon {
-  flex: 0 0 34px;
-  width: 34px;
-  height: 34px;
-  padding: 5px;
+  display: inline-flex;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   overflow: visible;
   border: 1px solid color-mix(in srgb, var(--command-gold) 56%, var(--command-border));
-  border-radius: 9px;
+  border-radius: var(--r-compact);
   background:
     radial-gradient(circle at 50% 15%, rgba(255, 214, 111, 0.16), transparent 62%),
     rgba(11, 17, 26, 0.62);
   color: currentColor;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-secondary-command-icon svg {
+  width: var(--icon-md);
+  height: var(--icon-md);
 }
 
 .vera5-secondary-command-copy {
@@ -1835,7 +2409,7 @@
 
 .vera5-secondary-command-copy strong {
   color: currentColor;
-  font-size: 13px;
+  font-size: var(--fs-value);
   font-weight: 700;
   letter-spacing: 0.035em;
   line-height: 1.25;
@@ -1844,7 +2418,7 @@
 
 .vera5-secondary-command-copy small {
   color: var(--command-muted);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 500;
   line-height: 1.25;
   white-space: normal;
@@ -1862,7 +2436,7 @@
   border-top: 1px solid color-mix(in srgb, var(--state-blue) 18%, var(--border-hairline));
   background: linear-gradient(180deg, rgba(17, 25, 39, 0.72), rgba(8, 12, 19, 0.9));
   color: var(--text-low);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   line-height: 1.35;
 }
 
@@ -1880,6 +2454,7 @@
   letter-spacing: 0.02em;
 }
 
+.vera5-workspace-footer-status,
 .vera5-workspace-footer-pill {
   display: inline-flex;
   align-items: center;
@@ -1889,40 +2464,49 @@
   border-radius: 0;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 9px;
-  font-weight: 600;
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-strong);
   letter-spacing: 0.03em;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
+.vera5-workspace-footer-status::before,
 .vera5-workspace-footer-pill::before {
   content: "";
-  width: 6px;
-  height: 6px;
+  width: var(--status-dot);
+  height: var(--status-dot);
   border-radius: 50%;
   background: var(--text-low);
 }
 
+.vera5-workspace-footer-status[data-vera5-footer-state="ready"]::before,
+.vera5-workspace-footer-status[data-vera5-footer-state="live"]::before,
+.vera5-workspace-footer-status[data-vera5-footer-state="enabled"]::before,
 .vera5-workspace-footer-pill[data-vera5-footer-state="ready"]::before,
 .vera5-workspace-footer-pill[data-vera5-footer-state="live"]::before,
 .vera5-workspace-footer-pill[data-vera5-footer-state="enabled"]::before {
   background: var(--terminal-teal);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--terminal-teal) 55%, transparent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--terminal-teal) 40%, transparent);
 }
 
+.vera5-workspace-footer-status[data-vera5-footer-state="loading"]::before,
 .vera5-workspace-footer-pill[data-vera5-footer-state="loading"]::before {
   background: var(--accent);
 }
 
+.vera5-workspace-footer-status[data-vera5-footer-state="quiet"]::before,
+.vera5-workspace-footer-status[data-vera5-footer-state="disabled"]::before,
 .vera5-workspace-footer-pill[data-vera5-footer-state="quiet"]::before,
 .vera5-workspace-footer-pill[data-vera5-footer-state="disabled"]::before {
   background: var(--signal-red);
 }
 
 .vera5-workspace-footer-privacy {
-  color: var(--text-low);
-  font-size: 10px;
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-medium);
   white-space: nowrap;
 }
 
@@ -1936,10 +2520,11 @@
 .vera5-popup[data-host="sidepanel"] .vera5-popup-workspace {
   display: grid;
   flex: 1 1 auto;
-  grid-template-columns: minmax(0, 1.12fr) minmax(0, 0.88fr);
+  /* ~52% Detected Indicators / ~48% Investigation Paths */
+  grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
   /* Intel Feed sizes to content; lower operational workspace fills leftover height. */
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 12px 16px;
+  gap: var(--section-gap) var(--section-gap);
   align-items: stretch;
   min-width: 0;
   min-height: 0;
@@ -1968,10 +2553,10 @@
   grid-row: 2;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  border-left: 1px solid var(--border-hard);
-  padding-left: 16px;
-  padding-right: 6px;
+  gap: 0;
+  border-left: var(--bw-thin) solid var(--divider-standard);
+  padding-left: var(--section-gap);
+  padding-right: 0;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-popup-detail > .vera5-investigation-paths {
@@ -2002,7 +2587,7 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-queue--suppressed {
   flex: 0 1 auto;
-  max-height: min(160px, 28dvh) !important;
+  max-height: min(140px, 24dvh) !important;
   overflow-y: auto !important;
 }
 
@@ -2031,65 +2616,63 @@
   height: fit-content;
   min-height: 0;
   overflow: visible;
+  gap: 0;
 }
 
 .vera5-intel-feed-header {
   position: relative;
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sp-3);
   min-width: 0;
+  padding: 0 0 var(--section-header-pad-y);
 }
 
 .vera5-intel-feed-title-row {
   position: relative;
-  display: flex;
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 6px;
-  width: fit-content;
-  max-width: 100%;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+  min-width: 0;
 }
 
 .vera5-intel-feed-heading {
   margin: 0;
   flex: 0 0 auto;
   color: var(--accent);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-family: var(--font-ui);
+  font-size: var(--fs-heading);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
   text-transform: uppercase;
 }
 
 .vera5-intel-feed-subheading {
   margin: 0;
+  max-width: 52ch;
   color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.35;
+  font-size: var(--fs-xs);
+  line-height: var(--lh-body);
 }
 
 .vera5-intel-warning {
   display: inline-grid;
-  flex: 0 0 19px;
+  flex: 0 0 var(--icon-sm);
   place-items: center;
-  width: 19px;
-  height: 19px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   color: var(--intel-high);
-  filter: drop-shadow(0 0 5px rgba(255, 138, 24, 0.22));
 }
 
 .vera5-intel-warning svg,
 .vera5-intel-info-button svg {
-  width: 100%;
-  height: 100%;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
   overflow: visible;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.vera5-intel-warning svg {
-  fill: color-mix(in srgb, var(--intel-high) 12%, transparent);
 }
 
 .vera5-intel-info-button {
@@ -2157,7 +2740,7 @@
 
 .vera5-intel-info-surface > strong {
   color: var(--accent-hover);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 750;
   letter-spacing: 0.035em;
   text-transform: uppercase;
@@ -2175,7 +2758,7 @@
 .vera5-intel-info-surface dt,
 .vera5-intel-info-surface dd {
   overflow-wrap: anywhere;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   line-height: 1.4;
 }
 
@@ -2208,27 +2791,22 @@
 
 .vera5-intel-composite-details {
   top: calc(100% + 6px);
-  left: 0;
+  right: 0;
+  left: auto;
   width: min(430px, calc(100vw - 44px));
 }
 
 .vera5-intel-feed {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: var(--sp-3);
   align-items: stretch;
   min-width: 0;
-  padding: 10px;
-  border: 1px solid color-mix(in srgb, var(--state-blue) 28%, var(--border-hard));
-  border-radius: var(--r-lg);
-  background:
-    radial-gradient(90% 85% at 100% 0%, rgba(139, 92, 246, 0.065), transparent 58%),
-    radial-gradient(90% 85% at 0% 0%, rgba(77, 141, 255, 0.07), transparent 58%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 84%, #101a2b), #0d131d);
-  box-shadow:
-    inset 0 1px 0 rgba(245, 247, 250, 0.055),
-    0 0 20px rgba(77, 141, 255, 0.07),
-    var(--shadow-low);
+  padding: var(--section-pad-y) var(--section-pad-x);
+  border: var(--bw-thin) solid var(--section-border);
+  border-radius: var(--r-major);
+  background: var(--section-surface);
+  box-shadow: var(--section-shadow);
   overflow: visible;
 }
 
@@ -2238,18 +2816,28 @@
   height: fit-content;
 }
 
-.vera5-intel-feed--empty {
+.vera5-intel-feed-body--empty {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   min-height: 48px;
-  gap: 12px;
+  gap: var(--section-gap);
 }
 
-.vera5-intel-feed--empty p {
+.vera5-intel-feed-body--empty p,
+.vera5-intel-feed--empty .vera5-intel-feed-body--empty p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--fs-micro);
+}
+
+/* Legacy empty modifier kept for tests; layout is on the body region. */
+.vera5-intel-feed--empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  align-items: stretch;
+  min-height: 0;
 }
 
 .vera5-intel-empty-actions {
@@ -2262,23 +2850,43 @@
 .vera5-intel-empty-actions button,
 .vera5-intel-export-actions button,
 .vera5-intel-more-formats button {
-  min-height: 27px;
-  padding: 5px 8px;
-  border: 1px solid color-mix(in srgb, var(--state-blue) 24%, var(--border-soft));
-  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ctrl-gap-icon);
+  min-height: var(--ctrl-h-compact);
+  padding: 6px 8px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 34%, var(--border-soft));
+  border-radius: var(--r-compact);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 56%),
-    var(--surface-2);
+    linear-gradient(180deg, rgba(255, 178, 36, 0.07), transparent 58%),
+    var(--elev-raised);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   color: var(--text-primary);
-  font: 650 9px/1.15 var(--font-ui);
+  font: var(--fw-strong) var(--fs-micro)/var(--lh-control) var(--font-ui);
+  letter-spacing: 0.01em;
   cursor: pointer;
+  transition:
+    border-color var(--t-hover) var(--ease-out),
+    color var(--t-hover) var(--ease-out),
+    background-color var(--t-hover) var(--ease-out);
+}
+
+.vera5-intel-empty-actions button svg,
+.vera5-intel-export-actions button svg,
+.vera5-intel-more-formats button svg,
+.vera5-intel-feed-enrich svg,
+.vera5-intel-feed-pivots > summary svg {
+  flex: 0 0 var(--icon-xs);
+  width: var(--icon-xs);
+  height: var(--icon-xs);
 }
 
 .vera5-intel-empty-actions button:disabled,
 .vera5-intel-export-actions button:disabled {
   cursor: not-allowed;
-  filter: saturate(0.4);
-  opacity: 0.42;
+  filter: saturate(var(--disabled-saturate));
+  opacity: var(--disabled-opacity);
 }
 
 .vera5-intel-export-actions button:hover:not(:disabled),
@@ -2312,8 +2920,8 @@
 .vera5-intel-findings-card {
   box-sizing: border-box;
   min-width: 0;
-  min-height: 132px;
-  padding: 10px 11px;
+  min-height: var(--intel-summary-min);
+  padding: 9px 10px;
   border: 1px solid color-mix(in srgb, var(--state-blue) 18%, var(--border-soft));
   border-radius: var(--r-md);
   background:
@@ -2337,10 +2945,10 @@
 .vera5-intel-feed-command > strong {
   grid-column: 1;
   align-self: start;
-  max-height: 2.7em;
+  max-height: 2.8em;
   overflow: auto;
   color: var(--text-primary);
-  font: 650 11px/1.32 var(--font-mono);
+  font: var(--fw-medium) var(--fs-value)/var(--lh-value) var(--font-mono);
   overflow-wrap: anywhere;
 }
 
@@ -2369,16 +2977,56 @@
 
 .vera5-intel-feed-enrich,
 .vera5-intel-feed-pivots > summary {
-  min-height: 26px;
-  border: 1px solid var(--border-accent);
-  border-radius: var(--r-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ctrl-gap-icon);
+  min-height: var(--ctrl-h-compact);
+  padding: 6px 8px;
+  border: var(--bw-thin) solid var(--border-accent);
+  border-radius: var(--r-compact);
   background:
     linear-gradient(180deg, rgba(255, 178, 36, 0.08), transparent 58%),
-    var(--surface-2);
+    var(--elev-raised);
   color: var(--accent-hover);
-  font: 700 10px/1 var(--font-ui);
+  font: var(--fw-strong) var(--fs-micro)/var(--lh-control) var(--font-ui);
+  letter-spacing: 0.02em;
   cursor: pointer;
   box-shadow: var(--highlight-top);
+  transition:
+    border-color var(--t-hover) var(--ease-out),
+    background-color var(--t-hover) var(--ease-out);
+}
+
+.vera5-intel-feed-enrich:hover:not(:disabled),
+.vera5-intel-feed-pivots > summary:hover {
+  border-color: color-mix(in srgb, var(--accent) 62%, var(--border-soft));
+  background:
+    linear-gradient(180deg, rgba(255, 178, 36, 0.12), transparent 58%),
+    var(--surface-raised);
+}
+
+.vera5-intel-analyst-note > summary {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 28px;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-hover);
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  list-style: none;
+}
+
+.vera5-intel-analyst-note > summary::-webkit-details-marker {
+  display: none;
 }
 
 .vera5-intel-feed-score {
@@ -2393,7 +3041,7 @@
 .vera5-intel-feed-score > span,
 .vera5-intel-feed-score > small {
   color: var(--text-secondary);
-  font-size: 9px;
+  font-size: var(--fs-pico);
   text-transform: uppercase;
 }
 
@@ -2435,14 +3083,14 @@
   z-index: 1;
   margin: -16px 0 0;
   color: var(--score-accent);
-  font: 800 25px/1 var(--font-display);
+  font: var(--fw-bold) var(--fs-score)/var(--lh-score) var(--font-display);
   text-shadow: 0 0 12px color-mix(in srgb, var(--score-accent) 26%, transparent);
 }
 
 .vera5-intel-feed-score > strong > span {
   margin-left: 1px;
   color: var(--text-secondary);
-  font: 700 10px/1 var(--font-ui);
+  font: var(--fw-strong) var(--fs-micro)/var(--lh-score) var(--font-ui);
 }
 
 .vera5-intel-feed-score > small {
@@ -2466,6 +3114,10 @@
   --score-accent: var(--score-gold);
 }
 
+.vera5-intel-feed-score[data-vera5-score-band="zero"] {
+  --score-accent: var(--score-zero);
+}
+
 .vera5-intel-findings-card {
   position: relative;
   display: grid;
@@ -2477,20 +3129,30 @@
 .vera5-intel-findings-card h3 {
   margin: 0;
   color: var(--text-secondary);
-  font: 750 9px/1.2 var(--font-ui);
-  letter-spacing: 0.075em;
+  font: var(--fw-strong) var(--fs-micro)/var(--lh-tight) var(--font-ui);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .vera5-intel-export-actions {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
 }
 
 .vera5-intel-export-actions button {
   min-width: 0;
   white-space: normal;
+}
+
+/* Visual grouping: copy row → file row → more (no DOM reorder). */
+.vera5-intel-export-actions .vera5-export-action--file,
+.vera5-intel-export-actions .vera5-export-action--more {
+  margin-top: 2px;
+}
+
+.vera5-intel-export-actions .vera5-export-action--more {
+  grid-column: 1 / -1;
 }
 
 .vera5-intel-more-formats {
@@ -2521,7 +3183,7 @@
 .vera5-intel-more-format-heading {
   padding: 4px 4px 2px;
   color: var(--text-low);
-  font-size: 8px;
+  font-size: var(--fs-nano);
   font-weight: 750;
   letter-spacing: 0.075em;
   text-transform: uppercase;
@@ -2533,20 +3195,12 @@
   padding-top: 5px;
 }
 
-.vera5-intel-analyst-note > summary {
-  width: fit-content;
-  color: var(--accent-hover);
-  font-size: 9px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
 .vera5-intel-analyst-note label {
   display: grid;
   gap: 4px;
   margin-top: 6px;
   color: var(--text-secondary);
-  font-size: 9px;
+  font-size: var(--fs-pico);
 }
 
 .vera5-intel-analyst-note textarea {
@@ -2560,14 +3214,14 @@
   display: block;
   margin-top: 3px;
   color: var(--text-low);
-  font-size: 8px;
+  font-size: var(--fs-nano);
   text-align: right;
 }
 
 .vera5-intel-export-message {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 8px;
+  font-size: var(--fs-nano);
   line-height: 1.25;
 }
 
@@ -2576,8 +3230,8 @@
   display: grid;
   flex: 0 0 auto;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-auto-rows: 124px;
-  gap: 8px;
+  grid-auto-rows: var(--intel-card-height);
+  gap: 7px;
   min-width: 0;
   align-items: stretch;
 }
@@ -2587,23 +3241,23 @@
   --source-tint: #111926;
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(40px, 1fr) auto;
-  gap: 5px;
+  grid-template-rows: auto minmax(28px, 1fr) auto;
+  gap: 4px;
   box-sizing: border-box;
   min-width: 0;
-  height: 124px;
-  min-height: 124px;
-  max-height: 124px;
-  padding: 9px 10px 10px;
-  border: 1px solid color-mix(in srgb, var(--source-accent) 68%, var(--border-soft));
+  height: var(--intel-card-height);
+  min-height: var(--intel-card-height);
+  max-height: var(--intel-card-height);
+  padding: 8px 9px 8px;
+  border: 1px solid color-mix(in srgb, var(--source-accent) 58%, var(--border-soft));
   border-radius: var(--r-md);
   background:
-    radial-gradient(100% 90% at 100% 0%, color-mix(in srgb, var(--source-accent) 16%, transparent), transparent 62%),
+    radial-gradient(100% 90% at 100% 0%, color-mix(in srgb, var(--source-accent) 12%, transparent), transparent 62%),
     linear-gradient(145deg, color-mix(in srgb, var(--surface-1) 82%, #080d15), var(--source-tint));
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--source-accent) 64%, rgba(255, 255, 255, 0.04)),
-    inset 0 1px 0 rgba(245, 247, 250, 0.045),
-    0 0 16px color-mix(in srgb, var(--source-accent) 12%, transparent);
+    inset 0 1px 0 color-mix(in srgb, var(--source-accent) 48%, rgba(255, 255, 255, 0.04)),
+    inset 0 1px 0 rgba(245, 247, 250, 0.04),
+    0 0 10px color-mix(in srgb, var(--source-accent) 8%, transparent);
   overflow: hidden;
 }
 
@@ -2623,25 +3277,51 @@
 .vera5-intel-source-header > div {
   display: flex;
   min-width: 0;
-  align-items: baseline;
-  gap: 4px;
+  align-items: center;
+  gap: 6px;
+}
+
+.vera5-vendor-mark {
+  display: inline-flex;
+  flex: 0 0 var(--icon-sm);
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--source-accent, var(--text-secondary));
+}
+
+.vera5-vendor-mark svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.vera5-vendor-mark-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: var(--icon-sm);
+  max-height: var(--icon-sm);
+  object-fit: contain;
 }
 
 .vera5-intel-source-header strong {
   overflow: hidden;
   color: var(--text-primary);
-  font-size: 10px;
-  font-weight: 700;
-  line-height: 1.2;
+  font-size: var(--fs-title);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-tight);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.vera5-intel-source-header > div > span {
+.vera5-intel-source-header > div > span,
+.vera5-intel-source-header .vera5-risk-label {
   flex-shrink: 0;
   color: var(--source-accent);
-  font: 750 8px/1.2 var(--font-ui);
-  letter-spacing: 0.035em;
+  font: var(--fw-strong) var(--fs-micro)/var(--lh-tight) var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .vera5-intel-source-header .vera5-intel-info-button {
@@ -2661,7 +3341,7 @@
 
 .vera5-intel-source-score {
   color: var(--source-accent);
-  font: 800 26px/1 var(--font-display);
+  font: var(--fw-bold) var(--fs-score)/var(--lh-score) var(--font-display);
   letter-spacing: -0.025em;
   text-shadow: 0 0 13px color-mix(in srgb, var(--source-accent) 30%, transparent);
 }
@@ -2674,17 +3354,32 @@
 }
 
 .vera5-intel-source-state-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   max-width: 100%;
   color: var(--source-accent);
-  font: 750 12px/1.2 var(--font-ui);
+  font: var(--fw-strong) var(--fs-sm)/var(--lh-tight) var(--font-ui);
   overflow-wrap: anywhere;
+}
+
+.vera5-intel-source-state-label::before {
+  content: "";
+  flex: 0 0 var(--status-dot);
+  width: var(--status-dot);
+  height: var(--status-dot);
+  border-radius: 50%;
+  background: var(--source-accent);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--source-accent) 40%, transparent);
 }
 
 .vera5-intel-source-signal {
   margin: 0;
   align-self: end;
-  color: color-mix(in srgb, var(--text-primary) 84%, var(--source-accent));
-  font-size: 10px;
+  min-height: 1.25em;
+  color: color-mix(in srgb, var(--text-primary) 88%, var(--source-accent));
+  font-size: var(--fs-micro);
   font-weight: 520;
   line-height: 1.25;
   text-align: center;
@@ -2692,6 +3387,12 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
+}
+
+.vera5-intel-source-signal--empty {
+  visibility: hidden;
+  min-height: 0;
+  -webkit-line-clamp: unset;
 }
 
 .vera5-intel-source-details {
@@ -2713,6 +3414,21 @@
 .vera5-intel-source-card[data-vera5-score-band="yellow"] {
   --source-accent: var(--intel-suspicious);
   --source-tint: #262109;
+}
+
+.vera5-intel-source-card[data-vera5-score-band="zero"] {
+  --source-accent: var(--score-zero);
+  border-color: color-mix(in srgb, var(--score-zero) 48%, var(--border-hard));
+  background:
+    radial-gradient(90% 80% at 50% 0%, color-mix(in srgb, var(--score-zero) 18%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 88%, #121820), var(--surface-1));
+}
+
+/* Valid 0 remains a scored result — keep score typography prominent, never muted like unavailable. */
+.vera5-intel-source-card[data-vera5-score-band="zero"] .vera5-intel-source-score {
+  color: var(--score-zero);
+  opacity: 1;
+  filter: none;
 }
 
 .vera5-intel-source-card[data-vera5-score-band="gold"] {
@@ -2771,13 +3487,14 @@
 }
 
 .vera5-intel-pivot-mark {
+  display: inline-flex;
+  align-items: center;
   color: var(--accent);
-  font-size: 11px;
   line-height: 1;
 }
 
 .vera5-intel-pivot-label {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 700;
 }
 
@@ -2808,7 +3525,7 @@
   border-radius: var(--r-sm);
   background: var(--surface-2);
   color: var(--text-primary);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   text-align: left;
   cursor: pointer;
 }
@@ -2838,7 +3555,7 @@
   .vera5-popup[data-host="sidepanel"] .vera5-header-action {
     min-height: 32px;
     padding: 6px 9px !important;
-    font-size: 10px !important;
+    font-size: var(--fs-micro) !important;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-command-section {
@@ -2868,7 +3585,7 @@
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-scan-page-copy strong {
-    font-size: 14px;
+    font-size: var(--fs-heading);
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-scan-secondary {
@@ -2906,7 +3623,7 @@
     min-height: auto;
   }
 
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed--empty {
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-body--empty {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2959,7 +3676,7 @@
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-score > strong {
     margin-top: -13px;
-    font-size: 22px;
+    font-size: var(--fs-score-sm);
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-export-actions {
@@ -2975,7 +3692,7 @@
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-command-toggle-label {
-    font-size: 10px;
+    font-size: var(--fs-micro);
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-command-toggle-track {
@@ -2991,7 +3708,7 @@
   }
 
   .vera5-secondary-command-copy small {
-    font-size: 9px;
+    font-size: var(--fs-pico);
   }
 }
 

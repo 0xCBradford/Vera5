@@ -307,6 +307,8 @@ import {
 import type { EnrichmentSourceResult } from "../lib/enrichment";
 import { buildHoverCardRiskScoreView, formatCompositeRiskLabelDisplay } from "../lib/scoring";
 import { getPivotLinks, type PivotLink } from "../lib/pivots";
+import { InvestigationGlyph, VeraIcon, VeraUiIcons, VERA_ICON_WEIGHT } from "../lib/veraIcons";
+import { VendorMark } from "../lib/vendorAssets";
 
 export type PopupTrayView = "prompt" | "scanning" | "empty" | "results";
 
@@ -2266,103 +2268,6 @@ type InvestigationSourceButton = {
   configured: boolean;
 };
 
-/** Restrained inline glyphs — no icon dependency is added for this module. */
-function InvestigationGlyph({ name }: { name: string }) {
-  const common = {
-    width: 14,
-    height: 14,
-    viewBox: "0 0 16 16",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 1.5,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    "aria-hidden": true,
-  };
-  switch (name) {
-    case "compass":
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8" r="6.25" />
-          <path d="M10.6 5.4 6.9 6.9 5.4 10.6 9.1 9.1z" fill="currentColor" stroke="none" />
-        </svg>
-      );
-    case "malware":
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="8.5" r="3.5" />
-          <path d="M8 5V2.5M4.9 6 3 4.4M11.1 6 13 4.4M4.5 8.5H2M13.5 8.5H11.5M5 11l-1.6 1.6M11 11l1.6 1.6" />
-        </svg>
-      );
-    case "detections":
-      return (
-        <svg {...common}>
-          <circle cx="7" cy="7" r="4.25" />
-          <path d="M10.2 10.2 13.5 13.5" />
-        </svg>
-      );
-    case "infra":
-      return (
-        <svg {...common}>
-          <rect x="2.25" y="2.5" width="11.5" height="4" rx="1" />
-          <rect x="2.25" y="9.5" width="11.5" height="4" rx="1" />
-          <path d="M4.5 4.5h.01M4.5 11.5h.01" />
-        </svg>
-      );
-    case "campaign":
-      return (
-        <svg {...common}>
-          <path d="M3 6.5v3l7 3V3.5z" />
-          <path d="M10 5.5c1.6 0 2.8 1.1 2.8 2.5S11.6 10.5 10 10.5" />
-          <path d="M4.5 9.5v2.2c0 .6.5 1 1 1h.6" />
-        </svg>
-      );
-    case "clipboard":
-      return (
-        <svg {...common}>
-          <rect x="3.5" y="2.75" width="9" height="11" rx="1.25" />
-          <path d="M6 2.75V2a.75.75 0 0 1 .75-.75h2.5A.75.75 0 0 1 10 2v.75" />
-        </svg>
-      );
-    case "mitre":
-      return (
-        <svg {...common}>
-          <path d="M2.5 13.5V4l5.5-2 5.5 2v9.5" />
-          <path d="M8 2v11.5M5.25 5.2v8.3M10.75 5.2v8.3" />
-        </svg>
-      );
-    case "family":
-      return (
-        <svg {...common}>
-          <circle cx="8" cy="4" r="1.75" />
-          <circle cx="4" cy="11.5" r="1.75" />
-          <circle cx="12" cy="11.5" r="1.75" />
-          <path d="M8 5.75v2.5M6.7 9.2 5.1 10.4M9.3 9.2l1.6 1.2" />
-        </svg>
-      );
-    case "cve":
-      return (
-        <svg {...common}>
-          <path d="M8 2 3 4v3.2c0 3 2.1 5.4 5 6.3 2.9-.9 5-3.3 5-6.3V4z" />
-          <path d="M8 6v2.5M8 10.5h.01" />
-        </svg>
-      );
-    case "chevron":
-      return (
-        <svg {...common}>
-          <path d="M6 4l4 4-4 4" />
-        </svg>
-      );
-    case "dot":
-    default:
-      return (
-        <svg width={8} height={8} viewBox="0 0 8 8" aria-hidden="true">
-          <circle cx="4" cy="4" r="3" fill="currentColor" />
-        </svg>
-      );
-  }
-}
-
 function InvestigationActionTile({
   glyph,
   label,
@@ -2576,9 +2481,9 @@ function InvestigationPaths({
         text: "Suppressed by a noise rule on this page",
       });
     }
-    // Structured relationship analysis does not exist in the data model yet, so
-    // this is reported as unavailable — never as a confirmed "none found".
-    if (lines.length < 3) {
+    // Structured relationship analysis does not exist in the data model yet.
+    // Report unavailable only when no factual lines exist — never a confirmed negative.
+    if (lines.length === 0) {
       lines.push({
         id: "infra",
         tone: "muted",
@@ -2605,15 +2510,20 @@ function InvestigationPaths({
       aria-label="Investigation paths"
       data-ioc-type={entry?.type}
     >
-      <header className="vera5-ip-header">
-        <span className="vera5-ip-header-icon" aria-hidden="true">
-          <InvestigationGlyph name="compass" />
-        </span>
-        <h2 className="vera5-ip-title">Investigation Paths</h2>
-        <span className="vera5-ip-header-chevron" aria-hidden="true">
+      <header className="vera5-section-header vera5-ip-header">
+        <div className="vera5-section-identity">
+          <h2 className="vera5-section-title vera5-ip-title">
+            <span className="vera5-section-icon" aria-hidden="true">
+              <VeraIcon icon={VeraUiIcons.investigationSection} size="sm" />
+            </span>
+            Investigation Paths
+          </h2>
+        </div>
+        <span className="vera5-section-utilities vera5-ip-header-chevron" aria-hidden="true">
           <InvestigationGlyph name="chevron" />
         </span>
       </header>
+      <hr className="vera5-section-divider" aria-hidden="true" />
 
       <div className="vera5-ip-scroll">
         <section className="vera5-ip-group" aria-label="Selected IOC">
@@ -2621,7 +2531,10 @@ function InvestigationPaths({
           {entry ? (
             <>
               <div className="vera5-ip-selected">
-                <span className="vera5-ioc-type-badge" aria-hidden="true">
+                <span
+                  className="vera5-ioc-type-badge"
+                  aria-label={`Indicator type ${IOC_TYPE_TRAY_LABEL[entry.type]}`}
+                >
                   {IOC_TYPE_TRAY_LABEL[entry.type]}
                 </span>
                 <span className="vera5-ip-selected-value">
@@ -2704,7 +2617,8 @@ function InvestigationPaths({
                     onClick={() => openIntelPivot(source.link)}
                     aria-label={`Open ${source.label} for the selected indicator`}
                   >
-                    {source.label}
+                    <VendorMark sourceId={source.sourceId} size="xs" />
+                    <span>{source.label}</span>
                   </button>
                 ) : (
                   <button
@@ -2716,7 +2630,11 @@ function InvestigationPaths({
                     title="API key required in Settings"
                     aria-label={`${source.label} — API key required in Settings`}
                   >
-                    {source.label}
+                    <VendorMark sourceId={source.sourceId} size="xs" />
+                    <span>{source.label}</span>
+                    <span className="vera5-status" data-vera5-status="config">
+                      Missing key
+                    </span>
                   </button>
                 )
               )}
@@ -2809,43 +2727,55 @@ function IntelFeedPanel({
   if (!entry) {
     return (
       <section className="vera5-intel-feed-section" aria-label="Intel feed">
-        <div className="vera5-intel-feed-header">
-          <div className="vera5-intel-feed-title-row">
-            <h2 className="vera5-intel-feed-heading">Intel Feed</h2>
-            <button
-              type="button"
-              className="vera5-intel-info-button"
-              aria-label="View composite score details"
-              disabled
-            >
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <circle cx="10" cy="10" r="7.5" />
-                <path d="M10 9v5M10 6.2h.01" />
-              </svg>
-            </button>
-          </div>
-          <p className="vera5-intel-feed-subheading">
-            Real-time intelligence, scoring, and vendor evidence.
-          </p>
-        </div>
         <div className="vera5-intel-feed vera5-intel-feed--empty">
-          <p>Select an indicator to assemble vendor evidence, scoring, and pivots.</p>
-          <div className="vera5-intel-empty-actions" aria-label="Unavailable intelligence exports">
-            <button type="button" disabled>
-              Copy Summary
-            </button>
-            <button type="button" disabled>
-              Copy IOC
-            </button>
-            <button type="button" disabled>
-              Export Markdown
-            </button>
-            <button type="button" disabled>
-              Export JSON
-            </button>
-            <button type="button" disabled>
-              More Formats
-            </button>
+          <header className="vera5-section-header vera5-intel-feed-header">
+            <div className="vera5-section-identity">
+              <h2 className="vera5-section-title vera5-intel-feed-heading">
+                <span className="vera5-section-icon" aria-hidden="true">
+                  <VeraIcon icon={VeraUiIcons.intelSection} size="sm" />
+                </span>
+                Intel Feed
+              </h2>
+              <p className="vera5-section-subtitle vera5-intel-feed-subheading">
+                Real-time intelligence, scoring, and vendor evidence.
+              </p>
+            </div>
+            <div className="vera5-section-utilities vera5-intel-feed-title-row">
+              <button
+                type="button"
+                className="vera5-intel-info-button"
+                aria-label="View composite score details"
+                disabled
+              >
+                <VeraIcon icon={VeraUiIcons.info} size="xs" />
+              </button>
+            </div>
+          </header>
+          <hr className="vera5-section-divider" aria-hidden="true" />
+          <div className="vera5-intel-feed-body--empty">
+            <p>Select an indicator to assemble vendor evidence, scoring, and pivots.</p>
+            <div className="vera5-intel-empty-actions" aria-label="Unavailable intelligence exports">
+              <button type="button" disabled>
+                <VeraIcon icon={VeraUiIcons.copy} size="xs" />
+                Copy Summary
+              </button>
+              <button type="button" disabled>
+                <VeraIcon icon={VeraUiIcons.copy} size="xs" />
+                Copy IOC
+              </button>
+              <button type="button" disabled>
+                <VeraIcon icon={VeraUiIcons.exportMarkdown} size="xs" />
+                Export Markdown
+              </button>
+              <button type="button" disabled>
+                <VeraIcon icon={VeraUiIcons.exportJson} size="xs" />
+                Export JSON
+              </button>
+              <button type="button" disabled>
+                <VeraIcon icon={VeraUiIcons.moreFormats} size="xs" />
+                More Formats
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -2883,7 +2813,7 @@ function IntelFeedPanel({
             ? "yellow"
             : compositeScore >= 1
               ? "gold"
-              : "pending";
+              : "zero";
   const compositeVerdict =
     compositeScore === null || compositeScore === 0
       ? "NO SCORE"
@@ -2967,79 +2897,81 @@ function IntelFeedPanel({
 
   return (
     <section className="vera5-intel-feed-section" aria-label="Intel feed">
-      <div className="vera5-intel-feed-header">
-        <div className="vera5-intel-feed-title-row">
-          <h2 className="vera5-intel-feed-heading">Intel Feed</h2>
-          {sourceDisagreement ? (
-            <span
-              className="vera5-intel-warning"
-              role="img"
-              aria-label="Source disagreement requires analyst review"
-              title="Source disagreement requires analyst review"
-            >
-              <svg viewBox="0 0 20 20" aria-hidden="true">
-                <path d="M10 2.5 18 17H2L10 2.5Z" />
-                <path d="M10 7v4.5M10 14.2h.01" />
-              </svg>
-            </span>
-          ) : null}
-          <button
-            type="button"
-            className="vera5-intel-info-button"
-            aria-label="View composite score details"
-            aria-expanded={compositeDetailsOpen}
-            aria-controls="vera5-intel-composite-details"
-            onClick={() => setOpenInfoId(compositeDetailsOpen ? null : "composite")}
-          >
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <circle cx="10" cy="10" r="7.5" />
-              <path d="M10 9v5M10 6.2h.01" />
-            </svg>
-          </button>
-          <div
-            id="vera5-intel-composite-details"
-            className="vera5-intel-info-surface vera5-intel-composite-details"
-            role="dialog"
-            aria-label="Composite score details"
-            hidden={!compositeDetailsOpen}
-          >
-            <strong>Composite assessment</strong>
-            <p>
-              {loading
-                ? "Refreshing vendor intelligence…"
-                : buildGroundedIntelSummary(sourceEntries)}
-            </p>
-            <dl>
-              <div>
-                <dt>Score classification</dt>
-                <dd>{compositeVerdict}</dd>
-              </div>
-              <div>
-                <dt>Contributing vendors</dt>
-                <dd>
-                  {successfulSources.length > 0
-                    ? successfulSources.map((source) => source.label).join(", ")
-                    : "No contributing vendor results"}
-                </dd>
-              </div>
-            </dl>
-            {riskView.chain.sourceLines.length > 0 ? (
-              <ul>
-                {riskView.chain.sourceLines.map((line) => (
-                  <li key={line}>{line}</li>
-                ))}
-              </ul>
-            ) : null}
-            {compositeUpdateLines.length > 0 ? (
-              <p>{compositeUpdateLines.join(" · ")}</p>
-            ) : null}
-          </div>
-        </div>
-        <p className="vera5-intel-feed-subheading">
-          Real-time intelligence, scoring, and vendor evidence.
-        </p>
-      </div>
       <div className="vera5-intel-feed" data-vera5-intel-value={entry.value}>
+        <header className="vera5-section-header vera5-intel-feed-header">
+          <div className="vera5-section-identity">
+            <h2 className="vera5-section-title vera5-intel-feed-heading">
+              <span className="vera5-section-icon" aria-hidden="true">
+                <VeraIcon icon={VeraUiIcons.intelSection} size="sm" />
+              </span>
+              Intel Feed
+            </h2>
+            <p className="vera5-section-subtitle vera5-intel-feed-subheading">
+              Real-time intelligence, scoring, and vendor evidence.
+            </p>
+          </div>
+          <div className="vera5-section-utilities vera5-intel-feed-title-row">
+            {sourceDisagreement ? (
+              <span
+                className="vera5-intel-warning"
+                role="img"
+                aria-label="Source disagreement requires analyst review"
+                title="Source disagreement requires analyst review"
+              >
+                <VeraIcon icon={VeraUiIcons.warning} size="sm" />
+              </span>
+            ) : null}
+            <button
+              type="button"
+              className="vera5-intel-info-button"
+              aria-label="View composite score details"
+              aria-expanded={compositeDetailsOpen}
+              aria-controls="vera5-intel-composite-details"
+              onClick={() => setOpenInfoId(compositeDetailsOpen ? null : "composite")}
+            >
+              <VeraIcon icon={VeraUiIcons.info} size="xs" />
+            </button>
+            <div
+              id="vera5-intel-composite-details"
+              className="vera5-intel-info-surface vera5-intel-composite-details"
+              role="dialog"
+              aria-label="Composite score details"
+              hidden={!compositeDetailsOpen}
+            >
+              <strong>Composite assessment</strong>
+              <p>
+                {loading
+                  ? "Refreshing vendor intelligence…"
+                  : buildGroundedIntelSummary(sourceEntries)}
+              </p>
+              <dl>
+                <div>
+                  <dt>Score classification</dt>
+                  <dd>{compositeVerdict}</dd>
+                </div>
+                <div>
+                  <dt>Contributing vendors</dt>
+                  <dd>
+                    {successfulSources.length > 0
+                      ? successfulSources.map((source) => source.label).join(", ")
+                      : "No contributing vendor results"}
+                  </dd>
+                </div>
+              </dl>
+              {riskView.chain.sourceLines.length > 0 ? (
+                <ul>
+                  {riskView.chain.sourceLines.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {compositeUpdateLines.length > 0 ? (
+                <p>{compositeUpdateLines.join(" · ")}</p>
+              ) : null}
+            </div>
+          </div>
+        </header>
+        <hr className="vera5-section-divider" aria-hidden="true" />
         <div className="vera5-intel-feed-summary-row">
           <div className="vera5-intel-feed-command">
             <span className="vera5-intel-card-label">Selected IOC</span>
@@ -3052,12 +2984,13 @@ function IntelFeedPanel({
                 disabled={loading}
                 className="vera5-intel-feed-enrich"
               >
+                <VeraIcon icon={VeraUiIcons.enrich} size="xs" />
                 {loading ? "Enriching…" : "Enrich"}
               </button>
               <details className="vera5-intel-feed-pivots">
                 <summary>
                   <span className="vera5-intel-pivot-mark" aria-hidden="true">
-                    ◎
+                    <VeraIcon icon={VeraUiIcons.research} size="xs" />
                   </span>
                   <span className="vera5-intel-pivot-label">Research</span>
                 </summary>
@@ -3105,34 +3038,51 @@ function IntelFeedPanel({
           <section className="vera5-intel-findings-card" aria-label="Findings and export">
             <h3>Findings &amp; Export</h3>
             <div className="vera5-intel-export-actions">
-              <button type="button" onClick={handleCopySummary} disabled={!intelligenceAvailable}>
+              <button
+                type="button"
+                className="vera5-export-action vera5-export-action--copy"
+                onClick={handleCopySummary}
+                disabled={!intelligenceAvailable}
+              >
+                <VeraIcon icon={VeraUiIcons.copy} size="xs" />
                 Copy Summary
               </button>
-              <button type="button" onClick={handleCopyIoc}>
+              <button
+                type="button"
+                className="vera5-export-action vera5-export-action--copy"
+                onClick={handleCopyIoc}
+              >
+                <VeraIcon icon={VeraUiIcons.copy} size="xs" />
                 Copy IOC
               </button>
               <button
                 type="button"
+                className="vera5-export-action vera5-export-action--file"
                 onClick={() => handleDownloadExport("markdown")}
                 disabled={!intelligenceAvailable}
               >
+                <VeraIcon icon={VeraUiIcons.exportMarkdown} size="xs" />
                 Export Markdown
               </button>
               <button
                 type="button"
+                className="vera5-export-action vera5-export-action--file"
                 onClick={() => handleDownloadExport("json")}
                 disabled={!intelligenceAvailable}
               >
+                <VeraIcon icon={VeraUiIcons.exportJson} size="xs" />
                 Export JSON
               </button>
               <button
                 type="button"
+                className="vera5-export-action vera5-export-action--more"
                 aria-haspopup="menu"
                 aria-expanded={moreFormatsOpen}
                 aria-controls="vera5-intel-more-formats"
                 onClick={() => setMoreFormatsOpen((open) => !open)}
                 disabled={!intelligenceAvailable}
               >
+                <VeraIcon icon={VeraUiIcons.moreFormats} size="xs" />
                 More Formats
               </button>
             </div>
@@ -3208,6 +3158,8 @@ function IntelFeedPanel({
           </section>
         </div>
 
+        <hr className="vera5-section-divider vera5-section-divider--content" aria-hidden="true" />
+
         <div className="vera5-intel-feed-sources" aria-label="Vendor assessments">
           {orderedSourceIds.map((sourceId) => {
             const definition = getEnrichmentSourceDefinition(sourceId);
@@ -3228,7 +3180,7 @@ function IntelFeedPanel({
                       ? "yellow"
                       : scoreValue >= 1
                         ? "gold"
-                        : undefined;
+                        : "zero";
             const riskLabel =
               scoreValue === null || scoreValue === 0
                 ? null
@@ -3239,29 +3191,23 @@ function IntelFeedPanel({
                     : scoreValue >= 15
                       ? "SUSPICIOUS"
                       : "LOW";
-            const detail =
-              source?.status === "ok"
-                ? (assessment?.verdict ?? source.detail)
-                : (source?.detail ??
-                  (status === "pivot-only"
-                    ? "Pivot only"
-                    : status === "disabled"
-                      ? "Disabled"
-                      : status === "not-configured"
-                        ? "Not configured"
-                        : "Not enriched"));
             const sourceLoading = loading && !source;
+            const okDetail =
+              source?.status === "ok"
+                ? (assessment?.verdict ?? source.detail ?? "")
+                : "";
             const sourceState =
               scoreBand ??
               (sourceLoading
                 ? "loading"
                 : status === "ok"
-                  ? /no (?:report|data)|not found/i.test(detail)
+                  ? /no (?:report|data)|not found/i.test(okDetail)
                     ? "no-report"
                     : "neutral"
                   : status === "skipped"
                     ? "no-data"
                     : status);
+            /* Primary operational/score label — shown once in the card center (or risk in header). */
             const stateLabel =
               riskLabel ??
               (sourceLoading
@@ -3271,7 +3217,7 @@ function IntelFeedPanel({
                   : status === "disabled"
                     ? "Disabled"
                     : status === "not-configured"
-                      ? "Setup needed"
+                      ? "Not configured"
                       : status === "error"
                         ? "Request error"
                         : sourceState === "no-report"
@@ -3279,6 +3225,27 @@ function IntelFeedPanel({
                           : status === "not-enriched"
                             ? "No data yet"
                             : source?.badgeText ?? "No score");
+            /*
+             * Supporting line only when it adds distinct information.
+             * Never repeat the primary stateLabel (Pivot only / Disabled / etc.).
+             */
+            const signalText = sourceLoading
+              ? "Loading vendor intelligence…"
+              : status === "ok"
+                ? okDetail
+                : status === "error"
+                  ? (source?.detail ?? "")
+                  : status === "pivot-only"
+                    ? "External research available"
+                    : status === "not-configured"
+                      ? "API key required in Settings"
+                      : status === "not-enriched"
+                        ? "Run Enrich to query this source"
+                        : status === "disabled"
+                          ? ""
+                          : source?.detail && source.detail !== stateLabel
+                            ? source.detail
+                            : "";
             const sourceDetailsOpen = openInfoId === sourceId;
             return (
               <article
@@ -3294,8 +3261,13 @@ function IntelFeedPanel({
               >
                 <div className="vera5-intel-source-header">
                   <div>
+                    <VendorMark sourceId={sourceId} size="sm" />
                     <strong>{definition.displayName}</strong>
-                    {riskLabel ? <span>[{riskLabel}]</span> : null}
+                    {riskLabel ? (
+                      <span className="vera5-risk-label" aria-label={`Risk ${riskLabel}`}>
+                        [{riskLabel}]
+                      </span>
+                    ) : null}
                   </div>
                   <button
                     type="button"
@@ -3305,10 +3277,7 @@ function IntelFeedPanel({
                     aria-controls={`vera5-intel-source-details-${sourceId}`}
                     onClick={() => setOpenInfoId(sourceDetailsOpen ? null : sourceId)}
                   >
-                    <svg viewBox="0 0 20 20" aria-hidden="true">
-                      <circle cx="10" cy="10" r="7.5" />
-                      <path d="M10 9v5M10 6.2h.01" />
-                    </svg>
+                    <VeraIcon icon={VeraUiIcons.info} size="xs" />
                   </button>
                 </div>
                 <div className="vera5-intel-source-center">
@@ -3321,9 +3290,11 @@ function IntelFeedPanel({
                     <strong className="vera5-intel-source-state-label">{stateLabel}</strong>
                   )}
                 </div>
-                <p className="vera5-intel-source-signal">
-                  {sourceLoading ? "Loading vendor intelligence…" : detail}
-                </p>
+                {signalText ? (
+                  <p className="vera5-intel-source-signal">{signalText}</p>
+                ) : (
+                  <p className="vera5-intel-source-signal vera5-intel-source-signal--empty" />
+                )}
                 <div
                   id={`vera5-intel-source-details-${sourceId}`}
                   className="vera5-intel-info-surface vera5-intel-source-details"
@@ -3336,7 +3307,7 @@ function IntelFeedPanel({
                   <dl>
                     <div>
                       <dt>Status</dt>
-                      <dd>{source?.badgeText ?? stateLabel}</dd>
+                      <dd>{stateLabel}</dd>
                     </div>
                     {source ? (
                       <div>
@@ -3536,7 +3507,7 @@ async function requestSelectionActionStateForActiveTab(): Promise<SelectionActio
 function filterChipStyle(active: boolean): CSSProperties {
   return {
     padding: "4px 8px",
-    borderRadius: 999,
+    borderRadius: 6,
     border: `1px solid ${active ? POPUP_THEME.filterActiveBg : POPUP_THEME.border}`,
     backgroundColor: active ? POPUP_THEME.filterActiveBg : POPUP_THEME.buttonBg,
     color: active ? POPUP_THEME.onAccent : POPUP_THEME.accentText,
@@ -3586,7 +3557,7 @@ export function pageContextBadgeStyle(options?: { isOverride?: boolean }): CSSPr
     fontSize: 10,
     fontWeight: 600,
     padding: "2px 8px",
-    borderRadius: 999,
+    borderRadius: 6,
     border: `1px solid ${isOverride ? POPUP_THEME.accentText : POPUP_THEME.border}`,
     backgroundColor: isOverride ? POPUP_THEME.buttonBg : POPUP_THEME.trayRowBg,
     color: POPUP_THEME.accentText,
@@ -4863,20 +4834,7 @@ export function Popup() {
               aria-label="Open the Vera5 How-To guide in a new tab"
               style={headerGlassButtonStyle}
             >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12 7v14" />
-                <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
-              </svg>
+              <VeraIcon icon={VeraUiIcons.howTo} size="xs" className="vera5-ui-icon" />
               How-To
             </a>
             <button
@@ -4891,20 +4849,7 @@ export function Popup() {
                 opacity: ready ? 1 : 0.65,
               }}
             >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                <circle cx="12" cy="12" r="3" />
-              </svg>
+              <VeraIcon icon={VeraUiIcons.settings} size="xs" className="vera5-ui-icon" />
               Settings
             </button>
             <button
@@ -4919,20 +4864,7 @@ export function Popup() {
                 opacity: ready ? 1 : 0.65,
               }}
             >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
+              <VeraIcon icon={VeraUiIcons.permissions} size="xs" className="vera5-ui-icon" />
               Permissions
             </button>
           </div>
@@ -4943,56 +4875,20 @@ export function Popup() {
           className="vera5-status-strip"
           role="status"
           aria-label={POPUP_STATUS_STRIP_ARIA_LABEL}
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            gap: 6,
-            margin: `0 0 ${VERA5_SPACE.md}px`,
-          }}
         >
           {quietModeActive ? (
             <span
+              className="vera5-status-chip vera5-status-chip--warning"
               aria-label="Quiet mode active. Live vendor enrichment is blocked."
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "3px 8px",
-                borderRadius: 999,
-                border: `1px solid ${POPUP_THEME.accent}`,
-                background: "rgba(255, 178, 36, 0.12)",
-                color: POPUP_THEME.accent,
-                fontFamily: VERA5_FONT.sans,
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-                lineHeight: 1.2,
-              }}
             >
               {POPUP_QUIET_MODE_STATUS_LABEL}
             </span>
           ) : null}
           {activeSession ? (
             <span
+              className="vera5-status-chip"
               aria-label={`Investigation session active: ${activeSession.title}`}
               title={activeSession.title}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                padding: "3px 8px",
-                borderRadius: 999,
-                border: `1px solid ${POPUP_THEME.border}`,
-                background: POPUP_THEME.secondaryBg,
-                color: POPUP_THEME.text,
-                fontFamily: VERA5_FONT.sans,
-                fontSize: 10,
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-                textTransform: "uppercase",
-                lineHeight: 1.2,
-                maxWidth: "100%",
-              }}
             >
               {POPUP_STATUS_SESSION_ACTIVE_LABEL}
             </span>
@@ -5000,6 +4896,17 @@ export function Popup() {
         </div>
       ) : null}
       <section className="vera5-command-section" aria-label="Scan and extension controls">
+        <header className="vera5-section-header">
+          <div className="vera5-section-identity">
+            <h2 className="vera5-section-title">
+              <span className="vera5-section-icon" aria-hidden="true">
+                <VeraIcon icon={VeraUiIcons.scanSection} size="sm" />
+              </span>
+              Scan
+            </h2>
+          </div>
+        </header>
+        <hr className="vera5-section-divider" aria-hidden="true" />
         <div className="vera5-scan-primary">
           <button
             type="button"
@@ -5012,20 +4919,12 @@ export function Popup() {
               opacity: !ready || !enabled ? 0.65 : 1,
             }}
           >
-            <svg
+            <VeraIcon
+              icon={VeraUiIcons.scanPage}
+              size="xl"
+              weight={VERA_ICON_WEIGHT.primary}
               className="vera5-scan-page-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <circle cx="12" cy="12" r="7.5" />
-              <circle cx="12" cy="12" r="2.75" />
-              <path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4" />
-            </svg>
+            />
             <span className="vera5-scan-page-copy">
               <strong>{scanState === "scanning" ? "SCANNING…" : "SCAN PAGE"}</strong>
               <small>[Detect IOCs on this page]</small>
@@ -5045,19 +4944,9 @@ export function Popup() {
               cursor: scanSelectionDisabled ? "not-allowed" : "pointer",
             }}
           >
-            <svg
-              className="vera5-secondary-command-icon"
-              viewBox="0 0 32 32"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
-            >
-              <rect x="7" y="7" width="18" height="18" rx="3" />
-              <path d="M11 3v8M21 3v8M11 21v8M21 21v8M3 11h8M21 11h8M3 21h8M21 21h8" />
-            </svg>
+            <span className="vera5-secondary-command-icon" aria-hidden="true">
+              <VeraIcon icon={VeraUiIcons.scanSelection} size="md" />
+            </span>
             <span className="vera5-secondary-command-copy">
               <strong>{scanState === "scanning" ? "SCANNING…" : "SCAN SELECTION"}</strong>
               <small>Scan highlighted text</small>
@@ -5075,25 +4964,12 @@ export function Popup() {
               cursor: enrichSelectionDisabled ? "not-allowed" : "pointer",
             }}
           >
-            <svg
+            <span
               className="vera5-secondary-command-icon vera5-secondary-command-icon--enrich"
-              viewBox="0 0 32 32"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.7"
-              strokeLinecap="round"
-              strokeLinejoin="round"
               aria-hidden="true"
             >
-              <path d="M11.5 20.5c-2-1.45-3.25-3.8-3.25-6.45a7.75 7.75 0 0 1 15.5 0c0 2.65-1.25 5-3.25 6.45" />
-              <path d="M12 22h8M13.5 25.5h5" />
-              <path d="m16 8.25 1.35 2.7 3 .45-2.18 2.12.52 3-2.69-1.42-2.69 1.42.52-3-2.18-2.12 3-.45z" />
-              <circle cx="4" cy="8" r="1.75" />
-              <circle cx="28" cy="8" r="1.75" />
-              <circle cx="4.5" cy="22.5" r="1.75" />
-              <circle cx="27.5" cy="22.5" r="1.75" />
-              <path d="m5.6 9.1 3.2 2M26.4 9.1l-3.2 2M6.1 21.6l4.25-2.55M25.9 21.6l-4.25-2.55" />
-            </svg>
+              <VeraIcon icon={VeraUiIcons.enrichSelection} size="md" />
+            </span>
             <span className="vera5-secondary-command-copy">
               <strong>ENRICH SELECTION</strong>
               <small>Enrich selected indicator</small>
@@ -5113,59 +4989,10 @@ export function Popup() {
             aria-label="Extension enabled"
             disabled={!ready}
             onClick={() => handleToggle(!enabled)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flex: "1 1 0",
-              minWidth: 0,
-              padding: "6px 8px 6px 10px",
-              borderRadius: 999,
-              border: `1px solid ${POPUP_THEME.border}`,
-              background: POPUP_THEME.buttonBg,
-              color: POPUP_THEME.muted,
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              cursor: ready ? "pointer" : "not-allowed",
-              opacity: ready ? 1 : 0.65,
-              textAlign: "left",
-            }}
           >
-            <span
-              className="vera5-command-toggle-label"
-              style={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.2 }}
-            >
-              Extension enabled
-            </span>
-            <span
-              className="vera5-command-toggle-track"
-              aria-hidden="true"
-              style={{
-                position: "relative",
-                flexShrink: 0,
-                width: 30,
-                height: 16,
-                borderRadius: 999,
-                background: enabled ? POPUP_THEME.accent : POPUP_THEME.buttonBg,
-                border: `1px solid ${enabled ? POPUP_THEME.accent : POPUP_THEME.border}`,
-                transition: "background 0.15s ease, border-color 0.15s ease",
-              }}
-            >
-              <span
-                className="vera5-command-toggle-thumb"
-                style={{
-                  position: "absolute",
-                  top: 1,
-                  left: 1,
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  background: enabled ? POPUP_THEME.onAccent : POPUP_THEME.muted,
-                  transform: enabled ? "translateX(14px)" : "translateX(0)",
-                  transition: "transform 0.15s ease, background 0.15s ease",
-                }}
-              />
+            <span className="vera5-command-toggle-label">Extension enabled</span>
+            <span className="vera5-command-toggle-track" aria-hidden="true">
+              <span className="vera5-command-toggle-thumb" />
             </span>
           </button>
           <button
@@ -5176,59 +5003,10 @@ export function Popup() {
             aria-label="Highlight indicators"
             disabled={!ready || !enabled}
             onClick={() => handleHighlightToggle(!highlightEnabled)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              flex: "1 1 0",
-              minWidth: 0,
-              padding: "6px 8px 6px 10px",
-              borderRadius: 999,
-              border: `1px solid ${POPUP_THEME.border}`,
-              background: POPUP_THEME.buttonBg,
-              color: POPUP_THEME.muted,
-              fontSize: 11,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              cursor: ready && enabled ? "pointer" : "not-allowed",
-              opacity: ready && enabled ? 1 : 0.65,
-              textAlign: "left",
-            }}
           >
-            <span
-              className="vera5-command-toggle-label"
-              style={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.2 }}
-            >
-              Highlight indicators
-            </span>
-            <span
-              className="vera5-command-toggle-track"
-              aria-hidden="true"
-              style={{
-                position: "relative",
-                flexShrink: 0,
-                width: 30,
-                height: 16,
-                borderRadius: 999,
-                background: highlightEnabled ? POPUP_THEME.accent : POPUP_THEME.buttonBg,
-                border: `1px solid ${highlightEnabled ? POPUP_THEME.accent : POPUP_THEME.border}`,
-                transition: "background 0.15s ease, border-color 0.15s ease",
-              }}
-            >
-              <span
-                className="vera5-command-toggle-thumb"
-                style={{
-                  position: "absolute",
-                  top: 1,
-                  left: 1,
-                  width: 12,
-                  height: 12,
-                  borderRadius: "50%",
-                  background: highlightEnabled ? POPUP_THEME.onAccent : POPUP_THEME.muted,
-                  transform: highlightEnabled ? "translateX(14px)" : "translateX(0)",
-                  transition: "transform 0.15s ease, background 0.15s ease",
-                }}
-              />
+            <span className="vera5-command-toggle-label">Highlight indicators</span>
+            <span className="vera5-command-toggle-track" aria-hidden="true">
+              <span className="vera5-command-toggle-thumb" />
             </span>
           </button>
           <button
@@ -5240,12 +5018,7 @@ export function Popup() {
             aria-label="On-Page Popout"
             disabled
           >
-            <span
-              className="vera5-command-toggle-label"
-              style={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.2 }}
-            >
-              On-Page Popout
-            </span>
+            <span className="vera5-command-toggle-label">On-Page Popout</span>
             <span className="vera5-command-toggle-track" aria-hidden="true">
               <span className="vera5-command-toggle-thumb" />
             </span>
@@ -5279,44 +5052,22 @@ export function Popup() {
               className="vera5-triage-section"
               aria-label="Detected indicators"
             >
-              <div
-                className="vera5-triage-heading-row"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 8,
-                  marginBottom: 8,
-                }}
-              >
-                <h2
-                  style={{
-                    fontSize: 15,
-                    fontWeight: 600,
-                    margin: 0,
-                    color: POPUP_THEME.accentText,
-                  }}
-                >
-                  Detected indicators
-                </h2>
+              <div className="vera5-section-header vera5-triage-heading-row">
+                <div className="vera5-section-identity">
+                  <h2 className="vera5-section-title">
+                    <span className="vera5-section-icon" aria-hidden="true">
+                      <VeraIcon icon={VeraUiIcons.detectedSection} size="sm" />
+                    </span>
+                    Detected indicators
+                  </h2>
+                </div>
                 {compactIndicatorQueue && trayView === "results" && scanSummary ? (
-                  <details className="vera5-tray-case-tools">
+                  <details className="vera5-tray-case-tools vera5-section-utilities">
                     <summary
                       aria-label={POPUP_TRAY_CASE_TOOLS_SUMMARY}
                       style={trayDemotedDetailsSummaryStyle()}
                     >
-                      <svg
-                        viewBox="0 0 16 16"
-                        width="14"
-                        height="14"
-                        fill="none"
-                        aria-hidden="true"
-                      >
-                        <rect x="1.5" y="1.5" width="5" height="5" rx="1" />
-                        <rect x="9.5" y="1.5" width="5" height="5" rx="1" />
-                        <rect x="1.5" y="9.5" width="5" height="5" rx="1" />
-                        <rect x="9.5" y="9.5" width="5" height="5" rx="1" />
-                      </svg>
+                      <VeraIcon icon={VeraUiIcons.collections} size="xs" />
                       <span className="vera5-tray-case-tools-label">
                         {POPUP_TRAY_CASE_TOOLS_SUMMARY}
                       </span>
@@ -5390,6 +5141,7 @@ export function Popup() {
                   </div>
                 ) : null}
               </div>
+              <hr className="vera5-section-divider" aria-hidden="true" />
               {trayView === "prompt" ? (
                 <p style={trayStatusStyle()}>Scan this page to list detected indicators.</p>
               ) : null}
@@ -5406,16 +5158,13 @@ export function Popup() {
               {trayView === "results" && scanSummary ? (
                 <>
                   <div
-                    className="vera5-triage-filters"
+                    className="vera5-triage-filters vera5-segmented"
                     role="group"
                     aria-label={`Filter by indicator type. ${buildTabScanCountSummaryText(
                       scanSummary,
                       activePageContextType
                     )}`}
                     style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: compactIndicatorQueue ? 0 : 6,
                       marginBottom: 10,
                     }}
                   >
@@ -5503,8 +5252,6 @@ export function Popup() {
                             listStyle: "none",
                             margin: 0,
                             padding: 0,
-                            maxHeight: 220,
-                            overflowY: "auto",
                             display: "flex",
                             flexDirection: "column",
                             gap: 6,
@@ -5559,8 +5306,6 @@ export function Popup() {
                               listStyle: "none",
                               margin: 0,
                               padding: 0,
-                              maxHeight: 160,
-                              overflowY: "auto",
                               display: "flex",
                               flexDirection: "column",
                               gap: 6,
@@ -5601,19 +5346,19 @@ export function Popup() {
         <div className="vera5-workspace-footer-meta">
           <span className="vera5-workspace-footer-version">Vera5 v0.1.0</span>
           <span
-            className="vera5-workspace-footer-pill"
+            className="vera5-workspace-footer-status"
             data-vera5-footer-state={ready ? "ready" : "loading"}
           >
             {ready ? "Ready" : "Loading…"}
           </span>
           <span
-            className="vera5-workspace-footer-pill"
+            className="vera5-workspace-footer-status"
             data-vera5-footer-state={quietModeActive ? "quiet" : "live"}
           >
             {quietModeActive ? "Quiet mode" : "Threat feeds: Live"}
           </span>
           <span
-            className="vera5-workspace-footer-pill"
+            className="vera5-workspace-footer-status"
             data-vera5-footer-state={enabled ? "enabled" : "disabled"}
           >
             {enabled ? "Extension: Enabled" : "Extension: Disabled"}
