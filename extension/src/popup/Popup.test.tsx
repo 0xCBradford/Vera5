@@ -796,7 +796,7 @@ describe("Popup IOC tray", () => {
     expect(mounted?.container.querySelector(".vera5-command-section")).not.toBeNull();
     expect(
       mounted?.container.querySelectorAll(".vera5-intel-empty-actions button:disabled")
-    ).toHaveLength(5);
+    ).toHaveLength(3);
     const main = mounted?.container.querySelector("main.vera5-popup");
     expect(main?.getAttribute("data-host")).toBe("sidepanel");
     expect(mounted?.container.querySelector(".vera5-popup-triage")).not.toBeNull();
@@ -834,6 +834,13 @@ describe("Popup IOC tray", () => {
     expect(chassis?.contains(workspace as Node)).toBe(true);
     expect(chassis?.contains(header as Node)).toBe(false);
     expect(chassis?.contains(footer as Node)).toBe(false);
+    // Phase 10A/10F — major panels share the Vera5 cutline frame language.
+    expect(commandSection?.classList.contains("vera5-section-frame")).toBe(true);
+    expect(intelFeed?.classList.contains("vera5-section-frame")).toBe(true);
+    expect(triage?.querySelector(".vera5-triage-section")?.classList.contains("vera5-section-frame")).toBe(
+      true
+    );
+    expect(investigation?.classList.contains("vera5-section-frame")).toBe(true);
     expect(header?.textContent).toContain("How-To");
     expect(header?.textContent).toContain("How-ToSettingsPermissions");
     expect(header?.querySelector("img")?.getAttribute("src")).toBe("icons/logo-mark.png");
@@ -869,8 +876,10 @@ describe("Popup IOC tray", () => {
     expect(intelFeed?.querySelector(".vera5-intel-feed-heading")).not.toBeNull();
     expect(intelFeed?.querySelector(".vera5-intel-feed-subheading")).not.toBeNull();
     expect(intelSection?.querySelector(":scope > .vera5-intel-feed-header")).toBeNull();
-    expect(commandSection?.querySelector(".vera5-section-title")?.textContent).toBe("Scan");
-    expect(commandSection?.querySelector(".vera5-section-divider")).not.toBeNull();
+    expect(commandSection?.querySelector(".vera5-section-title")).toBeNull();
+    expect(commandSection?.querySelector(".vera5-section-divider")).toBeNull();
+    expect(commandSection?.querySelector(".vera5-scan-page-cta")).not.toBeNull();
+    expect(commandSection?.firstElementChild?.classList.contains("vera5-scan-primary")).toBe(true);
     expect(mounted?.container.querySelector(".vera5-workspace-footer")).not.toBeNull();
     expect(intelFeed).not.toBeNull();
     expect(intelFeed?.textContent).toContain("Scan the current page to detect indicators.");
@@ -912,13 +921,25 @@ describe("Popup IOC tray", () => {
     expect(tokens).toContain("--ws-expanded-min: 1050px");
     expect(tokens).toContain("--ws-wide-min: 1400px");
     expect(tokens).toContain("--scan-command-max: 1080px");
-    expect(tokens).toContain("grid-template-columns: repeat(3, minmax(0, 1fr))");
+    expect(tokens).toContain("vera5-evidence-matrix");
+    // Phase 10F — cutline frame / surface hierarchy tokens
+    expect(tokens).toContain("--frame-cut-size");
+    expect(tokens).toContain("--shadow-major");
+    expect(tokens).toContain("--shadow-instrument");
+    expect(tokens).toContain("--shadow-hero");
+    expect(tokens).toContain("--shadow-popover");
+    expect(tokens).toContain("--divider-frame");
+    expect(tokens).toContain("--divider-section");
+    expect(tokens).toContain("--divider-row");
+    expect(tokens).toContain("--surface-instrument");
+    expect(tokens).toContain("--radius-data");
+    expect(tokens).toContain("Phase 10A/10F");
+    expect(tokens).toContain("vera5-evidence-row");
     expect(tokens).toContain("@container vera5-workspace (min-width: 1050px)");
     expect(tokens).toContain("@container vera5-workspace (min-width: 1400px)");
     expect(tokens).toContain("@container vera5-workspace (max-width: 679px)");
     expect(tokens).toContain("@container vera5-ip (min-width: 480px)");
     expect(tokens).toContain("@container vera5-ip (min-width: 560px)");
-    expect(tokens).toContain("repeat(4, minmax(var(--vendor-card-min), 1fr))");
     expect(tokens).toContain("max-width: var(--scan-command-max)");
     expect(tokens).toContain("max-width: var(--intel-empty-max)");
     expect(tokens).toContain("white-space: nowrap");
@@ -1024,6 +1045,7 @@ describe("Popup IOC tray", () => {
 
     const feed = mounted?.container.querySelector(".vera5-intel-feed");
     const summaryRow = feed?.querySelector(".vera5-intel-feed-summary-row");
+    const evidenceMatrix = feed?.querySelector(".vera5-evidence-matrix");
     const sourcesGrid = feed?.querySelector(".vera5-intel-feed-sources");
     expect(summaryRow).not.toBeNull();
     const targetCard = summaryRow?.querySelector(".vera5-intel-feed-command");
@@ -1039,37 +1061,39 @@ describe("Popup IOC tray", () => {
     expect(findings?.querySelector("h3")?.textContent).toBe("Findings & Export");
     expect(findings?.textContent).toContain("Copy Summary");
     expect(findings?.textContent).toContain("Copy IOC");
-    expect(findings?.textContent).toContain("Export Markdown");
-    expect(findings?.textContent).toContain("Export JSON");
-    expect(findings?.textContent).toContain("More Formats");
+    expect(findings?.textContent).toContain("Export [Multi-Format]");
+    expect(findings?.textContent).not.toContain("More Formats");
     expect(findings?.textContent).toContain("Jira comment");
     expect(findings?.textContent).toContain("TheHive case note");
     expect(findings?.textContent).toContain("Obsidian note");
     expect(findings?.textContent).toContain("CSV rows");
+    expect(findings?.textContent).toContain("Report formats");
     expect(findings?.textContent).toContain("+ Add analyst note");
     expect(summaryRow?.querySelector(".vera5-intel-feed-summary")).toBeNull();
+    expect(evidenceMatrix).not.toBeNull();
     expect(sourcesGrid).not.toBeNull();
     expect(sourcesGrid?.querySelector(".vera5-intel-feed-pivots")).toBeNull();
     expect(feed?.querySelector(".vera5-intel-feed-header")).not.toBeNull();
     expect(feed?.contains(summaryRow as Node)).toBe(true);
-    expect(feed?.contains(sourcesGrid as Node)).toBe(true);
+    expect(feed?.contains(evidenceMatrix as Node)).toBe(true);
     const feedChildren = Array.from(feed?.children ?? []);
     expect(feedChildren.indexOf(summaryRow as Element)).toBeLessThan(
-      feedChildren.indexOf(sourcesGrid as Element)
+      feedChildren.indexOf(evidenceMatrix as Element)
     );
     expect(feed?.querySelectorAll(".vera5-section-divider").length).toBeGreaterThanOrEqual(2);
     expect(
       sourcesGrid
-        ?.querySelector('.vera5-intel-source-card[data-vera5-source-id="abuseipdb"]')
+        ?.querySelector('.vera5-evidence-row[data-vera5-source-id="abuseipdb"]')
         ?.getAttribute("data-vera5-score-band")
     ).toBe("red");
     const abuseCard = sourcesGrid?.querySelector(
-      '.vera5-intel-source-card[data-vera5-source-id="abuseipdb"]'
+      '.vera5-evidence-row[data-vera5-source-id="abuseipdb"]'
     );
-    expect(abuseCard?.querySelector(".vera5-intel-source-header")?.textContent).toContain(
-      "AbuseIPDB[CRITICAL]"
-    );
-    expect(abuseCard?.querySelector(".vera5-intel-source-score")?.textContent).toBe("74/100");
+    expect(abuseCard?.getAttribute("data-vera5-actionable")).toBe("true");
+    expect(abuseCard?.classList.contains("vera5-evidence-row--actionable")).toBe(true);
+    expect(abuseCard?.querySelector(".vera5-evidence-source")?.textContent).toContain("AbuseIPDB");
+    expect(abuseCard?.querySelector(".vera5-risk-label")?.textContent).toContain("[CRITICAL]");
+    expect(abuseCard?.querySelector(".vera5-evidence-score")?.textContent).toBe("74/100");
     expect(abuseCard?.querySelector(":scope > small")).toBeNull();
     const abuseInfoButton = abuseCard?.querySelector<HTMLButtonElement>(
       '[aria-label="View AbuseIPDB details"]'
@@ -1086,9 +1110,9 @@ describe("Popup IOC tray", () => {
       "Updated"
     );
     expect(
-      sourcesGrid?.querySelector('.vera5-intel-source-card[data-vera5-source-status="pivot-only"]')
+      sourcesGrid?.querySelector('.vera5-evidence-row[data-vera5-source-status="pivot-only"]')
     ).not.toBeNull();
-    const sourceIds = Array.from(feed?.querySelectorAll(".vera5-intel-source-card") ?? []).map(
+    const sourceIds = Array.from(feed?.querySelectorAll(".vera5-evidence-row") ?? []).map(
       (card) => card.getAttribute("data-vera5-source-id")
     );
     // Scored cards first, then pivot-only, then disabled/unselected live sources.
@@ -1133,12 +1157,13 @@ describe("Popup IOC tray", () => {
     });
 
     writeText.mockClear();
-    const moreFormats = Array.from(
+    const multiFormat = Array.from(
       findings?.querySelectorAll<HTMLButtonElement>("button") ?? []
-    ).find((button) => button.textContent === "More Formats");
+    ).find((button) => button.textContent === "Export [Multi-Format]");
     flushSync(() => {
-      moreFormats?.click();
+      multiFormat?.click();
     });
+    expect(multiFormat?.getAttribute("aria-expanded")).toBe("true");
     const copyJira = Array.from(
       findings?.querySelectorAll<HTMLButtonElement>(".vera5-intel-more-formats button") ?? []
     ).find((button) => button.textContent === "Copy Jira comment");
@@ -1242,16 +1267,16 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(
         mounted?.container
-          .querySelector('.vera5-intel-source-card[data-vera5-source-id="abuseipdb"]')
+          .querySelector('.vera5-evidence-row[data-vera5-source-id="abuseipdb"]')
           ?.getAttribute("data-vera5-source-status")
       ).toBe("error");
     });
 
     const abuse = mounted?.container.querySelector(
-      '.vera5-intel-source-card[data-vera5-source-id="abuseipdb"]'
+      '.vera5-evidence-row[data-vera5-source-id="abuseipdb"]'
     );
     const virustotal = mounted?.container.querySelector(
-      '.vera5-intel-source-card[data-vera5-source-id="virustotal"]'
+      '.vera5-evidence-row[data-vera5-source-id="virustotal"]'
     );
     expect(abuse?.getAttribute("data-vera5-source-status")).toBe("error");
     expect(abuse?.textContent).toContain("AbuseIPDB rate limit reached.");
@@ -1259,8 +1284,8 @@ describe("Popup IOC tray", () => {
     expect(virustotal?.textContent).toContain("Missing configuration");
     expect(virustotal?.textContent).toContain("API key required");
     expect(virustotal?.textContent).not.toContain("0/100");
-    const vtSignal = virustotal?.querySelector(".vera5-intel-source-signal")?.textContent ?? "";
-    const vtState = virustotal?.querySelector(".vera5-intel-source-state-label")?.textContent ?? "";
+    const vtSignal = virustotal?.querySelector(".vera5-evidence-signal")?.textContent ?? "";
+    const vtState = virustotal?.querySelector(".vera5-evidence-state")?.textContent ?? "";
     expect(vtState).toBe("Missing configuration");
     expect(vtSignal).not.toBe(vtState);
   });
@@ -1300,7 +1325,7 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(
         mounted?.container.querySelector(
-          '.vera5-intel-source-card[data-vera5-presentation-kind="not_queried"]'
+          '.vera5-evidence-row[data-vera5-presentation-kind="not_queried"]'
         )
       ).not.toBeNull();
     });
@@ -1310,7 +1335,7 @@ describe("Popup IOC tray", () => {
     expect(score?.textContent).toContain("Not scored");
     expect(score?.textContent).not.toContain("0/100");
     const notQueried = feed?.querySelector(
-      '.vera5-intel-source-card[data-vera5-presentation-kind="not_queried"]'
+      '.vera5-evidence-row[data-vera5-presentation-kind="not_queried"]'
     );
     expect(notQueried?.textContent).toContain("Not queried");
     expect(notQueried?.textContent).not.toContain("Available for enrichment");
@@ -1351,20 +1376,20 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(
         mounted?.container.querySelector(
-          '.vera5-intel-source-card[data-vera5-source-status="pivot-only"]'
+          '.vera5-evidence-row[data-vera5-source-status="pivot-only"]'
         )
       ).not.toBeNull();
     });
     const pivotCard = mounted?.container.querySelector(
-      '.vera5-intel-source-card[data-vera5-source-status="pivot-only"]'
+      '.vera5-evidence-row[data-vera5-source-status="pivot-only"]'
     );
-    const state = pivotCard?.querySelector(".vera5-intel-source-state-label")?.textContent ?? "";
-    const signal = pivotCard?.querySelector(".vera5-intel-source-signal")?.textContent ?? "";
+    const state = pivotCard?.querySelector(".vera5-evidence-state")?.textContent ?? "";
+    const signal = pivotCard?.querySelector(".vera5-evidence-signal")?.textContent ?? "";
     expect(state).toBe("Pivot only");
     expect(signal.trim()).toBe("");
     expect(pivotCard?.textContent).not.toContain("External research available");
     expect(pivotCard?.getAttribute("title")).toBe("External research available");
-    expect(pivotCard?.querySelectorAll(".vera5-intel-source-state-label")).toHaveLength(1);
+    expect(pivotCard?.querySelectorAll(".vera5-evidence-state")).toHaveLength(1);
   });
 
   it("maps vendor score boundaries to the required visual bands", async () => {
@@ -1416,19 +1441,17 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       scoredSources.forEach(([sourceId, signal, band, label]) => {
         const card = mounted?.container.querySelector(
-          `.vera5-intel-source-card[data-vera5-source-id="${sourceId}"]`
+          `.vera5-evidence-row[data-vera5-source-id="${sourceId}"]`
         );
         expect(card?.getAttribute("data-vera5-score-band")).toBe(band);
         if (label) {
-          expect(card?.querySelector(".vera5-intel-source-header")?.textContent).toContain(
-            `[${label}]`
-          );
+          expect(card?.querySelector(".vera5-risk-label")?.textContent).toContain(`[${label}]`);
         } else {
-          expect(card?.querySelector(".vera5-intel-source-header")?.textContent).not.toMatch(
+          expect(card?.querySelector(".vera5-risk-label")?.textContent ?? "").not.toMatch(
             /\[(CRITICAL|HIGH|SUSPICIOUS|LOW)\]/
           );
         }
-        expect(card?.querySelector(".vera5-intel-source-score")?.textContent).toBe(
+        expect(card?.querySelector(".vera5-evidence-score")?.textContent).toBe(
           `${signal}/100`
         );
       });
@@ -1519,13 +1542,13 @@ describe("Popup IOC tray", () => {
 
     await vi.waitFor(() => {
       const otx = mounted?.container.querySelector(
-        '.vera5-intel-source-card[data-vera5-source-id="otx"]'
+        '.vera5-evidence-row[data-vera5-source-id="otx"]'
       );
-      expect(otx?.querySelector(".vera5-intel-source-score")?.textContent).toBe("0/100");
+      expect(otx?.querySelector(".vera5-evidence-score")?.textContent).toBe("0/100");
     });
 
     const sourceIds = Array.from(
-      mounted!.container.querySelectorAll(".vera5-intel-source-card")
+      mounted!.container.querySelectorAll(".vera5-evidence-row")
     ).map((card) => card.getAttribute("data-vera5-source-id"));
 
     expect(sourceIds.indexOf("virustotal")).toBeLessThan(sourceIds.indexOf("abuseipdb"));
@@ -1536,17 +1559,17 @@ describe("Popup IOC tray", () => {
     expect(sourceIds.indexOf("pulsedive")).toBeLessThan(sourceIds.indexOf("censys"));
     expect(
       mounted?.container
-        .querySelector('.vera5-intel-source-card[data-vera5-source-id="otx"]')
+        .querySelector('.vera5-evidence-row[data-vera5-source-id="otx"]')
         ?.getAttribute("data-vera5-source-status")
     ).toBe("ok");
     expect(
       mounted?.container
-        .querySelector('.vera5-intel-source-card[data-vera5-source-id="censys"]')
+        .querySelector('.vera5-evidence-row[data-vera5-source-id="censys"]')
         ?.getAttribute("data-vera5-source-status")
     ).toBe("disabled");
     expect(
       mounted?.container
-        .querySelector('.vera5-intel-source-card[data-vera5-source-id="pulsedive"]')
+        .querySelector('.vera5-evidence-row[data-vera5-source-id="pulsedive"]')
         ?.getAttribute("data-vera5-source-status")
     ).toBe("pivot-only");
   });
@@ -3262,6 +3285,11 @@ describe("Investigation Paths module", () => {
     expect(module?.textContent).toContain("Awaiting selection");
     expect(module?.textContent).not.toContain("No ATT&CK mappings available");
     expect(module?.querySelector(".vera5-ip-copy")).toBeNull();
+    expect(module?.querySelector(".vera5-ip-workflow")).not.toBeNull();
+    expect(module?.querySelector('[aria-label="Recommended path"]')?.textContent).toContain(
+      "Recommended Path"
+    );
+    expect(module?.querySelectorAll(".vera5-ip-workflow-row")).toHaveLength(4);
     expect(investigationActionByLabel("Search malware intelligence")?.disabled).toBe(true);
     expect(investigationActionByLabel("Review detections")?.disabled).toBe(true);
     expect(module?.querySelectorAll(".vera5-ip-source")).toHaveLength(0);
@@ -3304,7 +3332,12 @@ describe("Investigation Paths module", () => {
     const module = mounted?.container.querySelector(".vera5-investigation-paths");
     expect(module?.querySelector(".vera5-ioc-type-badge")).not.toBeNull();
     expect(module?.querySelector(".vera5-ip-selected-value")?.textContent).toContain("8.8.8.8");
+    expect(module?.querySelector(".vera5-ip-workflow")).not.toBeNull();
+    expect(module?.querySelector('[data-vera5-workflow-step="01"]')).not.toBeNull();
+    expect(module?.querySelector('[data-vera5-workflow-step="02"]')).not.toBeNull();
     expect(investigationActionByLabel("Review detections")?.disabled).toBe(false);
+    expect(investigationActionByLabel("Find related infrastructure")?.disabled).toBe(true);
+    expect(investigationActionByLabel("Check campaign associations")?.disabled).toBe(true);
 
     const copyButton = module?.querySelector<HTMLButtonElement>(".vera5-ip-copy");
     expect(copyButton).not.toBeNull();

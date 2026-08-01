@@ -117,9 +117,7 @@
   --font-wordmark: "Space Grotesk", "Inter", system-ui, sans-serif;
   --font-display: var(--font-wordmark);
 
-  /* Side-panel intelligence grid (Phase 5 densified; Phase 8 ops height) */
-  --intel-card-height: 108px;
-  --intel-card-height-ops: 86px;
+  /* Side-panel intelligence summary (Phase 5 densified) */
   --intel-summary-min: 112px;
   --panel-glow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
 
@@ -262,13 +260,14 @@
   --section-shadow: var(--highlight-top), var(--shadow-low);
 
   /*
-   * Phase 9 — soft metallic workspace chassis (canvas only).
-   * Rollback: set --surface-chassis-fill to var(--surface-page), or remove
-   * .vera5-workspace-chassis sidepanel rules. Do not reuse for cards/fields.
+   * Phase 9/10D — branded workspace chassis (canvas only).
+   * Pale Vera5 gold/ivory substrate behind dark modules.
+   * Rollback: set --surface-chassis-fill to var(--surface-page).
+   * Do not reuse for cards/fields.
    */
-  --surface-chassis: #BEC3C9;
-  --surface-chassis-top: #C2C7CC;
-  --surface-chassis-bottom: #B8BEC5;
+  --surface-chassis: #d6c9a4;
+  --surface-chassis-top: #e2d6b4;
+  --surface-chassis-bottom: #c8ba90;
   --surface-chassis-fill: linear-gradient(
     180deg,
     var(--surface-chassis-top) 0%,
@@ -277,6 +276,56 @@
   --ws-chassis-gutter: var(--sp-4); /* 10px — Standard baseline */
   --section-border-chassis: color-mix(in srgb, var(--state-blue) 18%, var(--border-hard));
   --section-shadow-chassis: var(--highlight-top), 0 2px 8px rgba(5, 10, 16, 0.22);
+
+  /*
+   * Phase 10A/10F — VERA5 cutline frame language (major panels only).
+   * Motif: asymmetric plate + dual perimeter + gold registration + BR cutline + terminal bracket.
+   * Surface levels: L0 chassis · L1 major frame · L2 instrument · L3 data/action.
+   * Do not reuse full L1 motif on inner cards, vendor tiles, or rows.
+   */
+  --frame-r-sharp: 3px;
+  --frame-r-soft: 7px;
+  --frame-radius: var(--frame-r-sharp) var(--frame-r-soft) var(--frame-r-sharp) var(--frame-r-soft);
+  --frame-border: var(--section-border);
+  --frame-inner-line: rgba(0, 0, 0, 0.36);
+  --frame-divider: color-mix(in srgb, var(--state-blue) 24%, var(--border-soft));
+  --frame-inset: inset 0 0 0 1px var(--frame-inner-line);
+  --frame-highlight: inset 0 1px 0 rgba(245, 247, 250, 0.06);
+  --frame-seat: 0 1px 0 rgba(255, 255, 255, 0.03), 0 3px 10px rgba(5, 10, 16, 0.28);
+  --frame-shadow: var(--frame-highlight), var(--frame-inset), var(--frame-seat);
+  --frame-signal: var(--accent);
+  --frame-registration: var(--frame-signal);
+  --frame-signal-length: 18px;
+  --frame-signal-thickness: 2px;
+  --frame-bracket-size: 8px;
+  --frame-cut-size: 11px;
+  --frame-header-wash: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--accent) 6%, transparent) 0%,
+    transparent 78%
+  );
+
+  /* Phase 10F — depth / shadow roles (consolidated) */
+  --shadow-major: var(--frame-seat);
+  --shadow-instrument: inset 0 1px 0 rgba(245, 247, 250, 0.05), inset 0 0 0 1px rgba(0, 0, 0, 0.26),
+    0 2px 6px rgba(4, 10, 18, 0.24);
+  --shadow-hero: 0 0 0 1px rgba(0, 0, 0, 0.42), 0 10px 24px rgba(2, 6, 12, 0.46);
+  --shadow-popover: inset 0 1px 0 rgba(255, 236, 180, 0.08), inset 0 0 0 1px rgba(0, 0, 0, 0.28),
+    0 12px 30px rgba(4, 10, 18, 0.52);
+
+  /* Phase 10F — divider roles */
+  --divider-frame: var(--frame-divider);
+  --divider-section: color-mix(in srgb, var(--state-blue) 14%, var(--border-hairline));
+  --divider-row: color-mix(in srgb, var(--border-hairline) 90%, transparent);
+
+  /* Phase 10F — instrument / data surface fills */
+  --surface-instrument: linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 46%),
+    color-mix(in srgb, var(--surface-1) 93%, #0b121c);
+  --surface-instrument-border: color-mix(in srgb, var(--state-blue) 18%, var(--border-soft));
+  --surface-data: color-mix(in srgb, var(--surface-1) 94%, #0a1018);
+  --radius-instrument: var(--frame-r-sharp) calc(var(--frame-r-soft) - 1px) var(--frame-r-sharp)
+    calc(var(--frame-r-soft) - 1px);
+  --radius-data: 2px 5px 2px 5px;
 
   /* Phase 3 — control families (extends Phase 1/2; no second system) */
   --ctrl-h-compact: 32px;
@@ -297,10 +346,10 @@
    * COMPACT:   ≤679px   — narrow side panel; controlled wrapping
    * STANDARD:  680–1049 — Phase 5 baseline (default rules below)
    * EXPANDED:  ≥1050px  — selective internal max-widths + denser grids
-   * VERY WIDE: ≥1400px  — optional 5-column vendor evidence grid
+   * VERY WIDE: ≥1400px  — additional evidence-column width for matrix
    *
    * Chosen where Scan/Intel/IOC rows begin to stretch, toggle labels
-   * disconnect from switches, and vendor cards waste horizontal space.
+   * disconnect from switches, and vendor evidence needs more reading room.
    * Density refinements at 559 / 399 / 339 remain compact sub-steps.
    * ---------------------------------------------------------------- */
   --ws-compact-max: 679px;
@@ -313,7 +362,6 @@
   --triage-filter-max: 640px;
   --prose-max: 62ch;
   --tech-value-max: 56ch;
-  --vendor-card-min: 220px;
   --ip-source-tile-min: 132px;
 
   /* ----------------------------------------------------------------
@@ -435,17 +483,28 @@
   }
 }
 
-/* Cursor-location hover glow on every popup button (amber ring + soft glow). */
-.vera5-popup button:not(.v5-btn) {
+/* Cursor-location hover glow — exclude purpose-built Vera5 control families. */
+.vera5-popup
+  button:not(.v5-btn):not(.vera5-header-action):not(.vera5-export-action):not(
+    .vera5-intel-feed-enrich
+  ):not(.vera5-command-toggle):not(.vera5-intel-info-button):not(.vera5-ip-action) {
   transition: box-shadow var(--t-hover) var(--ease-out);
 }
-.vera5-popup button:hover:not(:disabled) {
+.vera5-popup
+  button:hover:not(:disabled):not(.v5-btn):not(.vera5-header-action):not(
+    .vera5-export-action
+  ):not(.vera5-intel-feed-enrich):not(.vera5-command-toggle):not(
+    .vera5-intel-info-button
+  ):not(.vera5-ip-action) {
   box-shadow:
     0 0 0 1.5px rgba(255, 178, 36, 0.45),
     0 4px 16px rgba(255, 178, 36, 0.18);
 }
 @media (prefers-reduced-motion: reduce) {
-  .vera5-popup button:not(.v5-btn) {
+  .vera5-popup
+    button:not(.v5-btn):not(.vera5-header-action):not(.vera5-export-action):not(
+      .vera5-intel-feed-enrich
+    ):not(.vera5-command-toggle):not(.vera5-intel-info-button):not(.vera5-ip-action) {
     transition: none;
   }
 }
@@ -787,6 +846,10 @@
   padding: var(--ws-chassis-gutter);
   background: var(--surface-chassis-fill);
   background-color: var(--surface-chassis);
+  /* Level 0 — warm chassis; structural seams at navbar/footer bookends */
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--surface-chassis-top) 55%, #fff8e0),
+    inset 0 -1px 0 color-mix(in srgb, var(--surface-chassis-bottom) 70%, #8a7a52);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-workspace-chassis > .vera5-popup-workspace {
@@ -876,6 +939,91 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-section-divider--content {
   border-top-color: var(--divider-quiet);
+}
+
+/*
+ * Phase 10F — Level 1 major analytical frame (cutline motif).
+ * Applied to Scan / Intel Feed / Detected Indicators / Investigation Paths.
+ * ::before = chassis cutline notch (decorative) · ::after = terminal bracket.
+ * Focus rings stay on content — cutline does not use clip-path on the frame.
+ */
+.vera5-popup[data-host="sidepanel"] .vera5-section-frame {
+  position: relative;
+  isolation: isolate;
+  border: var(--bw-thin) solid var(--frame-border) !important;
+  border-radius: var(--frame-radius) !important;
+  background: var(--section-surface);
+  box-shadow: var(--frame-shadow) !important;
+}
+
+/* Chassis-colored cutline at lower-right — engineered notch, not clip-path */
+.vera5-popup[data-host="sidepanel"] .vera5-section-frame::before {
+  content: "";
+  position: absolute;
+  z-index: 3;
+  right: -1px;
+  bottom: -1px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 0 var(--frame-cut-size) var(--frame-cut-size);
+  border-color: transparent transparent var(--surface-chassis) transparent;
+  pointer-events: none;
+}
+
+/* Terminal corner bracket — inset from the cutline */
+.vera5-popup[data-host="sidepanel"] .vera5-section-frame::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  right: calc(var(--frame-cut-size) + 4px);
+  bottom: calc(var(--frame-cut-size) + 2px);
+  width: var(--frame-bracket-size);
+  height: var(--frame-bracket-size);
+  border-right: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 48%, var(--border-hard));
+  border-bottom: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 48%, var(--border-hard));
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-frame > .vera5-section-header {
+  position: relative;
+  align-items: flex-start;
+  min-height: var(--section-header-min-h);
+  padding-top: var(--sp-2);
+  padding-bottom: var(--sp-2);
+  background: var(--frame-header-wash);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-frame > .vera5-section-header .vera5-section-utilities {
+  align-self: center;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-frame > .vera5-section-divider {
+  position: relative;
+  border-top-color: var(--divider-frame);
+}
+
+/* Gold registration segment on the frame divider */
+.vera5-popup[data-host="sidepanel"] .vera5-section-frame > .vera5-section-divider::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: -1px;
+  width: var(--frame-signal-length);
+  height: var(--frame-signal-thickness);
+  background: var(--frame-registration);
+  pointer-events: none;
+}
+
+/* Content divider (summary → evidence) — quieter than frame divider */
+.vera5-popup[data-host="sidepanel"] .vera5-section-frame > .vera5-section-divider--content {
+  border-top-color: var(--divider-section);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-frame > .vera5-section-divider--content::after {
+  width: 12px;
+  opacity: 0.85;
 }
 
 /*
@@ -1011,9 +1159,12 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-header {
   min-height: 46px;
-  padding: 2px var(--ws-chassis-gutter) 12px;
-  border-bottom-color: var(--command-border-soft);
+  padding: 2px var(--ws-chassis-gutter) 11px;
+  border-bottom: var(--bw-thin) solid color-mix(in srgb, var(--command-gold) 22%, #0a1018);
   background: var(--surface-page);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.55),
+    0 4px 12px rgba(0, 0, 0, 0.28);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-header h1 {
@@ -1044,13 +1195,16 @@
   justify-content: center;
   gap: var(--ctrl-gap-icon);
   min-height: var(--ctrl-h-compact);
-  padding: 6px 10px !important;
-  border: var(--bw-thin) solid color-mix(in srgb, var(--command-gold) 44%, var(--command-border)) !important;
-  border-radius: var(--r-compact) !important;
+  padding: 6px 11px !important;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--command-gold) 48%, var(--command-border)) !important;
+  border-radius: 3px 7px 3px 7px !important;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 46%),
-    var(--command-surface) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+    linear-gradient(180deg, rgba(255, 236, 180, 0.1), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--command-surface-raised) 88%, #1a2230), var(--command-surface)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 180, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 1px 0 rgba(0, 0, 0, 0.2) !important;
   color: var(--command-gold-light) !important;
   font-family: var(--font-ui);
   font-size: var(--fs-sm) !important;
@@ -1060,17 +1214,20 @@
   transition:
     border-color var(--t-hover) var(--ease-out),
     background-color var(--t-hover) var(--ease-out),
-    box-shadow var(--t-hover) var(--ease-out) !important;
+    box-shadow var(--t-hover) var(--ease-out),
+    transform 90ms var(--ease-out) !important;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-header-action:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--command-gold) 66%, var(--command-border)) !important;
+  border-color: color-mix(in srgb, var(--command-gold) 72%, var(--command-border)) !important;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.07), transparent 48%),
-    var(--command-surface-raised) !important;
+    linear-gradient(180deg, rgba(255, 236, 180, 0.14), transparent 46%),
+    linear-gradient(180deg, color-mix(in srgb, var(--command-surface-raised) 94%, #222b3a), var(--command-surface-raised)) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 0 14px rgba(255, 178, 36, 0.12) !important;
+    inset 0 1px 0 rgba(255, 236, 180, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+    0 0 16px rgba(255, 178, 36, 0.14),
+    0 2px 6px rgba(0, 0, 0, 0.28) !important;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-header-action:focus-visible {
@@ -1089,10 +1246,7 @@
   --ioc-type-color: #8793a8;
   margin-top: 0 !important;
   padding: var(--section-pad-y) var(--section-pad-x) !important;
-  border: var(--bw-thin) solid var(--section-border) !important;
-  border-radius: var(--r-major);
-  background: var(--section-surface);
-  box-shadow: var(--section-shadow);
+  /* Phase 10A: outer chrome from .vera5-section-frame */
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row {
@@ -1103,7 +1257,6 @@
   gap: var(--sp-2);
   min-width: 0;
   margin-bottom: 0 !important;
-  padding-top: 0;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-heading-row .vera5-section-identity {
@@ -1221,10 +1374,10 @@
   overflow-x: auto;
   overflow-y: hidden;
   padding: 2px;
-  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 20%, var(--border-soft));
-  border-radius: var(--r-compact);
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 22%, var(--border-soft));
+  border-radius: var(--radius-data);
   background: color-mix(in srgb, var(--surface-page) 72%, var(--surface-1));
-  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.32);
+  box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.34), inset 0 0 0 1px rgba(0, 0, 0, 0.2);
   scrollbar-width: thin;
 }
 
@@ -1238,7 +1391,7 @@
   margin: 0;
   padding: 4px 7px !important;
   border: var(--bw-thin) solid transparent !important;
-  border-radius: calc(var(--r-compact) - 2px) !important;
+  border-radius: 2px !important;
   background: transparent !important;
   box-shadow: none;
   color: var(--text-secondary) !important;
@@ -1292,9 +1445,10 @@
   gap: 0 !important;
   overflow-x: hidden !important;
   padding: 2px !important;
-  border: 1px solid color-mix(in srgb, var(--state-blue) 18%, var(--border-soft));
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--surface-page) 84%, #0b1422);
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 18%, var(--border-soft));
+  border-radius: var(--radius-data);
+  background: var(--surface-data);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28);
   scrollbar-color: color-mix(in srgb, var(--state-blue) 32%, var(--surface-2)) transparent;
   scrollbar-width: thin;
 }
@@ -1305,12 +1459,13 @@
   min-height: 40px;
   box-sizing: border-box;
   gap: 9px !important;
-  padding: 5px 8px 5px 9px !important;
+  padding: 6px 8px 6px 9px !important;
   border: 1px solid transparent !important;
-  border-bottom-color: color-mix(in srgb, var(--border-soft) 72%, transparent) !important;
-  border-radius: 3px !important;
+  border-bottom-color: var(--divider-row) !important;
+  border-radius: 0 !important;
   background: color-mix(in srgb, var(--surface-1) 96%, #0b1524) !important;
   box-shadow: inset 3px 0 0 transparent;
+  cursor: pointer;
   transition:
     border-color var(--t-hover) var(--ease-out),
     background var(--t-hover) var(--ease-out),
@@ -1322,21 +1477,22 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-queue > [data-vera5-tray-entry="true"]:hover {
-  border-color: color-mix(in srgb, var(--ioc-type-color) 30%, var(--border-soft)) !important;
+  border-color: color-mix(in srgb, var(--ioc-type-color) 36%, var(--border-soft)) !important;
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--ioc-type-color) 7%, transparent), transparent 66%),
-    color-mix(in srgb, var(--surface-1) 92%, #101c2e) !important;
+    linear-gradient(90deg, color-mix(in srgb, var(--ioc-type-color) 10%, transparent), transparent 70%),
+    color-mix(in srgb, var(--surface-1) 90%, #101c2e) !important;
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--ioc-type-color) 55%, transparent);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-queue > [data-vera5-tray-entry="true"][data-vera5-selected="true"] {
-  border-color: color-mix(in srgb, var(--accent) 62%, var(--border-soft)) !important;
+  border-color: color-mix(in srgb, var(--accent) 66%, var(--border-soft)) !important;
   background:
-    linear-gradient(90deg, rgba(255, 178, 36, 0.1), transparent 58%),
-    linear-gradient(180deg, color-mix(in srgb, var(--ioc-type-color) 5%, var(--surface-1)), var(--surface-1)) !important;
+    linear-gradient(90deg, rgba(255, 178, 36, 0.12), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--ioc-type-color) 6%, var(--surface-1)), var(--surface-1)) !important;
   box-shadow:
     inset 3px 0 0 var(--accent),
-    inset 0 1px 0 rgba(255, 218, 137, 0.04),
-    0 0 9px rgba(255, 178, 36, 0.055);
+    inset 0 1px 0 rgba(255, 218, 137, 0.06),
+    0 0 12px rgba(255, 178, 36, 0.08);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-queue > [data-vera5-tray-entry="true"]:focus-visible {
@@ -1513,7 +1669,7 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="url"] {
-  --ioc-type-color: #dca82f;
+  --ioc-type-color: #2db87a; /* green — distinct from ALL gold */
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="ipv4"],
@@ -1567,7 +1723,7 @@
   --ioc-type-color: #8793a8;
 }
 .vera5-popup[data-host="sidepanel"] .vera5-investigation-paths[data-ioc-type="url"] {
-  --ioc-type-color: #dca82f;
+  --ioc-type-color: #2db87a;
 }
 .vera5-popup[data-host="sidepanel"] .vera5-investigation-paths[data-ioc-type="ipv4"],
 .vera5-popup[data-host="sidepanel"] .vera5-investigation-paths[data-ioc-type="ipv6"],
@@ -1607,10 +1763,7 @@
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border: var(--bw-thin) solid var(--section-border);
-  border-radius: var(--r-major);
-  background: var(--section-surface);
-  box-shadow: var(--section-shadow);
+  /* Phase 10A: outer chrome from .vera5-section-frame */
   container-type: inline-size;
   container-name: vera5-ip;
 }
@@ -1618,13 +1771,13 @@
 .vera5-popup[data-host="sidepanel"] .vera5-ip-header {
   display: flex;
   flex: 0 0 auto;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--sp-3);
   min-height: var(--section-header-min-h);
-  padding: var(--section-header-pad-y) var(--section-pad-x);
+  padding: var(--sp-2) var(--section-pad-x);
   border-bottom: 0;
-  background: linear-gradient(180deg, rgba(255, 178, 36, 0.05), transparent 70%);
+  /* Header wash comes from .vera5-section-frame > .vera5-section-header */
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-investigation-paths > .vera5-section-divider {
@@ -1679,18 +1832,32 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-group--inset {
+  position: relative;
   padding: 9px 10px 10px;
-  border: 1px solid var(--border-soft);
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--surface-page) 60%, var(--surface-1));
+  border: var(--bw-thin) solid var(--surface-instrument-border);
+  border-radius: var(--radius-instrument);
+  background: var(--surface-instrument);
+  box-shadow: var(--shadow-instrument);
   max-width: min(100%, calc(var(--tech-value-max) + 7rem));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group--inset::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 2px;
+  background: var(--frame-registration);
+  opacity: 0.75;
+  pointer-events: none;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-group--open {
   padding: var(--sp-3) 0 0;
   margin: 0;
   border: 0;
-  border-top: var(--bw-thin) solid var(--divider-quiet);
+  border-top: var(--bw-thin) solid var(--divider-section);
   border-radius: 0;
   background: transparent;
 }
@@ -1814,36 +1981,75 @@
   margin: 0;
 }
 
-/* Recommended Actions */
-.vera5-popup[data-host="sidepanel"] .vera5-ip-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
+/* Phase 10C — Recommended Path workflow (replaces 2×2 action tiles). */
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 16%, var(--border-soft));
+  border-radius: var(--radius-data);
+  background: var(--surface-data);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28);
+  overflow: hidden;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-ip-action {
-  display: flex;
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-item {
+  margin: 0;
+  padding: 0;
+  border-top: var(--bw-thin) solid var(--divider-row);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-item:first-child {
+  border-top: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-row {
+  --workflow-cols: 3px 28px 18px minmax(0, 1fr) minmax(72px, auto) 18px;
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--workflow-cols);
   align-items: center;
-  gap: var(--ctrl-gap-icon);
-  min-height: 36px;
-  padding: 7px 9px;
-  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 26%, var(--border-hard));
-  border-radius: var(--r-card);
-  background:
-    linear-gradient(180deg, rgba(255, 178, 36, 0.06), transparent 60%),
-    var(--elev-raised);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  column-gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 8px 10px 8px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--text-primary);
   font-family: var(--font-ui);
-  font-size: var(--fs-sm);
-  font-weight: var(--fw-strong);
-  line-height: var(--lh-control);
   text-align: left;
   cursor: pointer;
-  transition:
-    border-color var(--t-hover) var(--ease-out),
-    background-color var(--t-hover) var(--ease-out),
-    box-shadow var(--t-hover) var(--ease-out);
+  transition: background-color var(--t-hover) var(--ease-out);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-rail {
+  align-self: stretch;
+  width: 3px;
+  background: color-mix(in srgb, var(--accent) 42%, var(--border-hard));
+  opacity: 0.55;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-row:not([data-vera5-disabled="true"])
+  .vera5-ip-workflow-rail {
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-index {
+  color: color-mix(in srgb, var(--text-low) 88%, var(--state-blue));
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-align: center;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-action-icon {
@@ -1857,31 +2063,108 @@
   height: 15px;
 }
 
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .vera5-popup[data-host="sidepanel"] .vera5-ip-action-label {
   min-width: 0;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-strong);
   line-height: 1.25;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-ip-action:hover:not([data-vera5-disabled="true"]) {
-  border-color: color-mix(in srgb, var(--accent) 48%, var(--border-hard));
-  background:
-    linear-gradient(180deg, rgba(255, 178, 36, 0.1), transparent 60%),
-    var(--surface-raised);
-  box-shadow: 0 0 12px rgba(255, 178, 36, 0.08);
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-support {
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-body);
+  line-height: 1.3;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-ip-action[data-vera5-disabled="true"] {
-  border-color: var(--border-soft);
-  background: color-mix(in srgb, var(--surface-page) 68%, var(--surface-1));
-  box-shadow: none;
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-state {
+  color: color-mix(in srgb, var(--accent) 70%, var(--text-secondary));
+  font-size: var(--fs-nano);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-align: right;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-affordance {
+  display: inline-flex;
+  color: color-mix(in srgb, var(--accent) 55%, var(--text-low));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-affordance svg {
+  width: 13px;
+  height: 13px;
+  transform: rotate(-90deg);
+}
+
+.vera5-popup[data-host="sidepanel"]
+  .vera5-ip-workflow-row:hover:not([data-vera5-disabled="true"]) {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 10%, transparent), transparent 72%),
+    color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.vera5-popup[data-host="sidepanel"]
+  .vera5-ip-workflow-row:hover:not([data-vera5-disabled="true"])
+  .vera5-ip-workflow-rail {
+  opacity: 1;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.vera5-popup[data-host="sidepanel"]
+  .vera5-ip-workflow-row:hover:not([data-vera5-disabled="true"])
+  .vera5-ip-action-label {
+  color: color-mix(in srgb, var(--accent) 28%, var(--text-primary));
+}
+
+.vera5-popup[data-host="sidepanel"]
+  .vera5-ip-workflow-row:focus-visible {
+  outline: var(--focus-outline-width) solid var(--focus-color);
+  outline-offset: -2px;
+  z-index: 1;
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-row[data-vera5-disabled="true"] {
   color: var(--text-disabled);
   cursor: not-allowed;
   opacity: 1;
   filter: none;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-ip-action[data-vera5-disabled="true"] .vera5-ip-action-icon {
+.vera5-popup[data-host="sidepanel"]
+  .vera5-ip-workflow-row[data-vera5-disabled="true"]
+  .vera5-ip-action-icon {
   color: color-mix(in srgb, var(--text-disabled) 88%, var(--accent));
+}
+
+.vera5-popup[data-host="sidepanel"]
+  .vera5-ip-workflow-row[data-vera5-disabled="true"]
+  .vera5-ip-action-label {
+  color: var(--text-disabled);
+}
+
+.vera5-popup[data-host="sidepanel"]
+  .vera5-ip-workflow-row[data-vera5-disabled="true"]
+  .vera5-ip-workflow-state {
+  color: color-mix(in srgb, var(--text-disabled) 90%, var(--text-low));
+}
+
+.vera5-popup[data-host="sidepanel"]
+  .vera5-ip-workflow-row[data-vera5-disabled="true"]
+  .vera5-ip-workflow-affordance {
+  color: var(--text-low);
+  opacity: 0.35;
 }
 
 /* Intelligence Sources — rectangular source tiles (not capsules) */
@@ -1897,12 +2180,14 @@
   gap: var(--ctrl-gap-icon);
   min-height: var(--ctrl-h-source);
   padding: 6px 10px;
-  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 30%, var(--border-soft));
-  border-radius: var(--r-compact);
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 28%, var(--border-soft));
+  border-radius: var(--radius-data);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 58%),
-    color-mix(in srgb, var(--state-blue) 10%, var(--elev-raised));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 52%),
+    color-mix(in srgb, var(--state-blue) 8%, var(--elev-raised));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22);
   color: var(--text-primary);
   font-family: var(--font-ui);
   font-size: var(--fs-sm);
@@ -2004,16 +2289,16 @@
   height: 8px;
 }
 
-/* Conditional Intelligence — one disclosure group with row dividers (Phase 8). */
+/* Conditional Intelligence — open disclosure group with row dividers. */
 .vera5-popup[data-host="sidepanel"] .vera5-ip-conditional {
   display: flex;
   flex-direction: column;
   gap: 0;
   min-width: 0;
-  border: var(--bw-thin) solid var(--border-soft);
-  border-radius: var(--r-compact);
-  background: color-mix(in srgb, var(--surface-page) 72%, var(--surface-1));
-  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row,
@@ -2124,7 +2409,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-chevron,
-  .vera5-popup[data-host="sidepanel"] .vera5-ip-action,
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-row,
   .vera5-popup[data-host="sidepanel"] .vera5-ip-source,
   .vera5-popup[data-host="sidepanel"] .vera5-ip-copy {
     transition: none;
@@ -2132,8 +2417,38 @@
 }
 
 @container vera5-workspace (max-width: 339px) {
-  .vera5-popup[data-host="sidepanel"] .vera5-ip-actions {
-    grid-template-columns: minmax(0, 1fr);
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-row {
+    --workflow-cols: 3px 24px 16px minmax(0, 1fr) 16px;
+    grid-template-areas:
+      "rail index icon copy afford"
+      "rail index icon state afford";
+    row-gap: 2px;
+    align-items: start;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-rail {
+    grid-area: rail;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-index {
+    grid-area: index;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-row .vera5-ip-action-icon {
+    grid-area: icon;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-copy {
+    grid-area: copy;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-state {
+    grid-area: state;
+    text-align: left;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-affordance {
+    grid-area: afford;
   }
 }
 
@@ -2170,38 +2485,21 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-section {
-  position: relative;
-  isolation: isolate;
   margin: 0 0 var(--section-gap);
-  padding: var(--section-pad-y) var(--section-pad-x);
-  gap: var(--section-gap);
+  padding: 11px var(--section-pad-x) var(--section-pad-y);
+  gap: 10px;
   overflow: hidden;
-  /* Outer edge only — do not redefine --command-border for inner Scan controls. */
-  border: var(--bw-thin) solid rgba(96, 128, 178, 0.26);
-  border-radius: var(--command-radius);
+  /* L1 frame + denser command fill; top gold registration (no title row). */
+  --frame-border: rgba(96, 128, 178, 0.28);
   background:
+    linear-gradient(var(--frame-registration), var(--frame-registration)) 14px 0 /
+      var(--frame-signal-length) var(--frame-signal-thickness) no-repeat,
     linear-gradient(180deg, var(--command-surface-raised), var(--command-bg) 62%, var(--command-surface));
-  box-shadow:
-    inset 0 1px 0 rgba(235, 243, 255, 0.06),
-    0 2px 8px rgba(5, 10, 16, 0.22);
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-section-header {
-  padding-top: 0;
-}
-
-.vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-section-divider {
-  margin: calc(var(--section-header-pad-y) * -1) 0 0;
-}
-
-.vera5-popup[data-host="sidepanel"] .vera5-command-section::before {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background: radial-gradient(78% 130% at 100% 0%, rgba(150, 113, 255, 0.08), transparent 58%);
+/* Phase 10E/10F — SCAN PAGE anchors the card (header row removed). */
+.vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-scan-primary {
+  margin-top: 2px;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-command-section > * {
@@ -2216,8 +2514,8 @@
   min-width: 0;
   margin: 0 !important;
   padding: 3px;
-  border: 1px solid var(--command-border-soft);
-  border-radius: var(--r-card);
+  border: var(--bw-thin) solid var(--command-border-soft);
+  border-radius: var(--radius-data);
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 56%),
     color-mix(in srgb, var(--command-bg) 88%, #111a28);
@@ -2359,23 +2657,46 @@
   align-items: center;
   justify-content: center;
   gap: 12px;
-  min-height: 58px;
-  padding: 8px 16px !important;
-  border: 1px solid color-mix(in srgb, var(--command-gold-light) 68%, #b9800f) !important;
-  border-radius: var(--command-radius) !important;
+  min-height: 56px;
+  padding: 9px 16px !important;
+  border: 1px solid color-mix(in srgb, #ffe08a 52%, #a66f08) !important;
+  border-radius: 3px 8px 3px 8px !important;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.32), transparent 42%),
-    linear-gradient(180deg, #f7b52e 0%, #eca310 52%, #d08c07 100%) !important;
-  color: #14110a !important;
+    linear-gradient(180deg, rgba(255, 248, 220, 0.3) 0%, transparent 36%),
+    linear-gradient(180deg, #efb028 0%, #d9940c 46%, #b87806 100%) !important;
+  color: #12100a !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -6px 12px rgba(106, 54, 0, 0.18),
-    0 0 18px rgba(255, 178, 36, 0.14),
-    0 8px 20px rgba(0, 0, 0, 0.3);
+    inset 0 1px 0 rgba(255, 255, 255, 0.46),
+    inset 0 -8px 14px rgba(90, 48, 0, 0.24),
+    inset 0 0 0 1px rgba(80, 42, 0, 0.14),
+    0 1px 0 rgba(255, 220, 140, 0.14),
+    var(--shadow-hero);
   transition:
     filter var(--t-hover) var(--ease-out),
     box-shadow var(--t-hover) var(--ease-out),
     transform 90ms var(--ease-out);
+}
+
+/* Side registration ticks — instrument command, not website CTA */
+.vera5-popup[data-host="sidepanel"] .vera5-scan-primary .vera5-scan-page-cta::before,
+.vera5-popup[data-host="sidepanel"] .vera5-scan-primary .vera5-scan-page-cta::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 14px;
+  margin-top: -7px;
+  background: color-mix(in srgb, #3a2808 55%, transparent);
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-scan-primary .vera5-scan-page-cta::before {
+  left: 8px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-scan-primary .vera5-scan-page-cta::after {
+  right: 8px;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-scan-page-icon {
@@ -2445,16 +2766,17 @@
   justify-content: center;
   gap: 10px;
   min-width: 0;
-  min-height: 50px;
+  min-height: 48px;
   padding: 7px 12px !important;
-  border: var(--bw-thin) solid color-mix(in srgb, var(--command-gold) 72%, var(--command-border)) !important;
-  border-radius: var(--r-card) !important;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--command-gold) 58%, var(--command-border)) !important;
+  border-radius: 3px 8px 3px 8px !important;
   background:
-    linear-gradient(180deg, rgba(255, 214, 111, 0.16), rgba(120, 72, 0, 0.1) 62%, transparent),
-    var(--command-surface) !important;
+    linear-gradient(180deg, rgba(255, 220, 140, 0.12), transparent 44%),
+    linear-gradient(180deg, color-mix(in srgb, var(--command-surface-raised) 90%, #1c2432), var(--command-surface)) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 236, 172, 0.12),
-    0 0 13px rgba(255, 178, 36, 0.09) !important;
+    inset 0 1px 0 rgba(255, 236, 172, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+    0 2px 8px rgba(0, 0, 0, 0.22) !important;
   color: var(--command-gold-light) !important;
   font-family: var(--font-ui);
   text-align: center;
@@ -2466,13 +2788,15 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-secondary-command:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--command-gold-light) 86%, var(--command-border)) !important;
+  border-color: color-mix(in srgb, var(--command-gold-light) 78%, var(--command-border)) !important;
   background:
-    linear-gradient(180deg, rgba(255, 214, 111, 0.22), rgba(139, 83, 0, 0.14) 64%, transparent),
-    var(--command-surface-raised) !important;
+    linear-gradient(180deg, rgba(255, 220, 140, 0.18), transparent 48%),
+    linear-gradient(180deg, color-mix(in srgb, var(--command-surface-raised) 96%, #243040), var(--command-surface-raised)) !important;
   box-shadow:
-    inset 0 1px 0 rgba(255, 236, 172, 0.18),
-    0 0 17px rgba(255, 178, 36, 0.16) !important;
+    inset 0 1px 0 rgba(255, 236, 172, 0.2),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 0 16px rgba(255, 178, 36, 0.14),
+    0 3px 10px rgba(0, 0, 0, 0.28) !important;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-secondary-command:active:not(:disabled) {
@@ -2624,8 +2948,10 @@
 .vera5-popup[data-host="sidepanel"] .vera5-workspace-footer {
   margin-top: 0;
   padding: 7px var(--ws-chassis-gutter);
-  /* Opaque dark lower frame — no chassis bleed through translucency. */
+  /* Opaque dark lower frame — structural termination of the console. */
+  border-top: var(--bw-thin) solid color-mix(in srgb, var(--command-gold, #ffb224) 18%, #0a1018);
   background: linear-gradient(180deg, #111927 0%, #080c13 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 -2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .vera5-workspace-footer-meta {
@@ -3003,6 +3329,8 @@
   flex: 0 0 auto;
   min-height: 0;
   height: fit-content;
+  /* Phase 10A: outer chrome from .vera5-section-frame (overrides border/radius/shadow). */
+  overflow: visible;
 }
 
 .vera5-intel-feed-body--empty {
@@ -3075,22 +3403,27 @@
   align-items: center;
   justify-content: center;
   gap: var(--ctrl-gap-icon);
-  min-height: var(--ctrl-h-compact);
-  padding: 6px 8px;
-  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 34%, var(--border-soft));
-  border-radius: var(--r-compact);
+  min-height: 30px;
+  padding: 6px 9px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 42%, var(--border-hard));
+  border-radius: 3px 7px 3px 7px;
   background:
-    linear-gradient(180deg, rgba(255, 178, 36, 0.07), transparent 58%),
-    var(--elev-raised);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  color: var(--text-primary);
+    linear-gradient(180deg, rgba(255, 220, 140, 0.11), transparent 40%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 88%, #161e2a), color-mix(in srgb, var(--surface-1) 94%, #0a1018));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 180, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    0 1px 3px rgba(0, 0, 0, 0.28);
+  color: color-mix(in srgb, var(--accent) 55%, var(--text-primary));
   font: var(--fw-strong) var(--fs-micro)/var(--lh-control) var(--font-ui);
-  letter-spacing: 0.01em;
+  letter-spacing: 0.02em;
   cursor: pointer;
   transition:
     border-color var(--t-hover) var(--ease-out),
     color var(--t-hover) var(--ease-out),
-    background-color var(--t-hover) var(--ease-out);
+    background-color var(--t-hover) var(--ease-out),
+    box-shadow var(--t-hover) var(--ease-out),
+    transform 90ms var(--ease-out);
 }
 
 .vera5-intel-empty-actions button svg,
@@ -3105,19 +3438,41 @@
 
 .vera5-intel-empty-actions button:disabled,
 .vera5-intel-export-actions button:disabled {
-  border-color: color-mix(in srgb, var(--border-soft) 88%, var(--text-secondary));
-  background: color-mix(in srgb, var(--surface-page) 70%, var(--surface-1));
-  box-shadow: none;
+  border-color: color-mix(in srgb, var(--border-soft) 78%, transparent);
+  background: color-mix(in srgb, var(--surface-page) 62%, var(--surface-1));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
   color: var(--text-disabled);
   cursor: not-allowed;
   filter: none;
   opacity: 1;
+  transform: none;
 }
 
 .vera5-intel-export-actions button:hover:not(:disabled),
 .vera5-intel-more-formats button:hover {
-  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-soft));
+  border-color: color-mix(in srgb, var(--accent) 68%, var(--border-soft));
   color: var(--accent-hover);
+  background:
+    linear-gradient(180deg, rgba(255, 220, 140, 0.16), transparent 44%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 94%, #1c2634), var(--surface-raised));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 180, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 0 14px rgba(255, 178, 36, 0.12),
+    0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.vera5-intel-export-actions button:active:not(:disabled),
+.vera5-intel-more-formats button:active {
+  transform: translateY(1px);
+}
+
+.vera5-intel-export-actions .vera5-export-action--more {
+  grid-column: 1 / -1;
+  margin-top: 1px;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border-hard));
+  color: var(--accent-hover);
+  letter-spacing: 0.03em;
 }
 
 .vera5-intel-export-actions button:focus-visible,
@@ -3130,33 +3485,37 @@
   outline-offset: 2px;
 }
 
-/* Selected IOC + VERA5 score + findings/export. */
+/* Selected IOC + VERA5 score + findings/export — Level 2 instrument deck. */
 .vera5-intel-feed-summary-row {
+  position: relative;
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: minmax(168px, 0.92fr) minmax(132px, 0.72fr) minmax(300px, 2fr);
-  gap: 8px;
+  grid-template-columns: minmax(168px, 0.92fr) minmax(140px, 0.78fr) minmax(288px, 1.95fr);
+  gap: 1px;
   align-items: stretch;
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  padding: 1px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 16%, var(--border-soft));
+  border-radius: var(--radius-instrument);
+  background:
+    linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 22%, transparent) 50%, transparent)
+      0 0 / 100% 1px no-repeat,
+    color-mix(in srgb, var(--surface-page) 55%, #0a1018);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28);
 }
 
 .vera5-intel-feed-command,
-.vera5-intel-feed-score,
 .vera5-intel-findings-card {
   box-sizing: border-box;
   min-width: 0;
   min-height: var(--intel-summary-min);
   padding: 9px 10px;
-  border: 1px solid color-mix(in srgb, var(--state-blue) 18%, var(--border-soft));
-  border-radius: var(--r-md);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 52%),
-    color-mix(in srgb, var(--surface-1) 92%, #0c1421);
-  box-shadow:
-    inset 0 1px 0 rgba(245, 247, 250, 0.045),
-    var(--shadow-low);
+  border: 0;
+  border-radius: 0;
+  background: var(--surface-instrument);
+  box-shadow: none;
 }
 
 .vera5-intel-feed-command {
@@ -3167,6 +3526,18 @@
   align-content: stretch;
   position: relative;
   z-index: 5;
+  border-radius: calc(var(--frame-r-sharp) - 1px) 0 0 calc(var(--frame-r-sharp) - 1px);
+  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--state-blue) 18%, transparent);
+}
+
+.vera5-intel-findings-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  gap: 7px;
+  border-radius: 0 calc(var(--frame-r-soft) - 2px) calc(var(--frame-r-sharp) - 1px) 0;
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--state-blue) 18%, transparent);
 }
 
 .vera5-intel-feed-command > strong {
@@ -3208,29 +3579,53 @@
   align-items: center;
   justify-content: center;
   gap: var(--ctrl-gap-icon);
-  min-height: var(--ctrl-h-compact);
-  padding: 6px 8px;
-  border: var(--bw-thin) solid var(--border-accent);
-  border-radius: var(--r-compact);
+  min-height: 30px;
+  padding: 6px 9px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 52%, var(--border-hard));
+  border-radius: 3px 7px 3px 7px;
   background:
-    linear-gradient(180deg, rgba(255, 178, 36, 0.08), transparent 58%),
-    var(--elev-raised);
+    linear-gradient(180deg, rgba(255, 220, 140, 0.14), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 90%, #1a2230), color-mix(in srgb, var(--surface-1) 94%, #0a1018));
   color: var(--accent-hover);
   font: var(--fw-strong) var(--fs-micro)/var(--lh-control) var(--font-ui);
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   cursor: pointer;
-  box-shadow: var(--highlight-top);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 180, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.34),
+    0 1px 4px rgba(0, 0, 0, 0.28);
+  list-style: none;
   transition:
     border-color var(--t-hover) var(--ease-out),
-    background-color var(--t-hover) var(--ease-out);
+    background-color var(--t-hover) var(--ease-out),
+    box-shadow var(--t-hover) var(--ease-out),
+    transform 90ms var(--ease-out);
 }
 
 .vera5-intel-feed-enrich:hover:not(:disabled),
 .vera5-intel-feed-pivots > summary:hover {
-  border-color: color-mix(in srgb, var(--accent) 62%, var(--border-soft));
+  border-color: color-mix(in srgb, var(--accent) 74%, var(--border-soft));
   background:
-    linear-gradient(180deg, rgba(255, 178, 36, 0.12), transparent 58%),
-    var(--surface-raised);
+    linear-gradient(180deg, rgba(255, 220, 140, 0.2), transparent 46%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 96%, #222c3c), var(--surface-raised));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 236, 180, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 0 14px rgba(255, 178, 36, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.vera5-intel-feed-enrich:active:not(:disabled),
+.vera5-intel-feed-pivots > summary:active {
+  transform: translateY(1px);
+}
+
+.vera5-intel-feed-enrich:disabled {
+  border-color: color-mix(in srgb, var(--border-soft) 80%, transparent);
+  background: color-mix(in srgb, var(--surface-page) 65%, var(--surface-1));
+  box-shadow: none;
+  color: var(--text-disabled);
+  cursor: not-allowed;
 }
 
 .vera5-intel-analyst-note > summary {
@@ -3256,73 +3651,174 @@
   display: none;
 }
 
+/* Phase 10E/10F — full-card state-colored 3D glass score (hero within instrument deck). */
 .vera5-intel-feed-score {
   --score-accent: var(--text-low);
+  --score-glass: color-mix(in srgb, var(--score-accent) 28%, transparent);
+  box-sizing: border-box;
+  position: relative;
+  z-index: 6;
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: center;
   gap: 2px;
+  min-width: 0;
+  min-height: var(--intel-summary-min);
+  margin: -1px 0;
+  padding: 10px 10px 11px;
   text-align: center;
+  isolation: isolate;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--score-accent) 52%, rgba(255, 255, 255, 0.1));
+  border-radius: 0;
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.14) 0%, transparent 36%),
+    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--score-accent) 40%, transparent), transparent 58%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--score-accent) 30%, #1a1214) 0%,
+      color-mix(in srgb, var(--score-accent) 16%, #0e121a) 48%,
+      color-mix(in srgb, var(--score-accent) 9%, #080c12) 100%
+    );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -12px 24px color-mix(in srgb, var(--score-accent) 14%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--score-accent) 20%, rgba(0, 0, 0, 0.45)),
+    0 0 22px color-mix(in srgb, var(--score-accent) 16%, transparent),
+    var(--shadow-hero);
+}
+
+.vera5-intel-feed-score::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(125deg, rgba(255, 255, 255, 0.14) 0%, transparent 40%, transparent 62%, color-mix(in srgb, var(--score-accent) 12%, transparent) 100%);
+  opacity: 0.7;
+  z-index: 0;
+}
+
+.vera5-intel-feed-score::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 0;
+  height: 2px;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--score-accent) 70%, white),
+    transparent
+  );
+  opacity: 0.55;
+  z-index: 1;
+}
+
+.vera5-intel-feed-score > * {
+  position: relative;
+  z-index: 2;
 }
 
 .vera5-intel-feed-score > span,
 .vera5-intel-feed-score > small {
-  color: var(--text-secondary);
+  color: color-mix(in srgb, var(--score-accent) 62%, #f4f1ea);
   font-size: var(--fs-pico);
   text-transform: uppercase;
 }
 
+.vera5-intel-feed-score > span:first-child {
+  letter-spacing: 0.14em;
+  font-weight: var(--fw-bold);
+  color: color-mix(in srgb, var(--score-accent) 45%, #fff6e8);
+  text-shadow: 0 0 12px color-mix(in srgb, var(--score-accent) 28%, transparent);
+}
+
 .vera5-intel-score-meter {
   position: relative;
-  width: 82px;
-  height: 41px;
-  margin: 3px auto 0;
+  width: 96px;
+  height: 48px;
+  margin: 5px auto 0;
   overflow: hidden;
+  border-radius: 50px 50px 0 0;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--score-accent) 12%, transparent), transparent),
+    color-mix(in srgb, #05080e 72%, transparent);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--score-accent) 36%, transparent),
+    inset 0 8px 14px rgba(0, 0, 0, 0.35);
 }
 
 .vera5-intel-score-meter::before {
   content: "";
   position: absolute;
   inset: 0 auto auto 0;
-  width: 82px;
-  height: 82px;
+  width: 96px;
+  height: 96px;
   border-radius: 50%;
   background: conic-gradient(
     from 270deg,
     var(--score-accent) 0deg var(--vera5-score-angle),
-    color-mix(in srgb, var(--border-hard) 72%, transparent) var(--vera5-score-angle) 180deg,
+    color-mix(in srgb, #1a2230 78%, transparent) var(--vera5-score-angle) 180deg,
     transparent 180deg 360deg
   );
-  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--score-accent) 28%, transparent));
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--score-accent) 48%, transparent));
 }
 
 .vera5-intel-score-meter > span {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 66px;
-  height: 66px;
+  top: 9px;
+  left: 9px;
+  width: 78px;
+  height: 78px;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--surface-1) 94%, #0c1421);
+  background:
+    radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--score-accent) 22%, transparent), transparent 58%),
+    linear-gradient(180deg, color-mix(in srgb, var(--score-accent) 16%, #141820), color-mix(in srgb, #070b12 94%, black));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -6px 12px rgba(0, 0, 0, 0.35);
 }
 
 .vera5-intel-feed-score > strong {
-  z-index: 1;
-  margin: -16px 0 0;
-  color: var(--score-accent);
-  font: var(--fw-bold) var(--fs-score)/var(--lh-score) var(--font-display);
-  text-shadow: 0 0 12px color-mix(in srgb, var(--score-accent) 26%, transparent);
+  z-index: 2;
+  margin: -18px 0 0;
+  color: color-mix(in srgb, var(--score-accent) 82%, white);
+  font: var(--fw-bold) clamp(1.6rem, 2.5vw, 1.95rem) / var(--lh-score) var(--font-display);
+  letter-spacing: -0.03em;
+  text-shadow:
+    0 0 18px color-mix(in srgb, var(--score-accent) 48%, transparent),
+    0 1px 0 rgba(0, 0, 0, 0.45);
 }
 
 .vera5-intel-feed-score > strong > span {
   margin-left: 1px;
-  color: var(--text-secondary);
-  font: var(--fw-strong) var(--fs-micro)/var(--lh-score) var(--font-ui);
+  color: color-mix(in srgb, var(--score-accent) 50%, #d8d2c8);
+  font: var(--fw-strong) var(--fs-micro) / var(--lh-score) var(--font-ui);
 }
 
 .vera5-intel-feed-score > small {
-  font-weight: 700;
-  letter-spacing: 0.085em;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: color-mix(in srgb, var(--score-accent) 78%, white);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--score-accent) 35%, transparent);
+}
+
+.vera5-intel-feed-score .vera5-intel-enrichment-status {
+  margin: 3px 0 0;
+  max-width: 100%;
+  color: color-mix(in srgb, var(--score-accent) 35%, #c8c2b8);
+  font-size: var(--fs-nano);
+  font-weight: 560;
+  line-height: 1.25;
+}
+
+.vera5-intel-feed-score[data-vera5-score-band="pending"] {
+  --score-accent: color-mix(in srgb, var(--state-blue) 62%, #8aa4c4);
 }
 
 .vera5-intel-feed-score[data-vera5-score-band="red"] {
@@ -3345,14 +3841,6 @@
   --score-accent: var(--score-zero);
 }
 
-.vera5-intel-findings-card {
-  position: relative;
-  display: grid;
-  grid-template-rows: auto auto auto;
-  align-content: start;
-  gap: 7px;
-}
-
 .vera5-intel-findings-card h3 {
   margin: 0;
   color: var(--text-secondary);
@@ -3372,31 +3860,23 @@
   white-space: normal;
 }
 
-/* Visual grouping: copy row → file row → more (no DOM reorder). */
-.vera5-intel-export-actions .vera5-export-action--file,
-.vera5-intel-export-actions .vera5-export-action--more {
-  margin-top: 2px;
-}
-
-.vera5-intel-export-actions .vera5-export-action--more {
-  grid-column: 1 / -1;
-}
-
 .vera5-intel-more-formats {
   position: absolute;
   z-index: 35;
-  top: 67px;
+  top: 62px;
   right: 11px;
   display: grid;
-  gap: 4px;
-  width: min(220px, calc(100% - 22px));
-  max-height: min(260px, 46dvh);
-  padding: 6px;
+  gap: 2px;
+  width: min(252px, calc(100% - 22px));
+  max-height: min(320px, 52dvh);
+  padding: 8px;
   overflow-y: auto;
-  border: 1px solid color-mix(in srgb, var(--state-blue) 30%, var(--border-hard));
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--surface-raised) 96%, #07101c);
-  box-shadow: var(--shadow-high);
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 30%, var(--border-hard));
+  border-radius: var(--radius-instrument);
+  background:
+    linear-gradient(180deg, rgba(255, 220, 140, 0.05), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 94%, #0c1520), color-mix(in srgb, var(--surface-1) 96%, #071018));
+  box-shadow: var(--shadow-popover);
 }
 
 .vera5-intel-more-formats[hidden] {
@@ -3452,71 +3932,181 @@
   line-height: 1.25;
 }
 
-/* Source evidence grid — Phase 6: STANDARD default = 3 columns. */
-.vera5-intel-feed-sources {
-  display: grid;
+/* Phase 10B/10D — Vendor evidence matrix (operational evidence list). */
+.vera5-evidence-matrix {
+  display: flex;
   flex: 0 0 auto;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: minmax(var(--intel-card-height-ops), auto);
-  gap: 7px;
+  flex-direction: column;
+  gap: var(--sp-2);
   min-width: 0;
-  align-items: stretch;
-  justify-content: start;
 }
 
-.vera5-intel-source-card {
-  --source-accent: color-mix(in srgb, var(--state-blue) 32%, var(--border-soft));
-  --source-tint: #111926;
+.vera5-evidence-matrix-identity {
   position: relative;
-  display: grid;
-  grid-template-rows: auto minmax(22px, 1fr) auto;
-  gap: 3px;
-  box-sizing: border-box;
-  min-width: 0;
-  height: auto;
-  min-height: var(--intel-card-height-ops);
-  max-height: none;
-  padding: 7px 9px 7px;
-  border: 1px solid color-mix(in srgb, var(--source-accent) 58%, var(--border-soft));
-  border-radius: var(--r-md);
-  background:
-    radial-gradient(100% 90% at 100% 0%, color-mix(in srgb, var(--source-accent) 12%, transparent), transparent 62%),
-    linear-gradient(145deg, color-mix(in srgb, var(--surface-1) 82%, #080d15), var(--source-tint));
-  box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--source-accent) 48%, rgba(255, 255, 255, 0.04)),
-    inset 0 1px 0 rgba(245, 247, 250, 0.04),
-    0 0 10px color-mix(in srgb, var(--source-accent) 8%, transparent);
-  overflow: hidden;
-}
-
-.vera5-intel-source-card[data-vera5-score-band] {
-  height: var(--intel-card-height);
-  min-height: var(--intel-card-height);
-  max-height: var(--intel-card-height);
-  grid-template-rows: auto minmax(28px, 1fr) auto;
-  gap: 4px;
-  padding: 8px 9px 8px;
-}
-
-.vera5-intel-source-card[data-vera5-info-open="true"] {
-  z-index: 30;
-  overflow: visible;
-  max-height: none;
-}
-
-.vera5-intel-source-header {
   display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
-  align-items: center;
-  gap: 6px;
-  min-height: 0;
+  gap: 4px 12px;
+  min-width: 0;
+  padding: 2px 2px 4px 0;
+  border-bottom: var(--bw-thin) solid var(--divider-frame);
 }
 
-.vera5-intel-source-header > div {
+.vera5-evidence-matrix-identity::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: var(--frame-signal-length);
+  height: var(--frame-signal-thickness);
+  background: var(--frame-registration);
+  pointer-events: none;
+}
+
+.vera5-evidence-matrix-title {
+  margin: 0;
+  padding-left: 0;
+  color: color-mix(in srgb, var(--accent) 78%, var(--text-secondary));
+  font-family: var(--font-ui);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-heading);
+  line-height: var(--lh-tight);
+  text-transform: uppercase;
+}
+
+.vera5-evidence-matrix-meta {
+  margin: 0;
+  color: color-mix(in srgb, var(--text-secondary) 72%, var(--text-low));
+  font-size: var(--fs-nano);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.01em;
+  line-height: var(--lh-label);
+  text-align: right;
+}
+
+.vera5-evidence-matrix-shell {
+  --evidence-rail: 3px;
+  --evidence-cols: var(--evidence-rail) minmax(118px, 1.15fr) minmax(72px, auto) minmax(92px, auto)
+    minmax(110px, 1.45fr) 28px;
+  --source-accent: color-mix(in srgb, var(--state-blue) 36%, var(--text-secondary));
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 16%, var(--border-soft));
+  border-radius: var(--radius-data);
+  background: var(--surface-data);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  overflow: visible;
+}
+
+.vera5-evidence-matrix-head,
+.vera5-evidence-row {
+  display: grid;
+  grid-template-columns: var(--evidence-cols);
+  align-items: center;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+.vera5-evidence-matrix-head {
+  padding: 6px 8px 6px 0;
+  border-bottom: var(--bw-thin) solid color-mix(in srgb, var(--accent) 16%, var(--border-soft));
+  color: color-mix(in srgb, var(--text-secondary) 80%, var(--text-low));
+  font-size: var(--fs-nano);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.07em;
+  line-height: var(--lh-tight);
+  text-transform: uppercase;
+  background: color-mix(in srgb, var(--surface-raised) 35%, transparent);
+}
+
+.vera5-evidence-row {
+  position: relative;
+  padding: 7px 8px 7px 0;
+  border-bottom: var(--bw-thin) solid var(--divider-row);
+  background: transparent;
+  transition:
+    background-color var(--t-hover) var(--ease-out),
+    box-shadow var(--t-hover) var(--ease-out);
+}
+
+.vera5-evidence-row--actionable:active {
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+.vera5-evidence-row:last-child {
+  border-bottom: 0;
+}
+
+.vera5-evidence-row--actionable {
+  cursor: pointer;
+}
+
+.vera5-evidence-row--actionable:hover {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--source-accent) 12%, transparent), transparent 68%),
+    color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.vera5-evidence-row--actionable:hover .vera5-evidence-rail {
+  opacity: 1;
+  box-shadow: 0 0 8px color-mix(in srgb, var(--source-accent) 40%, transparent);
+}
+
+.vera5-evidence-row--actionable:focus-visible {
+  outline: none;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
+    color-mix(in srgb, var(--accent) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.vera5-evidence-row--actionable:focus-visible .vera5-evidence-source-name {
+  color: color-mix(in srgb, var(--accent) 55%, var(--text-primary));
+}
+
+.vera5-evidence-row[data-vera5-info-open="true"] {
+  z-index: 30;
+}
+
+.vera5-evidence-rail {
+  width: var(--evidence-rail);
+  align-self: stretch;
+  min-height: 100%;
+  background: var(--source-accent);
+  opacity: 0.92;
+}
+
+.vera5-evidence-matrix-head .vera5-evidence-rail {
+  visibility: hidden;
+}
+
+.vera5-evidence-source {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 6px;
+}
+
+.vera5-evidence-source-name {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--fs-title);
+  font-weight: var(--fw-strong);
+  line-height: var(--lh-tight);
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vera5-evidence-row--actionable:hover .vera5-evidence-source-name {
+  color: color-mix(in srgb, var(--accent) 40%, var(--text-primary));
 }
 
 .vera5-vendor-mark {
@@ -3543,168 +4133,148 @@
   object-fit: contain;
 }
 
-.vera5-intel-source-header strong {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: var(--fs-title);
-  font-weight: var(--fw-strong);
-  line-height: var(--lh-tight);
-  text-overflow: ellipsis;
+.vera5-evidence-result {
+  min-width: 0;
+}
+
+.vera5-evidence-score {
+  color: var(--source-accent);
+  font: var(--fw-bold) var(--fs-heading) / var(--lh-tight) var(--font-display);
+  letter-spacing: -0.02em;
   white-space: nowrap;
 }
 
-.vera5-intel-source-header > div > span,
-.vera5-intel-source-header .vera5-risk-label {
-  flex-shrink: 0;
-  color: var(--source-accent);
-  font: var(--fw-strong) var(--fs-micro)/var(--lh-tight) var(--font-ui);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.vera5-intel-source-header .vera5-intel-info-button {
-  flex-basis: 19px;
-  width: 19px;
-  height: 19px;
-  padding: 2px;
-  color: var(--source-accent);
-}
-
-.vera5-intel-source-center {
-  display: grid;
-  place-items: center;
-  min-width: 0;
-  text-align: center;
-}
-
-.vera5-intel-source-score {
-  color: var(--source-accent);
-  font: var(--fw-bold) var(--fs-score)/var(--lh-score) var(--font-display);
-  letter-spacing: -0.025em;
-  text-shadow: 0 0 13px color-mix(in srgb, var(--source-accent) 30%, transparent);
-}
-
-.vera5-intel-source-score > span {
+.vera5-evidence-score > span {
   margin-left: 1px;
-  color: color-mix(in srgb, var(--source-accent) 64%, var(--text-secondary));
+  color: color-mix(in srgb, var(--source-accent) 58%, var(--text-secondary));
   font: 700 10px/1 var(--font-ui);
   letter-spacing: 0;
 }
 
-.vera5-intel-source-state-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  max-width: 100%;
+.vera5-evidence-state {
   color: var(--source-accent);
-  font: var(--fw-strong) var(--fs-sm)/var(--lh-tight) var(--font-ui);
+  font: var(--fw-strong) var(--fs-micro) / var(--lh-tight) var(--font-ui);
+  letter-spacing: 0.02em;
   overflow-wrap: anywhere;
 }
 
-.vera5-intel-source-state-label::before {
-  content: "";
-  flex: 0 0 var(--status-dot);
-  width: var(--status-dot);
-  height: var(--status-dot);
-  border-radius: 50%;
-  background: var(--source-accent);
-  box-shadow: 0 0 6px color-mix(in srgb, var(--source-accent) 40%, transparent);
+.vera5-evidence-classification {
+  min-width: 0;
 }
 
-.vera5-intel-source-signal {
+.vera5-evidence-classification .vera5-risk-label {
+  color: var(--source-accent);
+  font: var(--fw-strong) var(--fs-micro) / var(--lh-tight) var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vera5-evidence-classification-empty {
+  color: var(--text-low);
+  opacity: 0.35;
+  font-size: var(--fs-micro);
+}
+
+.vera5-evidence-detail {
+  min-width: 0;
+}
+
+.vera5-evidence-signal {
   margin: 0;
-  align-self: end;
-  min-height: 1.25em;
   color: color-mix(in srgb, var(--text-primary) 88%, var(--source-accent));
   font-size: var(--fs-micro);
   font-weight: 520;
-  line-height: 1.25;
-  text-align: center;
+  line-height: 1.32;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
 
-.vera5-intel-source-signal--empty {
+.vera5-evidence-signal--empty {
   visibility: hidden;
   min-height: 0;
   -webkit-line-clamp: unset;
 }
 
+.vera5-evidence-utility {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.vera5-evidence-utility .vera5-intel-info-button {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  color: var(--source-accent);
+}
+
 .vera5-intel-source-details {
-  top: 32px;
-  right: 8px;
-  width: calc(100% - 16px);
+  top: calc(100% + 4px);
+  right: 0;
+  width: min(280px, 72vw);
 }
 
-.vera5-intel-source-card[data-vera5-score-band="red"] {
+.vera5-evidence-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.vera5-evidence-row[data-vera5-score-band="red"] {
   --source-accent: var(--intel-critical);
-  --source-tint: #2a0c16;
 }
 
-.vera5-intel-source-card[data-vera5-score-band="orange"] {
+.vera5-evidence-row[data-vera5-score-band="orange"] {
   --source-accent: var(--intel-high);
-  --source-tint: #291709;
 }
 
-.vera5-intel-source-card[data-vera5-score-band="yellow"] {
+.vera5-evidence-row[data-vera5-score-band="yellow"] {
   --source-accent: var(--intel-suspicious);
-  --source-tint: #262109;
 }
 
-.vera5-intel-source-card[data-vera5-score-band="zero"] {
-  --source-accent: var(--score-zero);
-  border-color: color-mix(in srgb, var(--score-zero) 48%, var(--border-hard));
-  background:
-    radial-gradient(90% 80% at 50% 0%, color-mix(in srgb, var(--score-zero) 18%, transparent), transparent 58%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 88%, #121820), var(--surface-1));
-}
-
-/* Valid 0 remains a scored result — keep score typography prominent, never muted like unavailable. */
-.vera5-intel-source-card[data-vera5-score-band="zero"] .vera5-intel-source-score {
-  color: var(--score-zero);
-  opacity: 1;
-  filter: none;
-}
-
-.vera5-intel-source-card[data-vera5-score-band="gold"] {
+.vera5-evidence-row[data-vera5-score-band="gold"] {
   --source-accent: var(--intel-low);
-  --source-tint: #21180d;
 }
 
-.vera5-intel-source-card[data-vera5-source-status="error"] {
+.vera5-evidence-row[data-vera5-score-band="zero"] {
+  --source-accent: var(--score-zero);
+}
+
+.vera5-evidence-row[data-vera5-source-status="error"] {
   --source-accent: var(--intel-critical);
-  --source-tint: #260b14;
 }
 
-.vera5-intel-source-card[data-vera5-source-status="pivot-only"] {
+.vera5-evidence-row[data-vera5-source-status="pivot-only"] {
   --source-accent: var(--intel-pivot);
-  --source-tint: #0b1930;
 }
 
-.vera5-intel-source-card[data-vera5-source-status="disabled"] {
+.vera5-evidence-row[data-vera5-source-status="disabled"] {
   --source-accent: var(--state-white);
-  --source-tint: #171b21;
 }
 
-.vera5-intel-source-card[data-vera5-source-status="not-configured"] {
+.vera5-evidence-row[data-vera5-source-status="not-configured"] {
   --source-accent: var(--intel-setup);
-  --source-tint: #18102c;
 }
 
-.vera5-intel-source-card[data-vera5-source-state="no-report"] {
+.vera5-evidence-row[data-vera5-source-state="no-report"] {
   --source-accent: color-mix(in srgb, var(--intel-setup) 72%, var(--state-blue));
-  --source-tint: #11152b;
 }
 
-.vera5-intel-source-card[data-vera5-source-state="not-enriched"],
-.vera5-intel-source-card[data-vera5-source-state="no-data"],
-.vera5-intel-source-card[data-vera5-source-state="loading"],
-.vera5-intel-source-card[data-vera5-source-state="neutral"] {
+.vera5-evidence-row[data-vera5-source-state="not-enriched"],
+.vera5-evidence-row[data-vera5-source-state="no-data"],
+.vera5-evidence-row[data-vera5-source-state="loading"],
+.vera5-evidence-row[data-vera5-source-state="neutral"] {
   --source-accent: color-mix(in srgb, var(--state-blue) 44%, var(--text-secondary));
-  --source-tint: #111925;
 }
 
 .vera5-intel-feed-pivots {
@@ -3816,8 +4386,9 @@
     justify-content: flex-start;
   }
 
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-sources {
-    grid-template-columns: repeat(4, minmax(var(--vendor-card-min), 1fr));
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-matrix-shell {
+    --evidence-cols: var(--evidence-rail) minmax(132px, 1fr) minmax(78px, auto) minmax(100px, auto)
+      minmax(160px, 1.8fr) 28px;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-popup-workspace {
@@ -3839,8 +4410,9 @@
 }
 
 @container vera5-workspace (min-width: 1400px) {
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-sources {
-    grid-template-columns: repeat(5, minmax(200px, 1fr));
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-matrix-shell {
+    --evidence-cols: var(--evidence-rail) minmax(148px, 0.95fr) minmax(82px, auto) minmax(108px, auto)
+      minmax(220px, 2fr) 28px;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-command-section > .vera5-scan-primary,
@@ -3851,8 +4423,8 @@
 }
 
 @container vera5-ip (min-width: 560px) {
-  .vera5-popup[data-host="sidepanel"] .vera5-ip-actions {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-row {
+    --workflow-cols: 3px 32px 18px minmax(0, 1fr) minmax(88px, auto) 18px;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-ip-sources {
@@ -3914,6 +4486,59 @@
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-body--empty {
     max-width: 100%;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-matrix-shell {
+    --evidence-cols: var(--evidence-rail) minmax(0, 1fr) auto auto 28px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-matrix-head {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-row {
+    grid-template-areas:
+      "rail source result class info"
+      "rail evidence evidence evidence evidence";
+    grid-template-columns: var(--evidence-rail) minmax(0, 1fr) auto auto 28px;
+    row-gap: 2px;
+    align-items: start;
+    padding-block: 7px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-row .vera5-evidence-rail {
+    grid-area: rail;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-row .vera5-evidence-source {
+    grid-area: source;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-row .vera5-evidence-result {
+    grid-area: result;
+    justify-self: end;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-row .vera5-evidence-classification {
+    grid-area: class;
+    justify-self: end;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-row .vera5-evidence-detail {
+    grid-area: evidence;
+    padding-left: 22px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-evidence-row .vera5-evidence-utility {
+    grid-area: info;
   }
 }
 
@@ -3991,12 +4616,23 @@
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-summary-row {
     grid-template-columns: minmax(0, 1fr) minmax(108px, 0.68fr);
-    gap: 6px;
+    gap: 1px;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command {
+    border-radius: calc(var(--frame-r-sharp) - 1px) 0 0 0;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-score {
+    margin: -1px -1px 0 0;
+    border-radius: 0 calc(var(--frame-r-soft) - 2px) 0 0;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-findings-card {
     grid-column: 1 / -1;
     min-height: auto;
+    border-radius: 0 0 calc(var(--frame-r-sharp) - 1px) calc(var(--frame-r-sharp) - 1px);
+    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--state-blue) 18%, transparent);
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-body--empty {
@@ -4005,11 +4641,6 @@
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-empty-actions {
     justify-content: flex-start;
-  }
-
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-sources {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: minmax(var(--intel-card-height-ops), auto);
   }
 }
 

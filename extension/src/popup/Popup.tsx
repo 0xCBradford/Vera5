@@ -203,7 +203,6 @@ import {
   copyTrayTemplateExportToClipboard,
   downloadTrayTemplateExportFile,
   getExportTemplateLabel,
-  listExportTemplateIds,
   type ExportTemplateId,
 } from "../lib/exportTemplates";
 import {
@@ -307,10 +306,8 @@ import {
   resolveIntelFeedUnselectedCopy,
   resolveInvestigationPathsSelectionCopy,
   resolveScanPresentation,
-  resolveVendorCardPresentation,
 } from "../lib/workspacePresentationState";
 import {
-  ENRICHMENT_ASSESSMENT_KIND,
   ENRICHMENT_SOURCE_ORDER,
   enrichmentSourceSupportsIocType,
   getEnrichmentSourceDefinition,
@@ -321,6 +318,23 @@ import { buildHoverCardRiskScoreView, formatCompositeRiskLabelDisplay } from "..
 import { getPivotLinks, type PivotLink } from "../lib/pivots";
 import { InvestigationGlyph, VeraIcon, VeraUiIcons, VERA_ICON_WEIGHT } from "../lib/veraIcons";
 import { VendorMark } from "../lib/vendorAssets";
+import { VendorEvidenceMatrix } from "./VendorEvidenceMatrix";
+import {
+  orderIntelFeedVendorSourceIds,
+  type IntelSourceAvailabilityRecord,
+} from "./intelVendorOrdering";
+
+export type {
+  IntelSourceAvailability,
+  IntelSourceAvailabilityRecord,
+  IntelVendorSortGroup,
+} from "./intelVendorOrdering";
+export {
+  orderIntelFeedVendorSourceIds,
+  resolveIntelVendorCardStatus,
+  resolveIntelVendorNumericScore,
+  resolveIntelVendorSortGroup,
+} from "./intelVendorOrdering";
 
 export type PopupTrayView = "prompt" | "scanning" | "empty" | "results";
 
@@ -2129,13 +2143,6 @@ function CorrelationClusterTrayDetails({
 type AnalystNoteSaveStatus = "idle" | "saving" | "saved";
 type DetailEnrichState = "idle" | "enriching";
 
-type IntelSourceAvailability = {
-  enabled: boolean;
-  configured: boolean;
-};
-
-type IntelSourceAvailabilityRecord = Partial<Record<EnrichmentSourceId, IntelSourceAvailability>>;
-
 function buildGroundedIntelSummary(sourceEntries: readonly HoverCardSourceEntry[]): string {
   const successful = sourceEntries.filter((source) => source.status === "ok");
   if (successful.length === 0) {
@@ -2165,99 +2172,6 @@ function openIntelPivot(link: PivotLink): void {
   window.open(link.href, "_blank", "noopener,noreferrer");
 }
 
-/** Display-only sort groups for INTEL FEED vendor cards. */
-export type IntelVendorSortGroup = 0 | 1 | 2 | 3;
-
-export function resolveIntelVendorNumericScore(
-  source: HoverCardSourceEntry | undefined
-): number | null {
-  const assessment = source?.assessment;
-  if (
-    assessment?.kind !== ENRICHMENT_ASSESSMENT_KIND.RISK ||
-    typeof assessment.signal !== "number" ||
-    !Number.isFinite(assessment.signal)
-  ) {
-    return null;
-  }
-  return Math.round(assessment.signal);
-}
-
-export function resolveIntelVendorCardStatus(
-  sourceId: EnrichmentSourceId,
-  source: HoverCardSourceEntry | undefined,
-  availability: IntelSourceAvailability | undefined
-): HoverCardSourceEntry["status"] | "pivot-only" | "disabled" | "not-configured" | "not-enriched" {
-  if (source) {
-    return source.status;
-  }
-  const definition = getEnrichmentSourceDefinition(sourceId);
-  if (!definition.liveConnector) {
-    return "pivot-only";
-  }
-  if (availability?.enabled === false) {
-    return "disabled";
-  }
-  if (availability?.configured === false) {
-    return "not-configured";
-  }
-  return "not-enriched";
-}
-
-export function resolveIntelVendorSortGroup(
-  status: string,
-  numericScore: number | null
-): IntelVendorSortGroup {
-  if (numericScore !== null) {
-    return 0;
-  }
-  if (status === "disabled") {
-    return 3;
-  }
-  if (status === "pivot-only") {
-    return 2;
-  }
-  return 1;
-}
-
-/**
- * Derived display order only — never mutates sourceEntries, availability, or cache.
- * Group 0: valid finite RISK scores (including 0), descending
- * Group 1: enabled operational / non-scored states, stable registry order
- * Group 2: pivot-only, stable registry order
- * Group 3: disabled / unselected, stable registry order
- */
-export function orderIntelFeedVendorSourceIds(
-  sourceIds: readonly EnrichmentSourceId[],
-  sourceEntryById: ReadonlyMap<EnrichmentSourceId, HoverCardSourceEntry>,
-  availability: IntelSourceAvailabilityRecord
-): EnrichmentSourceId[] {
-  return [...sourceIds]
-    .map((sourceId, originalIndex) => {
-      const source = sourceEntryById.get(sourceId);
-      const status = resolveIntelVendorCardStatus(sourceId, source, availability[sourceId]);
-      const numericScore = resolveIntelVendorNumericScore(source);
-      return {
-        sourceId,
-        originalIndex,
-        sortGroup: resolveIntelVendorSortGroup(status, numericScore),
-        numericScore,
-      };
-    })
-    .sort((left, right) => {
-      if (left.sortGroup !== right.sortGroup) {
-        return left.sortGroup - right.sortGroup;
-      }
-      if (left.sortGroup === 0 && right.sortGroup === 0) {
-        const scoreDelta = (right.numericScore ?? 0) - (left.numericScore ?? 0);
-        if (scoreDelta !== 0) {
-          return scoreDelta;
-        }
-      }
-      return left.originalIndex - right.originalIndex;
-    })
-    .map((entry) => entry.sourceId);
-}
-
 /**
  * Malware-intelligence pivot sources, in the priority order used to pick a
  * default when "Search malware intelligence" is activated. Values are
@@ -2280,34 +2194,58 @@ type InvestigationSourceButton = {
   configured: boolean;
 };
 
-function InvestigationActionTile({
+function InvestigationWorkflowRow({
+  step,
   glyph,
   label,
+  support,
+  stateLabel,
   disabled,
   reason,
   onActivate,
 }: {
+  step: string;
   glyph: string;
   label: string;
+  support?: string;
+  stateLabel: string;
   disabled: boolean;
   reason?: string;
   onActivate?: () => void;
 }) {
+  const supportText =
+    support && support !== label && support !== stateLabel ? support : undefined;
   return (
-    <button
-      type="button"
-      className="vera5-ip-action"
-      data-vera5-disabled={disabled ? "true" : undefined}
-      disabled={disabled}
-      onClick={disabled ? undefined : onActivate}
-      title={disabled ? reason : undefined}
-      aria-label={disabled && reason ? `${label} — ${reason}` : label}
-    >
-      <span className="vera5-ip-action-icon" aria-hidden="true">
-        <InvestigationGlyph name={glyph} />
-      </span>
-      <span className="vera5-ip-action-label">{label}</span>
-    </button>
+    <li className="vera5-ip-workflow-item">
+      <button
+        type="button"
+        className="vera5-ip-action vera5-ip-workflow-row"
+        data-vera5-disabled={disabled ? "true" : undefined}
+        data-vera5-workflow-step={step}
+        disabled={disabled}
+        onClick={disabled ? undefined : onActivate}
+        title={disabled ? reason : undefined}
+        aria-label={disabled && reason ? `${label} — ${reason}` : label}
+      >
+        <span className="vera5-ip-workflow-rail" aria-hidden="true" />
+        <span className="vera5-ip-workflow-index" aria-hidden="true">
+          {step}
+        </span>
+        <span className="vera5-ip-action-icon" aria-hidden="true">
+          <InvestigationGlyph name={glyph} />
+        </span>
+        <span className="vera5-ip-workflow-copy">
+          <span className="vera5-ip-action-label">{label}</span>
+          {supportText ? (
+            <span className="vera5-ip-workflow-support">{supportText}</span>
+          ) : null}
+        </span>
+        <span className="vera5-ip-workflow-state">{stateLabel}</span>
+        <span className="vera5-ip-workflow-affordance" aria-hidden="true">
+          <InvestigationGlyph name="chevron" />
+        </span>
+      </button>
+    </li>
   );
 }
 
@@ -2522,9 +2460,21 @@ function InvestigationPaths({
     });
   };
 
+  const malwareDisabled = !entry || malwareIntelActionable.length === 0;
+  const malwareReason = !entry
+    ? selectionCopy.actionDisabledReason
+    : "No enabled malware-intelligence source for this indicator";
+  const reviewDisabled = !entry;
+  const infraReason = entry
+    ? WORKSPACE_STATE_COPY.related.unavailable
+    : selectionCopy.actionDisabledReason;
+  const campaignReason = entry
+    ? "Campaign context unavailable"
+    : selectionCopy.actionDisabledReason;
+
   return (
     <section
-      className="vera5-investigation-paths"
+      className="vera5-investigation-paths vera5-section-frame"
       aria-label="Investigation paths"
       data-ioc-type={entry?.type}
     >
@@ -2583,52 +2533,56 @@ function InvestigationPaths({
           )}
         </section>
 
-        <section className="vera5-ip-group vera5-ip-group--open" aria-label="Recommended actions">
-          <div className="vera5-ip-group-label">Recommended Actions</div>
-          <div className="vera5-ip-actions">
-            <InvestigationActionTile
+        <section className="vera5-ip-group vera5-ip-group--open" aria-label="Recommended path">
+          <div className="vera5-ip-group-label">Recommended Path</div>
+          <ol className="vera5-ip-workflow">
+            <InvestigationWorkflowRow
+              step="01"
               glyph="malware"
               label="Search malware intelligence"
-              disabled={!entry || malwareIntelActionable.length === 0}
-              reason={
-                !entry
-                  ? selectionCopy.actionDisabledReason
-                  : "No enabled malware-intelligence source for this indicator"
+              support={
+                malwareDisabled
+                  ? undefined
+                  : "Opens attributed malware research pivots"
               }
+              stateLabel={malwareDisabled ? "Unavailable" : "External"}
+              disabled={malwareDisabled}
+              reason={malwareReason}
               onActivate={() => {
                 if (malwareIntelActionable[0]) {
                   openIntelPivot(malwareIntelActionable[0].link);
                 }
               }}
             />
-            <InvestigationActionTile
+            <InvestigationWorkflowRow
+              step="02"
               glyph="detections"
               label="Review detections"
-              disabled={!entry}
+              support={
+                reviewDisabled ? undefined : "Locate this IOC among page detections"
+              }
+              stateLabel={reviewDisabled ? "Unavailable" : "Page action"}
+              disabled={reviewDisabled}
               reason={selectionCopy.actionDisabledReason}
               onActivate={onReviewDetections}
             />
-            <InvestigationActionTile
+            <InvestigationWorkflowRow
+              step="03"
               glyph="infra"
               label="Find related infrastructure"
+              stateLabel="Unavailable"
               disabled
-              reason={
-                entry
-                  ? WORKSPACE_STATE_COPY.related.unavailable
-                  : selectionCopy.actionDisabledReason
-              }
+              reason={infraReason}
             />
-            <InvestigationActionTile
+            <InvestigationWorkflowRow
+              step="04"
               glyph="campaign"
               label="Check campaign associations"
+              stateLabel="Unavailable"
               disabled
-              reason={
-                entry
-                  ? "Campaign context unavailable"
-                  : selectionCopy.actionDisabledReason
-              }
+              reason={campaignReason}
             />
-          </div>
+          </ol>
         </section>
 
         <section className="vera5-ip-group vera5-ip-group--open" aria-label="Intelligence sources">
@@ -2783,7 +2737,7 @@ function IntelFeedPanel({
     });
     return (
       <section className="vera5-intel-feed-section" aria-label="Intel feed">
-        <div className="vera5-intel-feed vera5-intel-feed--empty">
+        <div className="vera5-intel-feed vera5-intel-feed--empty vera5-section-frame">
           <header className="vera5-section-header vera5-intel-feed-header">
             <div className="vera5-section-identity">
               <h2 className="vera5-section-title vera5-intel-feed-heading">
@@ -2827,16 +2781,8 @@ function IntelFeedPanel({
                 Copy IOC
               </button>
               <button type="button" disabled>
-                <VeraIcon icon={VeraUiIcons.exportMarkdown} size="xs" />
-                Export Markdown
-              </button>
-              <button type="button" disabled>
-                <VeraIcon icon={VeraUiIcons.exportJson} size="xs" />
-                Export JSON
-              </button>
-              <button type="button" disabled>
                 <VeraIcon icon={VeraUiIcons.moreFormats} size="xs" />
-                More Formats
+                Export [Multi-Format]
               </button>
             </div>
           </div>
@@ -2863,6 +2809,9 @@ function IntelFeedPanel({
   const pivotLinks = getPivotLinks(entry.type, entry.value, {
     showDisabledSources: true,
   });
+  const pivotBySourceId = new Map(
+    pivotLinks.map((link): [EnrichmentSourceId, PivotLink] => [link.provider, link])
+  );
   const compositeScore =
     riskView.score.compositeSignal === null ? null : Math.round(riskView.score.compositeSignal);
   const enrichmentPresentation = resolveEnrichmentPresentation({
@@ -2885,7 +2834,6 @@ function IntelFeedPanel({
   const disabledSourceIds = applicableSourceIds.filter(
     (sourceId) => availability[sourceId]?.enabled === false
   );
-  const intelExportTemplateIds = listExportTemplateIds();
   const compositeUpdateLines = sourceEntries
     .map((source) => source.lastUpdatedLine)
     .filter((line): line is string => typeof line === "string" && line.length > 0);
@@ -2952,7 +2900,7 @@ function IntelFeedPanel({
 
   return (
     <section className="vera5-intel-feed-section" aria-label="Intel feed">
-      <div className="vera5-intel-feed" data-vera5-intel-value={entry.value}>
+      <div className="vera5-intel-feed vera5-section-frame" data-vera5-intel-value={entry.value}>
         <header className="vera5-section-header vera5-intel-feed-header">
           <div className="vera5-section-identity">
             <h2 className="vera5-section-title vera5-intel-feed-heading">
@@ -3118,24 +3066,6 @@ function IntelFeedPanel({
               </button>
               <button
                 type="button"
-                className="vera5-export-action vera5-export-action--file"
-                onClick={() => handleDownloadExport("markdown")}
-                disabled={!intelligenceAvailable}
-              >
-                <VeraIcon icon={VeraUiIcons.exportMarkdown} size="xs" />
-                Export Markdown
-              </button>
-              <button
-                type="button"
-                className="vera5-export-action vera5-export-action--file"
-                onClick={() => handleDownloadExport("json")}
-                disabled={!intelligenceAvailable}
-              >
-                <VeraIcon icon={VeraUiIcons.exportJson} size="xs" />
-                Export JSON
-              </button>
-              <button
-                type="button"
                 className="vera5-export-action vera5-export-action--more"
                 aria-haspopup="menu"
                 aria-expanded={moreFormatsOpen}
@@ -3144,7 +3074,7 @@ function IntelFeedPanel({
                 disabled={!intelligenceAvailable}
               >
                 <VeraIcon icon={VeraUiIcons.moreFormats} size="xs" />
-                More Formats
+                Export [Multi-Format]
               </button>
             </div>
             <div
@@ -3156,7 +3086,38 @@ function IntelFeedPanel({
               <span className="vera5-intel-more-format-heading" role="presentation">
                 Case templates
               </span>
-              {intelExportTemplateIds.flatMap((templateId) => {
+              {(
+                [
+                  "jira-comment",
+                  "thehive-case-note",
+                  "analyst-update",
+                  "obsidian-note",
+                ] as const
+              ).flatMap((templateId) => {
+                const label = getExportTemplateLabel(templateId);
+                return [
+                  <button
+                    key={`copy-${templateId}`}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => handleCopyTemplate(templateId)}
+                  >
+                    Copy {label}
+                  </button>,
+                  <button
+                    key={`download-${templateId}`}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => handleDownloadTemplate(templateId)}
+                  >
+                    Export {label}
+                  </button>,
+                ];
+              })}
+              <span className="vera5-intel-more-format-heading" role="presentation">
+                Report formats
+              </span>
+              {(["markdown-report", "csv-row"] as const).flatMap((templateId) => {
                 const label = getExportTemplateLabel(templateId);
                 return [
                   <button
@@ -3180,14 +3141,17 @@ function IntelFeedPanel({
               <span className="vera5-intel-more-format-heading" role="presentation">
                 Raw formats
               </span>
+              <button type="button" role="menuitem" onClick={() => handleCopyFormat("txt")}>
+                Copy TXT
+              </button>
               <button type="button" role="menuitem" onClick={() => handleDownloadExport("txt")}>
                 Export TXT
               </button>
               <button type="button" role="menuitem" onClick={() => handleCopyFormat("json")}>
                 Copy JSON
               </button>
-              <button type="button" role="menuitem" onClick={() => handleCopyFormat("txt")}>
-                Copy TXT
+              <button type="button" role="menuitem" onClick={() => handleDownloadExport("json")}>
+                Export JSON
               </button>
             </div>
             <details className="vera5-intel-analyst-note" key={entry.value}>
@@ -3221,172 +3185,17 @@ function IntelFeedPanel({
 
         <hr className="vera5-section-divider vera5-section-divider--content" aria-hidden="true" />
 
-        <div className="vera5-intel-feed-sources" aria-label="Vendor assessments">
-          {orderedSourceIds.map((sourceId) => {
-            const definition = getEnrichmentSourceDefinition(sourceId);
-            const source = sourceEntryById.get(sourceId);
-            const sourceAvailability = availability[sourceId];
-            const status = resolveIntelVendorCardStatus(sourceId, source, sourceAvailability);
-            const assessment = source?.assessment;
-            const scoreValue = resolveIntelVendorNumericScore(source);
-            const score = scoreValue === null ? null : `${scoreValue}/100`;
-            const scoreBand =
-              scoreValue === null
-                ? undefined
-                : scoreValue >= 65
-                  ? "red"
-                  : scoreValue >= 30
-                    ? "orange"
-                    : scoreValue >= 15
-                      ? "yellow"
-                      : scoreValue >= 1
-                        ? "gold"
-                        : "zero";
-            const riskLabel =
-              scoreValue === null || scoreValue === 0
-                ? null
-                : scoreValue >= 65
-                  ? "CRITICAL"
-                  : scoreValue >= 30
-                    ? "HIGH"
-                    : scoreValue >= 15
-                      ? "SUSPICIOUS"
-                      : "LOW";
-            const sourceLoading = loading && !source;
-            const okDetail =
-              source?.status === "ok"
-                ? (assessment?.verdict ?? source.detail ?? "")
-                : "";
-            const vendorPresentation = resolveVendorCardPresentation({
-              source,
-              loading,
-              cardStatus: status,
-              numericScore: scoreValue,
-              okDetail,
-            });
-            const sourceState = scoreBand ?? vendorPresentation.sourceState;
-            /* Primary operational/score label — shown once in the card center (or risk in header). */
-            const stateLabel =
-              riskLabel ??
-              (vendorPresentation.stateLabel ||
-                source?.badgeText ||
-                WORKSPACE_STATE_COPY.source.unavailable);
-            /*
-             * Supporting line only when it adds distinct information.
-             * Never repeat the primary stateLabel (Pivot only / Disabled / etc.).
-             */
-            const signalText =
-              vendorPresentation.kind === "scored"
-                ? okDetail
-                : vendorPresentation.signalText &&
-                    vendorPresentation.signalText !== stateLabel
-                  ? vendorPresentation.signalText
-                  : "";
-            const sourceDetailsOpen = openInfoId === sourceId;
-            return (
-              <article
-                key={sourceId}
-                className="vera5-intel-source-card"
-                data-vera5-source-id={sourceId}
-                data-vera5-source-status={status}
-                data-vera5-source-state={sourceState}
-                data-vera5-presentation-kind={vendorPresentation.kind}
-                data-vera5-assessment-kind={definition.assessmentKind}
-                data-vera5-score-band={scoreBand}
-                data-vera5-info-open={sourceDetailsOpen}
-                aria-busy={sourceLoading || undefined}
-                title={
-                  vendorPresentation.kind === "pivot_only"
-                    ? WORKSPACE_STATE_COPY.source.pivotSupport
-                    : vendorPresentation.kind === "not_queried"
-                      ? WORKSPACE_STATE_COPY.enrichment.availableForEnrichment
-                      : (source?.detail ?? definition.description)
-                }
-              >
-                <div className="vera5-intel-source-header">
-                  <div>
-                    <VendorMark sourceId={sourceId} size="sm" />
-                    <strong>{definition.displayName}</strong>
-                    {riskLabel ? (
-                      <span className="vera5-risk-label" aria-label={`Risk ${riskLabel}`}>
-                        [{riskLabel}]
-                      </span>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    className="vera5-intel-info-button"
-                    aria-label={`View ${definition.displayName} details`}
-                    aria-expanded={sourceDetailsOpen}
-                    aria-controls={`vera5-intel-source-details-${sourceId}`}
-                    onClick={() => setOpenInfoId(sourceDetailsOpen ? null : sourceId)}
-                  >
-                    <VeraIcon icon={VeraUiIcons.info} size="xs" />
-                  </button>
-                </div>
-                <div className="vera5-intel-source-center">
-                  {score ? (
-                    <strong className="vera5-intel-source-score">
-                      {scoreValue}
-                      <span>/100</span>
-                    </strong>
-                  ) : (
-                    <strong className="vera5-intel-source-state-label">{stateLabel}</strong>
-                  )}
-                </div>
-                {signalText ? (
-                  <p className="vera5-intel-source-signal">{signalText}</p>
-                ) : (
-                  <p className="vera5-intel-source-signal vera5-intel-source-signal--empty" />
-                )}
-                <div
-                  id={`vera5-intel-source-details-${sourceId}`}
-                  className="vera5-intel-info-surface vera5-intel-source-details"
-                  role="dialog"
-                  aria-label={`${definition.displayName} details`}
-                  hidden={!sourceDetailsOpen}
-                >
-                  <strong>{definition.displayName}</strong>
-                  <p>{source?.detail ?? definition.description}</p>
-                  <dl>
-                    <div>
-                      <dt>Status</dt>
-                      <dd>{stateLabel}</dd>
-                    </div>
-                    {source ? (
-                      <div>
-                        <dt>Response</dt>
-                        <dd>{source.fromCache ? "Cached" : "Live"}</dd>
-                      </div>
-                    ) : null}
-                    {source?.lastUpdatedLine ? (
-                      <div>
-                        <dt>Updated</dt>
-                        <dd>{source.lastUpdatedLine.replace(/^Last updated:\s*/i, "")}</dd>
-                      </div>
-                    ) : null}
-                    {source?.errorCode ? (
-                      <div>
-                        <dt>Error code</dt>
-                        <dd>{source.errorCode}</dd>
-                      </div>
-                    ) : null}
-                  </dl>
-                  {source?.retryHint ? <p>{source.retryHint}</p> : null}
-                  {source?.metadataChips.length ? (
-                    <ul>
-                      {source.metadataChips.map((chip) => (
-                        <li key={`${chip.kind}-${chip.label}`} title={chip.tooltip}>
-                          {chip.label}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              </article>
-            );
-          })}
-        </div>
+        <VendorEvidenceMatrix
+          orderedSourceIds={orderedSourceIds}
+          sourceEntryById={sourceEntryById}
+          availability={availability}
+          loading={loading}
+          enrichment={enrichmentPresentation}
+          openInfoId={openInfoId}
+          onOpenInfoIdChange={setOpenInfoId}
+          pivotBySourceId={pivotBySourceId}
+          onOpenPivot={openIntelPivot}
+        />
       </div>
     </section>
   );
@@ -4942,18 +4751,7 @@ export function Popup() {
         </div>
       ) : null}
       <div className="vera5-workspace-chassis">
-      <section className="vera5-command-section" aria-label="Scan and extension controls">
-        <header className="vera5-section-header">
-          <div className="vera5-section-identity">
-            <h2 className="vera5-section-title">
-              <span className="vera5-section-icon" aria-hidden="true">
-                <VeraIcon icon={VeraUiIcons.scanSection} size="sm" />
-              </span>
-              Scan
-            </h2>
-          </div>
-        </header>
-        <hr className="vera5-section-divider" aria-hidden="true" />
+      <section className="vera5-command-section vera5-section-frame" aria-label="Scan and extension controls">
         <div className="vera5-scan-primary">
           <button
             type="button"
@@ -5098,7 +4896,7 @@ export function Popup() {
         <div className="vera5-popup-triage" aria-label="Triage">
           {trayView ? (
             <section
-              className="vera5-triage-section"
+              className="vera5-triage-section vera5-section-frame"
               aria-label="Detected indicators"
             >
               <div className="vera5-section-header vera5-triage-heading-row">
