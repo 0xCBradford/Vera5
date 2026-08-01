@@ -15,6 +15,7 @@ import {
   runOperatorMacroMessage,
   scanPageMessage,
   scanSelectionMessage,
+  resetWorkspacePageMessage,
   type MessageResponse,
 } from "../lib/messages";
 import type { OperatorMacro } from "../lib/operatorMacro";
@@ -26,7 +27,13 @@ import {
   OPERATOR_MACRO_TRAY_RUN_PICKER_HEADING,
 } from "../lib/operatorMacro";
 import { ensureBuiltInOperatorMacros, listStoredOperatorMacros } from "../lib/operatorMacroStorage";
-import { getTabScanTrayFilter, saveTabScanTrayFilter } from "../lib/tabScanSnapshotStorage";
+import { getTabScanTrayFilter, saveTabScanTrayFilter, clearTabScanSnapshot, clearTabScanTrayFilter } from "../lib/tabScanSnapshotStorage";
+import {
+  DEFAULT_ON_PAGE_POPOUT_ENABLED,
+  STORAGE_KEY_ON_PAGE_POPOUT_ENABLED,
+  getOnPagePopoutEnabled,
+  setOnPagePopoutEnabled,
+} from "../lib/onPagePopoutPreference";
 import { requestTabPageContextForActiveTab } from "../lib/pageContextClient";
 import {
   PAGE_CONTEXT_TYPE,
@@ -143,8 +150,6 @@ import {
 } from "../lib/correlationCluster";
 import { buildStoredCorrelationClustersFromInvestigationMemory } from "../lib/correlationClusterStorage";
 import {
-  formatNoiseRulesTraySuppressedSummary,
-  NOISE_RULES_TRAY_SUPPRESSED_SECTION_HINT,
   partitionTrayEntriesByNoiseRules,
   type NoiseRule,
 } from "../lib/noiseRule";
@@ -313,11 +318,11 @@ import {
   getEnrichmentSourceDefinition,
   type EnrichmentSourceId,
 } from "../lib/enrichmentSourceRegistry";
+import { liveEnrichmentSupportsIocType } from "../lib/enrichmentSourceSelection";
 import type { EnrichmentSourceResult } from "../lib/enrichment";
 import { buildHoverCardRiskScoreView, formatCompositeRiskLabelDisplay } from "../lib/scoring";
 import { getPivotLinks, type PivotLink } from "../lib/pivots";
 import { InvestigationGlyph, VeraIcon, VeraUiIcons, VERA_ICON_WEIGHT } from "../lib/veraIcons";
-import { VendorMark } from "../lib/vendorAssets";
 import { VendorEvidenceMatrix } from "./VendorEvidenceMatrix";
 import {
   orderIntelFeedVendorSourceIds,
@@ -634,7 +639,7 @@ function AddFilteredToCollectionPanel({
   feedback,
   onFeedback,
 }: {
-  entries: TabScanSummaryEntry[];
+  entries: readonly TabScanSummaryEntry[];
   open: boolean;
   onToggle: () => void;
   feedback: string | null;
@@ -1056,7 +1061,7 @@ function RunMacroOnFilteredPanel({
   feedback,
   onFeedback,
 }: {
-  entries: TabScanSummaryEntry[];
+  entries: readonly TabScanSummaryEntry[];
   open: boolean;
   onToggle: () => void;
   feedback: string | null;
@@ -2309,7 +2314,7 @@ function InvestigationConditionalRow({
  */
 function InvestigationPaths({
   entry,
-  loading,
+  loading: _loading,
   availability,
   pageIndicatorCount,
   priorSightingCount,
@@ -2326,16 +2331,13 @@ function InvestigationPaths({
   scanPresentation: ReturnType<typeof resolveScanPresentation>;
   onReviewDetections: () => void;
 }) {
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
   const [collectionMembership, setCollectionMembership] = useState<number | null>(null);
+  const [sectionExpanded, setSectionExpanded] = useState(true);
+  const [recommendedPathExpanded, setRecommendedPathExpanded] = useState(false);
   const selectionCopy = resolveInvestigationPathsSelectionCopy({
     scan: scanPresentation,
     hasSelection: Boolean(entry),
   });
-
-  useEffect(() => {
-    setCopyFeedback(null);
-  }, [entry?.value]);
 
   useEffect(() => {
     if (!entry) {
@@ -2451,15 +2453,6 @@ function InvestigationPaths({
 
   const isCve = entry?.type === "cve";
 
-  const handleCopy = () => {
-    if (!entry) {
-      return;
-    }
-    void copyTextToClipboard(entry.value).then((copied) => {
-      setCopyFeedback(copied ? "Copied selected IOC." : "Could not copy IOC.");
-    });
-  };
-
   const malwareDisabled = !entry || malwareIntelActionable.length === 0;
   const malwareReason = !entry
     ? selectionCopy.actionDisabledReason
@@ -2477,222 +2470,175 @@ function InvestigationPaths({
       className="vera5-investigation-paths vera5-section-frame"
       aria-label="Investigation paths"
       data-ioc-type={entry?.type}
+      data-vera5-section-expanded={sectionExpanded ? "true" : "false"}
     >
       <header className="vera5-section-header vera5-ip-header">
         <div className="vera5-section-identity">
-          <h2 className="vera5-section-title vera5-ip-title">
+          <h2 className="vera5-section-title vera5-ip-title" id="vera5-investigation-paths-title">
             <span className="vera5-section-icon" aria-hidden="true">
               <VeraIcon icon={VeraUiIcons.investigationSection} size="sm" />
             </span>
             Investigation Paths
           </h2>
         </div>
-        <span className="vera5-section-utilities vera5-ip-header-chevron" aria-hidden="true">
-          <InvestigationGlyph name="chevron" />
-        </span>
+        <button
+          type="button"
+          className="vera5-section-utilities vera5-section-collapse"
+          aria-expanded={sectionExpanded}
+          aria-controls="vera5-investigation-paths-body"
+          aria-label={
+            sectionExpanded ? "Collapse Investigation Paths" : "Expand Investigation Paths"
+          }
+          onClick={() => setSectionExpanded((open) => !open)}
+        >
+          <VeraIcon
+            icon={sectionExpanded ? VeraUiIcons.chevron : VeraUiIcons.chevronRight}
+            size="xs"
+          />
+        </button>
       </header>
-      <hr className="vera5-section-divider" aria-hidden="true" />
-
-      <div className="vera5-ip-scroll">
-        <section className="vera5-ip-group vera5-ip-group--inset" aria-label="Selected IOC">
-          <div className="vera5-ip-group-label">Selected IOC</div>
-          {entry ? (
-            <>
-              <div className="vera5-ip-selected">
-                <span
-                  className="vera5-ioc-type-badge"
-                  aria-label={`Indicator type ${IOC_TYPE_TRAY_LABEL[entry.type]}`}
-                >
-                  {IOC_TYPE_TRAY_LABEL[entry.type]}
-                </span>
-                <span className="vera5-ip-selected-value">
-                  <TrayIndicatorValue entry={entry} />
-                </span>
-                <button
-                  type="button"
-                  className="vera5-ip-copy"
-                  aria-label="Copy selected IOC"
-                  onClick={handleCopy}
-                >
-                  <InvestigationGlyph name="clipboard" />
-                </button>
-              </div>
-              <span aria-live="polite" className="vera5-ip-copy-feedback">
-                {copyFeedback ?? ""}
-              </span>
-            </>
-          ) : (
-            <div className="vera5-ip-empty-block">
-              <p className="vera5-ip-empty">{selectionCopy.selectedPrimary}</p>
-              {selectionCopy.selectedSecondary ? (
-                <p className="vera5-ip-empty vera5-ip-empty--secondary">
-                  {selectionCopy.selectedSecondary}
-                </p>
-              ) : null}
-            </div>
-          )}
-        </section>
-
-        <section className="vera5-ip-group vera5-ip-group--open" aria-label="Recommended path">
-          <div className="vera5-ip-group-label">Recommended Path</div>
-          <ol className="vera5-ip-workflow">
-            <InvestigationWorkflowRow
-              step="01"
-              glyph="malware"
-              label="Search malware intelligence"
-              support={
-                malwareDisabled
-                  ? undefined
-                  : "Opens attributed malware research pivots"
-              }
-              stateLabel={malwareDisabled ? "Unavailable" : "External"}
-              disabled={malwareDisabled}
-              reason={malwareReason}
-              onActivate={() => {
-                if (malwareIntelActionable[0]) {
-                  openIntelPivot(malwareIntelActionable[0].link);
-                }
-              }}
-            />
-            <InvestigationWorkflowRow
-              step="02"
-              glyph="detections"
-              label="Review detections"
-              support={
-                reviewDisabled ? undefined : "Locate this IOC among page detections"
-              }
-              stateLabel={reviewDisabled ? "Unavailable" : "Page action"}
-              disabled={reviewDisabled}
-              reason={selectionCopy.actionDisabledReason}
-              onActivate={onReviewDetections}
-            />
-            <InvestigationWorkflowRow
-              step="03"
-              glyph="infra"
-              label="Find related infrastructure"
-              stateLabel="Unavailable"
-              disabled
-              reason={infraReason}
-            />
-            <InvestigationWorkflowRow
-              step="04"
-              glyph="campaign"
-              label="Check campaign associations"
-              stateLabel="Unavailable"
-              disabled
-              reason={campaignReason}
-            />
-          </ol>
-        </section>
-
-        <section className="vera5-ip-group vera5-ip-group--open" aria-label="Intelligence sources">
-          <div className="vera5-ip-group-label">Intelligence Sources</div>
-          {!entry ? (
-            <p className="vera5-ip-empty">{selectionCopy.sourcesPlaceholder}</p>
-          ) : sourceButtons.length === 0 ? (
-            <p className="vera5-ip-empty">
-              {loading ? "Resolving sources…" : "No enabled sources apply to this indicator"}
-            </p>
-          ) : (
-            <div className="vera5-ip-sources">
-              {sourceButtons.map((source) =>
-                source.configured ? (
-                  <button
-                    key={source.sourceId}
-                    type="button"
-                    className="vera5-ip-source"
-                    onClick={() => openIntelPivot(source.link)}
-                    aria-label={`Open ${source.label} for the selected indicator`}
-                  >
-                    <VendorMark sourceId={source.sourceId} size="xs" />
-                    <span>{source.label}</span>
-                  </button>
-                ) : (
-                  <button
-                    key={source.sourceId}
-                    type="button"
-                    className="vera5-ip-source"
-                    data-vera5-disabled="true"
-                    disabled
-                    title={WORKSPACE_STATE_COPY.source.missingConfigurationSupport}
-                    aria-label={`${source.label} — ${WORKSPACE_STATE_COPY.source.missingConfiguration}`}
-                  >
-                    <VendorMark sourceId={source.sourceId} size="xs" />
-                    <span>{source.label}</span>
-                    <span className="vera5-status" data-vera5-status="config">
-                      {WORKSPACE_STATE_COPY.source.missingConfiguration}
-                    </span>
-                  </button>
-                )
-              )}
-            </div>
-          )}
-        </section>
-
-        <div className="vera5-ip-lower-pair">
-          <section className="vera5-ip-group vera5-ip-group--open" aria-label="Related context">
-            <div className="vera5-ip-group-label">Related Context</div>
-            {!entry ? (
-              <p className="vera5-ip-empty">{selectionCopy.contextPlaceholder}</p>
-            ) : (
-              <ul className="vera5-ip-context">
-                {relatedLines.map((line) => (
-                  <li key={line.id} className="vera5-ip-context-line" data-vera5-tone={line.tone}>
-                    <span className="vera5-ip-context-dot" aria-hidden="true">
-                      <InvestigationGlyph name="dot" />
-                    </span>
-                    <span>{line.text}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="vera5-ip-group vera5-ip-group--open" aria-label="Conditional intelligence">
-            <div className="vera5-ip-group-label">Conditional Intelligence</div>
-            <div className="vera5-ip-conditional">
-              <InvestigationConditionalRow
-                glyph="mitre"
-                label="MITRE ATT&CK"
-                available={false}
-                status={
-                  entry
-                    ? WORKSPACE_STATE_COPY.selection.notEvaluated
-                    : selectionCopy.conditionalStatus
-                }
-              />
-              <InvestigationConditionalRow
-                glyph="family"
-                label="Malware family / campaign"
-                available={false}
-                status={
-                  entry
-                    ? WORKSPACE_STATE_COPY.selection.notEvaluated
-                    : selectionCopy.conditionalStatus
-                }
-              />
-              <InvestigationConditionalRow
-                glyph="cve"
-                label="CVE / CVSS"
-                available={Boolean(isCve && entry)}
-                status={
-                  isCve && entry
-                    ? entry.value
-                    : entry
+      {sectionExpanded ? (
+        <>
+          <hr className="vera5-section-divider" aria-hidden="true" />
+          <div className="vera5-ip-scroll" id="vera5-investigation-paths-body">
+            <section
+              className="vera5-ip-group vera5-ip-group--open vera5-ip-group--conditional"
+              aria-label="Conditional intelligence"
+            >
+              <div className="vera5-ip-group-label">Conditional Intelligence</div>
+              <div className="vera5-ip-conditional">
+                <InvestigationConditionalRow
+                  glyph="mitre"
+                  label="MITRE ATT&CK"
+                  available={false}
+                  status={
+                    entry
                       ? WORKSPACE_STATE_COPY.selection.notEvaluated
                       : selectionCopy.conditionalStatus
-                }
+                  }
+                />
+                <InvestigationConditionalRow
+                  glyph="family"
+                  label="Malware family / campaign"
+                  available={false}
+                  status={
+                    entry
+                      ? WORKSPACE_STATE_COPY.selection.notEvaluated
+                      : selectionCopy.conditionalStatus
+                  }
+                />
+                <InvestigationConditionalRow
+                  glyph="cve"
+                  label="CVE / CVSS"
+                  available={Boolean(isCve && entry)}
+                  status={
+                    isCve && entry
+                      ? entry.value
+                      : entry
+                        ? WORKSPACE_STATE_COPY.selection.notEvaluated
+                        : selectionCopy.conditionalStatus
+                  }
+                >
+                  {isCve && entry ? (
+                    <p className="vera5-ip-cond-note">
+                      {entry.value} {WORKSPACE_STATE_COPY.conditional.cveUnavailable}
+                    </p>
+                  ) : undefined}
+                </InvestigationConditionalRow>
+              </div>
+            </section>
+
+            <section className="vera5-ip-group vera5-ip-group--open" aria-label="Related context">
+              <div className="vera5-ip-group-label">Related Context</div>
+              {!entry ? (
+                <p className="vera5-ip-empty">{selectionCopy.contextPlaceholder}</p>
+              ) : (
+                <ul className="vera5-ip-context">
+                  {relatedLines.map((line) => (
+                    <li key={line.id} className="vera5-ip-context-line" data-vera5-tone={line.tone}>
+                      <span className="vera5-ip-context-dot" aria-hidden="true">
+                        <InvestigationGlyph name="dot" />
+                      </span>
+                      <span>{line.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section
+              className="vera5-ip-group vera5-ip-group--open vera5-ip-group--recommended"
+              aria-label="Recommended path"
+            >
+              <button
+                type="button"
+                className="vera5-ip-disclosure-header"
+                aria-expanded={recommendedPathExpanded}
+                aria-controls="vera5-recommended-path-body"
+                onClick={() => setRecommendedPathExpanded((open) => !open)}
               >
-                {isCve && entry ? (
-                  <p className="vera5-ip-cond-note">
-                    {entry.value} {WORKSPACE_STATE_COPY.conditional.cveUnavailable}
-                  </p>
-                ) : undefined}
-              </InvestigationConditionalRow>
-            </div>
-          </section>
-        </div>
-      </div>
+                <span className="vera5-ip-group-label">Recommended Path</span>
+                <span className="vera5-ip-disclosure-icon" aria-hidden="true">
+                  <VeraIcon
+                    icon={recommendedPathExpanded ? VeraUiIcons.minus : VeraUiIcons.plus}
+                    size="xs"
+                  />
+                </span>
+              </button>
+              {recommendedPathExpanded ? (
+                <ol className="vera5-ip-workflow" id="vera5-recommended-path-body">
+                  <InvestigationWorkflowRow
+                    step="01"
+                    glyph="malware"
+                    label="Search malware intelligence"
+                    support={
+                      malwareDisabled
+                        ? undefined
+                        : "Opens attributed malware research pivots"
+                    }
+                    stateLabel={malwareDisabled ? "Unavailable" : "External"}
+                    disabled={malwareDisabled}
+                    reason={malwareReason}
+                    onActivate={() => {
+                      if (malwareIntelActionable[0]) {
+                        openIntelPivot(malwareIntelActionable[0].link);
+                      }
+                    }}
+                  />
+                  <InvestigationWorkflowRow
+                    step="02"
+                    glyph="detections"
+                    label="Review detections"
+                    support={
+                      reviewDisabled ? undefined : "Locate this IOC among page detections"
+                    }
+                    stateLabel={reviewDisabled ? "Unavailable" : "Page action"}
+                    disabled={reviewDisabled}
+                    reason={selectionCopy.actionDisabledReason}
+                    onActivate={onReviewDetections}
+                  />
+                  <InvestigationWorkflowRow
+                    step="03"
+                    glyph="infra"
+                    label="Find related infrastructure"
+                    stateLabel="Unavailable"
+                    disabled
+                    reason={infraReason}
+                  />
+                  <InvestigationWorkflowRow
+                    step="04"
+                    glyph="campaign"
+                    label="Check campaign associations"
+                    stateLabel="Unavailable"
+                    disabled
+                    reason={campaignReason}
+                  />
+                </ol>
+              ) : null}
+            </section>
+          </div>
+        </>
+      ) : null}
     </section>
   );
 }
@@ -2708,6 +2654,19 @@ function IntelFeedPanel({
   note,
   noteStatus,
   onNoteChange,
+  filteredEntries,
+  collectionsMenuOpen,
+  onCollectionsMenuOpenChange,
+  addFilteredToCollectionOpen,
+  onAddFilteredToCollectionToggle,
+  addFilteredToCollectionFeedback,
+  onAddFilteredToCollectionFeedback,
+  runMacroOnFilteredOpen,
+  onRunMacroOnFilteredToggle,
+  runMacroOnFilteredFeedback,
+  onRunMacroOnFilteredFeedback,
+  canResetWorkspace,
+  onResetWorkspace,
 }: {
   entry: TabScanSummaryEntry | null;
   loading: boolean;
@@ -2719,16 +2678,105 @@ function IntelFeedPanel({
   note: string;
   noteStatus: AnalystNoteSaveStatus;
   onNoteChange: (value: string) => void;
+  filteredEntries: readonly TabScanSummaryEntry[];
+  collectionsMenuOpen: boolean;
+  onCollectionsMenuOpenChange: (open: boolean) => void;
+  addFilteredToCollectionOpen: boolean;
+  onAddFilteredToCollectionToggle: () => void;
+  addFilteredToCollectionFeedback: string | null;
+  onAddFilteredToCollectionFeedback: (message: string | null) => void;
+  runMacroOnFilteredOpen: boolean;
+  onRunMacroOnFilteredToggle: () => void;
+  runMacroOnFilteredFeedback: string | null;
+  onRunMacroOnFilteredFeedback: (message: string | null) => void;
+  canResetWorkspace: boolean;
+  onResetWorkspace: () => void;
 }) {
   const [openInfoId, setOpenInfoId] = useState<string | null>(null);
   const [moreFormatsOpen, setMoreFormatsOpen] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [selectedCopyFeedback, setSelectedCopyFeedback] = useState<string | null>(null);
+  const exportOverlayRef = useRef<HTMLDivElement | null>(null);
+  const collectionsOverlayRef = useRef<HTMLDivElement | null>(null);
+  const exportTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const collectionsTriggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     setOpenInfoId(null);
     setMoreFormatsOpen(false);
+    onCollectionsMenuOpenChange(false);
     setExportMessage(null);
-  }, [entry?.value]);
+    setSelectedCopyFeedback(null);
+  }, [entry?.value, onCollectionsMenuOpenChange]);
+
+  useEffect(() => {
+    if (!moreFormatsOpen && !collectionsMenuOpen) {
+      return;
+    }
+    const onPointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (moreFormatsOpen) {
+        if (
+          exportOverlayRef.current?.contains(target) ||
+          exportTriggerRef.current?.contains(target)
+        ) {
+          return;
+        }
+        setMoreFormatsOpen(false);
+      }
+      if (collectionsMenuOpen) {
+        if (
+          collectionsOverlayRef.current?.contains(target) ||
+          collectionsTriggerRef.current?.contains(target)
+        ) {
+          return;
+        }
+        onCollectionsMenuOpenChange(false);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+      if (moreFormatsOpen) {
+        setMoreFormatsOpen(false);
+        exportTriggerRef.current?.focus();
+        return;
+      }
+      if (collectionsMenuOpen) {
+        onCollectionsMenuOpenChange(false);
+        collectionsTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [moreFormatsOpen, collectionsMenuOpen, onCollectionsMenuOpenChange]);
+
+  const toggleExportMenu = () => {
+    if (moreFormatsOpen) {
+      setMoreFormatsOpen(false);
+      return;
+    }
+    onCollectionsMenuOpenChange(false);
+    setMoreFormatsOpen(true);
+  };
+
+  const toggleCollectionsMenu = () => {
+    if (collectionsMenuOpen) {
+      onCollectionsMenuOpenChange(false);
+      return;
+    }
+    setMoreFormatsOpen(false);
+    onCollectionsMenuOpenChange(true);
+  };
+
+  const closeExportAfterAction = () => {
+    setMoreFormatsOpen(false);
+  };
 
   if (!entry) {
     const unselected = resolveIntelFeedUnselectedCopy({
@@ -2751,6 +2799,16 @@ function IntelFeedPanel({
               </p>
             </div>
             <div className="vera5-section-utilities vera5-intel-feed-title-row">
+              <button
+                type="button"
+                className="vera5-intel-info-button vera5-intel-reset-button"
+                aria-label="Reset current workspace"
+                title="Reset current workspace"
+                disabled={!canResetWorkspace}
+                onClick={onResetWorkspace}
+              >
+                <VeraIcon icon={VeraUiIcons.reset} size="xs" />
+              </button>
               <button
                 type="button"
                 className="vera5-intel-info-button"
@@ -2781,8 +2839,12 @@ function IntelFeedPanel({
                 Copy IOC
               </button>
               <button type="button" disabled>
-                <VeraIcon icon={VeraUiIcons.moreFormats} size="xs" />
+                <VeraIcon icon={VeraUiIcons.exportMarkdown} size="xs" />
                 Export [Multi-Format]
+              </button>
+              <button type="button" disabled>
+                <VeraIcon icon={VeraUiIcons.collections} size="xs" />
+                {POPUP_TRAY_CASE_TOOLS_SUMMARY}
               </button>
             </div>
           </div>
@@ -2797,18 +2859,33 @@ function IntelFeedPanel({
       source,
     ])
   );
-  const applicableSourceIds = ENRICHMENT_SOURCE_ORDER.filter((sourceId) =>
-    enrichmentSourceSupportsIocType(sourceId, entry.type)
-  );
+  const applicableSourceIds = ENRICHMENT_SOURCE_ORDER.filter((sourceId) => {
+    const definition = getEnrichmentSourceDefinition(sourceId);
+    if (!definition.liveConnector) {
+      return false;
+    }
+    if (!liveEnrichmentSupportsIocType(sourceId, entry.type)) {
+      return false;
+    }
+    return availability[sourceId]?.enabled === true;
+  });
   const orderedSourceIds = orderIntelFeedVendorSourceIds(
     applicableSourceIds,
     sourceEntryById,
     availability
   );
-  const riskView = buildHoverCardRiskScoreView(sourceEntries);
+  const riskView = buildHoverCardRiskScoreView(
+    sourceEntries.filter((source) => applicableSourceIds.includes(source.sourceId))
+  );
   const pivotLinks = getPivotLinks(entry.type, entry.value, {
     showDisabledSources: true,
   });
+  const hasDirectEnrichmentSources = applicableSourceIds.length > 0;
+  const enrichDisabled = loading || !hasDirectEnrichmentSources;
+  const enrichDisabledReason = !hasDirectEnrichmentSources
+    ? "No applicable enrichment sources are enabled"
+    : undefined;
+  const researchDisabled = pivotLinks.length === 0;
   const pivotBySourceId = new Map(
     pivotLinks.map((link): [EnrichmentSourceId, PivotLink] => [link.provider, link])
   );
@@ -2855,6 +2932,11 @@ function IntelFeedPanel({
       setExportMessage(copied ? "Copied IOC." : "Could not copy IOC.");
     });
   };
+  const handleCopySelectedIoc = () => {
+    void copyTextToClipboard(entry.value).then((copied) => {
+      setSelectedCopyFeedback(copied ? "Copied selected IOC." : "Could not copy IOC.");
+    });
+  };
   const handleDownloadExport = (format: EnrichmentExportFileFormat) => {
     downloadEnrichmentExportFile(buildIntelExportRecord(), format, document);
     setExportMessage(
@@ -2864,6 +2946,7 @@ function IntelFeedPanel({
           ? "Downloaded JSON export."
           : "Downloaded TXT export."
     );
+    closeExportAfterAction();
   };
   const handleCopyFormat = (
     format: Exclude<EnrichmentExportFileFormat, "markdown">
@@ -2879,6 +2962,7 @@ function IntelFeedPanel({
           ? `Copied ${format.toUpperCase()} export.`
           : `Could not copy ${format.toUpperCase()} export.`
       );
+      closeExportAfterAction();
     });
   };
   const handleCopyTemplate = (templateId: ExportTemplateId) => {
@@ -2889,12 +2973,14 @@ function IntelFeedPanel({
             ? `Copied ${getExportTemplateLabel(templateId)}.`
             : `Could not copy ${getExportTemplateLabel(templateId)}.`
         );
+        closeExportAfterAction();
       }
     );
   };
   const handleDownloadTemplate = (templateId: ExportTemplateId) => {
     downloadTrayTemplateExportFile(templateId, [buildIntelExportRecord()], document);
     setExportMessage(`Downloaded ${getExportTemplateLabel(templateId)}.`);
+    closeExportAfterAction();
   };
   const compositeDetailsOpen = openInfoId === "composite";
 
@@ -2914,6 +3000,16 @@ function IntelFeedPanel({
             </p>
           </div>
           <div className="vera5-section-utilities vera5-intel-feed-title-row">
+            <button
+              type="button"
+              className="vera5-intel-info-button vera5-intel-reset-button"
+              aria-label="Reset current workspace"
+              title="Reset current workspace"
+              disabled={!canResetWorkspace}
+              onClick={onResetWorkspace}
+            >
+              <VeraIcon icon={VeraUiIcons.reset} size="xs" />
+            </button>
             {sourceDisagreement ? (
               <span
                 className="vera5-intel-warning"
@@ -2976,36 +3072,55 @@ function IntelFeedPanel({
         </header>
         <hr className="vera5-section-divider" aria-hidden="true" />
         <div className="vera5-intel-feed-summary-row">
-          <div className="vera5-intel-feed-command">
-            <span className="vera5-intel-card-label">Selected IOC</span>
-            <span className="vera5-intel-feed-type">{IOC_TYPE_TRAY_LABEL[entry.type]}</span>
-            <strong title={entry.value}>{entry.value}</strong>
-            <div className="vera5-intel-feed-actions">
+          <div className="vera5-intel-feed-command" data-ioc-type={entry.type}>
+            <div className="vera5-intel-feed-command-top">
+              <div className="vera5-intel-feed-identity">
+                <span
+                  className="vera5-ioc-type-badge"
+                  aria-hidden="true"
+                >
+                  {IOC_TYPE_TRAY_LABEL[entry.type]}
+                </span>
+                <div className="vera5-intel-feed-identity-text">
+                  <span className="vera5-intel-feed-type">{IOC_TYPE_TRAY_LABEL[entry.type]}</span>
+                  <strong title={entry.value}>{entry.value}</strong>
+                </div>
+              </div>
               <button
                 type="button"
-                onClick={onEnrich}
-                disabled={loading}
-                className="vera5-intel-feed-enrich"
+                className="vera5-intel-selected-copy"
+                aria-label={`Copy selected ${IOC_TYPE_TRAY_LABEL[entry.type]}`}
+                title={`Copy selected ${IOC_TYPE_TRAY_LABEL[entry.type]}`}
+                onClick={handleCopySelectedIoc}
               >
-                <VeraIcon icon={VeraUiIcons.enrich} size="xs" />
-                {loading ? "Enriching…" : "Enrich"}
+                <VeraIcon icon={VeraUiIcons.copy} size="xs" />
+                <span className="vera5-intel-selected-copy-label">Copy</span>
               </button>
-              <details className="vera5-intel-feed-pivots">
-                <summary>
-                  <span className="vera5-intel-pivot-mark" aria-hidden="true">
-                    <VeraIcon icon={VeraUiIcons.research} size="xs" />
-                  </span>
-                  <span className="vera5-intel-pivot-label">Research</span>
-                </summary>
-                <div role="group" aria-label={`Pivot ${entry.value} to an intelligence source`}>
-                  {pivotLinks.map((link) => (
-                    <button key={link.provider} type="button" onClick={() => openIntelPivot(link)}>
-                      {link.label}
-                    </button>
-                  ))}
-                </div>
-              </details>
             </div>
+            <span aria-live="polite" className="vera5-intel-selected-copy-feedback">
+              {selectedCopyFeedback ?? ""}
+            </span>
+            <details className="vera5-intel-analyst-note" key={entry.value}>
+              <summary>+ Add analyst note</summary>
+              <label>
+                <span>{HOVER_CARD_ANALYST_NOTES_LABEL}</span>
+                <textarea
+                  value={note}
+                  rows={3}
+                  placeholder={HOVER_CARD_ANALYST_NOTES_PLACEHOLDER}
+                  aria-label={`${HOVER_CARD_ANALYST_NOTES_LABEL} for ${entry.value}`}
+                  data-vera5-analyst-note="true"
+                  onChange={(event) => onNoteChange(event.currentTarget.value)}
+                />
+              </label>
+              <small aria-live="polite">
+                {noteStatus === "saving"
+                  ? "Saving…"
+                  : noteStatus === "saved"
+                    ? "Saved locally"
+                    : "Stored locally"}
+              </small>
+            </details>
           </div>
 
           <div
@@ -3044,9 +3159,42 @@ function IntelFeedPanel({
             ) : null}
           </div>
 
-          <section className="vera5-intel-findings-card" aria-label="Findings and export">
-            <h3>Findings &amp; Export</h3>
-            <div className="vera5-intel-export-actions">
+          <section className="vera5-intel-findings-card" aria-label="Actions and export">
+            <h3>Actions &amp; Export</h3>
+            <div className="vera5-intel-export-actions vera5-intel-export-actions--deck">
+              <button
+                type="button"
+                className="vera5-export-action vera5-intel-feed-enrich"
+                onClick={onEnrich}
+                disabled={enrichDisabled}
+                title={enrichDisabledReason}
+                aria-label={
+                  enrichDisabledReason ? `Enrich — ${enrichDisabledReason}` : "Enrich"
+                }
+              >
+                <VeraIcon icon={VeraUiIcons.enrich} size="xs" />
+                {loading ? "Enriching…" : "Enrich"}
+              </button>
+              <details className="vera5-intel-feed-pivots vera5-export-action vera5-export-action--research">
+                <summary
+                  aria-disabled={researchDisabled || undefined}
+                  className={researchDisabled ? "vera5-export-action--disabled-summary" : undefined}
+                >
+                  <span className="vera5-intel-pivot-mark" aria-hidden="true">
+                    <VeraIcon icon={VeraUiIcons.research} size="xs" />
+                  </span>
+                  <span className="vera5-intel-pivot-label">Research</span>
+                </summary>
+                {!researchDisabled ? (
+                  <div role="group" aria-label={`Pivot ${entry.value} to an intelligence source`}>
+                    {pivotLinks.map((link) => (
+                      <button key={link.provider} type="button" onClick={() => openIntelPivot(link)}>
+                        {link.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </details>
               <button
                 type="button"
                 className="vera5-export-action vera5-export-action--copy"
@@ -3066,23 +3214,36 @@ function IntelFeedPanel({
               </button>
               <button
                 type="button"
+                ref={exportTriggerRef}
                 className="vera5-export-action vera5-export-action--more"
                 aria-haspopup="menu"
                 aria-expanded={moreFormatsOpen}
                 aria-controls="vera5-intel-more-formats"
-                onClick={() => setMoreFormatsOpen((open) => !open)}
+                onClick={toggleExportMenu}
                 disabled={!intelligenceAvailable}
               >
-                <VeraIcon icon={VeraUiIcons.moreFormats} size="xs" />
+                <VeraIcon icon={VeraUiIcons.exportMarkdown} size="xs" />
                 Export [Multi-Format]
               </button>
-            </div>
-            <div
-              id="vera5-intel-more-formats"
-              className="vera5-intel-more-formats"
-              role="menu"
-              hidden={!moreFormatsOpen}
-            >
+              <button
+                type="button"
+                ref={collectionsTriggerRef}
+                className="vera5-export-action vera5-export-action--collections"
+                aria-haspopup="menu"
+                aria-expanded={collectionsMenuOpen}
+                aria-controls="vera5-intel-collections-menu"
+                onClick={toggleCollectionsMenu}
+              >
+                <VeraIcon icon={VeraUiIcons.collections} size="xs" />
+                {POPUP_TRAY_CASE_TOOLS_SUMMARY}
+              </button>
+              <div
+                ref={exportOverlayRef}
+                id="vera5-intel-more-formats"
+                className="vera5-intel-more-formats"
+                role="menu"
+                hidden={!moreFormatsOpen}
+              >
               <span className="vera5-intel-more-format-heading" role="presentation">
                 Case templates
               </span>
@@ -3153,28 +3314,46 @@ function IntelFeedPanel({
               <button type="button" role="menuitem" onClick={() => handleDownloadExport("json")}>
                 Export JSON
               </button>
-            </div>
-            <details className="vera5-intel-analyst-note" key={entry.value}>
-              <summary>+ Add analyst note</summary>
-              <label>
-                <span>{HOVER_CARD_ANALYST_NOTES_LABEL}</span>
-                <textarea
-                  value={note}
-                  rows={3}
-                  placeholder={HOVER_CARD_ANALYST_NOTES_PLACEHOLDER}
-                  aria-label={`${HOVER_CARD_ANALYST_NOTES_LABEL} for ${entry.value}`}
-                  data-vera5-analyst-note="true"
-                  onChange={(event) => onNoteChange(event.currentTarget.value)}
+              </div>
+              <div
+                ref={collectionsOverlayRef}
+                id="vera5-intel-collections-menu"
+                className="vera5-intel-collections-menu"
+                role="menu"
+                hidden={!collectionsMenuOpen}
+              >
+                <AddFilteredToCollectionPanel
+                  entries={filteredEntries}
+                  open={addFilteredToCollectionOpen}
+                  onToggle={() => {
+                    onAddFilteredToCollectionFeedback(null);
+                    onAddFilteredToCollectionToggle();
+                  }}
+                  feedback={addFilteredToCollectionFeedback}
+                  onFeedback={(message) => {
+                    onAddFilteredToCollectionFeedback(message);
+                    if (message) {
+                      onCollectionsMenuOpenChange(false);
+                    }
+                  }}
                 />
-              </label>
-              <small aria-live="polite">
-                {noteStatus === "saving"
-                  ? "Saving…"
-                  : noteStatus === "saved"
-                    ? "Saved locally"
-                    : "Stored locally"}
-              </small>
-            </details>
+                <RunMacroOnFilteredPanel
+                  entries={filteredEntries}
+                  open={runMacroOnFilteredOpen}
+                  onToggle={() => {
+                    onRunMacroOnFilteredFeedback(null);
+                    onRunMacroOnFilteredToggle();
+                  }}
+                  feedback={runMacroOnFilteredFeedback}
+                  onFeedback={(message) => {
+                    onRunMacroOnFilteredFeedback(message);
+                    if (message) {
+                      onCollectionsMenuOpenChange(false);
+                    }
+                  }}
+                />
+              </div>
+            </div>
             {exportMessage ? (
               <p className="vera5-intel-export-message" aria-live="polite">
                 {exportMessage}
@@ -3195,6 +3374,16 @@ function IntelFeedPanel({
           onOpenInfoIdChange={setOpenInfoId}
           pivotBySourceId={pivotBySourceId}
           onOpenPivot={openIntelPivot}
+          emptyStateMessage={
+            !hasDirectEnrichmentSources
+              ? "No applicable enrichment sources are enabled."
+              : undefined
+          }
+          emptyStateSupport={
+            !hasDirectEnrichmentSources
+              ? "Configure Enrichment Sources in Settings or use Research for external pivots."
+              : undefined
+          }
         />
       </div>
     </section>
@@ -3236,7 +3425,7 @@ const POPUP_THEME = {
 };
 
 /** Batch collection/macro controls — collapsed so filters stay primary. */
-export const POPUP_TRAY_CASE_TOOLS_SUMMARY = "Collections & macros";
+export const POPUP_TRAY_CASE_TOOLS_SUMMARY = "Collections & Macros";
 /** Per-row Save/Run macro — collapsed so Why detected / Appeared stay primary. */
 export const POPUP_TRAY_ROW_ACTIONS_SUMMARY = "Actions";
 
@@ -3446,6 +3635,10 @@ const SELECTED_INTEL_ANCHOR_BY_TAB = new Map<number, string>();
 export function Popup() {
   const [enabled, setEnabled] = useState(true);
   const [highlightEnabled, setHighlightEnabledState] = useState(true);
+  const [onPagePopoutEnabled, setOnPagePopoutEnabledState] = useState(
+    DEFAULT_ON_PAGE_POPOUT_ENABLED
+  );
+  const [onPagePopoutUnavailableOnPage, setOnPagePopoutUnavailableOnPage] = useState(false);
   const [quietModeActive, setQuietModeActive] = useState(false);
   const [ready, setReady] = useState(false);
   const [scanState, setScanState] = useState<"idle" | "scanning" | "done" | "error">("idle");
@@ -3473,6 +3666,9 @@ export function Popup() {
     useState<IntelSourceAvailabilityRecord>({});
   const [intelFeedLoading, setIntelFeedLoading] = useState(false);
   const analystNoteSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const workspaceGenerationRef = useRef(0);
+  const [workspaceGeneration, setWorkspaceGeneration] = useState(0);
+  const iocQueueRef = useRef<HTMLUListElement | null>(null);
   const [selectionEnrichMessage, setSelectionEnrichMessage] = useState<string | null>(null);
   const [textSelectionAvailable, setTextSelectionAvailable] = useState(false);
   const [selectionEnrichAvailable, setSelectionEnrichAvailable] = useState(false);
@@ -3490,6 +3686,10 @@ export function Popup() {
   const [addFilteredToCollectionFeedback, setAddFilteredToCollectionFeedback] = useState<
     string | null
   >(null);
+  const [collectionsMenuOpen, setCollectionsMenuOpen] = useState(false);
+  const [detectedIndicatorsExpanded, setDetectedIndicatorsExpanded] = useState(true);
+  const [iocSearchQuery, setIocSearchQuery] = useState("");
+  const [trayShowSuppressed, setTrayShowSuppressed] = useState(false);
   const [runMacroTrayAnchorId, setRunMacroTrayAnchorId] = useState<string | null>(null);
   const [runMacroTrayFeedback, setRunMacroTrayFeedback] = useState<string | null>(null);
   const [runMacroOnFilteredOpen, setRunMacroOnFilteredOpen] = useState(false);
@@ -3543,7 +3743,11 @@ export function Popup() {
   };
 
   const refreshIntelFeed = useCallback(async (entry: TabScanSummaryEntry | null) => {
+    const generation = workspaceGenerationRef.current;
     if (!entry) {
+      if (workspaceGenerationRef.current !== generation) {
+        return;
+      }
       setIntelSourceResults([]);
       setIntelSourceAvailability({});
       setIntelFeedLoading(false);
@@ -3577,14 +3781,22 @@ export function Popup() {
           readStoredEnrichmentSourceResult(entry.value, sourceId)
         )
       );
+      if (workspaceGenerationRef.current !== generation) {
+        return;
+      }
       setIntelSourceAvailability(availability);
       setIntelSourceResults(
         stored.filter((result): result is EnrichmentSourceResult => result !== null)
       );
     } catch {
+      if (workspaceGenerationRef.current !== generation) {
+        return;
+      }
       setIntelSourceResults([]);
     } finally {
-      setIntelFeedLoading(false);
+      if (workspaceGenerationRef.current === generation) {
+        setIntelFeedLoading(false);
+      }
     }
   }, []);
 
@@ -3612,14 +3824,18 @@ export function Popup() {
   };
 
   useEffect(() => {
-    void Promise.all([getExtensionEnabled(), getHighlightEnabled(), getQuietMode()]).then(
-      ([extensionValue, highlightValue, quietModeValue]) => {
-        setEnabled(extensionValue);
-        setHighlightEnabledState(highlightValue);
-        setQuietModeActive(quietModeValue);
-        setReady(true);
-      }
-    );
+    void Promise.all([
+      getExtensionEnabled(),
+      getHighlightEnabled(),
+      getQuietMode(),
+      getOnPagePopoutEnabled(),
+    ]).then(([extensionValue, highlightValue, quietModeValue, popoutValue]) => {
+      setEnabled(extensionValue);
+      setHighlightEnabledState(highlightValue);
+      setQuietModeActive(quietModeValue);
+      setOnPagePopoutEnabledState(popoutValue);
+      setReady(true);
+    });
     void requestTabScanSummaryForActiveTab().then((summary) => {
       if (summary) {
         setScanSummary(summary);
@@ -3675,6 +3891,14 @@ export function Popup() {
       if (change) {
         setQuietModeActive(Boolean(change.newValue));
       }
+      if (STORAGE_KEY_ON_PAGE_POPOUT_ENABLED in changes) {
+        const popoutChange = changes[STORAGE_KEY_ON_PAGE_POPOUT_ENABLED];
+        setOnPagePopoutEnabledState(
+          popoutChange.newValue === undefined
+            ? DEFAULT_ON_PAGE_POPOUT_ENABLED
+            : Boolean(popoutChange.newValue)
+        );
+      }
       if (changes[STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES]) {
         void refreshActivePageContext();
       }
@@ -3714,6 +3938,20 @@ export function Popup() {
         }
         setTextSelectionAvailable(state.textSelectionAvailable);
         setSelectionEnrichAvailable(state.selectionEnrichAvailable);
+      });
+      void chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+        if (cancelled) {
+          return;
+        }
+        const url = tab?.url ?? "";
+        setOnPagePopoutUnavailableOnPage(
+          url.startsWith("chrome://") ||
+            url.startsWith("chrome-extension://") ||
+            url.startsWith("edge://") ||
+            url.startsWith("about:") ||
+            url.includes("chrome.google.com/webstore") ||
+            url.includes("chromewebstore.google.com")
+        );
       });
     };
 
@@ -3796,6 +4034,12 @@ export function Popup() {
   useEffect(() => {
     void refreshIntelFeed(selectedDetailEntry);
   }, [refreshIntelFeed, selectedDetailEntry]);
+
+  useEffect(() => {
+    if (iocQueueRef.current) {
+      iocQueueRef.current.scrollTop = 0;
+    }
+  }, [typeFilter, trayShowSuppressed, iocSearchQuery]);
 
   useEffect(() => {
     const onChanged = chrome.storage?.onChanged;
@@ -4006,6 +4250,24 @@ export function Popup() {
     );
   }, [trayNoisePartition.active, knownGoodEntries, activeSession]);
   const suppressedTrayEntries = trayNoisePartition.suppressed;
+  const iocSearchNeedle = iocSearchQuery.trim().toLowerCase();
+  const visibleTrayEntries = useMemo(() => {
+    if (trayShowSuppressed) {
+      const suppressed = suppressedTrayEntries.map(({ entry }) => entry);
+      if (!iocSearchNeedle) {
+        return suppressed.map((entry) => ({ entry, noiseSuppressed: true as const }));
+      }
+      return suppressed
+        .filter((entry) => entry.value.toLowerCase().includes(iocSearchNeedle))
+        .map((entry) => ({ entry, noiseSuppressed: true as const }));
+    }
+    if (!iocSearchNeedle) {
+      return activeTrayEntries.map((entry) => ({ entry, noiseSuppressed: false as const }));
+    }
+    return activeTrayEntries
+      .filter((entry) => entry.value.toLowerCase().includes(iocSearchNeedle))
+      .map((entry) => ({ entry, noiseSuppressed: false as const }));
+  }, [trayShowSuppressed, suppressedTrayEntries, activeTrayEntries, iocSearchNeedle]);
   // INVESTIGATION PATHS — derived strictly from real local state.
   const investigationPageIndicatorCount = scanSummary?.entries.length ?? 0;
   const investigationPriorSightingCount = useMemo(() => {
@@ -4087,6 +4349,11 @@ export function Popup() {
   const handleHighlightToggle = (checked: boolean) => {
     setHighlightEnabledState(checked);
     void setHighlightEnabled(checked);
+  };
+
+  const handleOnPagePopoutToggle = (checked: boolean) => {
+    setOnPagePopoutEnabledState(checked);
+    void setOnPagePopoutEnabled(checked);
   };
 
   const handleOpenSettings = () => {
@@ -4241,6 +4508,7 @@ export function Popup() {
     if (!entry || detailEnrichState === "enriching") {
       return;
     }
+    const generation = workspaceGenerationRef.current;
     setDetailEnrichState("enriching");
     void (async () => {
       try {
@@ -4250,24 +4518,128 @@ export function Popup() {
       } catch {
         // Background unreachable; surface stays on the last known status.
       }
+      if (workspaceGenerationRef.current !== generation) {
+        return;
+      }
       try {
         if (scanSummary && scanSummary.entries.length > 0) {
           const statuses = await loadTrayEntryEnrichmentStatuses(scanSummary.entries);
+          if (workspaceGenerationRef.current !== generation) {
+            return;
+          }
           setTrayEnrichmentStatuses(statuses);
         }
       } catch {
         // Leave existing statuses in place on refresh failure.
       }
+      if (workspaceGenerationRef.current !== generation) {
+        return;
+      }
       await refreshIntelFeed(entry);
+      if (workspaceGenerationRef.current !== generation) {
+        return;
+      }
       await refreshInvestigationSessionState();
+      if (workspaceGenerationRef.current !== generation) {
+        return;
+      }
       setDetailEnrichState("idle");
     })();
   };
+
+  const handleResetWorkspace = () => {
+    const hasUnsavedNoteDraft =
+      analystNoteStatus === "saving" || analystNoteSaveTimerRef.current !== null;
+    if (hasUnsavedNoteDraft) {
+      const confirmed = window.confirm(
+        "Reset this workspace? Unsaved analyst-note changes will be discarded."
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    if (analystNoteSaveTimerRef.current) {
+      clearTimeout(analystNoteSaveTimerRef.current);
+      analystNoteSaveTimerRef.current = null;
+    }
+
+    workspaceGenerationRef.current += 1;
+    setWorkspaceGeneration(workspaceGenerationRef.current);
+
+    setScanState("idle");
+    setScanSummary(null);
+    setSelectedDetailEntry(null);
+    setTypeFilter("all");
+    setTrayFilterReady(false);
+    setTrayNavigationMessage(null);
+    setTrayEnrichmentStatuses({});
+    setIntelSourceResults([]);
+    setIntelSourceAvailability({});
+    setIntelFeedLoading(false);
+    setDetailEnrichState("idle");
+    setAnalystNote("");
+    setAnalystNoteStatus("idle");
+    setIocSearchQuery("");
+    setTrayShowSuppressed(false);
+    setCollectionsMenuOpen(false);
+    setAddFilteredToCollectionOpen(false);
+    setAddFilteredToCollectionFeedback(null);
+    setRunMacroOnFilteredOpen(false);
+    setRunMacroOnFilteredFeedback(null);
+    setSaveToCollectionAnchorId(null);
+    setSaveToCollectionFeedback(null);
+    setRunMacroTrayAnchorId(null);
+    setRunMacroTrayFeedback(null);
+    setSelectionEnrichMessage(null);
+    if (iocQueueRef.current) {
+      iocQueueRef.current.scrollTop = 0;
+    }
+
+    void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
+      if (!tab?.id) {
+        return;
+      }
+      SELECTED_INTEL_ANCHOR_BY_TAB.delete(tab.id);
+      try {
+        await clearTabScanSnapshot(tab.id);
+      } catch {
+        // Snapshot clear is best-effort for the bound tab.
+      }
+      try {
+        await clearTabScanTrayFilter(tab.id);
+      } catch {
+        // Filter clear is best-effort for the bound tab.
+      }
+      try {
+        await chrome.tabs.sendMessage(tab.id, resetWorkspacePageMessage());
+      } catch {
+        // Restricted pages and unbound tabs fail safely.
+      }
+    });
+  };
+
+  const canResetWorkspace =
+    scanState !== "idle" ||
+    scanSummary !== null ||
+    selectedDetailEntry !== null ||
+    typeFilter !== "all" ||
+    trayShowSuppressed ||
+    iocSearchQuery.trim().length > 0 ||
+    collectionsMenuOpen ||
+    addFilteredToCollectionOpen ||
+    runMacroOnFilteredOpen ||
+    intelSourceResults.length > 0 ||
+    detailEnrichState === "enriching" ||
+    intelFeedLoading ||
+    analystNoteStatus === "saving" ||
+    analystNoteSaveTimerRef.current !== null;
 
   const handleScanPage = () => {
     if (!enabled) {
       return;
     }
+    const generation = workspaceGenerationRef.current;
     setScanState("scanning");
     setScanSummary(null);
     setTypeFilter("all");
@@ -4280,13 +4652,21 @@ export function Popup() {
     });
     void chrome.tabs.query({ active: true, currentWindow: true }).then(async ([tab]) => {
       if (!tab?.id) {
-        setScanState("error");
+        if (workspaceGenerationRef.current === generation) {
+          setScanState("error");
+        }
         return;
       }
       try {
         const response = await chrome.tabs.sendMessage(tab.id, scanPageMessage());
+        if (workspaceGenerationRef.current !== generation) {
+          return;
+        }
         if (response && typeof response === "object" && "ok" in response && response.ok === true) {
           const summary = await requestTabScanSummaryForActiveTab();
+          if (workspaceGenerationRef.current !== generation) {
+            return;
+          }
           if (summary !== null) {
             setScanSummary(summary);
             setScanState("done");
@@ -4295,9 +4675,13 @@ export function Popup() {
             return;
           }
         }
-        setScanState("error");
+        if (workspaceGenerationRef.current === generation) {
+          setScanState("error");
+        }
       } catch {
-        setScanState("error");
+        if (workspaceGenerationRef.current === generation) {
+          setScanState("error");
+        }
       }
     });
   };
@@ -4640,6 +5024,9 @@ export function Popup() {
         ["--vera5-workspace-split-min" as string]: `${POPUP_SIDE_PANEL_SPLIT_MIN_PX}px`,
       }}
     >
+      {popupHost === "sidepanel" ? (
+        <span className="vera5-sidepanel-resize-grip" aria-hidden="true" />
+      ) : null}
       <header className="vera5-command-header" aria-label="Vera5 workspace header">
         <h1
           style={{
@@ -4855,13 +5242,18 @@ export function Popup() {
             </span>
           </button>
           <button
-            className="vera5-command-toggle vera5-command-toggle--placeholder"
+            className="vera5-command-toggle vera5-command-toggle--popout"
             type="button"
             role="switch"
-            aria-checked="false"
-            aria-disabled="true"
+            aria-checked={onPagePopoutEnabled}
             aria-label="On-Page Popout"
-            disabled
+            title={
+              onPagePopoutUnavailableOnPage
+                ? "On-page popout is unavailable on this page."
+                : undefined
+            }
+            disabled={!ready || !enabled}
+            onClick={() => handleOnPagePopoutToggle(!onPagePopoutEnabled)}
           >
             <span className="vera5-command-toggle-label">On-Page Popout</span>
             <span className="vera5-command-toggle-track" aria-hidden="true">
@@ -4892,255 +5284,225 @@ export function Popup() {
           note={analystNote}
           noteStatus={analystNoteStatus}
           onNoteChange={handleAnalystNoteChange}
+          filteredEntries={filteredEntries}
+          collectionsMenuOpen={collectionsMenuOpen}
+          onCollectionsMenuOpenChange={setCollectionsMenuOpen}
+          addFilteredToCollectionOpen={addFilteredToCollectionOpen}
+          onAddFilteredToCollectionToggle={() => {
+            setAddFilteredToCollectionFeedback(null);
+            setAddFilteredToCollectionOpen((current) => !current);
+          }}
+          addFilteredToCollectionFeedback={addFilteredToCollectionFeedback}
+          onAddFilteredToCollectionFeedback={setAddFilteredToCollectionFeedback}
+          runMacroOnFilteredOpen={runMacroOnFilteredOpen}
+          onRunMacroOnFilteredToggle={() => {
+            setRunMacroOnFilteredFeedback(null);
+            setRunMacroOnFilteredOpen((current) => !current);
+          }}
+          runMacroOnFilteredFeedback={runMacroOnFilteredFeedback}
+          onRunMacroOnFilteredFeedback={setRunMacroOnFilteredFeedback}
+          canResetWorkspace={canResetWorkspace}
+          onResetWorkspace={handleResetWorkspace}
         />
         <div className="vera5-popup-triage" aria-label="Triage">
           {trayView ? (
             <section
               className="vera5-triage-section vera5-section-frame"
               aria-label="Detected indicators"
+              data-vera5-section-expanded={detectedIndicatorsExpanded ? "true" : "false"}
             >
               <div className="vera5-section-header vera5-triage-heading-row">
                 <div className="vera5-section-identity">
-                  <h2 className="vera5-section-title">
+                  <h2 className="vera5-section-title" id="vera5-detected-indicators-title">
                     <span className="vera5-section-icon" aria-hidden="true">
                       <VeraIcon icon={VeraUiIcons.detectedSection} size="sm" />
                     </span>
                     Detected indicators
                   </h2>
                 </div>
-                {compactIndicatorQueue && trayView === "results" && scanSummary ? (
-                  <details className="vera5-tray-case-tools vera5-section-utilities">
-                    <summary
-                      aria-label={POPUP_TRAY_CASE_TOOLS_SUMMARY}
-                      style={trayDemotedDetailsSummaryStyle()}
-                    >
-                      <VeraIcon icon={VeraUiIcons.collections} size="xs" />
-                      <span className="vera5-tray-case-tools-label">
-                        {POPUP_TRAY_CASE_TOOLS_SUMMARY}
-                      </span>
-                    </summary>
-                    <div className="vera5-tray-case-tools-menu">
-                      <AddFilteredToCollectionPanel
-                        entries={filteredEntries}
-                        open={addFilteredToCollectionOpen}
-                        onToggle={() => {
-                          setAddFilteredToCollectionFeedback(null);
-                          setAddFilteredToCollectionOpen((current) => !current);
-                        }}
-                        feedback={addFilteredToCollectionFeedback}
-                        onFeedback={setAddFilteredToCollectionFeedback}
-                      />
-                      <RunMacroOnFilteredPanel
-                        entries={filteredEntries}
-                        open={runMacroOnFilteredOpen}
-                        onToggle={() => {
-                          setRunMacroOnFilteredFeedback(null);
-                          setRunMacroOnFilteredOpen((current) => !current);
-                        }}
-                        feedback={runMacroOnFilteredFeedback}
-                        onFeedback={setRunMacroOnFilteredFeedback}
-                      />
-                    </div>
-                  </details>
-                ) : !compactIndicatorQueue ? (
-                  <div
-                    className="vera5-triage-profile"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "flex-end",
-                      flexWrap: "wrap",
-                      gap: 6,
-                      maxWidth: "62%",
-                    }}
-                  >
-                    <span
-                      aria-label={`Page profile: ${activePageContextBadgeLabel}. ${activePageContextSourceLabel}.`}
-                      title={`Active page profile: ${activePageContextBadgeLabel} (${activePageContextSourceLabel.toLowerCase()})`}
-                      style={pageContextBadgeStyle({
-                        isOverride: activePageContextOverrideActive,
-                      })}
-                    >
-                      {activePageContextBadgeLabel}
-                    </span>
-                    {activePageContextOverrideActive ? (
-                      <button
-                        type="button"
-                        aria-label="Reset page profile to auto-detect"
-                        title="Profile override active. Reset to auto-detect."
-                        style={{
-                          width: 22,
-                          height: 22,
-                          padding: 0,
-                          border: `1px solid ${POPUP_THEME.border}`,
-                          borderRadius: 4,
-                          background: POPUP_THEME.secondaryBg,
-                          color: POPUP_THEME.accent,
-                          fontSize: 13,
-                          lineHeight: 1,
-                          cursor: "pointer",
-                        }}
-                        onClick={handleResetActivePageContextOverride}
-                      >
-                        ↺
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              <hr className="vera5-section-divider" aria-hidden="true" />
-              {trayView === "prompt" || trayView === "scanning" || trayView === "empty" ? (
-                <p style={trayStatusStyle()} aria-live="polite">
-                  {resolveDetectedIndicatorsStatusCopy(scanPresentation)}
-                </p>
-              ) : null}
-              {trayView === "results" && scanSummary ? (
-                <>
-                  <div
-                    className="vera5-triage-filters vera5-segmented"
-                    role="group"
-                    aria-label={`Filter by indicator type. ${buildTabScanCountSummaryText(
-                      scanSummary,
-                      activePageContextType
-                    )}`}
-                    style={{
-                      marginBottom: 10,
-                    }}
-                  >
-                    <button
-                      type="button"
-                      data-ioc-type="all"
-                      aria-pressed={typeFilter === "all"}
-                      onClick={() => setTypeFilter("all")}
-                      style={filterChipStyle(typeFilter === "all")}
-                    >
-                      All ({scanSummary.totalCount})
-                    </button>
-                    {listIocTypesPresentInSummaryForPageContext(
-                      scanSummary,
-                      activePageContextType
-                    ).map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        data-ioc-type={type}
-                        aria-pressed={typeFilter === type}
-                        onClick={() => setTypeFilter(type)}
-                        style={filterChipStyle(typeFilter === type)}
-                      >
-                        {IOC_TYPE_TRAY_LABEL[type]} ({scanSummary.countByType[type] ?? 0})
-                      </button>
-                    ))}
-                  </div>
+                <div className="vera5-section-utilities vera5-triage-header-utilities">
                   {!compactIndicatorQueue ? (
-                    <details className="vera5-tray-case-tools" style={{ marginBottom: 10 }}>
-                      <summary style={trayDemotedDetailsSummaryStyle()}>
-                        {POPUP_TRAY_CASE_TOOLS_SUMMARY}
-                      </summary>
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: 8,
-                          marginTop: 8,
-                        }}
-                      >
-                        <AddFilteredToCollectionPanel
-                          entries={filteredEntries}
-                          open={addFilteredToCollectionOpen}
-                          onToggle={() => {
-                            setAddFilteredToCollectionFeedback(null);
-                            setAddFilteredToCollectionOpen((current) => !current);
-                          }}
-                          feedback={addFilteredToCollectionFeedback}
-                          onFeedback={setAddFilteredToCollectionFeedback}
-                        />
-                        <RunMacroOnFilteredPanel
-                          entries={filteredEntries}
-                          open={runMacroOnFilteredOpen}
-                          onToggle={() => {
-                            setRunMacroOnFilteredFeedback(null);
-                            setRunMacroOnFilteredOpen((current) => !current);
-                          }}
-                          feedback={runMacroOnFilteredFeedback}
-                          onFeedback={setRunMacroOnFilteredFeedback}
-                        />
-                      </div>
-                    </details>
-                  ) : null}
-                  {trayNavigationMessage ? (
-                    <p
-                      role="alert"
-                      aria-live="polite"
+                    <div
+                      className="vera5-triage-profile"
                       style={{
-                        fontSize: 12,
-                        margin: "0 0 10px",
-                        color: POPUP_THEME.error,
-                        lineHeight: 1.5,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "flex-end",
+                        flexWrap: "wrap",
+                        gap: 6,
                       }}
                     >
-                      {trayNavigationMessage}
-                    </p>
-                  ) : null}
-                  {filteredEntries.length > 0 ? (
-                    <>
-                      {activeTrayEntries.length > 0 ? (
-                        <ul
-                          className="vera5-ioc-queue"
+                      <span
+                        aria-label={`Page profile: ${activePageContextBadgeLabel}. ${activePageContextSourceLabel}.`}
+                        title={`Active page profile: ${activePageContextBadgeLabel} (${activePageContextSourceLabel.toLowerCase()})`}
+                        style={pageContextBadgeStyle({
+                          isOverride: activePageContextOverrideActive,
+                        })}
+                      >
+                        {activePageContextBadgeLabel}
+                      </span>
+                      {activePageContextOverrideActive ? (
+                        <button
+                          type="button"
+                          aria-label="Reset page profile to auto-detect"
+                          title="Profile override active. Reset to auto-detect."
                           style={{
-                            listStyle: "none",
-                            margin: 0,
+                            width: 22,
+                            height: 22,
                             padding: 0,
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: 6,
-                          }}
-                        >
-                          {activeTrayEntries.map((entry) => renderTrayEntryRow(entry))}
-                        </ul>
-                      ) : (
-                        <p style={trayStatusStyle()}>
-                          All matching indicators are listed under Suppressed.
-                        </p>
-                      )}
-                      {suppressedTrayEntries.length > 0 ? (
-                        <details
-                          className="vera5-ioc-suppressed-section"
-                          data-vera5-tray-suppressed-section="true"
-                          style={{
-                            marginTop: activeTrayEntries.length > 0 ? 8 : 0,
-                            borderRadius: 6,
                             border: `1px solid ${POPUP_THEME.border}`,
-                            padding: "6px 8px",
-                            backgroundColor: POPUP_THEME.trayRowBg,
+                            borderRadius: 4,
+                            background: POPUP_THEME.secondaryBg,
+                            color: POPUP_THEME.accent,
+                            fontSize: 13,
+                            lineHeight: 1,
+                            cursor: "pointer",
+                          }}
+                          onClick={handleResetActivePageContextOverride}
+                        >
+                          ↺
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="vera5-section-collapse"
+                    aria-expanded={detectedIndicatorsExpanded}
+                    aria-controls="vera5-detected-indicators-body"
+                    aria-label={
+                      detectedIndicatorsExpanded
+                        ? "Collapse Detected Indicators"
+                        : "Expand Detected Indicators"
+                    }
+                    onClick={() => setDetectedIndicatorsExpanded((open) => !open)}
+                  >
+                    <VeraIcon
+                      icon={
+                        detectedIndicatorsExpanded
+                          ? VeraUiIcons.chevron
+                          : VeraUiIcons.chevronRight
+                      }
+                      size="xs"
+                    />
+                  </button>
+                </div>
+              </div>
+              {detectedIndicatorsExpanded ? (
+                <>
+                  <hr className="vera5-section-divider" aria-hidden="true" />
+                  <div id="vera5-detected-indicators-body">
+                    {trayView === "prompt" || trayView === "scanning" || trayView === "empty" ? (
+                      <p style={trayStatusStyle()} aria-live="polite">
+                        {resolveDetectedIndicatorsStatusCopy(scanPresentation)}
+                      </p>
+                    ) : null}
+                    {trayView === "results" && scanSummary ? (
+                      <>
+                        <div
+                          className="vera5-triage-filters vera5-segmented"
+                          role="group"
+                          aria-label={`Filter by indicator type. ${buildTabScanCountSummaryText(
+                            scanSummary,
+                            activePageContextType
+                          )}`}
+                          style={{
+                            marginBottom: 10,
                           }}
                         >
-                          <summary
-                            data-vera5-why-still-visible-tooltip="true"
+                          <button
+                            type="button"
+                            data-ioc-type="all"
+                            aria-pressed={!trayShowSuppressed && typeFilter === "all"}
+                            onClick={() => {
+                              setTrayShowSuppressed(false);
+                              setTypeFilter("all");
+                            }}
+                            style={filterChipStyle(!trayShowSuppressed && typeFilter === "all")}
+                          >
+                            All ({scanSummary.totalCount})
+                          </button>
+                          {listIocTypesPresentInSummaryForPageContext(
+                            scanSummary,
+                            activePageContextType
+                          ).map((type) => (
+                            <button
+                              key={type}
+                              type="button"
+                              data-ioc-type={type}
+                              aria-pressed={!trayShowSuppressed && typeFilter === type}
+                              onClick={() => {
+                                setTrayShowSuppressed(false);
+                                setTypeFilter(type);
+                              }}
+                              style={filterChipStyle(!trayShowSuppressed && typeFilter === type)}
+                            >
+                              {IOC_TYPE_TRAY_LABEL[type]} ({scanSummary.countByType[type] ?? 0})
+                            </button>
+                          ))}
+                          <button
+                            type="button"
+                            data-ioc-type="suppressed"
+                            data-vera5-tray-suppressed-filter="true"
+                            aria-pressed={trayShowSuppressed}
                             title={whyStillVisibleTooltip}
-                            style={{
-                              cursor: "pointer",
-                              fontSize: 12,
-                              fontWeight: 600,
-                              color: POPUP_THEME.muted,
-                              listStylePosition: "outside",
-                            }}
+                            onClick={() => setTrayShowSuppressed(true)}
+                            style={filterChipStyle(trayShowSuppressed)}
                           >
-                            {formatNoiseRulesTraySuppressedSummary(suppressedTrayEntries.length)}
-                          </summary>
+                            SUPPRESSED ({suppressedTrayEntries.length})
+                          </button>
+                        </div>
+                        <label className="vera5-ioc-search">
+                          <span className="vera5-ioc-search-icon" aria-hidden="true">
+                            <VeraIcon icon={VeraUiIcons.search} size="xs" />
+                          </span>
+                          <span className="vera5-visually-hidden">Search indicators</span>
+                          <input
+                            type="search"
+                            value={iocSearchQuery}
+                            placeholder="Search indicators…"
+                            aria-label="Search indicators"
+                            onChange={(event) => setIocSearchQuery(event.currentTarget.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Escape" && iocSearchQuery) {
+                                event.preventDefault();
+                                setIocSearchQuery("");
+                              }
+                            }}
+                          />
+                          {iocSearchQuery ? (
+                            <button
+                              type="button"
+                              className="vera5-ioc-search-clear"
+                              aria-label="Clear indicator search"
+                              onClick={() => setIocSearchQuery("")}
+                            >
+                              <VeraIcon icon={VeraUiIcons.clear} size="xs" />
+                            </button>
+                          ) : null}
+                        </label>
+                        {trayNavigationMessage ? (
                           <p
-                            className="vera5-ioc-suppressed-hint"
+                            role="alert"
+                            aria-live="polite"
                             style={{
-                              fontSize: 11,
-                              margin: "6px 0 8px",
-                              color: POPUP_THEME.muted,
-                              lineHeight: 1.4,
+                              fontSize: 12,
+                              margin: "0 0 10px",
+                              color: POPUP_THEME.error,
+                              lineHeight: 1.5,
                             }}
                           >
-                            {NOISE_RULES_TRAY_SUPPRESSED_SECTION_HINT}
+                            {trayNavigationMessage}
                           </p>
+                        ) : null}
+                        {visibleTrayEntries.length > 0 ? (
                           <ul
-                            className="vera5-ioc-queue vera5-ioc-queue--suppressed"
+                            ref={iocQueueRef}
+                            className={
+                              trayShowSuppressed
+                                ? "vera5-ioc-queue vera5-ioc-queue--suppressed"
+                                : "vera5-ioc-queue"
+                            }
                             style={{
                               listStyle: "none",
                               margin: 0,
@@ -5150,16 +5512,26 @@ export function Popup() {
                               gap: 6,
                             }}
                           >
-                            {suppressedTrayEntries.map(({ entry }) =>
-                              renderTrayEntryRow(entry, { noiseSuppressed: true })
+                            {visibleTrayEntries.map(({ entry, noiseSuppressed }) =>
+                              renderTrayEntryRow(entry, { noiseSuppressed })
                             )}
                           </ul>
-                        </details>
-                      ) : null}
-                    </>
-                  ) : (
-                    <p style={trayStatusStyle()}>No indicators match this filter.</p>
-                  )}
+                        ) : iocSearchNeedle ? (
+                          <p style={trayStatusStyle()}>
+                            No indicators match “{iocSearchQuery.trim()}”.
+                          </p>
+                        ) : trayShowSuppressed ? (
+                          <p style={trayStatusStyle()}>No suppressed indicators.</p>
+                        ) : filteredEntries.length > 0 ? (
+                          <p style={trayStatusStyle()}>
+                            All matching indicators are listed under Suppressed.
+                          </p>
+                        ) : (
+                          <p style={trayStatusStyle()}>No indicators match this filter.</p>
+                        )}
+                      </>
+                    ) : null}
+                  </div>
                 </>
               ) : null}
             </section>
@@ -5167,6 +5539,7 @@ export function Popup() {
         </div>
         <div className="vera5-popup-detail" aria-label="Investigation paths">
           <InvestigationPaths
+            key={workspaceGeneration}
             entry={selectedDetailEntry}
             loading={intelFeedLoading || detailEnrichState === "enriching"}
             availability={intelSourceAvailability}

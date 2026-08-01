@@ -22,7 +22,7 @@ import { CONTENT_MESSAGE } from "./constants";
 import { setupBackgroundEnrichmentRouting } from "./enrichmentBackgroundFetch";
 import { setupCommandPaletteListener } from "./commandPalette";
 import { setupRunOperatorMacroListener } from "./commandPaletteCommands";
-import { setupHoverCardTrigger } from "./hoverCardTrigger";
+import { setupHoverCardTrigger, setupOnPagePopoutPreferenceListener } from "./hoverCardTrigger";
 import { setupEnrichSelectionListener } from "./enrichSelection";
 import { setupHighlightStorageListener, setupScanPageListener } from "./scanPage";
 import { setupNavigateToIocAnchorListener } from "./iocTrayNavigation";
@@ -74,6 +74,7 @@ if (!contentScriptAlreadyInitialized) {
   setupNavigateToIocAnchorListener();
   setupReopenInvestigationHistoryListener();
   setupHighlightStorageListener();
+  setupOnPagePopoutPreferenceListener();
   setupAutoScanStorageListener();
   void runWithExtensionContextAsync(syncAutoScanWithStorage);
   setupAnalystNotesStorageListener();

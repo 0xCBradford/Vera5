@@ -268,19 +268,32 @@
   --surface-chassis: #d6c9a4;
   --surface-chassis-top: #e2d6b4;
   --surface-chassis-bottom: #c8ba90;
+  /* Phase 11 — dark bookend seams into warm chassis (navbar/footer stay opaque dark). */
+  --surface-chassis-seam-dark: #080c13;
   --surface-chassis-fill: linear-gradient(
-    180deg,
-    var(--surface-chassis-top) 0%,
-    var(--surface-chassis-bottom) 100%
-  );
+      180deg,
+      color-mix(in srgb, var(--surface-chassis-seam-dark) 88%, transparent) 0%,
+      transparent clamp(28px, 7vh, 56px)
+    ),
+    linear-gradient(
+      0deg,
+      color-mix(in srgb, var(--surface-chassis-seam-dark) 88%, transparent) 0%,
+      transparent clamp(28px, 7vh, 56px)
+    ),
+    linear-gradient(
+      180deg,
+      var(--surface-chassis-top) 0%,
+      var(--surface-chassis-bottom) 100%
+    );
   --ws-chassis-gutter: var(--sp-4); /* 10px — Standard baseline */
   --section-border-chassis: color-mix(in srgb, var(--state-blue) 18%, var(--border-hard));
   --section-shadow-chassis: var(--highlight-top), 0 2px 8px rgba(5, 10, 16, 0.22);
 
   /*
-   * Phase 10A/10F — VERA5 cutline frame language (major panels only).
+   * Phase 10A/10F/10G — VERA5 cutline frame language (major panels only).
    * Motif: asymmetric plate + dual perimeter + gold registration + BR cutline + terminal bracket.
    * Surface levels: L0 chassis · L1 major frame · L2 instrument · L3 data/action.
+   * Phase 10G: VISUAL SYSTEM FROZEN — micro-corrections only; no new motifs or families.
    * Do not reuse full L1 motif on inner cards, vendor tiles, or rows.
    */
   --frame-r-sharp: 3px;
@@ -1668,52 +1681,71 @@
   --ioc-type-color: #ffb224;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="url"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="url"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="url"] {
   --ioc-type-color: #2db87a; /* green — distinct from ALL gold */
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="ipv4"],
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="ipv6"],
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="ip"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="ip"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="ipv4"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="ipv6"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="ip"] {
   --ioc-type-color: #3aa7e8;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="domain"],
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="dom"],
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="hostname"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="hostname"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="domain"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="dom"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="hostname"] {
   --ioc-type-color: #8d72e8;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="cidr"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="cidr"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="cidr"] {
   --ioc-type-color: #28a99e;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="asn"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="asn"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="asn"] {
   --ioc-type-color: #e17b32;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="sha256"],
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="sha1"],
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="md5"],
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="hash"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="hash"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="sha256"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="sha1"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="md5"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="hash"] {
   --ioc-type-color: #c64eae;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="email"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="email"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="email"] {
   --ioc-type-color: #d65c84;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="cve"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="cve"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="cve"] {
   --ioc-type-color: #d84b5f;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="filepath"],
 .vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="file"],
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="path"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="path"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="filepath"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="file"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="path"] {
   --ioc-type-color: #687ebd;
 }
 
-.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="onion"] {
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="onion"],
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command[data-ioc-type="onion"] {
   --ioc-type-color: #945cc9;
 }
 
@@ -1815,15 +1847,202 @@
   color: color-mix(in srgb, var(--text-low) 78%, var(--state-blue));
 }
 
+.vera5-popup[data-host="sidepanel"] .vera5-section-collapse {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--border-soft) 80%, transparent);
+  border-radius: var(--r-compact);
+  background: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+  color: color-mix(in srgb, var(--text-secondary) 88%, var(--accent));
+  cursor: pointer;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-collapse:hover {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border-soft));
+  color: var(--accent);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-section-collapse:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline-offset: 1px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-header-utilities {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  max-width: 70%;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-search {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 7px 9px;
+  border: var(--bw-thin) solid color-mix(in srgb, #2a3444 72%, #8a93a3);
+  border-radius: var(--radius-instrument);
+  background: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-search-icon {
+  display: inline-flex;
+  color: #1a1f28;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-search input[type="search"] {
+  min-width: 0;
+  width: 100%;
+  margin: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #101318;
+  caret-color: #101318;
+  font: var(--fw-medium) var(--fs-micro) / 1.35 var(--font-ui);
+  outline: none;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-search input[type="search"]::placeholder {
+  color: #3d4654;
+  opacity: 1;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-search input[type="search"]::-webkit-search-cancel-button {
+  display: none;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-search:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 62%, #2a3444);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 38%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: #ffffff;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-compact);
+  background: transparent;
+  color: #1a1f28;
+  cursor: pointer;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ioc-search-clear:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline-offset: 1px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="suppressed"] {
+  --ioc-type-color: #e8902a;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section [data-ioc-type="suppressed"][aria-pressed="true"] {
+  background: color-mix(in srgb, #e8902a 78%, #1a1208) !important;
+  border-color: color-mix(in srgb, #e8902a 70%, white) !important;
+  color: #fff8ee !important;
+}
+
 .vera5-popup[data-host="sidepanel"] .vera5-ip-scroll {
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
   gap: 0;
   min-height: 0;
-  padding: var(--sp-4) var(--section-pad-x) var(--section-pad-y);
+  padding: var(--sp-4) var(--section-pad-x) calc(var(--section-pad-y) + var(--frame-cut-size));
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-scroll > .vera5-ip-group--open:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-disclosure-header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-disclosure-header .vera5-ip-group-label {
+  margin-bottom: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-disclosure-header:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-disclosure-icon {
+  display: inline-flex;
+  color: color-mix(in srgb, var(--text-secondary) 70%, var(--accent));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group--recommended .vera5-ip-workflow {
+  margin-top: 8px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group--conditional .vera5-ip-conditional {
+  border-left: 2px solid color-mix(in srgb, var(--frame-registration) 70%, transparent);
+  padding-left: 8px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 2px;
+  border-bottom: var(--bw-thin) solid color-mix(in srgb, var(--divider-section) 88%, transparent);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row:last-child {
+  border-bottom: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row[data-vera5-available="false"] {
+  opacity: 0.86;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-label {
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  font-weight: 650;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-status {
+  color: var(--text-low);
+  font-size: var(--fs-nano);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 /* Phase 8 — Selected IOC keeps an inset surface; other groups are open + dividers. */
@@ -1833,7 +2052,7 @@
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-group--inset {
   position: relative;
-  padding: 9px 10px 10px;
+  padding: 9px 10px 10px 14px;
   border: var(--bw-thin) solid var(--surface-instrument-border);
   border-radius: var(--radius-instrument);
   background: var(--surface-instrument);
@@ -2488,7 +2707,8 @@
   margin: 0 0 var(--section-gap);
   padding: 11px var(--section-pad-x) var(--section-pad-y);
   gap: 10px;
-  overflow: hidden;
+  /* Visible so Scan focus rings are not clipped by frame overflow. */
+  overflow: visible;
   /* L1 frame + denser command fill; top gold registration (no title row). */
   --frame-border: rgba(96, 128, 178, 0.28);
   background:
@@ -3091,6 +3311,19 @@
   flex: 0 0 auto;
 }
 
+/* Phase 12 — body wrapper must shrink so the IOC list can scroll. */
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section > #vera5-detected-indicators-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-triage-section > #vera5-detected-indicators-body > :not(.vera5-ioc-queue) {
+  flex: 0 0 auto;
+}
+
 .vera5-popup[data-host="sidepanel"] .vera5-ioc-queue {
   flex: 1 1 auto;
   min-height: 0;
@@ -3390,10 +3623,11 @@
 }
 
 .vera5-intel-empty-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
+  justify-content: stretch;
+  width: min(100%, 320px);
 }
 
 .vera5-intel-empty-actions button,
@@ -3468,8 +3702,6 @@
 }
 
 .vera5-intel-export-actions .vera5-export-action--more {
-  grid-column: 1 / -1;
-  margin-top: 1px;
   border-color: color-mix(in srgb, var(--accent) 55%, var(--border-hard));
   color: var(--accent-hover);
   letter-spacing: 0.03em;
@@ -3496,14 +3728,13 @@
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  padding: 1px;
+  padding: 0;
   border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 16%, var(--border-soft));
   border-radius: var(--radius-instrument);
-  background:
-    linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 22%, transparent) 50%, transparent)
-      0 0 / 100% 1px no-repeat,
-    color-mix(in srgb, var(--surface-page) 55%, #0a1018);
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28);
+  background: color-mix(in srgb, var(--state-blue) 22%, var(--border-soft));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+  /* Visible: export menu must not be clipped by the deck shell. */
+  overflow: visible;
 }
 
 .vera5-intel-feed-command,
@@ -3521,13 +3752,78 @@
 .vera5-intel-feed-command {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 5px;
   align-content: stretch;
   position: relative;
   z-index: 5;
-  border-radius: calc(var(--frame-r-sharp) - 1px) 0 0 calc(var(--frame-r-sharp) - 1px);
-  box-shadow: inset -1px 0 0 color-mix(in srgb, var(--state-blue) 18%, transparent);
+  --ioc-type-color: #8793a8;
+}
+
+.vera5-intel-feed-command-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vera5-intel-feed-identity {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.vera5-intel-feed-identity-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vera5-intel-feed-identity-text > strong {
+  max-height: 3.6em;
+  overflow: auto;
+  color: var(--text-primary);
+  font: var(--fw-medium) var(--fs-value)/var(--lh-value) var(--font-mono);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.vera5-intel-selected-copy {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 3px 7px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--border-soft) 80%, var(--accent));
+  border-radius: var(--r-compact);
+  background: color-mix(in srgb, var(--surface-raised) 90%, transparent);
+  color: var(--text-secondary);
+  font-size: var(--fs-nano);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.vera5-intel-selected-copy:hover {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-soft));
+  color: var(--accent);
+}
+
+.vera5-intel-selected-copy:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white);
+  outline-offset: 1px;
+}
+
+.vera5-intel-selected-copy-feedback {
+  min-height: 1em;
+  color: var(--text-low);
+  font-size: var(--fs-nano);
 }
 
 .vera5-intel-findings-card {
@@ -3536,33 +3832,14 @@
   grid-template-rows: auto auto auto;
   align-content: start;
   gap: 7px;
-  border-radius: 0 calc(var(--frame-r-soft) - 2px) calc(var(--frame-r-sharp) - 1px) 0;
-  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--state-blue) 18%, transparent);
+  z-index: 8;
+  overflow: visible;
 }
 
-.vera5-intel-feed-command > strong {
-  grid-column: 1;
-  align-self: start;
-  max-height: 2.8em;
-  overflow: auto;
-  color: var(--text-primary);
-  font: var(--fw-medium) var(--fs-value)/var(--lh-value) var(--font-mono);
-  overflow-wrap: anywhere;
-}
-
-.vera5-intel-card-label,
 .vera5-intel-feed-type {
-  grid-column: 1;
   font: 750 9px/1.2 var(--font-ui);
   letter-spacing: 0.075em;
   text-transform: uppercase;
-}
-
-.vera5-intel-card-label {
-  color: var(--text-low);
-}
-
-.vera5-intel-feed-type {
   color: var(--text-secondary);
 }
 
@@ -3651,7 +3928,7 @@
   display: none;
 }
 
-/* Phase 10E/10F — full-card state-colored 3D glass score (hero within instrument deck). */
+/* Phase 10E/10F/10G — full-card state-colored 3D glass score (hero within instrument deck). */
 .vera5-intel-feed-score {
   --score-accent: var(--text-low);
   --score-glass: color-mix(in srgb, var(--score-accent) 28%, transparent);
@@ -3665,28 +3942,27 @@
   gap: 2px;
   min-width: 0;
   min-height: var(--intel-summary-min);
-  margin: -1px 0;
+  margin: 0;
   padding: 10px 10px 11px;
   text-align: center;
   isolation: isolate;
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--score-accent) 52%, rgba(255, 255, 255, 0.1));
+  border: 0;
   border-radius: 0;
   background:
     linear-gradient(155deg, rgba(255, 255, 255, 0.14) 0%, transparent 36%),
-    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--score-accent) 40%, transparent), transparent 58%),
+    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--score-accent) 36%, transparent), transparent 58%),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--score-accent) 30%, #1a1214) 0%,
-      color-mix(in srgb, var(--score-accent) 16%, #0e121a) 48%,
-      color-mix(in srgb, var(--score-accent) 9%, #080c12) 100%
+      color-mix(in srgb, var(--score-accent) 28%, #1a1214) 0%,
+      color-mix(in srgb, var(--score-accent) 15%, #0e121a) 48%,
+      color-mix(in srgb, var(--score-accent) 8%, #080c12) 100%
     );
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    inset 0 -12px 24px color-mix(in srgb, var(--score-accent) 14%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--score-accent) 20%, rgba(0, 0, 0, 0.45)),
-    0 0 22px color-mix(in srgb, var(--score-accent) 16%, transparent),
-    var(--shadow-hero);
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -10px 20px color-mix(in srgb, var(--score-accent) 12%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--score-accent) 24%, rgba(0, 0, 0, 0.4)),
+    0 0 14px color-mix(in srgb, var(--score-accent) 12%, transparent);
 }
 
 .vera5-intel-feed-score::before {
@@ -3833,8 +4109,24 @@
   --score-accent: var(--score-yellow);
 }
 
+.vera5-intel-feed-score[data-vera5-score-band="yellow"] > strong,
+.vera5-intel-feed-score[data-vera5-score-band="yellow"] > small {
+  color: #fff4c8;
+  text-shadow:
+    0 0 12px color-mix(in srgb, var(--score-accent) 40%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.65);
+}
+
 .vera5-intel-feed-score[data-vera5-score-band="gold"] {
   --score-accent: var(--score-gold);
+}
+
+.vera5-intel-feed-score[data-vera5-score-band="gold"] > strong,
+.vera5-intel-feed-score[data-vera5-score-band="gold"] > small {
+  color: color-mix(in srgb, var(--score-accent) 55%, #fff6e0);
+  text-shadow:
+    0 0 10px color-mix(in srgb, var(--score-accent) 35%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
 .vera5-intel-feed-score[data-vera5-score-band="zero"] {
@@ -3850,26 +4142,141 @@
 }
 
 .vera5-intel-export-actions {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
 }
 
-.vera5-intel-export-actions button {
+.vera5-intel-export-actions--deck {
+  grid-template-rows: repeat(3, minmax(30px, auto));
+}
+
+.vera5-intel-export-actions > .vera5-export-action,
+.vera5-intel-export-actions > .vera5-intel-feed-pivots {
+  width: 100%;
   min-width: 0;
+  min-height: 30px;
   white-space: normal;
+  text-align: center;
+}
+
+.vera5-intel-export-actions > .vera5-intel-feed-pivots {
+  position: relative;
+  display: flex;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.vera5-intel-export-actions > .vera5-intel-feed-pivots > summary {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ctrl-gap-icon);
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 9px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 42%, var(--border-hard));
+  border-radius: 3px 7px 3px 7px;
+  background:
+    linear-gradient(180deg, rgba(255, 220, 140, 0.11), transparent 40%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 88%, #161e2a), color-mix(in srgb, var(--surface-1) 94%, #0a1018));
+  color: color-mix(in srgb, var(--accent) 55%, var(--text-primary));
+  font: var(--fw-strong) var(--fs-micro)/var(--lh-control) var(--font-ui);
+  cursor: pointer;
+  list-style: none;
+}
+
+.vera5-intel-export-actions > .vera5-intel-feed-pivots > summary::-webkit-details-marker {
+  display: none;
+}
+
+.vera5-intel-feed-command .vera5-intel-analyst-note {
+  margin-top: 4px;
+  border-top: 1px solid var(--border-hairline);
+  padding-top: 5px;
+}
+
+.vera5-evidence-matrix-empty {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  line-height: 1.4;
+}
+
+.vera5-evidence-matrix-empty > p {
+  margin: 0;
+}
+
+/* Phase 12 — decorative Chrome side-panel resize discovery grip (left edge).
+ * Chrome owns native resizing; this affordance is noninteractive.
+ * Left-edge placement assumes the common right-side Chrome side panel.
+ * No reliable Chrome placement API exists to flip for left-side panels. */
+.vera5-popup[data-host="sidepanel"] > .vera5-sidepanel-resize-grip {
+  position: fixed;
+  top: 50%;
+  left: 2px;
+  z-index: 80;
+  width: 4px;
+  height: 36px;
+  margin-top: -18px;
+  border-radius: 2px;
+  background:
+    linear-gradient(
+      180deg,
+      transparent 0 4px,
+      color-mix(in srgb, var(--accent) 55%, #6a5a30) 4px 6px,
+      transparent 6px 10px,
+      color-mix(in srgb, var(--accent) 55%, #6a5a30) 10px 12px,
+      transparent 12px 16px,
+      color-mix(in srgb, var(--accent) 55%, #6a5a30) 16px 18px,
+      transparent 18px 22px,
+      color-mix(in srgb, var(--accent) 55%, #6a5a30) 22px 24px,
+      transparent 24px 28px,
+      color-mix(in srgb, var(--accent) 55%, #6a5a30) 28px 30px,
+      transparent 30px 100%
+    );
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+  pointer-events: none;
+  opacity: 0.72;
+}
+
+.vera5-intel-reset-button {
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-soft)) !important;
+  color: color-mix(in srgb, var(--accent) 78%, var(--text-primary)) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 8px color-mix(in srgb, var(--accent) 12%, transparent) !important;
+}
+
+.vera5-intel-reset-button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 72%, var(--border-soft)) !important;
+  color: color-mix(in srgb, var(--accent) 92%, #fff) !important;
+}
+
+.vera5-intel-reset-button:disabled {
+  opacity: var(--disabled-opacity);
+  cursor: default;
 }
 
 .vera5-intel-more-formats {
   position: absolute;
-  z-index: 35;
-  top: 62px;
-  right: 11px;
+  z-index: 40;
+  top: calc(100% + 4px);
+  right: 0;
+  left: auto;
   display: grid;
   gap: 2px;
-  width: min(252px, calc(100% - 22px));
-  max-height: min(320px, 52dvh);
+  width: min(252px, calc(100cqw - 48px));
+  max-width: min(252px, 100%);
+  max-height: min(280px, 42dvh);
   padding: 8px;
+  overflow-x: hidden;
   overflow-y: auto;
   border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 30%, var(--border-hard));
   border-radius: var(--radius-instrument);
@@ -3877,6 +4284,32 @@
     linear-gradient(180deg, rgba(255, 220, 140, 0.05), transparent 28%),
     linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 94%, #0c1520), color-mix(in srgb, var(--surface-1) 96%, #071018));
   box-shadow: var(--shadow-popover);
+}
+
+.vera5-intel-collections-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  left: 0;
+  right: auto;
+  display: grid;
+  gap: 8px;
+  width: min(280px, calc(100cqw - 48px));
+  max-width: min(280px, 100%);
+  max-height: min(320px, 48dvh);
+  padding: 10px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 30%, var(--border-hard));
+  border-radius: var(--radius-instrument);
+  background:
+    linear-gradient(180deg, rgba(255, 220, 140, 0.05), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 94%, #0c1520), color-mix(in srgb, var(--surface-1) 96%, #071018));
+  box-shadow: var(--shadow-popover);
+}
+
+.vera5-intel-collections-menu[hidden] {
+  display: none;
 }
 
 .vera5-intel-more-formats[hidden] {
@@ -4008,7 +4441,7 @@
 .vera5-evidence-row {
   display: grid;
   grid-template-columns: var(--evidence-cols);
-  align-items: center;
+  align-items: start;
   column-gap: 8px;
   min-width: 0;
 }
@@ -4023,6 +4456,7 @@
   line-height: var(--lh-tight);
   text-transform: uppercase;
   background: color-mix(in srgb, var(--surface-raised) 35%, transparent);
+  align-items: end;
 }
 
 .vera5-evidence-row {
@@ -4033,6 +4467,13 @@
   transition:
     background-color var(--t-hover) var(--ease-out),
     box-shadow var(--t-hover) var(--ease-out);
+}
+
+.vera5-evidence-row > .vera5-evidence-source,
+.vera5-evidence-row > .vera5-evidence-result,
+.vera5-evidence-row > .vera5-evidence-classification,
+.vera5-evidence-row > .vera5-evidence-utility {
+  padding-top: 1px;
 }
 
 .vera5-evidence-row--actionable:active {
@@ -4048,6 +4489,10 @@
   cursor: pointer;
 }
 
+.vera5-evidence-row:not(.vera5-evidence-row--actionable) {
+  cursor: default;
+}
+
 .vera5-evidence-row--actionable:hover {
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--source-accent) 12%, transparent), transparent 68%),
@@ -4060,11 +4505,13 @@
 }
 
 .vera5-evidence-row--actionable:focus-visible {
-  outline: none;
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, white);
+  outline-offset: -2px;
   background:
     linear-gradient(90deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 70%),
     color-mix(in srgb, var(--accent) 9%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 42%, transparent);
+  box-shadow: none;
+  z-index: 2;
 }
 
 .vera5-evidence-row--actionable:focus-visible .vera5-evidence-source-name {
@@ -4620,19 +5067,19 @@
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command {
-    border-radius: calc(var(--frame-r-sharp) - 1px) 0 0 0;
+    border-radius: 0;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-score {
-    margin: -1px -1px 0 0;
-    border-radius: 0 calc(var(--frame-r-soft) - 2px) 0 0;
+    margin: 0;
+    border-radius: 0;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-findings-card {
     grid-column: 1 / -1;
     min-height: auto;
-    border-radius: 0 0 calc(var(--frame-r-sharp) - 1px) calc(var(--frame-r-sharp) - 1px);
-    box-shadow: inset 0 1px 0 color-mix(in srgb, var(--state-blue) 18%, transparent);
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-body--empty {

@@ -109,6 +109,7 @@ describe("buildVendorEvidenceRowModel", () => {
       loading: false,
     });
     expect(disabled.presentationKind).toBe("disabled");
+    expect(disabled.status).toBe("disabled");
 
     const missing = buildVendorEvidenceRowModel({
       sourceId: ENRICHMENT_SOURCE.SHODAN,
@@ -117,6 +118,13 @@ describe("buildVendorEvidenceRowModel", () => {
       loading: false,
     });
     expect(missing.presentationKind).toBe("missing_configuration");
+    expect(missing.status).toBe("not-configured");
     expect(missing.evidenceText).toBe("API key required");
+
+    // Phase 10G — clickability gates on disabled / not-configured only.
+    expect(["disabled", "not-configured"]).toContain(disabled.status);
+    expect(["disabled", "not-configured"]).toContain(missing.status);
+    expect(pivot.status).not.toBe("disabled");
+    expect(pivot.status).not.toBe("not-configured");
   });
 });

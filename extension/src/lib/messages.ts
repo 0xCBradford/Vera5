@@ -44,6 +44,7 @@ export const MESSAGE = {
   RENAME_IOC_COLLECTION: "RENAME_IOC_COLLECTION",
   DELETE_IOC_COLLECTION: "DELETE_IOC_COLLECTION",
   REMOVE_IOC_FROM_COLLECTION: "REMOVE_IOC_FROM_COLLECTION",
+  RESET_WORKSPACE_PAGE: "RESET_WORKSPACE_PAGE",
 } as const;
 
 export type MessageType = (typeof MESSAGE)[keyof typeof MESSAGE];
@@ -249,6 +250,12 @@ export function contentRegisterMessage(): ContentRegisterMessage {
 
 export function scanPageMessage(): ScanPageMessage {
   return { type: MESSAGE.SCAN_PAGE };
+}
+
+export type ResetWorkspacePageMessage = { type: typeof MESSAGE.RESET_WORKSPACE_PAGE };
+
+export function resetWorkspacePageMessage(): ResetWorkspacePageMessage {
+  return { type: MESSAGE.RESET_WORKSPACE_PAGE };
 }
 
 export function scanSelectionMessage(): ScanSelectionMessage {

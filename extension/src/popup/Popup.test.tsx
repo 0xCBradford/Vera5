@@ -58,6 +58,10 @@ import {
   STORAGE_KEY_PAGE_CONTEXT_SITE_MODE_OVERRIDES,
   STORAGE_KEY_QUIET_MODE,
 } from "../lib/storage";
+import {
+  DEFAULT_ON_PAGE_POPOUT_ENABLED,
+  STORAGE_KEY_ON_PAGE_POPOUT_ENABLED,
+} from "../lib/onPagePopoutPreference";
 import { TEST_FIXTURE_GENERIC_API_KEY } from "../lib/fixtureSecrets";
 
 const sampleCollection = createIocCollection({
@@ -553,6 +557,18 @@ function openTrayDemotedDetails(
   return details ?? null;
 }
 
+function openFindingsCollectionsMenu(container: ParentNode): void {
+  const trigger = Array.from(container.querySelectorAll("button")).find(
+    (button) =>
+      button.getAttribute("aria-controls") === "vera5-intel-collections-menu" ||
+      (button.classList.contains("vera5-export-action--collections") &&
+        button.textContent?.includes(POPUP_TRAY_CASE_TOOLS_SUMMARY))
+  );
+  flushSync(() => {
+    trigger?.click();
+  });
+}
+
 describe("Intel Feed vendor display ordering", () => {
   function scoredEntry(
     sourceId: EnrichmentSourceId,
@@ -796,7 +812,7 @@ describe("Popup IOC tray", () => {
     expect(mounted?.container.querySelector(".vera5-command-section")).not.toBeNull();
     expect(
       mounted?.container.querySelectorAll(".vera5-intel-empty-actions button:disabled")
-    ).toHaveLength(3);
+    ).toHaveLength(4);
     const main = mounted?.container.querySelector("main.vera5-popup");
     expect(main?.getAttribute("data-host")).toBe("sidepanel");
     expect(mounted?.container.querySelector(".vera5-popup-triage")).not.toBeNull();
@@ -863,9 +879,22 @@ describe("Popup IOC tray", () => {
     const popout = commandSection?.querySelector<HTMLButtonElement>(
       '.vera5-command-toggle[aria-label="On-Page Popout"]'
     );
-    expect(popout?.disabled).toBe(true);
-    expect(popout?.getAttribute("aria-checked")).toBe("false");
-    expect(popout?.getAttribute("aria-disabled")).toBe("true");
+    await vi.waitFor(() => {
+      expect(popout?.disabled).toBe(false);
+    });
+    expect(popout?.getAttribute("aria-checked")).toBe("true");
+    expect(popout?.getAttribute("aria-disabled")).toBeNull();
+    expect(
+      mounted?.container.querySelector(
+        'button[aria-label="Reset current workspace"]'
+      )?.disabled
+    ).toBe(true);
+    expect(mounted?.container.querySelector(".vera5-sidepanel-resize-grip")).not.toBeNull();
+    expect(
+      mounted?.container
+        .querySelector(".vera5-sidepanel-resize-grip")
+        ?.getAttribute("aria-hidden")
+    ).toBe("true");
     expect(workspace?.children[0]).toBe(intelSection);
     expect(workspace?.children[1]).toBe(triage);
     expect(workspace?.children[2]).toBe(detail);
@@ -891,14 +920,19 @@ describe("Popup IOC tray", () => {
       "Investigation Paths"
     );
     expect(investigation?.querySelector(".vera5-section-divider")).not.toBeNull();
-    expect(investigation?.textContent).toContain("Scan the current page to detect indicators.");
+    expect(investigation?.textContent).toContain("Conditional Intelligence");
+    expect(investigation?.textContent).toContain("Related Context");
+    expect(investigation?.textContent).toContain("Recommended Path");
+    expect(investigation?.textContent).toContain("Awaiting selection");
+    expect(investigation?.textContent).toContain("Context becomes available after selection.");
     expect(investigation?.textContent).not.toContain("No indicator selected");
-    expect(investigation?.querySelector(".vera5-ip-group--inset")).not.toBeNull();
+    expect(investigation?.textContent).not.toContain("Intelligence Sources");
+    expect(investigation?.querySelector(".vera5-ip-group--inset")).toBeNull();
     expect(investigation?.querySelectorAll(".vera5-ip-group--open").length).toBeGreaterThanOrEqual(3);
-    const lowerPair = investigation?.querySelector(".vera5-ip-lower-pair");
-    expect(lowerPair).not.toBeNull();
-    expect(lowerPair?.querySelector('[aria-label="Related context"]')).not.toBeNull();
-    expect(lowerPair?.querySelector('[aria-label="Conditional intelligence"]')).not.toBeNull();
+    expect(investigation?.querySelector(".vera5-ip-lower-pair")).toBeNull();
+    expect(investigation?.querySelector('[aria-label="Related context"]')).not.toBeNull();
+    expect(investigation?.querySelector('[aria-label="Conditional intelligence"]')).not.toBeNull();
+    expect(investigation?.querySelector(".vera5-ip-workflow")).toBeNull();
     const mainEl = main as HTMLElement | null;
     expect(mainEl?.style.containerName).toBe("vera5-workspace");
     expect(mainEl?.style.containerType).toBe("inline-size");
@@ -934,6 +968,10 @@ describe("Popup IOC tray", () => {
     expect(tokens).toContain("--surface-instrument");
     expect(tokens).toContain("--radius-data");
     expect(tokens).toContain("Phase 10A/10F");
+    expect(tokens).toContain("VISUAL SYSTEM FROZEN");
+    expect(tokens).toContain('[data-ioc-type="url"]');
+    expect(tokens).toMatch(/\[data-ioc-type="url"\][^{]*\{[^}]*--ioc-type-color:\s*#2db87a/);
+    expect(tokens).toMatch(/\[data-ioc-type="all"\][^{]*\{[^}]*--ioc-type-color:\s*#ffb224/);
     expect(tokens).toContain("vera5-evidence-row");
     expect(tokens).toContain("@container vera5-workspace (min-width: 1050px)");
     expect(tokens).toContain("@container vera5-workspace (min-width: 1400px)");
@@ -944,6 +982,112 @@ describe("Popup IOC tray", () => {
     expect(tokens).toContain("max-width: var(--intel-empty-max)");
     expect(tokens).toContain("white-space: nowrap");
     expect(tokens).toContain("container-name: vera5-ip");
+    // Phase 11A — Findings 2×2 grid + white IOC search + Selected IOC marker colors
+    expect(tokens).not.toMatch(
+      /\.vera5-intel-export-actions\s+\.vera5-export-action--more\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/
+    );
+    expect(tokens).toMatch(
+      /\.vera5-popup\[data-host="sidepanel"\]\s+\.vera5-ioc-search\s*\{[^}]*background:\s*#ffffff/
+    );
+    expect(tokens).toContain(".vera5-intel-feed-command[data-ioc-type=");
+    expect(tokens).toContain(".vera5-intel-feed-identity");
+  });
+
+  it("Phase 11A: Selected IOC uses type marker without SELECTED IOC title", async () => {
+    const mixedSummary = buildTabScanSummary({
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/phase11a",
+        scannedAt: 1_700_000_000_000,
+        entries: [
+          {
+            type: "ipv4",
+            value: "8.8.8.8",
+            anchorId: "vera5-hl-ip",
+            ruleId: IOC_RULE_ID.IPV4,
+            sourceTextHint: "8.8.8.8",
+          },
+          {
+            type: "url",
+            value: "https://evil.example/path",
+            anchorId: "vera5-hl-url",
+            ruleId: IOC_RULE_ID.URL,
+            sourceTextHint: "https://evil.example/path",
+          },
+          {
+            type: "domain",
+            value: "evil.example",
+            anchorId: "vera5-hl-dom",
+            ruleId: IOC_RULE_ID.DOMAIN,
+            sourceTextHint: "evil.example",
+          },
+          {
+            type: "sha256",
+            value: "a".repeat(64),
+            anchorId: "vera5-hl-hash",
+            ruleId: IOC_RULE_ID.SHA256,
+            sourceTextHint: "a".repeat(64),
+          },
+        ],
+      }),
+      tabId: 7,
+    });
+    stubChrome({ initialSummary: mixedSummary });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+
+    expect(mounted?.container.querySelector(".vera5-intel-feed--empty .vera5-ioc-type-badge")).toBeNull();
+    expect(mounted?.container.querySelector(".vera5-intel-feed-body--empty")?.textContent).not.toContain(
+      "SELECTED IOC"
+    );
+
+    const selectByValue = (value: string) => {
+      const entry = Array.from(
+        mounted!.container.querySelectorAll<HTMLButtonElement>('[data-vera5-tray-entry="true"]')
+      ).find((node) => node.dataset.vera5Value === value);
+      flushSync(() => {
+        entry?.click();
+      });
+    };
+
+    selectByValue("8.8.8.8");
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(".vera5-intel-feed-command")?.getAttribute("data-ioc-type")
+      ).toBe("ipv4");
+    });
+    let command = mounted!.container.querySelector(".vera5-intel-feed-command");
+    expect(command?.querySelector(".vera5-intel-card-label")).toBeNull();
+    expect(command?.textContent).not.toMatch(/SELECTED IOC/i);
+    expect(command?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("IP");
+
+    selectByValue("https://evil.example/path");
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(".vera5-intel-feed-command")?.getAttribute("data-ioc-type")
+      ).toBe("url");
+    });
+    command = mounted!.container.querySelector(".vera5-intel-feed-command");
+    expect(command?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("URL");
+
+    selectByValue("evil.example");
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(".vera5-intel-feed-command")?.getAttribute("data-ioc-type")
+      ).toBe("domain");
+    });
+    command = mounted!.container.querySelector(".vera5-intel-feed-command");
+    expect(command?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("DOM");
+
+    selectByValue("a".repeat(64));
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector(".vera5-intel-feed-command")?.getAttribute("data-ioc-type")
+      ).toBe("sha256");
+    });
+    command = mounted!.container.querySelector(".vera5-intel-feed-command");
+    expect(command?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("SHA256");
   });
 
   it("preserves header utility handlers and functional switch persistence", async () => {
@@ -1009,6 +1153,14 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       localStore: {
+        [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+          abuseipdb: true,
+          otx: true,
+          virustotal: true,
+          greynoise: true,
+          shodan: true,
+          censys: true,
+        },
         [STORAGE_KEY_ENRICHMENT_CACHE]: {
           "8.8.8.8|abuseipdb": {
             fetchedAt,
@@ -1040,7 +1192,7 @@ describe("Popup IOC tray", () => {
       expect(feed?.getAttribute("data-vera5-intel-value")).toBe("8.8.8.8");
       expect(feed?.textContent).toContain("74/100");
       expect(feed?.textContent).toContain("High risk signal");
-      expect(feed?.textContent).toContain("Pivot only");
+      expect(feed?.textContent).not.toContain("Pivot only");
     });
 
     const feed = mounted?.container.querySelector(".vera5-intel-feed");
@@ -1051,25 +1203,63 @@ describe("Popup IOC tray", () => {
     const targetCard = summaryRow?.querySelector(".vera5-intel-feed-command");
     const scoreCard = summaryRow?.querySelector(".vera5-intel-feed-score");
     expect(targetCard).not.toBeNull();
-    expect(targetCard?.querySelector(".vera5-intel-feed-enrich")).not.toBeNull();
-    expect(targetCard?.querySelector(".vera5-intel-feed-pivots")).not.toBeNull();
-    expect(targetCard?.querySelector(".vera5-intel-pivot-label")?.textContent).toBe("Research");
+    expect(targetCard?.querySelector(".vera5-intel-feed-enrich")).toBeNull();
+    expect(targetCard?.querySelector(".vera5-intel-feed-pivots")).toBeNull();
+    expect(targetCard?.querySelector(".vera5-intel-analyst-note")).not.toBeNull();
+    expect(targetCard?.querySelector(".vera5-intel-analyst-note")?.textContent).toContain(
+      "+ Add analyst note"
+    );
     expect(scoreCard).not.toBeNull();
     expect(scoreCard?.querySelector(".vera5-intel-score-meter")).not.toBeNull();
     expect(scoreCard?.getAttribute("data-vera5-score-band")).toBe("pending");
     const findings = summaryRow?.querySelector(".vera5-intel-findings-card");
-    expect(findings?.querySelector("h3")?.textContent).toBe("Findings & Export");
+    expect(findings?.querySelector("h3")?.textContent).toBe("Actions & Export");
     expect(findings?.textContent).toContain("Copy Summary");
     expect(findings?.textContent).toContain("Copy IOC");
     expect(findings?.textContent).toContain("Export [Multi-Format]");
+    expect(findings?.textContent).toContain(POPUP_TRAY_CASE_TOOLS_SUMMARY);
     expect(findings?.textContent).not.toContain("More Formats");
+    expect(findings?.querySelector(".vera5-intel-feed-enrich")).not.toBeNull();
+    expect(findings?.querySelector(".vera5-intel-feed-pivots")).not.toBeNull();
+    expect(findings?.querySelector(".vera5-intel-pivot-label")?.textContent).toBe("Research");
+    expect(findings?.querySelectorAll(".vera5-export-action")).toHaveLength(6);
+    const exportActions = Array.from(
+      findings?.querySelectorAll(".vera5-intel-export-actions > .vera5-export-action") ?? []
+    ).map((button) => {
+      if (button.classList.contains("vera5-intel-feed-pivots")) {
+        return button.querySelector(".vera5-intel-pivot-label")?.textContent?.trim() ?? "";
+      }
+      return button.textContent?.replace(/\s+/g, " ").trim();
+    });
+    expect(exportActions).toEqual([
+      "Enrich",
+      "Research",
+      "Copy Summary",
+      "Copy IOC",
+      "Export [Multi-Format]",
+      POPUP_TRAY_CASE_TOOLS_SUMMARY,
+    ]);
+    expect(exportActions[4]).not.toMatch(/^[.\-…·]/);
+    expect(findings?.querySelector(".vera5-export-action--more")?.textContent).not.toMatch(
+      /^\s*(\.\.\.|---|…)/
+    );
+    expect(findings?.querySelector(".vera5-intel-export-actions")?.className).toContain(
+      "vera5-intel-export-actions--deck"
+    );
+    expect(findings?.querySelector(".vera5-intel-analyst-note")).toBeNull();
+    expect(targetCard?.querySelector(".vera5-intel-card-label")).toBeNull();
+    expect(targetCard?.getAttribute("data-ioc-type")).toBe("ipv4");
+    expect(targetCard?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("IP");
+    expect(targetCard?.querySelector(".vera5-intel-selected-copy")).not.toBeNull();
     expect(findings?.textContent).toContain("Jira comment");
     expect(findings?.textContent).toContain("TheHive case note");
     expect(findings?.textContent).toContain("Obsidian note");
     expect(findings?.textContent).toContain("CSV rows");
     expect(findings?.textContent).toContain("Report formats");
-    expect(findings?.textContent).toContain("+ Add analyst note");
-    expect(summaryRow?.querySelector(".vera5-intel-feed-summary")).toBeNull();
+    expect(findings?.textContent).not.toContain("+ Add analyst note");
+    expect(
+      feed?.querySelector('button[aria-label="Reset current workspace"]')?.disabled
+    ).toBe(false);
     expect(evidenceMatrix).not.toBeNull();
     expect(sourcesGrid).not.toBeNull();
     expect(sourcesGrid?.querySelector(".vera5-intel-feed-pivots")).toBeNull();
@@ -1111,16 +1301,20 @@ describe("Popup IOC tray", () => {
     );
     expect(
       sourcesGrid?.querySelector('.vera5-evidence-row[data-vera5-source-status="pivot-only"]')
-    ).not.toBeNull();
+    ).toBeNull();
     const sourceIds = Array.from(feed?.querySelectorAll(".vera5-evidence-row") ?? []).map(
       (card) => card.getAttribute("data-vera5-source-id")
     );
-    // Scored cards first, then pivot-only, then disabled/unselected live sources.
+    // Enabled direct-enrichment sources only; scored cards first.
     expect(sourceIds[0]).toBe("abuseipdb");
-    expect(sourceIds.slice(0, 3)).toEqual(["abuseipdb", "pulsedive", "threatfox"]);
+    expect(sourceIds).toContain("otx");
+    expect(sourceIds).toContain("virustotal");
+    expect(sourceIds).not.toContain("pulsedive");
+    expect(sourceIds).not.toContain("threatfox");
     expect(sourceIds.indexOf("abuseipdb")).toBeLessThan(sourceIds.indexOf("otx"));
-    expect(sourceIds.indexOf("pulsedive")).toBeLessThan(sourceIds.indexOf("otx"));
     expect(sourceIds.indexOf("otx")).toBeLessThan(sourceIds.indexOf("virustotal"));
+    expect(findings?.textContent).toContain("Pulsedive");
+    expect(findings?.textContent).toContain("ThreatFox");
 
     const compositeInfoButton = mounted?.container.querySelector<HTMLButtonElement>(
       '.vera5-intel-feed-title-row [aria-label="View composite score details"]'
@@ -1175,10 +1369,10 @@ describe("Popup IOC tray", () => {
     });
 
     flushSync(() => {
-      (findings?.querySelector(".vera5-intel-analyst-note > summary") as HTMLElement | null)?.click();
+      (targetCard?.querySelector(".vera5-intel-analyst-note > summary") as HTMLElement | null)?.click();
     });
     expect(
-      findings?.querySelector<HTMLTextAreaElement>(".vera5-intel-analyst-note textarea")
+      targetCard?.querySelector<HTMLTextAreaElement>(".vera5-intel-analyst-note textarea")
     ).not.toBeNull();
 
     flushSync(() => {
@@ -1344,11 +1538,16 @@ describe("Popup IOC tray", () => {
     expect(feed?.querySelector(".vera5-intel-feed-enrich")?.textContent).toContain("Enrich");
   });
 
-  it("does not duplicate pivot-only state text on vendor cards", async () => {
+  it("keeps pivot-only destinations out of Vendor Evidence while Research retains them", async () => {
     const fetchedAt = Date.now();
     stubChrome({
       initialSummary: sampleSummary,
       localStore: {
+        [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+          abuseipdb: true,
+          pulsedive: true,
+          threatfox: true,
+        },
         [STORAGE_KEY_ENRICHMENT_CACHE]: {
           "8.8.8.8|abuseipdb": {
             fetchedAt,
@@ -1376,20 +1575,24 @@ describe("Popup IOC tray", () => {
     await vi.waitFor(() => {
       expect(
         mounted?.container.querySelector(
-          '.vera5-evidence-row[data-vera5-source-status="pivot-only"]'
+          '.vera5-evidence-row[data-vera5-source-id="abuseipdb"]'
         )
       ).not.toBeNull();
     });
-    const pivotCard = mounted?.container.querySelector(
-      '.vera5-evidence-row[data-vera5-source-status="pivot-only"]'
-    );
-    const state = pivotCard?.querySelector(".vera5-evidence-state")?.textContent ?? "";
-    const signal = pivotCard?.querySelector(".vera5-evidence-signal")?.textContent ?? "";
-    expect(state).toBe("Pivot only");
-    expect(signal.trim()).toBe("");
-    expect(pivotCard?.textContent).not.toContain("External research available");
-    expect(pivotCard?.getAttribute("title")).toBe("External research available");
-    expect(pivotCard?.querySelectorAll(".vera5-evidence-state")).toHaveLength(1);
+    expect(
+      mounted?.container.querySelector(
+        '.vera5-evidence-row[data-vera5-source-status="pivot-only"]'
+      )
+    ).toBeNull();
+    expect(
+      mounted?.container.querySelector('.vera5-evidence-row[data-vera5-source-id="pulsedive"]')
+    ).toBeNull();
+    expect(
+      mounted?.container.querySelector('.vera5-evidence-row[data-vera5-source-id="threatfox"]')
+    ).toBeNull();
+    const research = mounted?.container.querySelector(".vera5-intel-feed-pivots");
+    expect(research?.textContent).toContain("Pulsedive");
+    expect(research?.textContent).toContain("ThreatFox");
   });
 
   it("maps vendor score boundaries to the required visual bands", async () => {
@@ -1398,12 +1601,19 @@ describe("Popup IOC tray", () => {
       [ENRICHMENT_SOURCE.ABUSEIPDB, 65, "red", "CRITICAL"],
       [ENRICHMENT_SOURCE.OTX, 64, "orange", "HIGH"],
       [ENRICHMENT_SOURCE.VIRUSTOTAL, 29, "yellow", "SUSPICIOUS"],
-      [ENRICHMENT_SOURCE.PULSEDIVE, 14, "gold", "LOW"],
+      [ENRICHMENT_SOURCE.SHODAN, 14, "gold", "LOW"],
       [ENRICHMENT_SOURCE.GREYNOISE, 0, "zero", null],
     ] as const;
     stubChrome({
       initialSummary: sampleSummary,
       localStore: {
+        [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+          abuseipdb: true,
+          otx: true,
+          virustotal: true,
+          shodan: true,
+          greynoise: true,
+        },
         [STORAGE_KEY_ENRICHMENT_CACHE]: Object.fromEntries(
           scoredSources.map(([sourceId, signal]) => [
             `8.8.8.8|${sourceId}`,
@@ -1458,7 +1668,7 @@ describe("Popup IOC tray", () => {
     });
   });
 
-  it("orders Intel Feed vendor cards by score then operational, pivot-only, and disabled states", async () => {
+  it("orders Intel Feed vendor cards by score then operational states without pivot-only rows", async () => {
     const fetchedAt = Date.now();
     stubChrome({
       initialSummary: sampleSummary,
@@ -1555,23 +1765,22 @@ describe("Popup IOC tray", () => {
     expect(sourceIds.indexOf("abuseipdb")).toBeLessThan(sourceIds.indexOf("otx"));
     expect(sourceIds.indexOf("otx")).toBeLessThan(sourceIds.indexOf("greynoise"));
     expect(sourceIds.indexOf("greynoise")).toBeLessThan(sourceIds.indexOf("shodan"));
-    expect(sourceIds.indexOf("shodan")).toBeLessThan(sourceIds.indexOf("pulsedive"));
-    expect(sourceIds.indexOf("pulsedive")).toBeLessThan(sourceIds.indexOf("censys"));
+    expect(sourceIds).not.toContain("pulsedive");
+    expect(sourceIds).not.toContain("censys");
     expect(
       mounted?.container
         .querySelector('.vera5-evidence-row[data-vera5-source-id="otx"]')
         ?.getAttribute("data-vera5-source-status")
     ).toBe("ok");
     expect(
-      mounted?.container
-        .querySelector('.vera5-evidence-row[data-vera5-source-id="censys"]')
-        ?.getAttribute("data-vera5-source-status")
-    ).toBe("disabled");
+      mounted?.container.querySelector('.vera5-evidence-row[data-vera5-source-id="censys"]')
+    ).toBeNull();
     expect(
-      mounted?.container
-        .querySelector('.vera5-evidence-row[data-vera5-source-id="pulsedive"]')
-        ?.getAttribute("data-vera5-source-status")
-    ).toBe("pivot-only");
+      mounted?.container.querySelector('.vera5-evidence-row[data-vera5-source-id="pulsedive"]')
+    ).toBeNull();
+    expect(mounted?.container.querySelector(".vera5-intel-feed-pivots")?.textContent).toContain(
+      "Pulsedive"
+    );
   });
 
   it("shows source disagreement only through the Intel Feed warning and details control", async () => {
@@ -1583,6 +1792,10 @@ describe("Popup IOC tray", () => {
     stubChrome({
       initialSummary: sampleSummary,
       localStore: {
+        [STORAGE_KEY_ENRICHMENT_SOURCE_ENABLED]: {
+          abuseipdb: true,
+          otx: true,
+        },
         [STORAGE_KEY_ENRICHMENT_CACHE]: Object.fromEntries(
           sourceSignals.map(([sourceId, signal]) => [
             `8.8.8.8|${sourceId}`,
@@ -1639,7 +1852,7 @@ describe("Popup IOC tray", () => {
     expect(details?.textContent).toContain("Source disagreement requires analyst review.");
   });
 
-  it("places case tools in the Chrome tray header without inline row details", async () => {
+  it("places Collections & Macros in Actions & Export, not the Detected Indicators header", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
 
@@ -1648,12 +1861,15 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain(POPUP_TRAY_CASE_TOOLS_SUMMARY);
     });
 
-    const caseTools = Array.from(mounted!.container.querySelectorAll("details")).find((node) =>
-      Array.from(node.children).some(
-        (child) =>
-          child.tagName === "SUMMARY" && child.textContent === POPUP_TRAY_CASE_TOOLS_SUMMARY
-      )
-    ) as HTMLDetailsElement | undefined;
+    const triage = mounted!.container.querySelector(".vera5-triage-section");
+    expect(triage?.querySelector(".vera5-tray-case-tools")).toBeNull();
+    expect(triage?.textContent).not.toContain(POPUP_TRAY_CASE_TOOLS_SUMMARY);
+
+    const emptyCollections = Array.from(
+      mounted!.container.querySelectorAll(".vera5-intel-empty-actions button")
+    ).find((button) => button.textContent?.includes(POPUP_TRAY_CASE_TOOLS_SUMMARY));
+    expect(emptyCollections?.disabled).toBe(true);
+
     const rowActions = Array.from(mounted!.container.querySelectorAll("details")).find((node) =>
       Array.from(node.children).some(
         (child) =>
@@ -1664,11 +1880,95 @@ describe("Popup IOC tray", () => {
       ".vera5-tray-context"
     ) as HTMLDetailsElement | null;
 
-    expect(caseTools?.open).toBe(false);
-    expect(caseTools?.closest(".vera5-triage-heading-row")).not.toBeNull();
     expect(rowActions).toBeUndefined();
     expect(context).toBeNull();
     expect(mounted?.container.textContent).not.toContain("Generic page");
+  });
+
+  it("disables Reset Workspace in a pristine workspace and clears scan state on reset", async () => {
+    stubChrome({ initialSummary: null });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector<HTMLButtonElement>(
+          'button[aria-label="Reset current workspace"]'
+        )?.disabled
+      ).toBe(true);
+    });
+
+    mounted?.root.unmount();
+    mounted?.container.remove();
+    mounted = null;
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+    const resetReady = mounted?.container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Reset current workspace"]'
+    );
+    expect(resetReady?.disabled).toBe(false);
+    vi.mocked(chrome.tabs.sendMessage).mockClear();
+    flushSync(() => {
+      resetReady?.click();
+    });
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).toBeNull();
+      expect(mounted?.container.textContent).toContain(
+        "Scan the current page to detect indicators."
+      );
+      expect(chrome.tabs.sendMessage).toHaveBeenCalledWith(7, {
+        type: MESSAGE.RESET_WORKSPACE_PAGE,
+      });
+    });
+    expect(
+      mounted?.container.querySelector<HTMLButtonElement>(
+        'button[aria-label="Reset current workspace"]'
+      )?.disabled
+    ).toBe(true);
+  });
+
+  it("wires On-Page Popout as a persisted global preference", async () => {
+    stubChrome({
+      initialSummary: null,
+      localStore: {
+        [STORAGE_KEY_ON_PAGE_POPOUT_ENABLED]: DEFAULT_ON_PAGE_POPOUT_ENABLED,
+      },
+    });
+    mounted = renderPopup();
+
+    const popout = await vi.waitFor(() => {
+      const button = mounted?.container.querySelector<HTMLButtonElement>(
+        '.vera5-command-toggle[aria-label="On-Page Popout"]'
+      );
+      expect(button?.disabled).toBe(false);
+      return button!;
+    });
+    expect(popout.getAttribute("aria-checked")).toBe("true");
+    flushSync(() => {
+      popout.click();
+    });
+    await vi.waitFor(() => {
+      expect(popout.getAttribute("aria-checked")).toBe("false");
+    });
+    expect(chromeLocalStore[STORAGE_KEY_ON_PAGE_POPOUT_ENABLED]).toBe(false);
+
+    const listener = storageOnChangedListeners.at(-1);
+    flushSync(() => {
+      listener?.(
+        {
+          [STORAGE_KEY_ON_PAGE_POPOUT_ENABLED]: {
+            newValue: true,
+          },
+        },
+        "local"
+      );
+    });
+    await vi.waitFor(() => {
+      expect(popout.getAttribute("aria-checked")).toBe("true");
+    });
   });
 
   it("steps through investigation replay with previous, next, and jump-to-step", () => {
@@ -2002,6 +2302,9 @@ describe("Popup IOC tray", () => {
     expect(firstRow?.dataset.vera5RuleId).toBe("ioc.regex.ipv4");
     expect(firstRow?.dataset.vera5SourceTextHint).toBe("Contact 8.8.8.8 for details.");
     expect(firstRow?.dataset.iocType).toBe("ipv4");
+    flushSync(() => {
+      firstRow?.click();
+    });
     expect(firstRow?.getAttribute("aria-pressed")).toBe("true");
     expect(firstRow?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("IP");
     expect(firstRow?.querySelector(".vera5-ioc-queue-value")?.textContent).toBe("8.8.8.8");
@@ -2037,31 +2340,33 @@ describe("Popup IOC tray", () => {
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("Suppressed (1)");
+      expect(mounted?.container.textContent).toContain("SUPPRESSED (1)");
     });
 
-    const suppressedSection = mounted!.container.querySelector(
-      "[data-vera5-tray-suppressed-section='true']"
-    ) as HTMLDetailsElement | null;
-    expect(suppressedSection).not.toBeNull();
-    expect(suppressedSection?.open).toBe(false);
-    expect(mounted!.container.textContent).toContain(
-      "Matching local noise rules. Still detected on the page—collapsed for triage."
-    );
+    const suppressedFilter = mounted!.container.querySelector(
+      "[data-vera5-tray-suppressed-filter='true']"
+    ) as HTMLButtonElement | null;
+    expect(suppressedFilter).not.toBeNull();
+    expect(mounted!.container.querySelector("[data-vera5-tray-suppressed-section='true']")).toBeNull();
+    expect(mounted!.container.querySelector(".vera5-ioc-search")).not.toBeNull();
 
     const activeRows = Array.from(
       mounted!.container.querySelectorAll<HTMLElement>(
         "[data-vera5-tray-entry='true']:not([data-vera5-noise-suppressed='true'])"
       )
     );
+    expect(activeRows.map((row) => row.dataset.vera5Value)).toEqual(["8.8.8.8", "CVE-2021-44228"]);
+
+    flushSync(() => {
+      suppressedFilter?.click();
+    });
+
     const suppressedRows = Array.from(
       mounted!.container.querySelectorAll<HTMLElement>(
         "[data-vera5-tray-entry='true'][data-vera5-noise-suppressed='true']"
       )
     );
-    expect(activeRows.map((row) => row.dataset.vera5Value)).toEqual(["8.8.8.8", "CVE-2021-44228"]);
     expect(suppressedRows.map((row) => row.dataset.vera5Value)).toEqual(["192.0.2.1"]);
-    expect(suppressedSection?.contains(suppressedRows[0]!)).toBe(true);
     expect(suppressedRows[0]?.dataset.iocType).toBe("ipv4");
     expect(suppressedRows[0]?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("IP");
     expect(suppressedRows[0]?.querySelector(".vera5-ioc-queue-value")?.textContent).toBe(
@@ -2070,14 +2375,10 @@ describe("Popup IOC tray", () => {
     expect(suppressedRows[0]?.querySelector(".vera5-tray-row-actions")).toBeNull();
     expect(suppressedRows[0]?.querySelector(".vera5-tray-context")).toBeNull();
 
-    const whyStillVisible = suppressedSection?.querySelector(
-      "[data-vera5-why-still-visible-tooltip='true']"
-    ) as HTMLElement | null;
-    expect(whyStillVisible).not.toBeNull();
-    expect(whyStillVisible?.getAttribute("title")).toContain("Why still visible?");
-    expect(whyStillVisible?.getAttribute("title")).toContain("192.0.2.1");
-    expect(whyStillVisible?.getAttribute("title")).toContain("Type: IPv4 address");
-    expect(whyStillVisible?.getAttribute("title")).toContain("Source context: 192.0.2.1");
+    expect(suppressedFilter?.getAttribute("title")).toContain("Why still visible?");
+    expect(suppressedFilter?.getAttribute("title")).toContain("192.0.2.1");
+    expect(suppressedFilter?.getAttribute("title")).toContain("Type: IPv4 address");
+    expect(suppressedFilter?.getAttribute("title")).toContain("Source context: 192.0.2.1");
   });
 
   it("preserves known-good row metadata without rendering an inline badge", async () => {
@@ -2953,7 +3254,19 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
-    openTrayDemotedDetails(mounted.container, POPUP_TRAY_CASE_TOOLS_SUMMARY);
+    const entry = Array.from(
+      mounted!.container.querySelectorAll<HTMLButtonElement>('[data-vera5-tray-entry="true"]')
+    ).find((node) => node.textContent?.includes("8.8.8.8"));
+    flushSync(() => {
+      entry?.click();
+    });
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector('[aria-controls="vera5-intel-collections-menu"]')
+      ).not.toBeNull();
+    });
+
+    openFindingsCollectionsMenu(mounted.container);
     const addFilteredButton = Array.from(mounted.container.querySelectorAll("button")).find(
       (button) => button.textContent === "Add filtered to collection… (3)"
     );
@@ -3038,7 +3351,19 @@ describe("Popup IOC tray", () => {
       expect(mounted?.container.textContent).toContain("8.8.8.8");
     });
 
-    openTrayDemotedDetails(mounted.container, POPUP_TRAY_CASE_TOOLS_SUMMARY);
+    const entry = Array.from(
+      mounted!.container.querySelectorAll<HTMLButtonElement>('[data-vera5-tray-entry="true"]')
+    ).find((node) => node.textContent?.includes("8.8.8.8"));
+    flushSync(() => {
+      entry?.click();
+    });
+    await vi.waitFor(() => {
+      expect(
+        mounted?.container.querySelector('[aria-controls="vera5-intel-collections-menu"]')
+      ).not.toBeNull();
+    });
+
+    openFindingsCollectionsMenu(mounted.container);
     const runFilteredButton = Array.from(mounted.container.querySelectorAll("button")).find(
       (button) => button.textContent === "Run macro on filtered… (3)"
     );
@@ -3196,7 +3521,7 @@ describe("Popup IOC tray", () => {
     expect(emptyIntel?.querySelectorAll("button:disabled").length).toBeGreaterThan(0);
   });
 
-  it("keeps Detected Indicators title intact with Collections & macros utility", async () => {
+  it("keeps Detected Indicators title without Collections & Macros in the header", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
 
@@ -3207,8 +3532,10 @@ describe("Popup IOC tray", () => {
     const heading = triage?.querySelector(".vera5-triage-heading-row .vera5-section-title");
     expect(heading?.textContent).toContain("Detected indicators");
     expect(heading?.textContent).not.toMatch(/Detected\s*$/);
-    expect(triage?.querySelector(".vera5-tray-case-tools")).not.toBeNull();
-    expect(triage?.textContent).toContain(POPUP_TRAY_CASE_TOOLS_SUMMARY);
+    expect(triage?.querySelector(".vera5-tray-case-tools")).toBeNull();
+    expect(triage?.querySelector('[aria-label="Collapse Detected Indicators"]')).not.toBeNull();
+    expect(triage?.querySelector(".vera5-ioc-search")).not.toBeNull();
+    expect(triage?.querySelector('[data-vera5-tray-suppressed-filter="true"]')).not.toBeNull();
   });
 });
 
@@ -3249,6 +3576,17 @@ describe("Investigation Paths module", () => {
     ).find((node) => node.textContent?.includes(label));
   }
 
+  function expandRecommendedPath(): void {
+    const disclosure = mounted?.container.querySelector<HTMLButtonElement>(
+      '[aria-label="Recommended path"] .vera5-ip-disclosure-header, [aria-controls="vera5-recommended-path-body"]'
+    );
+    if (disclosure && disclosure.getAttribute("aria-expanded") !== "true") {
+      flushSync(() => {
+        disclosure.click();
+      });
+    }
+  }
+
   it("replaces the old inspector and casework cards with one module (Scenario I)", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
@@ -3265,30 +3603,31 @@ describe("Investigation Paths module", () => {
     expect(mounted?.container.querySelector(".vera5-intel-feed")).not.toBeNull();
   });
 
-  it("shows a neutral no-selection state with disabled actions (Scenario A)", async () => {
+  it("shows a neutral no-selection state with collapsed recommended path (Scenario A)", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
 
     await vi.waitFor(() => {
-      expect(mounted?.container.textContent).toContain("No indicator selected");
       expect(mounted?.container.textContent).toContain("3 indicators detected");
     });
     const module = mounted?.container.querySelector(".vera5-investigation-paths");
-    expect(module?.textContent).toContain("No indicator selected");
-    expect(module?.textContent).toContain(
-      "Select an indicator from Detected Indicators to begin investigation."
-    );
-    // Primary absence message once — not repeated under Sources / Related Context.
-    expect(module?.textContent?.match(/No indicator selected/g)?.length).toBe(1);
-    expect(module?.textContent).toContain("Sources become available after selecting an indicator.");
+    expect(module?.querySelector('[aria-label="Selected IOC"]')).toBeNull();
+    expect(module?.textContent).not.toContain("Intelligence Sources");
+    expect(module?.textContent).toContain("Conditional Intelligence");
+    expect(module?.textContent).toContain("Related Context");
     expect(module?.textContent).toContain("Context becomes available after selection.");
     expect(module?.textContent).toContain("Awaiting selection");
     expect(module?.textContent).not.toContain("No ATT&CK mappings available");
     expect(module?.querySelector(".vera5-ip-copy")).toBeNull();
-    expect(module?.querySelector(".vera5-ip-workflow")).not.toBeNull();
+    expect(module?.querySelector(".vera5-ip-workflow")).toBeNull();
     expect(module?.querySelector('[aria-label="Recommended path"]')?.textContent).toContain(
       "Recommended Path"
     );
+    const disclosure = module?.querySelector<HTMLButtonElement>(
+      '[aria-controls="vera5-recommended-path-body"]'
+    );
+    expect(disclosure?.getAttribute("aria-expanded")).toBe("false");
+    expandRecommendedPath();
     expect(module?.querySelectorAll(".vera5-ip-workflow-row")).toHaveLength(4);
     expect(investigationActionByLabel("Search malware intelligence")?.disabled).toBe(true);
     expect(investigationActionByLabel("Review detections")?.disabled).toBe(true);
@@ -3303,8 +3642,8 @@ describe("Investigation Paths module", () => {
     });
     selectTrayEntryByText("8.8.8.8");
     await vi.waitFor(() => {
-      const module = mounted?.container.querySelector(".vera5-investigation-paths");
-      expect(module?.textContent).toContain("Appears with");
+      const paths = mounted?.container.querySelector(".vera5-investigation-paths");
+      expect(paths?.textContent).toContain("Appears with");
     });
     const module = mounted?.container.querySelector(".vera5-investigation-paths");
     // Real co-occurrence fact present — do not pad with unavailable filler.
@@ -3313,7 +3652,7 @@ describe("Investigation Paths module", () => {
     expect(module?.textContent).not.toContain("No related infrastructure identified");
   });
 
-  it("binds the selected IOC, enables copy and review detections (Scenario D)", async () => {
+  it("binds the selected IOC in Intel Feed and enables review detections (Scenario D)", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
 
@@ -3330,21 +3669,31 @@ describe("Investigation Paths module", () => {
       ).toBe("ipv4");
     });
     const module = mounted?.container.querySelector(".vera5-investigation-paths");
-    expect(module?.querySelector(".vera5-ioc-type-badge")).not.toBeNull();
-    expect(module?.querySelector(".vera5-ip-selected-value")?.textContent).toContain("8.8.8.8");
+    expect(module?.querySelector('[aria-label="Selected IOC"]')).toBeNull();
+    expect(module?.querySelector(".vera5-ip-selected-value")).toBeNull();
+    const intelCommand = mounted?.container.querySelector(".vera5-intel-feed-command");
+    expect(intelCommand?.textContent).not.toContain("SELECTED IOC");
+    expect(intelCommand?.querySelector(".vera5-intel-card-label")).toBeNull();
+    expect(intelCommand?.getAttribute("data-ioc-type")).toBe("ipv4");
+    expect(intelCommand?.querySelector(".vera5-ioc-type-badge")?.textContent).toBe("IP");
+    expect(intelCommand?.querySelector(".vera5-intel-feed-type")?.textContent).toBe("IP");
+    expect(intelCommand?.textContent).toContain("8.8.8.8");
+    const copySelected = intelCommand?.querySelector<HTMLButtonElement>(
+      ".vera5-intel-selected-copy"
+    );
+    expect(copySelected).not.toBeNull();
+    flushSync(() => {
+      copySelected?.click();
+    });
+    expect(writeText).toHaveBeenCalledWith("8.8.8.8");
+
+    expandRecommendedPath();
     expect(module?.querySelector(".vera5-ip-workflow")).not.toBeNull();
     expect(module?.querySelector('[data-vera5-workflow-step="01"]')).not.toBeNull();
     expect(module?.querySelector('[data-vera5-workflow-step="02"]')).not.toBeNull();
     expect(investigationActionByLabel("Review detections")?.disabled).toBe(false);
     expect(investigationActionByLabel("Find related infrastructure")?.disabled).toBe(true);
     expect(investigationActionByLabel("Check campaign associations")?.disabled).toBe(true);
-
-    const copyButton = module?.querySelector<HTMLButtonElement>(".vera5-ip-copy");
-    expect(copyButton).not.toBeNull();
-    flushSync(() => {
-      copyButton?.click();
-    });
-    expect(writeText).toHaveBeenCalledWith("8.8.8.8");
   });
 
   it("enables CVE conditional intelligence only for CVE indicators (Scenario B/C)", async () => {
@@ -3389,6 +3738,22 @@ describe("Investigation Paths module", () => {
     expect(module?.textContent).toContain(
       "is tracked as a CVE indicator. CVSS, EPSS, and CISA KEV context are not available in local enrichment."
     );
+  });
+
+  it("orders Conditional Intelligence, Related Context, then Recommended Path", async () => {
+    stubChrome({ initialSummary: sampleSummary });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector(".vera5-investigation-paths")).not.toBeNull();
+    });
+    const labels = Array.from(
+      mounted!.container.querySelectorAll(".vera5-investigation-paths .vera5-ip-group-label")
+    ).map((node) => node.textContent?.trim());
+    expect(labels).toEqual([
+      "Conditional Intelligence",
+      "Related Context",
+      "Recommended Path",
+    ]);
   });
 });
 

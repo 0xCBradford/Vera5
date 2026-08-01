@@ -26,8 +26,36 @@ import {
   showHoverCardNearAnchor,
   type HoverCardOverlayPayload,
 } from "./hoverCardOverlay";
+import {
+  CONTENT_STORAGE_KEY_ON_PAGE_POPOUT_ENABLED,
+  getOnPagePopoutEnabledForContent,
+} from "./onPagePopoutStorage";
 
 const IOC_TYPES = new Set<string>(Object.values(IOC_TYPE));
+
+/** Cached preference — default true until content storage loads. */
+let onPagePopoutAllowed = true;
+
+export async function syncOnPagePopoutPreference(doc: Document = document): Promise<void> {
+  onPagePopoutAllowed = await getOnPagePopoutEnabledForContent();
+  if (!onPagePopoutAllowed) {
+    cancelPendingHoverEnrichment();
+    hideHoverCard(doc);
+  }
+}
+
+export function setupOnPagePopoutPreferenceListener(doc: Document = document): void {
+  void syncOnPagePopoutPreference(doc);
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "local") {
+      return;
+    }
+    if (!(CONTENT_STORAGE_KEY_ON_PAGE_POPOUT_ENABLED in changes)) {
+      return;
+    }
+    void syncOnPagePopoutPreference(doc);
+  });
+}
 
 function isIocType(value: string): value is IocType {
   return IOC_TYPES.has(value);
@@ -88,6 +116,9 @@ export function openHoverCardForHighlight(
   options: HoverCardOpenOptions = {},
   doc: Document = document
 ): boolean {
+  if (!onPagePopoutAllowed) {
+    return false;
+  }
   const basePayload = buildHoverCardPayloadFromHighlight(highlight);
   if (!basePayload) {
     return false;

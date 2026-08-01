@@ -53,6 +53,8 @@ import {
   highlightDetectedIocs,
   type HighlightAnchorLink,
 } from "./highlighter";
+import { hideHoverCard } from "./hoverCardOverlay";
+import { cancelPendingHoverEnrichment } from "./enrichmentBackgroundFetch";
 
 export function isScanPageMessage(
   raw: unknown
@@ -73,6 +75,17 @@ export function isScanSelectionMessage(
     typeof raw === "object" &&
     "type" in raw &&
     (raw as { type: unknown }).type === CONTENT_MESSAGE.SCAN_SELECTION
+  );
+}
+
+export function isResetWorkspacePageMessage(
+  raw: unknown
+): raw is { type: typeof CONTENT_MESSAGE.RESET_WORKSPACE_PAGE } {
+  return (
+    raw !== null &&
+    typeof raw === "object" &&
+    "type" in raw &&
+    (raw as { type: unknown }).type === CONTENT_MESSAGE.RESET_WORKSPACE_PAGE
   );
 }
 
@@ -376,6 +389,14 @@ export function setupScanPageListener(): void {
           logUnlessBenignExtensionError(error);
         });
       return true;
+    }
+
+    if (isResetWorkspacePageMessage(message)) {
+      cancelPendingHoverEnrichment();
+      hideHoverCard(document);
+      clearIocHighlights(document.body);
+      sendResponse({ ok: true });
+      return false;
     }
 
     return false;

@@ -201,7 +201,7 @@ function VendorEvidenceRow({
       title={model.title}
       aria-label={
         actionable
-          ? `Open ${model.displayName} for the selected indicator`
+          ? `${model.displayName}, ${model.resultLabel}. Open vendor result for the selected indicator`
           : undefined
       }
       tabIndex={actionable ? 0 : undefined}
@@ -330,6 +330,8 @@ export function VendorEvidenceMatrix({
   onOpenInfoIdChange,
   pivotBySourceId,
   onOpenPivot,
+  emptyStateMessage,
+  emptyStateSupport,
 }: {
   orderedSourceIds: readonly EnrichmentSourceId[];
   sourceEntryById: ReadonlyMap<EnrichmentSourceId, HoverCardSourceEntry>;
@@ -340,6 +342,8 @@ export function VendorEvidenceMatrix({
   onOpenInfoIdChange: (id: string | null) => void;
   pivotBySourceId: ReadonlyMap<EnrichmentSourceId, PivotLink>;
   onOpenPivot: (link: PivotLink) => void;
+  emptyStateMessage?: string;
+  emptyStateSupport?: string;
 }) {
   const queryableIds = orderedSourceIds.filter((sourceId) => {
     const definition = getEnrichmentSourceDefinition(sourceId);
@@ -384,6 +388,12 @@ export function VendorEvidenceMatrix({
           <p className="vera5-evidence-matrix-meta">{metaParts.join(" · ")}</p>
         ) : null}
       </header>
+      {orderedSourceIds.length === 0 ? (
+        <div className="vera5-evidence-matrix-empty" role="status">
+          <p>{emptyStateMessage ?? "No applicable enrichment sources are enabled."}</p>
+          {emptyStateSupport ? <p>{emptyStateSupport}</p> : null}
+        </div>
+      ) : (
       <div
         className="vera5-evidence-matrix-shell vera5-intel-feed-sources"
         role="table"
@@ -423,6 +433,7 @@ export function VendorEvidenceMatrix({
           );
         })}
       </div>
+      )}
     </section>
   );
 }

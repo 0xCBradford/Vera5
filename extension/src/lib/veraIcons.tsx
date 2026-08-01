@@ -5,10 +5,12 @@
  */
 import type { Icon, IconProps, IconWeight } from "@phosphor-icons/react";
 import {
+  ArrowCounterClockwise,
   BookOpen,
   BracketsCurly,
   Bug,
   CaretDown,
+  CaretRight,
   CirclesThreePlus,
   Copy,
   Crosshair,
@@ -23,7 +25,9 @@ import {
   Info,
   MagnifyingGlass,
   MagnifyingGlassPlus,
+  Minus,
   Network,
+  Plus,
   Pulse,
   Selection,
   ShareNetwork,
@@ -32,6 +36,7 @@ import {
   SquaresFour,
   TreeStructure,
   Warning,
+  X,
 } from "@phosphor-icons/react";
 
 /** Phase 1 icon-size tokens (px). */
@@ -118,6 +123,12 @@ export const VeraUiIcons = {
   family: ShareNetwork,
   cve: ShieldWarning,
   chevron: CaretDown,
+  chevronRight: CaretRight,
+  plus: Plus,
+  minus: Minus,
+  search: MagnifyingGlass,
+  clear: X,
+  reset: ArrowCounterClockwise,
   network: Network,
   globe: Globe,
   identification: IdentificationCard,
