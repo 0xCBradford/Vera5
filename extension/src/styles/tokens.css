@@ -536,6 +536,17 @@
   font-size: var(--fs-sm);
   font-weight: var(--fw-body);
   line-height: var(--lh-body);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Phase 12B.1 — explicit application shell; controls inherit VERA5 type (no native form defaults). */
+.vera5-popup button,
+.vera5-popup input,
+.vera5-popup select,
+.vera5-popup textarea {
+  font: inherit;
+  letter-spacing: inherit;
 }
 
 .vera5-popup *,
@@ -842,6 +853,77 @@
   --section-border: var(--section-border-chassis);
   --section-shadow: var(--section-shadow-chassis);
   --ws-chassis-gutter: var(--sp-4); /* Standard: ~10px */
+  /* Phase 12B — resist profile/browser typography defaults. */
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  line-height: var(--lh-body);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Phase 12B/12B.1 — measured width-mode token normalization (data-ws-mode).
+ * Hard rule: Expanded must never reduce type/control sizes below Standard.
+ * Compact may tighten spacing; analytical type stays at Standard floor. */
+.vera5-popup[data-host="sidepanel"][data-ws-mode="compact"] {
+  --ws-chassis-gutter: var(--sp-3);
+  --section-gap: 8px;
+  --fs-micro: 11px;
+  --fs-xs: 11.5px;
+  --fs-sm: 12px;
+  --fs-md: 12.5px;
+  --fs-value: 13px;
+  --fs-title: 13.5px;
+  --fs-heading: 14px;
+  --fs-score-sm: 22px;
+  --fs-score: 28px;
+  --lh-body: 1.45;
+  --ctrl-h-compact: 30px;
+  --score-card-min: 128px;
+  --score-card-max: 156px;
+  --score-meter-w: 88px;
+  --score-meter-h: 44px;
+  --action-deck-h: 32px;
+}
+
+.vera5-popup[data-host="sidepanel"][data-ws-mode="standard"] {
+  --ws-chassis-gutter: var(--sp-4);
+  --section-gap: 10px;
+  --fs-micro: 11px;
+  --fs-xs: 11.5px;
+  --fs-sm: 12px;
+  --fs-md: 12.5px;
+  --fs-value: 13px;
+  --fs-title: 13.5px;
+  --fs-heading: 14px;
+  --fs-score-sm: 22px;
+  --fs-score: 30px;
+  --lh-body: 1.45;
+  --score-card-min: 150px;
+  --score-card-max: 175px;
+  --score-meter-w: 104px;
+  --score-meter-h: 52px;
+  --action-deck-h: 32px;
+}
+
+.vera5-popup[data-host="sidepanel"][data-ws-mode="expanded"] {
+  --ws-chassis-gutter: var(--sp-5);
+  --section-gap: 12px;
+  --fs-micro: 11px;
+  --fs-xs: 11.5px;
+  --fs-sm: 12px;
+  --fs-md: 12.5px;
+  --fs-value: 13px;
+  --fs-title: 13.5px;
+  --fs-heading: 14.5px;
+  --fs-score-sm: 24px;
+  --fs-score: 32px;
+  --lh-body: 1.45;
+  --intel-summary-max: 1200px;
+  --score-card-min: 160px;
+  --score-card-max: 188px;
+  --score-meter-w: 112px;
+  --score-meter-h: 56px;
+  --action-deck-h: 32px;
 }
 
 /* Phase 9 — passthrough outside sidepanel; metallic canvas inside sidepanel. */
@@ -2200,6 +2282,296 @@
   margin: 0;
 }
 
+/* Phase 12C — Sandbox Launch Console (replaces plain white 2×2 buttons). */
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group--sandbox {
+  --sandbox-blue: #4d8dff;
+  --sandbox-blue-deep: #2a528f;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group-summary {
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--state-blue) 55%, var(--text-low));
+  font-size: var(--fs-pico);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-target {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 7px 9px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 18%, var(--border-soft));
+  border-radius: var(--radius-data);
+  background: color-mix(in srgb, var(--state-blue) 8%, var(--surface-data));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-target-label {
+  color: color-mix(in srgb, var(--text-secondary) 80%, var(--text-low));
+  font-size: var(--fs-pico);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-target-value {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-target-type {
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-strong);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-target-ioc {
+  min-width: 0;
+  color: var(--text-primary);
+  font: var(--fw-medium) var(--fs-value) / var(--lh-value) var(--font-mono);
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-guidance {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-privacy {
+  display: grid;
+  grid-template-columns: 3px auto minmax(0, 1fr);
+  align-items: start;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 8px;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 22%, var(--border-soft));
+  border-radius: var(--radius-data);
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-data));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-privacy-rail {
+  align-self: stretch;
+  min-height: 100%;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--accent) 72%, #8a6410);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-privacy-icon {
+  display: inline-flex;
+  margin-top: 1px;
+  color: color-mix(in srgb, var(--accent) 70%, var(--text-secondary));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-privacy-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-privacy-title {
+  color: color-mix(in srgb, var(--accent) 55%, var(--text-primary));
+  font-size: var(--fs-pico);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-privacy-text {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-console {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 18%, var(--border-soft));
+  border-radius: var(--radius-data);
+  background: color-mix(in srgb, var(--state-blue) 10%, #0c121a);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.28);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-console-label {
+  padding: 6px 10px 5px;
+  border-bottom: var(--bw-thin) solid var(--divider-quiet);
+  color: color-mix(in srgb, var(--text-secondary) 78%, var(--text-low));
+  font-size: var(--fs-pico);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row {
+  --sandbox-blue: #4d8dff;
+  --sandbox-blue-deep: #2a528f;
+  position: relative;
+  display: grid;
+  grid-template-columns: 3px 28px 16px minmax(0, 1fr) auto 16px;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 8px 9px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 0;
+  border-top: var(--bw-thin) solid var(--divider-quiet);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-console > .vera5-ip-sandbox-row:first-of-type {
+  border-top: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row::before {
+  content: none;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-rail {
+  align-self: stretch;
+  min-height: 100%;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--sandbox-blue) 42%, transparent);
+  opacity: 0.85;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-index {
+  color: color-mix(in srgb, var(--state-blue) 45%, var(--text-low));
+  font: var(--fw-strong) var(--fs-pico) / 1 var(--font-mono);
+  letter-spacing: 0.04em;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-icon {
+  display: inline-flex;
+  color: color-mix(in srgb, var(--sandbox-blue) 70%, var(--text-secondary));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-destination-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--fs-sm);
+  font-weight: var(--fw-strong);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-desc {
+  color: color-mix(in srgb, var(--sandbox-blue) 62%, var(--text-secondary));
+  font-size: var(--fs-micro);
+  line-height: 1.3;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-state {
+  color: color-mix(in srgb, var(--sandbox-blue) 55%, var(--text-low));
+  font-size: var(--fs-pico);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-destination-external {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: color-mix(in srgb, var(--sandbox-blue) 70%, var(--text-secondary));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-destination-external--muted {
+  width: 14px;
+  height: 14px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--state-blue) 10%, transparent);
+  box-shadow: none;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:hover:not(:disabled) .vera5-ip-sandbox-row-rail {
+  background: color-mix(in srgb, var(--sandbox-blue) 78%, white);
+  opacity: 1;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:hover:not(:disabled) .vera5-ip-sandbox-destination-label,
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:hover:not(:disabled) .vera5-ip-sandbox-destination-external {
+  color: color-mix(in srgb, var(--sandbox-blue) 35%, white);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:active:not(:disabled) {
+  transform: none;
+  background: color-mix(in srgb, var(--state-blue) 14%, transparent);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.28);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  filter: saturate(0.65);
+  box-shadow: none;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:disabled:hover {
+  background: transparent;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:disabled .vera5-ip-sandbox-destination-label,
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:disabled .vera5-ip-sandbox-row-desc,
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row:disabled .vera5-ip-sandbox-row-state {
+  color: color-mix(in srgb, var(--text-disabled) 80%, var(--text-low));
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-feedback {
+  margin: 0;
+  color: color-mix(in srgb, var(--state-blue) 55%, var(--text-primary));
+  font-size: var(--fs-micro);
+  line-height: 1.35;
+}
+
 /* Phase 10C — Recommended Path workflow (replaces 2×2 action tiles). */
 .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow {
   position: relative;
@@ -2449,34 +2821,60 @@
   text-transform: uppercase;
 }
 
-/* Related Context */
+/* Related Context — Phase 12C open correlation rows */
 .vera5-popup[data-host="sidepanel"] .vera5-ip-context {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0;
   margin: 0;
   padding: 0;
   list-style: none;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--state-blue) 14%, var(--border-soft));
+  border-radius: var(--radius-data);
+  background: color-mix(in srgb, var(--state-blue) 6%, var(--surface-data));
+  overflow: hidden;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-context-line {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: 3px auto minmax(0, 1fr);
+  align-items: start;
   gap: 7px;
+  padding: 7px 9px;
+  border-top: var(--bw-thin) solid var(--divider-quiet);
   color: var(--text-secondary);
   font-size: var(--fs-micro);
   line-height: 1.4;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-context-line:first-child {
+  border-top: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-context-rail {
+  align-self: stretch;
+  min-height: 100%;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--state-blue) 55%, transparent);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-context-line[data-vera5-tone="muted"] {
   color: var(--text-low);
 }
 
+.vera5-popup[data-host="sidepanel"] .vera5-ip-context-line[data-vera5-tone="muted"] .vera5-ip-context-rail {
+  background: color-mix(in srgb, var(--text-low) 45%, transparent);
+}
+
 .vera5-popup[data-host="sidepanel"] .vera5-ip-context-dot {
   display: inline-flex;
   flex: 0 0 auto;
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--state-blue);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-context-text {
+  min-width: 0;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-context-dot-mark {
@@ -2508,16 +2906,27 @@
   height: 8px;
 }
 
-/* Conditional Intelligence — open disclosure group with row dividers. */
-.vera5-popup[data-host="sidepanel"] .vera5-ip-conditional {
+/* Conditional Intelligence — Phase 12C shared correlation console. */
+.vera5-popup[data-host="sidepanel"] .vera5-ip-group--conditional {
+  gap: 6px;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-conditional,
+.vera5-popup[data-host="sidepanel"] .vera5-ip-conditional--console {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 0;
   min-width: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  overflow: visible;
+  overflow: hidden;
+  border: var(--bw-thin) solid color-mix(in srgb, var(--accent) 20%, var(--border-soft));
+  border-radius: var(--radius-data);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, transparent), transparent 40%),
+    color-mix(in srgb, #10161f 92%, var(--accent));
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.28),
+    inset 3px 0 0 color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row,
@@ -2534,10 +2943,13 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row:not(.vera5-ip-cond-row--interactive) {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 2px;
   padding: 8px 10px;
+  cursor: default;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row[data-vera5-available="false"] {
@@ -2545,9 +2957,11 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row--interactive > summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto 14px;
   align-items: center;
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 2px;
   padding: 8px 10px;
   cursor: pointer;
   list-style: none;
@@ -2557,10 +2971,15 @@
   display: none;
 }
 
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row--interactive > summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-icon {
   display: inline-flex;
   flex: 0 0 auto;
-  color: color-mix(in srgb, var(--state-blue) 70%, var(--text-secondary));
+  color: color-mix(in srgb, var(--accent) 55%, var(--text-secondary));
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row[data-vera5-available="false"] .vera5-ip-cond-icon {
@@ -2572,29 +2991,46 @@
   height: 14px;
 }
 
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-label {
-  flex: 0 0 auto;
   color: var(--text-primary);
-  font-size: var(--fs-micro);
+  font-size: var(--fs-sm);
   font-weight: 650;
+  line-height: 1.25;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-desc {
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  line-height: 1.3;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row[data-vera5-available="false"] .vera5-ip-cond-label {
-  color: var(--text-disabled);
+  color: color-mix(in srgb, var(--text-primary) 72%, var(--text-disabled));
 }
 
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row[data-vera5-available="false"] .vera5-ip-cond-desc,
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row[data-vera5-available="false"] .vera5-ip-cond-status {
   color: color-mix(in srgb, var(--text-disabled) 88%, var(--text-low));
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-status {
-  flex: 1 1 auto;
   min-width: 0;
+  max-width: 9.5em;
   overflow: hidden;
-  color: var(--text-low);
-  font-size: var(--fs-micro);
+  color: color-mix(in srgb, var(--accent) 40%, var(--text-low));
+  font-size: var(--fs-pico);
+  font-weight: var(--fw-strong);
+  letter-spacing: 0.04em;
   text-align: right;
   text-overflow: ellipsis;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -2615,7 +3051,7 @@
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-body {
-  padding: 0 10px 9px;
+  padding: 0 10px 9px 34px;
 }
 
 .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-note {
@@ -2626,12 +3062,96 @@
   line-height: 1.45;
 }
 
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-finding {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-finding-title {
+  color: var(--text-primary);
+  font-size: var(--fs-micro);
+  font-weight: var(--fw-strong);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-finding-value {
+  color: var(--text-primary);
+  font: var(--fw-medium) var(--fs-value) / var(--lh-value) var(--font-mono);
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-ip-cond-finding-source {
+  color: var(--text-low);
+  font-size: var(--fs-pico);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-chevron,
   .vera5-popup[data-host="sidepanel"] .vera5-ip-workflow-row,
   .vera5-popup[data-host="sidepanel"] .vera5-ip-source,
-  .vera5-popup[data-host="sidepanel"] .vera5-ip-copy {
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-copy,
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row {
     transition: none;
+  }
+}
+
+@container vera5-ip (max-width: 360px) {
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row:not(.vera5-ip-cond-row--interactive),
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-row--interactive > summary {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-status {
+    grid-column: 2;
+    max-width: none;
+    text-align: left;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-cond-chevron {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row {
+    grid-template-columns: 3px 24px 16px minmax(0, 1fr) 16px;
+    grid-template-areas:
+      "rail index icon copy external"
+      "rail index icon state external";
+    row-gap: 2px;
+    align-items: start;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-rail {
+    grid-area: rail;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-index {
+    grid-area: index;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-icon {
+    grid-area: icon;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-copy {
+    grid-area: copy;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-row-state {
+    grid-area: state;
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-ip-sandbox-destination-external {
+    grid-area: external;
   }
 }
 
@@ -3256,8 +3776,8 @@
   flex: 1 1 auto;
   /* ~52% Detected Indicators / ~48% Investigation Paths */
   grid-template-columns: minmax(0, 1.04fr) minmax(0, 0.96fr);
-  /* Intel Feed sizes to content; lower operational workspace fills leftover height. */
-  grid-template-rows: auto minmax(0, 1fr);
+  /* Phase 12B — Intel Feed dominant; lower panels secondary + internally scrollable. */
+  grid-template-rows: minmax(0, 1.42fr) minmax(0, 1fr);
   gap: var(--section-gap) var(--section-gap);
   align-items: stretch;
   min-width: 0;
@@ -3360,11 +3880,20 @@
   grid-column: 1 / -1;
   grid-row: 1;
   align-self: stretch;
-  flex: 0 0 auto;
-  height: fit-content;
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  overflow: visible;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
   gap: 0;
+}
+
+.vera5-popup[data-host="sidepanel"] .vera5-intel-feed-section > .vera5-intel-feed {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .vera5-intel-feed-header {
@@ -3717,12 +4246,16 @@
   outline-offset: 2px;
 }
 
-/* Selected IOC + VERA5 score + findings/export — Level 2 instrument deck. */
+/* Selected IOC + VERA5 score + findings/export — Level 2 instrument deck.
+ * Phase 12B.1 — stable tracks: flexible IOC · instrument score · dominant actions. */
 .vera5-intel-feed-summary-row {
   position: relative;
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: minmax(168px, 0.92fr) minmax(140px, 0.78fr) minmax(288px, 1.95fr);
+  grid-template-columns:
+    minmax(170px, 0.9fr)
+    minmax(var(--score-card-min, 150px), var(--score-card-max, 175px))
+    minmax(300px, 1.6fr);
   gap: 1px;
   align-items: stretch;
   width: 100%;
@@ -3784,11 +4317,33 @@
 }
 
 .vera5-intel-feed-identity-text > strong {
-  max-height: 3.6em;
+  max-height: 4.8em;
   overflow: auto;
   color: var(--text-primary);
   font: var(--fw-medium) var(--fs-value)/var(--lh-value) var(--font-mono);
+  overflow-wrap: break-word;
+  word-break: break-word;
+  hyphens: none;
+}
+
+.vera5-intel-feed-command[data-ioc-type="ipv4"] .vera5-intel-feed-identity-text > strong,
+.vera5-intel-feed-command[data-ioc-type="domain"] .vera5-intel-feed-identity-text > strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: none;
+}
+
+.vera5-intel-feed-command[data-ioc-type="sha256"] .vera5-intel-feed-identity-text > strong,
+.vera5-intel-feed-command[data-ioc-type="sha1"] .vera5-intel-feed-identity-text > strong,
+.vera5-intel-feed-command[data-ioc-type="md5"] .vera5-intel-feed-identity-text > strong {
   overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.vera5-intel-feed-command[data-ioc-type="url"] .vera5-intel-feed-identity-text > strong,
+.vera5-intel-feed-command[data-ioc-type="ipv6"] .vera5-intel-feed-identity-text > strong {
+  overflow-wrap: break-word;
   word-break: break-word;
 }
 
@@ -3928,7 +4483,7 @@
   display: none;
 }
 
-/* Phase 10E/10F/10G — full-card state-colored 3D glass score (hero within instrument deck). */
+/* Phase 10E/10F/10G + 12B.1 — dark state-colored glass score (hero instrument). */
 .vera5-intel-feed-score {
   --score-accent: var(--text-low);
   --score-glass: color-mix(in srgb, var(--score-accent) 28%, transparent);
@@ -3939,8 +4494,9 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 2px;
-  min-width: 0;
+  gap: 3px;
+  width: 100%;
+  min-width: var(--score-card-min, 150px);
   min-height: var(--intel-summary-min);
   margin: 0;
   padding: 10px 10px 11px;
@@ -3949,20 +4505,24 @@
   overflow: hidden;
   border: 0;
   border-radius: 0;
+  /* Dark state glass: radial lift + depth — no bright vertical edge, no flat fill. */
   background:
-    linear-gradient(155deg, rgba(255, 255, 255, 0.14) 0%, transparent 36%),
-    radial-gradient(120% 90% at 50% -10%, color-mix(in srgb, var(--score-accent) 36%, transparent), transparent 58%),
+    radial-gradient(
+      115% 85% at 50% 18%,
+      color-mix(in srgb, var(--score-accent) 26%, transparent),
+      transparent 58%
+    ),
     linear-gradient(
       180deg,
-      color-mix(in srgb, var(--score-accent) 28%, #1a1214) 0%,
-      color-mix(in srgb, var(--score-accent) 15%, #0e121a) 48%,
-      color-mix(in srgb, var(--score-accent) 8%, #080c12) 100%
+      color-mix(in srgb, var(--score-accent) 20%, #1c1618) 0%,
+      color-mix(in srgb, var(--score-accent) 11%, #0e121a) 46%,
+      color-mix(in srgb, var(--score-accent) 5%, #070a10) 100%
     );
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    inset 0 -10px 20px color-mix(in srgb, var(--score-accent) 12%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--score-accent) 24%, rgba(0, 0, 0, 0.4)),
-    0 0 14px color-mix(in srgb, var(--score-accent) 12%, transparent);
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -10px 18px rgba(0, 0, 0, 0.32),
+    inset 0 0 0 1px color-mix(in srgb, var(--score-accent) 12%, rgba(0, 0, 0, 0.5)),
+    0 2px 8px color-mix(in srgb, var(--score-accent) 10%, rgba(0, 0, 0, 0.36));
 }
 
 .vera5-intel-feed-score::before {
@@ -3971,28 +4531,18 @@
   inset: 1px;
   border-radius: inherit;
   pointer-events: none;
-  background:
-    linear-gradient(125deg, rgba(255, 255, 255, 0.14) 0%, transparent 40%, transparent 62%, color-mix(in srgb, var(--score-accent) 12%, transparent) 100%);
-  opacity: 0.7;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--score-accent) 10%, rgba(255, 255, 255, 0.06)) 0%,
+    transparent 42%
+  );
+  opacity: 0.55;
   z-index: 0;
 }
 
+/* Phase 12B.1 — remove bright bottom/edge chrome; depth comes from surface only. */
 .vera5-intel-feed-score::after {
-  content: "";
-  position: absolute;
-  left: 12%;
-  right: 12%;
-  bottom: 0;
-  height: 2px;
-  pointer-events: none;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--score-accent) 70%, white),
-    transparent
-  );
-  opacity: 0.55;
-  z-index: 1;
+  content: none;
 }
 
 .vera5-intel-feed-score > * {
@@ -4003,7 +4553,7 @@
 .vera5-intel-feed-score > span,
 .vera5-intel-feed-score > small {
   color: color-mix(in srgb, var(--score-accent) 62%, #f4f1ea);
-  font-size: var(--fs-pico);
+  font-size: var(--fs-micro);
   text-transform: uppercase;
 }
 
@@ -4011,21 +4561,21 @@
   letter-spacing: 0.14em;
   font-weight: var(--fw-bold);
   color: color-mix(in srgb, var(--score-accent) 45%, #fff6e8);
-  text-shadow: 0 0 12px color-mix(in srgb, var(--score-accent) 28%, transparent);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--score-accent) 22%, transparent);
 }
 
 .vera5-intel-score-meter {
   position: relative;
-  width: 96px;
-  height: 48px;
-  margin: 5px auto 0;
+  width: var(--score-meter-w, 104px);
+  height: var(--score-meter-h, 52px);
+  margin: 4px auto 0;
   overflow: hidden;
   border-radius: 50px 50px 0 0;
   background:
-    linear-gradient(180deg, color-mix(in srgb, var(--score-accent) 12%, transparent), transparent),
+    linear-gradient(180deg, color-mix(in srgb, var(--score-accent) 14%, transparent), transparent),
     color-mix(in srgb, #05080e 72%, transparent);
   box-shadow:
-    inset 0 0 0 1px color-mix(in srgb, var(--score-accent) 36%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--score-accent) 30%, transparent),
     inset 0 8px 14px rgba(0, 0, 0, 0.35);
 }
 
@@ -4033,8 +4583,8 @@
   content: "";
   position: absolute;
   inset: 0 auto auto 0;
-  width: 96px;
-  height: 96px;
+  width: var(--score-meter-w, 104px);
+  height: calc(var(--score-meter-w, 104px));
   border-radius: 50%;
   background: conic-gradient(
     from 270deg,
@@ -4042,15 +4592,15 @@
     color-mix(in srgb, #1a2230 78%, transparent) var(--vera5-score-angle) 180deg,
     transparent 180deg 360deg
   );
-  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--score-accent) 48%, transparent));
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--score-accent) 40%, transparent));
 }
 
 .vera5-intel-score-meter > span {
   position: absolute;
-  top: 9px;
-  left: 9px;
-  width: 78px;
-  height: 78px;
+  top: calc(var(--score-meter-w, 104px) * 0.094);
+  left: calc(var(--score-meter-w, 104px) * 0.094);
+  width: calc(var(--score-meter-w, 104px) * 0.812);
+  height: calc(var(--score-meter-w, 104px) * 0.812);
   border-radius: 50%;
   background:
     radial-gradient(circle at 50% 32%, color-mix(in srgb, var(--score-accent) 22%, transparent), transparent 58%),
@@ -4062,35 +4612,36 @@
 
 .vera5-intel-feed-score > strong {
   z-index: 2;
-  margin: -18px 0 0;
+  margin: -20px 0 0;
   color: color-mix(in srgb, var(--score-accent) 82%, white);
-  font: var(--fw-bold) clamp(1.6rem, 2.5vw, 1.95rem) / var(--lh-score) var(--font-display);
+  /* Phase 12B.1 — token size only; no vw/rem clamp (cross-profile stability). */
+  font: var(--fw-bold) var(--fs-score) / var(--lh-score) var(--font-display);
   letter-spacing: -0.03em;
   text-shadow:
-    0 0 18px color-mix(in srgb, var(--score-accent) 48%, transparent),
+    0 0 14px color-mix(in srgb, var(--score-accent) 40%, transparent),
     0 1px 0 rgba(0, 0, 0, 0.45);
 }
 
 .vera5-intel-feed-score > strong > span {
   margin-left: 1px;
   color: color-mix(in srgb, var(--score-accent) 50%, #d8d2c8);
-  font: var(--fw-strong) var(--fs-micro) / var(--lh-score) var(--font-ui);
+  font: var(--fw-strong) var(--fs-xs) / var(--lh-score) var(--font-ui);
 }
 
 .vera5-intel-feed-score > small {
   font-weight: 800;
   letter-spacing: 0.12em;
   color: color-mix(in srgb, var(--score-accent) 78%, white);
-  text-shadow: 0 0 10px color-mix(in srgb, var(--score-accent) 35%, transparent);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--score-accent) 28%, transparent);
 }
 
 .vera5-intel-feed-score .vera5-intel-enrichment-status {
   margin: 3px 0 0;
   max-width: 100%;
   color: color-mix(in srgb, var(--score-accent) 35%, #c8c2b8);
-  font-size: var(--fs-nano);
+  font-size: var(--fs-pico);
   font-weight: 560;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 
 .vera5-intel-feed-score[data-vera5-score-band="pending"] {
@@ -4101,12 +4652,37 @@
   --score-accent: var(--score-red);
 }
 
+/* High — burnt orange glass (avoid muddy brown flat fill). */
 .vera5-intel-feed-score[data-vera5-score-band="orange"] {
-  --score-accent: var(--score-orange);
+  --score-accent: #ff8a24;
+  background:
+    radial-gradient(
+      115% 85% at 50% 16%,
+      color-mix(in srgb, #ff8a24 30%, transparent),
+      transparent 58%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #ff8a24 22%, #1a120e) 0%,
+      color-mix(in srgb, #ff6a12 12%, #0e1016) 48%,
+      color-mix(in srgb, #c45a10 6%, #07090e) 100%
+    );
 }
 
 .vera5-intel-feed-score[data-vera5-score-band="yellow"] {
   --score-accent: var(--score-yellow);
+  background:
+    radial-gradient(
+      115% 85% at 50% 16%,
+      color-mix(in srgb, var(--score-yellow) 24%, transparent),
+      transparent 58%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--score-yellow) 16%, #1a1610) 0%,
+      color-mix(in srgb, var(--score-yellow) 9%, #0e1218) 48%,
+      color-mix(in srgb, var(--score-yellow) 4%, #070a10) 100%
+    );
 }
 
 .vera5-intel-feed-score[data-vera5-score-band="yellow"] > strong,
@@ -4136,8 +4712,9 @@
 .vera5-intel-findings-card h3 {
   margin: 0;
   color: var(--text-secondary);
-  font: var(--fw-strong) var(--fs-micro)/var(--lh-tight) var(--font-ui);
+  font: var(--fw-strong) var(--fs-xs)/var(--lh-tight) var(--font-ui);
   letter-spacing: 0.06em;
+  text-align: center;
   text-transform: uppercase;
 }
 
@@ -4149,15 +4726,203 @@
 }
 
 .vera5-intel-export-actions--deck {
-  grid-template-rows: repeat(3, minmax(30px, auto));
+  /* Phase 12B.1 — smoked colored glass tokens (light → base → dark; no white cap). */
+  --vera-action-enrich-light: #d9ad3a;
+  --vera-action-enrich: #c9941a;
+  --vera-action-enrich-dark: #8a6410;
+  --vera-action-enrich-shadow: rgba(201, 148, 26, 0.28);
+  --vera-action-research-light: #b54052;
+  --vera-action-research: #9a2b3a;
+  --vera-action-research-dark: #6a1c28;
+  --vera-action-research-shadow: rgba(154, 43, 58, 0.3);
+  --vera-action-copy-light: #4a86d4;
+  --vera-action-copy: #2f6fbf;
+  --vera-action-copy-dark: #1d4a86;
+  --vera-action-copy-shadow: rgba(47, 111, 191, 0.28);
+  --vera-action-export-light: #2ea873;
+  --vera-action-export: #1f8a5a;
+  --vera-action-export-dark: #145c3c;
+  --vera-action-export-shadow: rgba(31, 138, 90, 0.28);
+  --vera-action-collections-light: #db8340;
+  --vera-action-collections: #c46a1e;
+  --vera-action-collections-dark: #8a4812;
+  --vera-action-collections-shadow: rgba(196, 106, 30, 0.28);
+  grid-template-rows: repeat(3, minmax(var(--action-deck-h, 32px), auto));
+}
+
+/* Phase 12B.1 — smoked enterprise glass Actions & Export (no arcade white cap). */
+.vera5-intel-export-actions--deck > .vera5-export-action,
+.vera5-intel-export-actions--deck > .vera5-intel-feed-pivots > summary {
+  position: relative;
+  overflow: hidden;
+  min-height: var(--action-deck-h, 32px);
+  height: var(--action-deck-h, 32px);
+  padding-block: 0;
+  padding-inline: 8px;
+  border-width: 1px;
+  color: #ffffff !important;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.28);
+  white-space: nowrap;
+  isolation: isolate;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action svg,
+.vera5-intel-export-actions--deck > .vera5-intel-feed-pivots > summary svg {
+  color: #f7f9fc !important;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.22));
+}
+
+/* Remove Phase 12A white reflective band pseudo entirely. */
+.vera5-intel-export-actions--deck > .vera5-export-action::before,
+.vera5-intel-export-actions--deck > .vera5-intel-feed-pivots > summary::before {
+  content: none;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action > *,
+.vera5-intel-export-actions--deck > .vera5-intel-feed-pivots > summary > * {
+  position: relative;
+  z-index: 1;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action--enrich,
+.vera5-intel-export-actions--deck > .vera5-intel-feed-enrich {
+  border-color: color-mix(in srgb, var(--vera-action-enrich-dark) 70%, #000) !important;
+  background: linear-gradient(
+    to bottom,
+    var(--vera-action-enrich-light) 0%,
+    var(--vera-action-enrich) 38%,
+    var(--vera-action-enrich) 58%,
+    var(--vera-action-enrich-dark) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 2px 4px rgba(0, 0, 0, 0.28) !important;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action--research > summary {
+  border-color: color-mix(in srgb, var(--vera-action-research-dark) 70%, #000) !important;
+  background: linear-gradient(
+    to bottom,
+    var(--vera-action-research-light) 0%,
+    var(--vera-action-research) 38%,
+    var(--vera-action-research) 58%,
+    var(--vera-action-research-dark) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 2px 4px rgba(0, 0, 0, 0.28) !important;
+  color: #ffffff !important;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action--copy {
+  border-color: color-mix(in srgb, var(--vera-action-copy-dark) 70%, #000) !important;
+  background: linear-gradient(
+    to bottom,
+    var(--vera-action-copy-light) 0%,
+    var(--vera-action-copy) 38%,
+    var(--vera-action-copy) 58%,
+    var(--vera-action-copy-dark) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 2px 4px rgba(0, 0, 0, 0.28) !important;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action--export,
+.vera5-intel-export-actions--deck > .vera5-export-action--more {
+  border-color: color-mix(in srgb, var(--vera-action-export-dark) 70%, #000) !important;
+  background: linear-gradient(
+    to bottom,
+    var(--vera-action-export-light) 0%,
+    var(--vera-action-export) 38%,
+    var(--vera-action-export) 58%,
+    var(--vera-action-export-dark) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 2px 4px rgba(0, 0, 0, 0.28) !important;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action--collections {
+  border-color: color-mix(in srgb, var(--vera-action-collections-dark) 70%, #000) !important;
+  background: linear-gradient(
+    to bottom,
+    var(--vera-action-collections-light) 0%,
+    var(--vera-action-collections) 38%,
+    var(--vera-action-collections) 58%,
+    var(--vera-action-collections-dark) 100%
+  ) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 2px 4px rgba(0, 0, 0, 0.28) !important;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action:hover:not(:disabled),
+.vera5-intel-export-actions--deck > .vera5-export-action--research:not([open]) > summary:hover {
+  filter: brightness(1.05);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.26),
+    0 3px 5px rgba(0, 0, 0, 0.3) !important;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action:active:not(:disabled),
+.vera5-intel-export-actions--deck > .vera5-export-action--research > summary:active {
+  filter: brightness(0.96);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 1px 2px rgba(0, 0, 0, 0.22) !important;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action:focus-visible,
+.vera5-intel-export-actions--deck > .vera5-export-action--research > summary:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 2px rgba(0, 0, 0, 0.55),
+    0 0 0 4px color-mix(in srgb, var(--accent) 75%, #fff) !important;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action:disabled,
+.vera5-intel-export-actions--deck > .vera5-export-action--research > summary.vera5-export-action--disabled-summary {
+  filter: saturate(0.45) brightness(0.88);
+  opacity: 0.78;
+  cursor: not-allowed;
+  color: rgba(255, 255, 255, 0.9) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22) !important;
+}
+
+.vera5-intel-export-actions--deck > .vera5-export-action:disabled:hover,
+.vera5-intel-export-actions--deck
+  > .vera5-export-action--research
+  > summary.vera5-export-action--disabled-summary:hover {
+  filter: saturate(0.45) brightness(0.88);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.22) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vera5-intel-export-actions--deck > .vera5-export-action,
+  .vera5-intel-export-actions--deck > .vera5-export-action--research > summary {
+    transition: none !important;
+  }
 }
 
 .vera5-intel-export-actions > .vera5-export-action,
 .vera5-intel-export-actions > .vera5-intel-feed-pivots {
   width: 100%;
   min-width: 0;
-  min-height: 30px;
-  white-space: normal;
+  min-height: var(--action-deck-h, 32px);
+  white-space: nowrap;
   text-align: center;
 }
 
@@ -4213,37 +4978,40 @@
   margin: 0;
 }
 
-/* Phase 12 — decorative Chrome side-panel resize discovery grip (left edge).
+/* Phase 12B — decorative Chrome side-panel resize discovery grip (right edge).
  * Chrome owns native resizing; this affordance is noninteractive.
- * Left-edge placement assumes the common right-side Chrome side panel.
- * No reliable Chrome placement API exists to flip for left-side panels. */
+ * Right-edge placement matches Phase 12B discovery guidance for the common
+ * right-docked Chrome side panel. No reliable placement API exists to flip. */
 .vera5-popup[data-host="sidepanel"] > .vera5-sidepanel-resize-grip {
   position: fixed;
   top: 50%;
-  left: 2px;
+  right: 2px;
+  left: auto;
   z-index: 80;
-  width: 4px;
-  height: 36px;
-  margin-top: -18px;
-  border-radius: 2px;
+  width: 5px;
+  height: 42px;
+  margin-top: -21px;
+  border-radius: 3px;
   background:
     linear-gradient(
       180deg,
-      transparent 0 4px,
-      color-mix(in srgb, var(--accent) 55%, #6a5a30) 4px 6px,
-      transparent 6px 10px,
-      color-mix(in srgb, var(--accent) 55%, #6a5a30) 10px 12px,
-      transparent 12px 16px,
-      color-mix(in srgb, var(--accent) 55%, #6a5a30) 16px 18px,
-      transparent 18px 22px,
-      color-mix(in srgb, var(--accent) 55%, #6a5a30) 22px 24px,
-      transparent 24px 28px,
-      color-mix(in srgb, var(--accent) 55%, #6a5a30) 28px 30px,
-      transparent 30px 100%
+      transparent 0 5px,
+      color-mix(in srgb, var(--accent) 58%, #6a5a30) 5px 7px,
+      transparent 7px 12px,
+      color-mix(in srgb, var(--accent) 58%, #6a5a30) 12px 14px,
+      transparent 14px 19px,
+      color-mix(in srgb, var(--accent) 58%, #6a5a30) 19px 21px,
+      transparent 21px 26px,
+      color-mix(in srgb, var(--accent) 58%, #6a5a30) 26px 28px,
+      transparent 28px 33px,
+      color-mix(in srgb, var(--accent) 58%, #6a5a30) 33px 35px,
+      transparent 35px 100%
     );
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04);
   pointer-events: none;
-  opacity: 0.72;
+  opacity: 0.78;
 }
 
 .vera5-intel-reset-button {
@@ -4450,7 +5218,7 @@
   padding: 6px 8px 6px 0;
   border-bottom: var(--bw-thin) solid color-mix(in srgb, var(--accent) 16%, var(--border-soft));
   color: color-mix(in srgb, var(--text-secondary) 80%, var(--text-low));
-  font-size: var(--fs-nano);
+  font-size: var(--fs-pico);
   font-weight: var(--fw-strong);
   letter-spacing: 0.07em;
   line-height: var(--lh-tight);
@@ -4461,7 +5229,7 @@
 
 .vera5-evidence-row {
   position: relative;
-  padding: 7px 8px 7px 0;
+  padding: 8px 8px 8px 0;
   border-bottom: var(--bw-thin) solid var(--divider-row);
   background: transparent;
   transition:
@@ -4546,7 +5314,7 @@
   color: var(--text-primary);
   font-size: var(--fs-title);
   font-weight: var(--fw-strong);
-  line-height: var(--lh-tight);
+  line-height: 1.3;
   text-decoration: none;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4594,7 +5362,7 @@
 .vera5-evidence-score > span {
   margin-left: 1px;
   color: color-mix(in srgb, var(--source-accent) 58%, var(--text-secondary));
-  font: 700 10px/1 var(--font-ui);
+  font: 700 var(--fs-micro)/1 var(--font-ui);
   letter-spacing: 0;
 }
 
@@ -4611,7 +5379,7 @@
 
 .vera5-evidence-classification .vera5-risk-label {
   color: var(--source-accent);
-  font: var(--fw-strong) var(--fs-micro) / var(--lh-tight) var(--font-ui);
+  font: var(--fw-strong) var(--fs-xs) / var(--lh-tight) var(--font-ui);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -4630,9 +5398,9 @@
 .vera5-evidence-signal {
   margin: 0;
   color: color-mix(in srgb, var(--text-primary) 88%, var(--source-accent));
-  font-size: var(--fs-micro);
+  font-size: var(--fs-xs);
   font-weight: 520;
-  line-height: 1.32;
+  line-height: 1.35;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -4818,7 +5586,11 @@
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-summary-row {
     max-width: var(--intel-summary-max);
-    grid-template-columns: minmax(230px, 0.85fr) minmax(180px, 0.55fr) minmax(400px, 1.5fr);
+    /* Expanded: score track ≥ Standard (never shrink instrument). */
+    grid-template-columns:
+      minmax(230px, 0.85fr)
+      minmax(var(--score-card-min, 160px), var(--score-card-max, 188px))
+      minmax(400px, 1.5fr);
     justify-content: start;
   }
 
@@ -4991,7 +5763,15 @@
 
 @container vera5-workspace (max-width: 699px) {
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-summary-row {
-    grid-template-columns: minmax(140px, 0.9fr) minmax(112px, 0.7fr) minmax(220px, 1.6fr);
+    grid-template-columns:
+      minmax(140px, 0.9fr)
+      minmax(var(--score-card-min, 128px), var(--score-card-max, 156px))
+      minmax(220px, 1.6fr);
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-export-actions--deck > .vera5-export-action,
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-export-actions--deck > .vera5-intel-feed-pivots > summary {
+    padding-inline: 5px;
   }
 }
 
@@ -5062,7 +5842,8 @@
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-summary-row {
-    grid-template-columns: minmax(0, 1fr) minmax(108px, 0.68fr);
+    /* Compact reflow: actions span full width; score keeps instrument min-width. */
+    grid-template-columns: minmax(0, 1fr) minmax(var(--score-card-min, 128px), var(--score-card-max, 156px));
     gap: 1px;
   }
 
@@ -5093,7 +5874,7 @@
 
 @container vera5-workspace (max-width: 399px) {
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-summary-row {
-    grid-template-columns: minmax(0, 1fr) minmax(94px, 0.62fr);
+    grid-template-columns: minmax(0, 1fr) minmax(var(--score-card-min, 128px), var(--score-card-max, 156px));
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-command,
@@ -5102,30 +5883,19 @@
     padding: 7px 8px;
   }
 
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-score-meter {
-    width: 60px;
-    height: 30px;
-  }
-
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-score-meter::before {
-    width: 60px;
-    height: 60px;
-  }
-
-  .vera5-popup[data-host="sidepanel"] .vera5-intel-score-meter > span {
-    top: 7px;
-    left: 7px;
-    width: 46px;
-    height: 46px;
-  }
-
+  /* Phase 12B.1 — keep compact gauge readable; do not collapse to 60px sliver. */
   .vera5-popup[data-host="sidepanel"] .vera5-intel-feed-score > strong {
-    margin-top: -13px;
+    margin-top: -16px;
     font-size: var(--fs-score-sm);
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-intel-export-actions {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-export-actions--deck > .vera5-export-action,
+  .vera5-popup[data-host="sidepanel"] .vera5-intel-export-actions--deck > .vera5-intel-feed-pivots > summary {
+    padding-inline: 4px;
   }
 
   .vera5-popup[data-host="sidepanel"] .vera5-command-toggle {

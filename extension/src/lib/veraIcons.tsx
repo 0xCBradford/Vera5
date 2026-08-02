@@ -6,6 +6,7 @@
 import type { Icon, IconProps, IconWeight } from "@phosphor-icons/react";
 import {
   ArrowCounterClockwise,
+  ArrowSquareOut,
   BookOpen,
   BracketsCurly,
   Bug,
@@ -14,6 +15,7 @@ import {
   CirclesThreePlus,
   Copy,
   Crosshair,
+  Cube,
   Database,
   DotsThree,
   FileText,
@@ -106,6 +108,7 @@ export const VeraUiIcons = {
   intelSection: Pulse,
   enrich: Database,
   research: MagnifyingGlass,
+  external: ArrowSquareOut,
   copy: Copy,
   exportMarkdown: FileText,
   exportJson: BracketsCurly,
@@ -122,6 +125,7 @@ export const VeraUiIcons = {
   mitre: GridFour,
   family: ShareNetwork,
   cve: ShieldWarning,
+  sandbox: Cube,
   chevron: CaretDown,
   chevronRight: CaretRight,
   plus: Plus,
@@ -147,6 +151,7 @@ export type InvestigationGlyphName =
   | "mitre"
   | "family"
   | "cve"
+  | "sandbox"
   | "chevron"
   | "dot";
 
@@ -160,6 +165,7 @@ const INVESTIGATION_GLYPH_MAP: Record<Exclude<InvestigationGlyphName, "dot">, Ic
   mitre: GridFour,
   family: ShareNetwork,
   cve: ShieldWarning,
+  sandbox: Cube,
   chevron: CaretDown,
 };
 

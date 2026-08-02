@@ -44,6 +44,7 @@ import {
   orderIntelFeedVendorSourceIds,
   resolveIntelVendorNumericScore,
   resolveIntelVendorSortGroup,
+  resolveWorkspaceWidthMode,
 } from "./Popup";
 import type { HoverCardSourceEntry } from "../lib/hoverCardEnrichment";
 import type { EnrichmentSourceId } from "../lib/enrichmentSourceRegistry";
@@ -516,6 +517,7 @@ function stubChrome(options: {
         }
       ),
       openOptionsPage: vi.fn(),
+      getManifest: vi.fn(() => ({ version: "0.1.0" })),
     },
     tabs: {
       query: vi.fn(async () => [{ id: 7 }]),
@@ -815,10 +817,19 @@ describe("Popup IOC tray", () => {
     ).toHaveLength(4);
     const main = mounted?.container.querySelector("main.vera5-popup");
     expect(main?.getAttribute("data-host")).toBe("sidepanel");
+    expect(main?.getAttribute("data-ws-mode")).toMatch(/^(compact|standard|expanded)$/);
     expect(mounted?.container.querySelector(".vera5-popup-triage")).not.toBeNull();
     expect(mounted?.container.querySelector(".vera5-investigation-paths")).not.toBeNull();
     expect(mounted?.container.querySelector(".vera5-popup-casework")).toBeNull();
     expect(mounted?.container.querySelector(".vera5-popup-inspector")).toBeNull();
+  });
+
+  it("resolves measured workspace width modes for cross-profile normalization", () => {
+    expect(resolveWorkspaceWidthMode(480)).toBe("compact");
+    expect(resolveWorkspaceWidthMode(679)).toBe("compact");
+    expect(resolveWorkspaceWidthMode(680)).toBe("standard");
+    expect(resolveWorkspaceWidthMode(1049)).toBe("standard");
+    expect(resolveWorkspaceWidthMode(1050)).toBe("expanded");
   });
 
   it("marks side panel host for permanent three-panel workspace", async () => {
@@ -924,7 +935,9 @@ describe("Popup IOC tray", () => {
     expect(investigation?.textContent).toContain("Related Context");
     expect(investigation?.textContent).toContain("Recommended Path");
     expect(investigation?.textContent).toContain("Awaiting selection");
-    expect(investigation?.textContent).toContain("Context becomes available after selection.");
+    expect(investigation?.textContent).toContain(
+      "Select an indicator to evaluate local context."
+    );
     expect(investigation?.textContent).not.toContain("No indicator selected");
     expect(investigation?.textContent).not.toContain("Intelligence Sources");
     expect(investigation?.querySelector(".vera5-ip-group--inset")).toBeNull();
@@ -982,6 +995,64 @@ describe("Popup IOC tray", () => {
     expect(tokens).toContain("max-width: var(--intel-empty-max)");
     expect(tokens).toContain("white-space: nowrap");
     expect(tokens).toContain("container-name: vera5-ip");
+    // Phase 12A — centered Actions & Export heading + chromatic glass tokens
+    expect(tokens).toMatch(
+      /\.vera5-intel-findings-card h3\s*\{[^}]*text-align:\s*center/
+    );
+    expect(tokens).toContain("--vera-action-enrich:");
+    expect(tokens).toContain("--vera-action-research:");
+    expect(tokens).toContain("--vera-action-copy:");
+    expect(tokens).toContain("--vera-action-export:");
+    expect(tokens).toContain("--vera-action-collections:");
+    expect(tokens).toContain("vera5-ip-sandbox-console");
+    expect(tokens).toContain("vera5-ip-conditional--console");
+    expect(tokens).toContain("vera5-export-action--enrich");
+    // Phase 12B — width-mode tokens, Intel-dominant rows, right-edge grip
+    expect(tokens).toContain('[data-ws-mode="compact"]');
+    expect(tokens).toContain('[data-ws-mode="standard"]');
+    expect(tokens).toContain('[data-ws-mode="expanded"]');
+    expect(tokens).toContain("text-size-adjust: 100%");
+    expect(tokens).toContain("minmax(0, 1.42fr) minmax(0, 1fr)");
+    expect(tokens).toContain("right: 2px");
+    expect(tokens).toContain("--sandbox-blue:");
+    // Phase 12C — launch console (no white button grid)
+    expect(tokens).not.toContain("vera5-ip-sandbox-grid");
+    expect(tokens).toContain("Sandbox Launch Console");
+    // Phase 12B.1 — smoked glass, score instrument, no vw/scale normalization
+    expect(tokens).toContain("--vera-action-enrich-light:");
+    expect(tokens).toContain("--vera-action-research-light:");
+    expect(tokens).toContain("--vera-action-copy-light:");
+    expect(tokens).toContain("--vera-action-export-light:");
+    expect(tokens).toContain("--vera-action-collections-light:");
+    expect(tokens).toContain("Remove Phase 12A white reflective band");
+    expect(tokens).toMatch(
+      /\.vera5-intel-export-actions--deck\s*>\s*\.vera5-export-action::before[\s\S]*?content:\s*none/
+    );
+    expect(tokens).toContain("--score-card-min: 150px");
+    expect(tokens).toContain("--score-card-min: 160px");
+    expect(tokens).toContain("font: var(--fw-bold) var(--fs-score)");
+    expect(tokens).not.toContain("2.5vw");
+    expect(tokens).not.toMatch(/(?:^|[^a-z-])zoom\s*:/m);
+    expect(tokens).not.toMatch(/transform:\s*scale\(/);
+    expect(tokens).toMatch(
+      /\.vera5-popup\s+button[\s\S]*?font:\s*inherit/
+    );
+    expect(tokens).toMatch(
+      /\[data-ws-mode="expanded"\][\s\S]*?--fs-score:\s*32px/
+    );
+    expect(tokens).toMatch(
+      /\[data-ws-mode="standard"\][\s\S]*?--fs-score:\s*30px/
+    );
+    expect(tokens).toMatch(
+      /\[data-ws-mode="expanded"\][\s\S]*?--action-deck-h:\s*32px/
+    );
+    expect(tokens).toMatch(
+      /\[data-ws-mode="standard"\][\s\S]*?--action-deck-h:\s*32px/
+    );
+    expect(tokens).toContain(".vera5-intel-feed-score::after");
+    expect(tokens).toMatch(
+      /\.vera5-intel-feed-score::after\s*\{[^}]*content:\s*none/
+    );
     // Phase 11A — Findings 2×2 grid + white IOC search + Selected IOC marker colors
     expect(tokens).not.toMatch(
       /\.vera5-intel-export-actions\s+\.vera5-export-action--more\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/
@@ -1246,6 +1317,17 @@ describe("Popup IOC tray", () => {
     expect(findings?.querySelector(".vera5-intel-export-actions")?.className).toContain(
       "vera5-intel-export-actions--deck"
     );
+    expect(findings?.querySelector('[data-vera5-action="enrich"]')).not.toBeNull();
+    expect(findings?.querySelector('[data-vera5-action="research"]')).not.toBeNull();
+    expect(findings?.querySelectorAll('[data-vera5-action="copy"]')).toHaveLength(2);
+    expect(findings?.querySelector('[data-vera5-action="export"]')).not.toBeNull();
+    expect(findings?.querySelector('[data-vera5-action="collections"]')).not.toBeNull();
+    expect(findings?.querySelector(".vera5-export-action--enrich")).not.toBeNull();
+    expect(findings?.querySelector(".vera5-export-action--research")).not.toBeNull();
+    expect(findings?.querySelector(".vera5-export-action--export")).not.toBeNull();
+    expect(findings?.querySelector(".vera5-export-action--collections")).not.toBeNull();
+    const findingsHeading = findings?.querySelector("h3");
+    expect(findingsHeading?.textContent).toBe("Actions & Export");
     expect(findings?.querySelector(".vera5-intel-analyst-note")).toBeNull();
     expect(targetCard?.querySelector(".vera5-intel-card-label")).toBeNull();
     expect(targetCard?.getAttribute("data-ioc-type")).toBe("ipv4");
@@ -3475,6 +3557,7 @@ describe("Popup IOC tray", () => {
           return { ok: true, payload: { summary } };
         }),
         openOptionsPage: vi.fn(),
+        getManifest: vi.fn(() => ({ version: "0.1.0" })),
       },
       tabs: {
         query: vi.fn(async () => [{ id: 7 }]),
@@ -3615,8 +3698,10 @@ describe("Investigation Paths module", () => {
     expect(module?.textContent).not.toContain("Intelligence Sources");
     expect(module?.textContent).toContain("Conditional Intelligence");
     expect(module?.textContent).toContain("Related Context");
-    expect(module?.textContent).toContain("Context becomes available after selection.");
+    expect(module?.textContent).toContain("Select an indicator to evaluate local context.");
     expect(module?.textContent).toContain("Awaiting selection");
+    expect(module?.textContent).toContain("Vulnerability Context");
+    expect(module?.textContent).toContain("Malware / Campaign");
     expect(module?.textContent).not.toContain("No ATT&CK mappings available");
     expect(module?.querySelector(".vera5-ip-copy")).toBeNull();
     expect(module?.querySelector(".vera5-ip-workflow")).toBeNull();
@@ -3632,6 +3717,10 @@ describe("Investigation Paths module", () => {
     expect(investigationActionByLabel("Search malware intelligence")?.disabled).toBe(true);
     expect(investigationActionByLabel("Review detections")?.disabled).toBe(true);
     expect(module?.querySelectorAll(".vera5-ip-source")).toHaveLength(0);
+    expect(module?.querySelectorAll(".vera5-ip-cond-row--interactive")).toHaveLength(0);
+    expect(module?.querySelectorAll('[data-vera5-channel-state="awaiting_selection"]')).toHaveLength(
+      3
+    );
   });
 
   it("keeps related-context factual lines and never uses a confirmed-negative for missing analysis", async () => {
@@ -3696,7 +3785,7 @@ describe("Investigation Paths module", () => {
     expect(investigationActionByLabel("Check campaign associations")?.disabled).toBe(true);
   });
 
-  it("enables CVE conditional intelligence only for CVE indicators (Scenario B/C)", async () => {
+  it("enables Vulnerability Context disclosure only for CVE indicators (Scenario B/C)", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
 
@@ -3714,8 +3803,9 @@ describe("Investigation Paths module", () => {
     });
     let cveRow = Array.from(
       mounted!.container.querySelectorAll(".vera5-ip-cond-row")
-    ).find((node) => node.textContent?.includes("CVE / CVSS"));
+    ).find((node) => node.textContent?.includes("Vulnerability Context"));
     expect(cveRow?.getAttribute("data-vera5-available")).toBe("false");
+    expect(cveRow?.getAttribute("data-vera5-channel-state")).toBe("not_evaluated");
     expect(cveRow?.tagName).not.toBe("DETAILS");
 
     selectTrayEntryByText("CVE-2021-44228");
@@ -3727,9 +3817,10 @@ describe("Investigation Paths module", () => {
       ).toBe("cve");
     });
     cveRow = Array.from(mounted!.container.querySelectorAll(".vera5-ip-cond-row")).find((node) =>
-      node.textContent?.includes("CVE / CVSS")
+      node.textContent?.includes("Vulnerability Context")
     );
     expect(cveRow?.getAttribute("data-vera5-available")).toBe("true");
+    expect(cveRow?.getAttribute("data-vera5-channel-state")).toBe("unavailable");
     expect(cveRow?.tagName).toBe("DETAILS");
     const module = mounted?.container.querySelector(".vera5-investigation-paths");
     expect(module?.textContent).toContain("Not evaluated");
@@ -3738,9 +3829,10 @@ describe("Investigation Paths module", () => {
     expect(module?.textContent).toContain(
       "is tracked as a CVE indicator. CVSS, EPSS, and CISA KEV context are not available in local enrichment."
     );
+    expect(module?.textContent).not.toContain("CVE / CVSS");
   });
 
-  it("orders Conditional Intelligence, Related Context, then Recommended Path", async () => {
+  it("orders Conditional Intelligence, Related Context, Sandbox Analysis, then Recommended Path", async () => {
     stubChrome({ initialSummary: sampleSummary });
     mounted = renderPopup();
     await vi.waitFor(() => {
@@ -3752,8 +3844,84 @@ describe("Investigation Paths module", () => {
     expect(labels).toEqual([
       "Conditional Intelligence",
       "Related Context",
+      "Sandbox Analysis",
       "Recommended Path",
     ]);
+    const sandbox = mounted!.container.querySelector('[aria-label="Sandbox analysis"]');
+    const recommended = mounted!.container.querySelector('[aria-label="Recommended path"]');
+    expect(sandbox).not.toBeNull();
+    expect(recommended).not.toBeNull();
+    expect(
+      sandbox!.compareDocumentPosition(recommended!) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    const destinations = Array.from(
+      sandbox!.querySelectorAll(".vera5-ip-sandbox-destination-label")
+    ).map((node) => node.textContent?.replace(/\s+/g, " ").trim());
+    expect(destinations).toEqual(["ANY.RUN", "Joe Sandbox", "Hybrid Analysis", "Triage"]);
+    expect(sandbox!.querySelector(".vera5-ip-sandbox-console")).not.toBeNull();
+    expect(sandbox!.querySelector(".vera5-ip-sandbox-target")).not.toBeNull();
+    expect(sandbox!.textContent).toMatch(/may (be public|expose submitted data publicly)/i);
+    expect(sandbox!.textContent).toContain("Public-submission notice");
+    expect(
+      sandbox!.querySelectorAll(".vera5-ip-sandbox-destination:disabled")
+    ).toHaveLength(4);
+    expect(sandbox!.querySelector(".vera5-ip-sandbox-grid")).toBeNull();
+    expect(recommended!.querySelector(".vera5-ip-workflow")).toBeNull();
+  });
+
+  it("enables sandbox destinations for URL IOCs with copy-and-open navigation", async () => {
+    const urlSummary = buildTabScanSummary({
+      ...buildTabScanSnapshotPayload({
+        pageUrl: "https://example.com/alert",
+        scannedAt: 1_700_000_000_000,
+        entries: [
+          {
+            type: "url",
+            value: "http://malicious.example/payload",
+            anchorId: "vera5-hl-url",
+            ruleId: IOC_RULE_ID.URL,
+            sourceTextHint: "http://malicious.example/payload",
+          },
+        ],
+      }),
+      tabId: 7,
+    });
+    stubChrome({ initialSummary: urlSummary });
+    mounted = renderPopup();
+    await vi.waitFor(() => {
+      expect(mounted?.container.querySelector('[data-vera5-tray-entry="true"]')).not.toBeNull();
+    });
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '[data-vera5-tray-entry="true"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+    await vi.waitFor(() => {
+      const sandbox = mounted?.container.querySelector('[aria-label="Sandbox analysis"]');
+      expect(
+        sandbox?.querySelectorAll(".vera5-ip-sandbox-destination:not(:disabled)")
+      ).toHaveLength(4);
+    });
+    vi.mocked(chrome.tabs.create).mockClear();
+    writeText.mockClear();
+    flushSync(() => {
+      (
+        mounted?.container.querySelector(
+          '.vera5-ip-sandbox-destination[aria-label*="ANY.RUN"]'
+        ) as HTMLButtonElement | null
+      )?.click();
+    });
+    await vi.waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("http://malicious.example/payload");
+      expect(chrome.tabs.create).toHaveBeenCalledWith(
+        expect.objectContaining({ url: expect.stringMatching(/^https:\/\/app\.any\.run\//) })
+      );
+    });
+    expect(mounted?.container.textContent).toContain(
+      "URL copied. Paste it into the sandbox submission form."
+    );
   });
 });
 
