@@ -1,5 +1,5 @@
 /**
- * Phase 21D — benchmark case contract + provenance.
+ * Phase 21D / 21D.1 — benchmark case contract + provenance.
  * Prefer severity ranges / behavioral assertions over exact scores.
  */
 
@@ -34,6 +34,8 @@ export const BENCHMARK_CATEGORY = {
   NO_SIGNAL: "NO_SIGNAL",
   MATCH: "MATCH",
   IOC_TYPE: "IOC_TYPE",
+  AMBIGUOUS_MIXED: "AMBIGUOUS_MIXED",
+  ADVERSARIAL: "ADVERSARIAL",
 } as const;
 
 export type BenchmarkCategory =
@@ -53,12 +55,16 @@ export const BENCHMARK_PROVENANCE_KIND = {
 export type BenchmarkProvenanceKind =
   (typeof BENCHMARK_PROVENANCE_KIND)[keyof typeof BENCHMARK_PROVENANCE_KIND];
 
+export type BenchmarkCaseQuality = "HIGH" | "MEDIUM" | "SYNTHETIC";
+
 export type BenchmarkProvenance = {
   kind: BenchmarkProvenanceKind;
   /** Why this expected class is trusted. Required for non-synthetic labels. */
   rationale: string;
   /** Optional fixture path / source id. */
   fixtureRef?: string;
+  /** Optional fixture capture date (ISO) — snapshot only, not a scoring dimension. */
+  capturedAt?: string;
 };
 
 export type BenchmarkExpected = {
@@ -95,11 +101,21 @@ export type ScoringBenchmarkCase = {
   category: BenchmarkCategory;
   targetType: IocType;
   targetValue?: string;
-  /** Calibration vs holdout. Small corpus: most are calibration. */
+  /** GOLDEN = invariants; CALIBRATION = tune; HOLDOUT = independent validation. */
   set: "calibration" | "holdout" | "golden";
   provenance: BenchmarkProvenance;
   expected: BenchmarkExpected;
   /** Prefer signals for synthetic math; evidence for provider semantics. */
   inputs: BenchmarkEvidenceInput[];
   runContext?: CoverageRunContext;
+  /** Provenance strength / fixture quality. */
+  quality?: BenchmarkCaseQuality;
+  /** Related case ids when one IOC/fixture yields multiple scenarios. */
+  relatedCaseIds?: readonly string[];
+};
+
+export type ExcludedBenchmarkCase = {
+  id: string;
+  reason: string;
+  proposedCategory?: BenchmarkCategory;
 };

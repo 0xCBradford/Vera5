@@ -11,9 +11,12 @@ import type { ScoringAdapterConstants } from "./adapterConstantsType";
 
 export type { ScoringAdapterConstants } from "./adapterConstantsType";
 
-export const SCORING_BENCHMARK_VERSION = 1 as const;
+export const SCORING_BENCHMARK_VERSION_V1 = 1 as const;
+/** Current production-readiness corpus (Phase 21D.1). */
+export const SCORING_BENCHMARK_VERSION = 2 as const;
 export const SCORING_CALIBRATION_POLICY_BASELINE_ID = "vera5-v2-baseline-uncalibrated" as const;
 export const SCORING_CALIBRATION_POLICY_RC1_ID = "vera5-v2-rc1" as const;
+export const SCORING_CALIBRATION_POLICY_RC2_ID = "vera5-v2-rc2" as const;
 
 export type CoverageThresholds = {
   NONE: number;

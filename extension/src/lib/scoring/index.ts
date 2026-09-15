@@ -185,8 +185,10 @@ export {
 
 export {
   SCORING_BENCHMARK_VERSION,
+  SCORING_BENCHMARK_VERSION_V1,
   SCORING_CALIBRATION_POLICY_BASELINE_ID,
   SCORING_CALIBRATION_POLICY_RC1_ID,
+  SCORING_CALIBRATION_POLICY_RC2_ID,
   type ScoringCalibrationPolicy,
   type CutoverReadiness,
   type IocCutoverReadiness,
@@ -206,8 +208,14 @@ export {
 
 export {
   getScoringBenchmarkCorpus,
+  getScoringBenchmarkCorpusV1,
+  getScoringBenchmarkCorpusByVersion,
   getBenchmarkCorpusMeta,
+  getBenchmarkCorpusMetaV1,
+  auditCorpusDuplication,
 } from "./calibration/benchmarkCorpus";
+
+export { PROVIDER_READINESS } from "./calibration/providerReadiness";
 
 export {
   runBenchmarkCase,

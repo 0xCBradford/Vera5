@@ -1,11 +1,17 @@
 /**
  * Phase 21D — golden regression + calibration harness tests (offline).
+ * Corpus v1 remains frozen; default corpus is v2 (Phase 21D.1).
  */
 
 import { describe, expect, it } from "vitest";
 import { ENRICHMENT_SOURCE } from "../../enrichmentSourceRegistry";
 import { DEFAULT_SCORING_ENGINE_MODE, SCORING_ENGINE_MODE } from "../scoringCompositePolicy";
-import { getBenchmarkCorpusMeta, getScoringBenchmarkCorpus } from "./benchmarkCorpus";
+import {
+  getBenchmarkCorpusMeta,
+  getBenchmarkCorpusMetaV1,
+  getScoringBenchmarkCorpus,
+  getScoringBenchmarkCorpusV1,
+} from "./benchmarkCorpus";
 import {
   CALIBRATION_POLICY_BASELINE,
   CALIBRATION_POLICY_RC1,
@@ -18,32 +24,44 @@ import {
   assertContributorReconstruction,
 } from "./calibrationHarness";
 import { buildCalibrationReport } from "./calibrationReport";
-import { SCORING_BENCHMARK_VERSION } from "./calibrationTypes";
+import {
+  SCORING_BENCHMARK_VERSION,
+  SCORING_BENCHMARK_VERSION_V1,
+} from "./calibrationTypes";
 
 describe("Phase 21D calibration harness", () => {
   it("keeps production engine mode on legacy (no auto-cutover)", () => {
     expect(DEFAULT_SCORING_ENGINE_MODE).toBe(SCORING_ENGINE_MODE.LEGACY);
   });
 
-  it("versions corpus and policies", () => {
-    expect(SCORING_BENCHMARK_VERSION).toBe(1);
+  it("preserves frozen corpus v1 and RC1 policy ids", () => {
+    expect(SCORING_BENCHMARK_VERSION_V1).toBe(1);
+    expect(getBenchmarkCorpusMetaV1().caseCount).toBe(30);
+    expect(getScoringBenchmarkCorpusV1()).toHaveLength(30);
     expect(CALIBRATION_POLICY_BASELINE.uncalibrated).toBe(true);
-    expect(CALIBRATION_POLICY_RC1.uncalibrated).toBe(false);
-    expect(RECOMMENDED_CALIBRATION_POLICY.calibrationVersion).toBe(
-      CALIBRATION_POLICY_RC1.calibrationVersion
-    );
+    expect(CALIBRATION_POLICY_RC1.calibrationVersion).toBe("vera5-v2-rc1");
     expect(diffCalibrationPolicies(CALIBRATION_POLICY_BASELINE, CALIBRATION_POLICY_RC1).length).toBeGreaterThan(0);
   });
 
-  it("corpus covers required categories and IOC types offline", () => {
+  it("versions current corpus as v2 with expanded coverage", () => {
+    expect(SCORING_BENCHMARK_VERSION).toBe(2);
     const meta = getBenchmarkCorpusMeta();
-    expect(meta.caseCount).toBeGreaterThanOrEqual(25);
-    expect(meta.byIoc.ipv4).toBeGreaterThan(0);
-    expect(meta.byIoc.domain).toBeGreaterThan(0);
-    expect(meta.byIoc.url).toBeGreaterThan(0);
-    expect(meta.byIoc.sha256).toBeGreaterThan(0);
-    expect(meta.goldenCount).toBeGreaterThan(5);
-    expect(meta.synthetic).toBeGreaterThan(5);
+    expect(meta.caseCount).toBeGreaterThanOrEqual(75);
+    expect(meta.byIoc.ipv4).toBeGreaterThanOrEqual(20);
+    expect(meta.byIoc.domain).toBeGreaterThanOrEqual(12);
+    expect(meta.byIoc.url).toBeGreaterThanOrEqual(12);
+    expect(meta.byIoc.sha256).toBeGreaterThanOrEqual(12);
+    expect(meta.goldenCount).toBeGreaterThan(10);
+    expect(meta.holdoutCount).toBeGreaterThanOrEqual(12);
+    expect(meta.trustedLow).toBeGreaterThanOrEqual(10);
+  });
+
+  it("frozen v1 corpus still passes under RC1", () => {
+    const run = runCalibrationHarness({
+      policy: CALIBRATION_POLICY_RC1,
+      cases: getScoringBenchmarkCorpusV1(),
+    });
+    expect(run.passRate).toBe(1);
   });
 
   it("golden suite passes under baseline (exact arithmetic)", () => {
@@ -61,9 +79,10 @@ describe("Phase 21D calibration harness", () => {
     expect(run.passRate).toBe(1);
   });
 
-  it("full corpus passes under RC1 recommended policy", () => {
+  it("golden suite passes under RC1", () => {
     const run = runCalibrationHarness({
       policy: CALIBRATION_POLICY_RC1,
+      setFilter: ["golden"],
     });
     if (run.failed > 0) {
       const details = run.results
@@ -98,17 +117,27 @@ describe("Phase 21D calibration harness", () => {
     expect(CALIBRATION_POLICY_RC1.sourceWeights[ENRICHMENT_SOURCE.RDAP_WHOIS]?.domain).toBe(0);
   });
 
-  it("buildCalibrationReport is deterministic and reports cutover without activating V2", () => {
-    const a = buildCalibrationReport(CALIBRATION_POLICY_RC1);
-    const b = buildCalibrationReport(CALIBRATION_POLICY_RC1);
+  it("input order does not change score", () => {
+    const a = getScoringBenchmarkCorpus().find((x) => x.id === "adv-order-a")!;
+    const b = getScoringBenchmarkCorpus().find((x) => x.id === "adv-order-b")!;
+    const ra = runBenchmarkCase(a, CALIBRATION_POLICY_RC1);
+    const rb = runBenchmarkCase(b, CALIBRATION_POLICY_RC1);
+    expect(ra.v2.score).toBe(rb.v2.score);
+  });
+
+  it("buildCalibrationReport is deterministic and keeps V2 shadowed", () => {
+    const a = buildCalibrationReport(CALIBRATION_POLICY_RC1, { runSensitivity: false });
+    const b = buildCalibrationReport(CALIBRATION_POLICY_RC1, { runSensitivity: false });
     expect(a.json.productionCutover).toBe("DISABLED_SHADOW_ONLY");
-    expect(a.json.corpusVersion).toBe(1);
+    expect(a.json.corpusVersion).toBe(2);
+    expect(a.json.recommendedPolicy).toBe(RECOMMENDED_CALIBRATION_POLICY.calibrationVersion);
     expect(a.json.metrics.cutoverReadiness).toMatch(/READY|NOT_READY/);
-    expect(a.markdown).toContain("Cutover readiness");
-    expect(a.json.caseCount).toBe(b.json.caseCount);
-    expect(a.json.metrics.overall.passRate).toBe(b.json.metrics.overall.passRate);
+    expect(a.json.partition.golden.passRate).toBe(1);
     expect(a.json.metrics.severe.knownMaliciousToLow).toBe(0);
     expect(a.json.metrics.severe.trustedToCritical).toBe(0);
     expect(a.json.metrics.severe.contextOnlyScored).toBe(0);
+    expect(a.json.vtSuppressionFlags).toEqual([]);
+    expect(a.json.caseCount).toBe(b.json.caseCount);
+    expect(a.markdown).toContain("21E recommendation");
   });
 });
