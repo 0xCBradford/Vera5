@@ -1,5 +1,5 @@
 /**
- * Phase 4 — VERA5 UI icon system.
+ * Phase 4 / 14Q — VERA5 UI icon system.
  * Sole general-purpose icon family: Phosphor (`@phosphor-icons/react`).
  * Import only icons used by the Chrome workspace; do not barrel-import the package.
  */
@@ -7,37 +7,46 @@ import type { Icon, IconProps, IconWeight } from "@phosphor-icons/react";
 import {
   ArrowCounterClockwise,
   ArrowSquareOut,
+  Binoculars,
   BookOpen,
   BracketsCurly,
+  Browser,
   Bug,
   CaretDown,
   CaretRight,
   CirclesThreePlus,
   Copy,
+  CopySimple,
   Crosshair,
   Cube,
   Database,
   DotsThree,
+  Export,
   FileText,
+  Files,
   GearSix,
   Globe,
   GridFour,
   HardDrives,
   IdentificationCard,
   Info,
+  LinkSimple,
   MagnifyingGlass,
   MagnifyingGlassPlus,
   Minus,
   Network,
   Plus,
   Pulse,
+  Scan,
   Selection,
   ShareNetwork,
+  SlidersHorizontal,
   ShieldCheck,
   ShieldWarning,
-  SquaresFour,
+  Stack,
   TreeStructure,
   Warning,
+  WaveSine,
   X,
 } from "@phosphor-icons/react";
 
@@ -105,17 +114,30 @@ export const VeraUiIcons = {
   scanPage: Crosshair,
   scanSelection: Selection,
   enrichSelection: MagnifyingGlassPlus,
+  controls: SlidersHorizontal,
   intelSection: Pulse,
-  enrich: Database,
+  /** Phase 14Q — enrichment / data-acquisition. */
+  enrich: MagnifyingGlassPlus,
   research: MagnifyingGlass,
   external: ArrowSquareOut,
   copy: Copy,
+  /** Legacy Phosphor — Copy Summary now uses UI_ASSET.copySummary (Copy-IOC.svg). */
+  copySummary: Files,
+  /** Legacy Phosphor — Copy IOC now uses UI_ASSET.copyIoc. */
+  copyIoc: CopySimple,
   exportMarkdown: FileText,
+  analystNote: FileText,
+  /** Legacy Phosphor — Export now uses UI_ASSET.exportOut. */
+  exportOut: Export,
   exportJson: BracketsCurly,
   moreFormats: DotsThree,
   warning: Warning,
+  /** Legacy Phosphor — generic info now uses UI_ASSET.info where wired. */
   info: Info,
-  collections: SquaresFour,
+  /** Phase 14Q — inspect / evidence detail (not generic info). */
+  inspect: Crosshair,
+  /** Legacy Phosphor — Collections now uses UI_ASSET.collections. */
+  collections: Stack,
   detectedSection: Crosshair,
   investigationSection: ShareNetwork,
   malware: Bug,
@@ -139,6 +161,12 @@ export const VeraUiIcons = {
   threatIntel: Database,
   genericSource: CirclesThreePlus,
   pulse: Pulse,
+  browser: Browser,
+  binoculars: Binoculars,
+  link: LinkSimple,
+  scan: Scan,
+  wave: WaveSine,
+  shield: ShieldCheck,
 } as const;
 
 export type InvestigationGlyphName =

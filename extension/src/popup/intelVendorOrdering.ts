@@ -1,14 +1,18 @@
 /**
  * Display-only Intel Feed vendor ordering helpers.
  * Never mutates enrichment results, availability, or cache.
+ *
+ * Phase 16E — ordering is registry-priority deterministic; never sorted by result severity.
  */
 
 import type { HoverCardSourceEntry } from "../lib/hoverCardEnrichment";
+import type { IocType } from "../lib/iocRegex";
 import {
   ENRICHMENT_ASSESSMENT_KIND,
   getEnrichmentSourceDefinition,
   type EnrichmentSourceId,
 } from "../lib/enrichmentSourceRegistry";
+import { orderSourcesForVendorEvidence } from "../lib/enrichmentSourceApplicability";
 
 export type IntelSourceAvailability = {
   enabled: boolean;
@@ -19,7 +23,7 @@ export type IntelSourceAvailabilityRecord = Partial<
   Record<EnrichmentSourceId, IntelSourceAvailability>
 >;
 
-/** Display-only sort groups for INTEL FEED vendor evidence. */
+/** Display-only sort groups retained for status classification tests. */
 export type IntelVendorSortGroup = 0 | 1 | 2 | 3;
 
 export function resolveIntelVendorNumericScore(
@@ -74,40 +78,13 @@ export function resolveIntelVendorSortGroup(
 }
 
 /**
- * Derived display order only — never mutates sourceEntries, availability, or cache.
- * Group 0: valid finite RISK scores (including 0), descending
- * Group 1: enabled operational / non-scored states, stable registry order
- * Group 2: pivot-only, stable registry order
- * Group 3: disabled / unselected, stable registry order
+ * Derived display order only — registry priority per IOC type; never result severity.
  */
 export function orderIntelFeedVendorSourceIds(
   sourceIds: readonly EnrichmentSourceId[],
-  sourceEntryById: ReadonlyMap<EnrichmentSourceId, HoverCardSourceEntry>,
+  iocType: IocType,
+  _sourceEntryById: ReadonlyMap<EnrichmentSourceId, HoverCardSourceEntry>,
   availability: IntelSourceAvailabilityRecord
 ): EnrichmentSourceId[] {
-  return [...sourceIds]
-    .map((sourceId, originalIndex) => {
-      const source = sourceEntryById.get(sourceId);
-      const status = resolveIntelVendorCardStatus(sourceId, source, availability[sourceId]);
-      const numericScore = resolveIntelVendorNumericScore(source);
-      return {
-        sourceId,
-        originalIndex,
-        sortGroup: resolveIntelVendorSortGroup(status, numericScore),
-        numericScore,
-      };
-    })
-    .sort((left, right) => {
-      if (left.sortGroup !== right.sortGroup) {
-        return left.sortGroup - right.sortGroup;
-      }
-      if (left.sortGroup === 0 && right.sortGroup === 0) {
-        const scoreDelta = (right.numericScore ?? 0) - (left.numericScore ?? 0);
-        if (scoreDelta !== 0) {
-          return scoreDelta;
-        }
-      }
-      return left.originalIndex - right.originalIndex;
-    })
-    .map((entry) => entry.sourceId);
+  return orderSourcesForVendorEvidence(iocType, sourceIds, availability);
 }

@@ -1,27 +1,36 @@
 /**
- * Phase 4 — Vendor visual-asset registry (presentation only).
+ * Phase 4 / 14Q / 14V / 14V.1 — Vendor visual-asset registry (presentation only).
  * Does not participate in enrichment, scoring, or source enablement logic.
  *
- * No third-party vendor logo files are shipped until an approved Priority 1–3
- * source is documented. Every source uses a neutral Phosphor category fallback.
+ * Phase 14V — local bundled vendor marks where approved; distinctive Phosphor
+ * fallback glyphs otherwise (OTX / RDAP remain fallback-only until dedicated assets exist).
+ * Phase 14V.1 — brand color allowed inside tiny marks; Censys uses ultra-wide footprint.
  */
 import { useState, type ReactNode } from "react";
 import type { Icon } from "@phosphor-icons/react";
 import {
+  Binoculars,
+  Browser,
   Bug,
   CirclesThreePlus,
+  Crosshair,
   Database,
   Globe,
   IdentificationCard,
+  LinkSimple,
   Network,
+  Pulse,
+  Scan,
   ShieldCheck,
   ShieldWarning,
+  WaveSine,
 } from "@phosphor-icons/react";
 import {
   ENRICHMENT_SOURCE,
   ENRICHMENT_SOURCE_ORDER,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
+import { VENDOR_ASSET } from "./uiAssetRegistry";
 import { VeraIcon, type VeraIconSizeToken } from "./veraIcons";
 
 export type VendorAssetCategory =
@@ -33,20 +42,28 @@ export type VendorAssetCategory =
   | "search_pivot"
   | "generic";
 
+/** Phase 14Q — distinctive identity glyphs (one shape family per vendor). */
 export type VendorFallbackIconId =
-  | "database"
-  | "bug"
-  | "network"
+  | "scan"
+  | "crosshair"
   | "shieldCheck"
   | "shieldWarning"
+  | "wave"
+  | "browser"
   | "globe"
+  | "binoculars"
+  | "pulse"
+  | "bug"
+  | "link"
+  | "network"
   | "identification"
+  | "database"
   | "generic";
 
 export type VendorAssetEntry = {
   sourceId: EnrichmentSourceId;
   displayName: string;
-  /** Local packaged logo path under public/, or null when using fallback. */
+  /** Vite-bundled local logo URL, or null when using fallback glyph. */
   localAsset: string | null;
   fallbackIcon: VendorFallbackIconId;
   category: VendorAssetCategory;
@@ -55,22 +72,36 @@ export type VendorAssetEntry = {
 };
 
 const FALLBACK_ICON_MAP: Record<VendorFallbackIconId, Icon> = {
-  database: Database,
-  bug: Bug,
-  network: Network,
+  scan: Scan,
+  crosshair: Crosshair,
   shieldCheck: ShieldCheck,
   shieldWarning: ShieldWarning,
+  wave: WaveSine,
+  browser: Browser,
   globe: Globe,
+  binoculars: Binoculars,
+  pulse: Pulse,
+  bug: Bug,
+  link: LinkSimple,
+  network: Network,
   identification: IdentificationCard,
+  database: Database,
   generic: CirclesThreePlus,
 };
+
+function bundledVendorAsset(sourceId: EnrichmentSourceId): string | null {
+  if (sourceId in VENDOR_ASSET) {
+    return VENDOR_ASSET[sourceId as keyof typeof VENDOR_ASSET];
+  }
+  return null;
+}
 
 const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.VIRUSTOTAL]: {
     sourceId: ENRICHMENT_SOURCE.VIRUSTOTAL,
     displayName: "VirusTotal",
-    localAsset: null,
-    fallbackIcon: "database",
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.VIRUSTOTAL),
+    fallbackIcon: "scan",
     category: "threat_intelligence",
     accessibilityLabel: "VirusTotal",
     attributionId: "vendor-virustotal",
@@ -78,8 +109,9 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.OTX]: {
     sourceId: ENRICHMENT_SOURCE.OTX,
     displayName: "OTX",
+    /** No dedicated OTX asset in the bundled pack — keep Phosphor fallback. */
     localAsset: null,
-    fallbackIcon: "database",
+    fallbackIcon: "crosshair",
     category: "threat_intelligence",
     accessibilityLabel: "AlienVault OTX",
     attributionId: "vendor-otx",
@@ -87,7 +119,7 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.ABUSEIPDB]: {
     sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
     displayName: "AbuseIPDB",
-    localAsset: null,
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.ABUSEIPDB),
     fallbackIcon: "shieldCheck",
     category: "reputation",
     accessibilityLabel: "AbuseIPDB",
@@ -96,8 +128,8 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.GREYNOISE]: {
     sourceId: ENRICHMENT_SOURCE.GREYNOISE,
     displayName: "GreyNoise",
-    localAsset: null,
-    fallbackIcon: "shieldWarning",
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.GREYNOISE),
+    fallbackIcon: "wave",
     category: "reputation",
     accessibilityLabel: "GreyNoise",
     attributionId: "vendor-greynoise",
@@ -105,8 +137,8 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.URLSCAN]: {
     sourceId: ENRICHMENT_SOURCE.URLSCAN,
     displayName: "URLScan.io",
-    localAsset: null,
-    fallbackIcon: "network",
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.URLSCAN),
+    fallbackIcon: "browser",
     category: "infrastructure_search",
     accessibilityLabel: "URLScan.io",
     attributionId: "vendor-urlscan",
@@ -114,8 +146,8 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.SHODAN]: {
     sourceId: ENRICHMENT_SOURCE.SHODAN,
     displayName: "Shodan",
-    localAsset: null,
-    fallbackIcon: "network",
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.SHODAN),
+    fallbackIcon: "globe",
     category: "infrastructure_search",
     accessibilityLabel: "Shodan",
     attributionId: "vendor-shodan",
@@ -123,8 +155,8 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.CENSYS]: {
     sourceId: ENRICHMENT_SOURCE.CENSYS,
     displayName: "Censys",
-    localAsset: null,
-    fallbackIcon: "network",
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.CENSYS),
+    fallbackIcon: "binoculars",
     category: "infrastructure_search",
     accessibilityLabel: "Censys",
     attributionId: "vendor-censys",
@@ -132,8 +164,8 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.PULSEDIVE]: {
     sourceId: ENRICHMENT_SOURCE.PULSEDIVE,
     displayName: "Pulsedive",
-    localAsset: null,
-    fallbackIcon: "database",
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.PULSEDIVE),
+    fallbackIcon: "pulse",
     category: "threat_intelligence",
     accessibilityLabel: "Pulsedive",
     attributionId: "vendor-pulsedive",
@@ -141,8 +173,8 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING]: {
     sourceId: ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING,
     displayName: "Google Safe Browsing",
-    localAsset: null,
-    fallbackIcon: "shieldCheck",
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.GOOGLE_SAFE_BROWSING),
+    fallbackIcon: "shieldWarning",
     category: "reputation",
     accessibilityLabel: "Google Safe Browsing",
     attributionId: "vendor-google-safe-browsing",
@@ -150,7 +182,7 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.MALWAREBAZAAR]: {
     sourceId: ENRICHMENT_SOURCE.MALWAREBAZAAR,
     displayName: "MalwareBazaar",
-    localAsset: null,
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.MALWAREBAZAAR),
     fallbackIcon: "bug",
     category: "malware_intelligence",
     accessibilityLabel: "MalwareBazaar",
@@ -159,8 +191,8 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.THREATFOX]: {
     sourceId: ENRICHMENT_SOURCE.THREATFOX,
     displayName: "ThreatFox",
-    localAsset: null,
-    fallbackIcon: "bug",
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.THREATFOX),
+    fallbackIcon: "network",
     category: "malware_intelligence",
     accessibilityLabel: "ThreatFox",
     attributionId: "vendor-threatfox",
@@ -168,8 +200,8 @@ const VENDOR_ASSET_BY_ID: Record<EnrichmentSourceId, VendorAssetEntry> = {
   [ENRICHMENT_SOURCE.URLHAUS]: {
     sourceId: ENRICHMENT_SOURCE.URLHAUS,
     displayName: "URLHaus",
-    localAsset: null,
-    fallbackIcon: "bug",
+    localAsset: bundledVendorAsset(ENRICHMENT_SOURCE.URLHAUS),
+    fallbackIcon: "link",
     category: "malware_intelligence",
     accessibilityLabel: "URLHaus",
     attributionId: "vendor-urlhaus",
@@ -216,8 +248,8 @@ type VendorMarkProps = {
 };
 
 /**
- * Vendor identity mark for cards and source tiles.
- * Uses local approved logo when registered; otherwise category Phosphor fallback.
+ * Vendor identity mark for evidence rows.
+ * Uses local approved logo when registered; otherwise distinctive Phosphor glyph.
  * Broken logo loads fall back without layout shift.
  */
 export function VendorMark({
@@ -229,10 +261,18 @@ export function VendorMark({
   const entry = getVendorAsset(sourceId);
   const visual = resolveVendorVisual(sourceId);
   const [logoFailed, setLogoFailed] = useState(false);
+  const markVariant =
+    sourceId === ENRICHMENT_SOURCE.CENSYS
+      ? " vera5-vendor-mark--wide vera5-vendor-mark--ultra-wide"
+      : sourceId === ENRICHMENT_SOURCE.SHODAN
+        ? " vera5-vendor-mark--wide"
+        : "";
 
   if (visual.kind === "logo" && !logoFailed) {
     return (
-      <span className={`vera5-vendor-mark ${className ?? ""}`.trim()}>
+      <span
+        className={`vera5-vendor-mark${markVariant} ${className ?? ""}`.trim()}
+      >
         <img
           className="vera5-vendor-mark-img"
           src={visual.src}

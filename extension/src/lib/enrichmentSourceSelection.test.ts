@@ -114,28 +114,18 @@ describe("enrichment source selection", () => {
     expect(hasAnyEnabledLiveEnrichmentSource(enabled)).toBe(true);
   });
 
-  it("builds explicit unsupported-type skipped rows for enabled live sources", () => {
+  it("returns a single aggregate skipped result when enabled live sources do not apply", () => {
     const results = buildSkippedLiveEnrichmentUnsupportedTypeResults({
       abuseipdb: true,
       otx: true,
       urlscan: false,
     });
 
-    expect(results).toEqual([
-      {
-        sourceId: ENRICHMENT_SOURCE.ABUSEIPDB,
-        sourceLabel: "AbuseIPDB",
-        status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
-        errorCode: "unsupported_type",
-        errorMessage: "AbuseIPDB does not support this indicator type.",
-      },
-      {
-        sourceId: ENRICHMENT_SOURCE.OTX,
-        sourceLabel: "OTX",
-        status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
-        errorCode: "unsupported_type",
-        errorMessage: "OTX does not support this indicator type.",
-      },
-    ]);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({
+      status: ENRICHMENT_SOURCE_STATUS.SKIPPED,
+      errorCode: "unsupported_type",
+    });
+    expect(results[0]?.errorMessage).toContain("No enabled enrichment sources support");
   });
 });

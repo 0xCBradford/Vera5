@@ -133,6 +133,7 @@ describe("Censys host and certificate normalization", () => {
       dnsNameCount: 2,
       countryCode: "US",
       autonomousSystemName: "GOOGLE",
+      asn: "15169",
       serviceTags: ["HTTP", "443/tcp", "DNS", "53/udp"],
       certificateTags: ["dns.google"],
       dnsNames: ["dns.google", "ns1.google.com"],
@@ -194,6 +195,16 @@ describe("Censys host and certificate normalization", () => {
     expect(normalizeCensysHostResponse(SAMPLE_CENSYS_HOST_PAYLOAD)).toEqual({
       summary: "2 observed services",
       tags: ["US", "GOOGLE", "HTTP", "443/tcp", "DNS"],
+      networkContext: {
+        asn: "15169",
+        countryCode: "US",
+        organization: "GOOGLE",
+      },
+      scoringEvidence: {
+        kind: "context",
+        source: "censys",
+        summary: "2 observed services",
+      },
     });
 
     expect(normalizeCensysHostResponse(SAMPLE_PLATFORM_HOST_PAYLOAD)).toEqual({
@@ -205,6 +216,15 @@ describe("Censys host and certificate normalization", () => {
         "SSH",
         "server.example.test",
       ],
+      networkContext: {
+        countryCode: "JP",
+        organization: "CTGSERVERLIMITED-AS-AP CTG Server Limited",
+      },
+      scoringEvidence: {
+        kind: "context",
+        source: "censys",
+        summary: "1 observed service",
+      },
     });
   });
 

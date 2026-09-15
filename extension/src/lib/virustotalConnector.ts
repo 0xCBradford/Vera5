@@ -11,6 +11,8 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import type { EnrichmentIntelContext } from "./conditionalIntelNormalize";
+import { normalizeIntelContext } from "./conditionalIntelNormalize";
 import { recordGlobalEnrichmentCooldownFromHeaders } from "./enrichmentCooldown";
 import {
   CONNECTOR_AUTHORITY_TIER,
@@ -21,9 +23,9 @@ import {
 } from "./connectorDefinition";
 import {
   ENRICHMENT_SOURCE,
-  enrichmentSourceSupportsIocType,
   getEnrichmentSourceDefinition,
 } from "./enrichmentSourceRegistry";
+import { liveEnrichmentSupportsIocType } from "./enrichmentSourceApplicability";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import { IOC_TYPE, type IocType } from "./iocRegex";
 import {
@@ -87,10 +89,7 @@ function readFiniteNumber(value: unknown): number | undefined {
 }
 
 export function virustotalLiveSupportsIocType(type: IocType): boolean {
-  if (type === IOC_TYPE.CVE) {
-    return false;
-  }
-  return enrichmentSourceSupportsIocType(ENRICHMENT_SOURCE.VIRUSTOTAL, type);
+  return liveEnrichmentSupportsIocType(ENRICHMENT_SOURCE.VIRUSTOTAL, type);
 }
 
 export function encodeVirustotalUrlId(url: string): string {
@@ -246,14 +245,107 @@ export function parseVirustotalUnifiedInput(payload: unknown): VirustotalUnified
   };
 }
 
+/**
+ * Extract VT popular threat names only — never categories/labels alone.
+ * Generic AV category names are filtered later by normalizeIntelContext.
+ */
+export function parseVirustotalIntelContext(
+  payload: unknown
+): EnrichmentIntelContext | undefined {
+  if (!isRecord(payload)) {
+    return undefined;
+  }
+  const data = payload.data;
+  if (!isRecord(data)) {
+    return undefined;
+  }
+  const attributes = data.attributes;
+  if (!isRecord(attributes)) {
+    return undefined;
+  }
+
+  const malwareFamilies: string[] = [];
+  const seen = new Set<string>();
+
+  const classification = attributes.popular_threat_classification;
+  if (isRecord(classification)) {
+    const names = classification.popular_threat_name;
+    if (Array.isArray(names)) {
+      for (const entry of names) {
+        const value = isRecord(entry)
+          ? readNonEmptyString(entry.value)
+          : typeof entry === "string"
+            ? readNonEmptyString(entry)
+            : undefined;
+        if (!value) {
+          continue;
+        }
+        const key = value.toLowerCase();
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        malwareFamilies.push(value);
+      }
+    }
+    // Only fall back to suggested label when popular_threat_name is absent.
+    if (malwareFamilies.length === 0) {
+      const suggested = readNonEmptyString(classification.suggested_threat_label);
+      if (suggested) {
+        malwareFamilies.push(suggested);
+      }
+    }
+  }
+
+  const popularName = readNonEmptyString(attributes.popular_threat_name);
+  if (popularName) {
+    const key = popularName.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      malwareFamilies.push(popularName);
+    }
+  }
+
+  if (malwareFamilies.length === 0) {
+    return undefined;
+  }
+  return normalizeIntelContext({ malwareFamilies });
+}
+
 export function normalizeVirustotalResponse(
   payload: unknown
-): ReturnType<typeof mapVirustotalFieldsToUnifiedPresentation> | null {
+): {
+  summary: string;
+  tags: readonly string[];
+  intelContext?: EnrichmentIntelContext;
+  networkContext?: { organization?: string; countryCode?: string };
+} | null {
   const input = parseVirustotalUnifiedInput(payload);
   if (!input) {
     return null;
   }
-  return mapVirustotalFieldsToUnifiedPresentation(input);
+  const presentation = mapVirustotalFieldsToUnifiedPresentation(input);
+  const intelContext = parseVirustotalIntelContext(payload);
+  const networkContext =
+    input.networkOwner || input.countryCode
+      ? {
+          ...(input.networkOwner ? { organization: input.networkOwner } : {}),
+          ...(input.countryCode ? { countryCode: input.countryCode } : {}),
+        }
+      : undefined;
+  return {
+    summary: presentation.summary,
+    tags: presentation.tags,
+    ...(intelContext ? { intelContext } : {}),
+    ...(networkContext ? { networkContext } : {}),
+    scoringEvidence: {
+      source: VIRUSTOTAL_SOURCE_ID,
+      malicious: input.maliciousDetections ?? 0,
+      suspicious: input.suspiciousDetections ?? 0,
+      harmless: input.harmlessDetections ?? 0,
+      undetected: parseVirustotalAnalysisStats(payload)?.undetected ?? 0,
+    },
+  };
 }
 
 export function formatVirustotalDetectionSummary(stats: VirustotalAnalysisStats): string {
@@ -426,6 +518,9 @@ export async function enrichWithVirustotal(
       sourceId: VIRUSTOTAL_SOURCE_ID,
       summary: normalized.summary,
       tags: normalized.tags,
+      intelContext: normalized.intelContext,
+      networkContext: normalized.networkContext,
+      scoringEvidence: normalized.scoringEvidence,
       fetchedAt,
       rawVendorJson: formatRedactedVendorJson(payload),
     });

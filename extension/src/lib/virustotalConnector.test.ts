@@ -125,6 +125,17 @@ describe("VirusTotal connector normalization", () => {
     expect(normalizeVirustotalResponse(SAMPLE_IPV4_PAYLOAD)).toEqual({
       summary: "5 malicious detections",
       tags: ["US", "GOOGLE"],
+      networkContext: {
+        countryCode: "US",
+        organization: "GOOGLE",
+      },
+      scoringEvidence: {
+        harmless: 60,
+        malicious: 5,
+        source: "virustotal",
+        suspicious: 2,
+        undetected: 8,
+      },
     });
     expect(
       formatVirustotalDetectionSummary(parseVirustotalAnalysisStats(SAMPLE_IPV4_PAYLOAD)!)

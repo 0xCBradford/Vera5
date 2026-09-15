@@ -2,8 +2,10 @@
  * Phase 10B — VERA5 Intel Feed vendor evidence matrix.
  * Presentation-only: uses Phase 7 selectors and existing display ordering.
  * Does not initiate enrichment, mutate results, or change scoring.
+ * Phase 18D — ready-state bay supports optional action slot (no fake vendor rows).
  */
 
+import type { ReactNode } from "react";
 import type { HoverCardSourceEntry } from "../lib/hoverCardEnrichment";
 import {
   getEnrichmentSourceDefinition,
@@ -15,7 +17,6 @@ import {
   resolveVendorCardPresentation,
   type WorkspaceEnrichmentPresentation,
 } from "../lib/workspacePresentationState";
-import { VeraIcon, VeraUiIcons } from "../lib/veraIcons";
 import { VendorMark } from "../lib/vendorAssets";
 import {
   resolveIntelVendorCardStatus,
@@ -39,6 +40,8 @@ export type VendorEvidenceRowModel = {
   resultAriaLabel: string;
   classificationText: string | null;
   evidenceText: string;
+  evidenceProvenance: string | null;
+  evidenceConclusion: string;
   fromCache: boolean;
   hasSourceEntry: boolean;
   sourceLoading: boolean;
@@ -105,13 +108,22 @@ export function buildVendorEvidenceRowModel(input: {
         : "";
 
   const fromCache = source?.fromCache === true;
+  let evidenceProvenance: string | null = null;
+  let evidenceConclusion = signalText;
   let evidenceText = signalText;
   if (vendorPresentation.kind === "scored" && fromCache) {
-    evidenceText = signalText
-      ? `Cached · ${signalText}`
-      : source?.badgeText === "Cached"
-        ? "Cached"
-        : "Cached evidence";
+    evidenceProvenance = "Cached";
+    if (signalText) {
+      evidenceText = `Cached · ${signalText}`;
+      evidenceConclusion = signalText;
+    } else if (source?.badgeText === "Cached") {
+      evidenceText = "Cached";
+      evidenceConclusion = "";
+    } else {
+      evidenceText = "Cached evidence";
+      evidenceProvenance = null;
+      evidenceConclusion = "";
+    }
   }
 
   const resultLabel =
@@ -142,6 +154,8 @@ export function buildVendorEvidenceRowModel(input: {
     resultAriaLabel,
     classificationText,
     evidenceText,
+    evidenceProvenance,
+    evidenceConclusion,
     fromCache,
     hasSourceEntry: Boolean(source),
     sourceLoading,
@@ -250,7 +264,27 @@ function VendorEvidenceRow({
       </div>
       <div className="vera5-evidence-detail" role="cell">
         {model.evidenceText ? (
-          <p className="vera5-evidence-signal">{model.evidenceText}</p>
+          <p className="vera5-evidence-signal" title={model.evidenceText}>
+            {model.evidenceProvenance && model.evidenceConclusion ? (
+              <>
+                <span className="vera5-evidence-signal-provenance">
+                  {model.evidenceProvenance}
+                </span>
+                <span className="vera5-evidence-signal-sep" aria-hidden="true">
+                  {" · "}
+                </span>
+                <span className="vera5-evidence-signal-conclusion">
+                  {model.evidenceConclusion}
+                </span>
+              </>
+            ) : model.evidenceProvenance && !model.evidenceConclusion ? (
+              <span className="vera5-evidence-signal-provenance">
+                {model.evidenceProvenance}
+              </span>
+            ) : (
+              model.evidenceText
+            )}
+          </p>
         ) : (
           <p className="vera5-evidence-signal vera5-evidence-signal--empty" />
         )}
@@ -259,7 +293,7 @@ function VendorEvidenceRow({
         <button
           type="button"
           className="vera5-intel-info-button"
-          aria-label={`View ${model.displayName} details`}
+          aria-label={`Inspect ${model.displayName} evidence`}
           aria-expanded={detailsOpen}
           aria-controls={`vera5-intel-source-details-${model.sourceId}`}
           onClick={(event) => {
@@ -268,7 +302,9 @@ function VendorEvidenceRow({
           }}
           onKeyDown={(event) => event.stopPropagation()}
         >
-          <VeraIcon icon={VeraUiIcons.info} size="xs" />
+          <span className="vera5-info-badge-glyph" aria-hidden="true">
+            i
+          </span>
         </button>
         <div
           id={`vera5-intel-source-details-${model.sourceId}`}
@@ -325,13 +361,14 @@ export function VendorEvidenceMatrix({
   sourceEntryById,
   availability,
   loading,
-  enrichment,
+  enrichment: _enrichment,
   openInfoId,
   onOpenInfoIdChange,
   pivotBySourceId,
   onOpenPivot,
   emptyStateMessage,
   emptyStateSupport,
+  emptyStateAction,
 }: {
   orderedSourceIds: readonly EnrichmentSourceId[];
   sourceEntryById: ReadonlyMap<EnrichmentSourceId, HoverCardSourceEntry>;
@@ -344,32 +381,9 @@ export function VendorEvidenceMatrix({
   onOpenPivot: (link: PivotLink) => void;
   emptyStateMessage?: string;
   emptyStateSupport?: string;
+  emptyStateAction?: ReactNode;
 }) {
-  const queryableIds = orderedSourceIds.filter((sourceId) => {
-    const definition = getEnrichmentSourceDefinition(sourceId);
-    if (!definition.liveConnector) {
-      return false;
-    }
-    const row = availability[sourceId];
-    if (row?.enabled === false || row?.configured === false) {
-      return false;
-    }
-    return true;
-  });
-  const completedCount = queryableIds.filter((sourceId) => sourceEntryById.has(sourceId)).length;
-  const applicableCount = queryableIds.length;
-  const hasCached = [...sourceEntryById.values()].some((source) => source.fromCache);
-
-  const metaParts: string[] = [];
-  if (applicableCount > 0) {
-    metaParts.push(`${completedCount}/${applicableCount} sources complete`);
-  }
-  if (enrichment === "partial_terminal" || enrichment === "partial_running") {
-    metaParts.push("partial coverage");
-  }
-  if (hasCached) {
-    metaParts.push("cached evidence included");
-  }
+  void _enrichment;
 
   const rows = orderedSourceIds.map((sourceId) =>
     buildVendorEvidenceRowModel({
@@ -382,16 +396,20 @@ export function VendorEvidenceMatrix({
 
   return (
     <section className="vera5-evidence-matrix" aria-label="Vendor evidence">
-      <header className="vera5-evidence-matrix-identity">
-        <h3 className="vera5-evidence-matrix-title">Vendor Evidence</h3>
-        {metaParts.length ? (
-          <p className="vera5-evidence-matrix-meta">{metaParts.join(" · ")}</p>
-        ) : null}
-      </header>
       {orderedSourceIds.length === 0 ? (
-        <div className="vera5-evidence-matrix-empty" role="status">
-          <p>{emptyStateMessage ?? "No applicable enrichment sources are enabled."}</p>
-          {emptyStateSupport ? <p>{emptyStateSupport}</p> : null}
+        <div
+          className="vera5-evidence-matrix-shell vera5-evidence-matrix-shell--empty vera5-intel-feed-sources"
+          role="status"
+        >
+          <div className="vera5-evidence-matrix-empty">
+            <p className="vera5-evidence-matrix-empty-primary">
+              {emptyStateMessage ?? "No applicable enrichment sources are enabled."}
+            </p>
+            {emptyStateSupport ? (
+              <p className="vera5-evidence-matrix-empty-support">{emptyStateSupport}</p>
+            ) : null}
+            {emptyStateAction ?? null}
+          </div>
         </div>
       ) : (
       <div

@@ -5,6 +5,8 @@ import {
   resolveConditionalHeaderSummary,
   resolveConditionalIntelligenceChannels,
 } from "./conditionalIntelligence";
+import { createOkSourceResult } from "./enrichment";
+import { INVESTIGATION_STATUS } from "./investigationCapability";
 
 describe("conditionalIntelligence", () => {
   it("exposes three normalized channels with Vulnerability Context label", () => {
@@ -35,7 +37,7 @@ describe("conditionalIntelligence", () => {
     expect(model.channels.every((channel) => channel.findings.length === 0)).toBe(true);
   });
 
-  it("uses not-evaluated for MITRE and malware when an IOC is selected", () => {
+  it("marks MITRE and malware NOT_EVALUATED without enrichment evidence", () => {
     const model = resolveConditionalIntelligenceChannels({
       iocType: IOC_TYPE.IPV4,
       iocValue: "8.8.8.8",
@@ -43,11 +45,11 @@ describe("conditionalIntelligence", () => {
     expect(model.channels[0]?.state).toBe("not_evaluated");
     expect(model.channels[1]?.state).toBe("not_evaluated");
     expect(model.channels[2]?.state).toBe("not_evaluated");
-    expect(model.channels.every((channel) => channel.isExpandable === false)).toBe(true);
-    expect(model.headerSummary).toBe("0 / 3 EVALUATED");
+    expect(model.channels[0]?.investigationStatus).toBe(INVESTIGATION_STATUS.NOT_EVALUATED);
+    expect(model.channels.every((channel) => channel.findings.length === 0)).toBe(true);
   });
 
-  it("marks Vulnerability Context unavailable with expandable detail for CVE IOCs", () => {
+  it("marks Vulnerability Context AVAILABLE for CVE IOC at identifier level", () => {
     const model = resolveConditionalIntelligenceChannels({
       iocType: IOC_TYPE.CVE,
       iocValue: "CVE-2021-44228",
@@ -55,23 +57,52 @@ describe("conditionalIntelligence", () => {
     const vuln = model.channels.find(
       (channel) => channel.id === CONDITIONAL_CHANNEL_ID.VULNERABILITY
     );
-    expect(vuln?.state).toBe("unavailable");
+    expect(vuln?.state).toBe("available");
     expect(vuln?.isExpandable).toBe(true);
-    expect(vuln?.detailNote).toContain("CVE-2021-44228");
-    expect(vuln?.detailNote).toContain("not available in local enrichment");
-    expect(vuln?.findings).toHaveLength(0);
+    expect(vuln?.findings[0]?.primaryValue).toBe("CVE-2021-44228");
+    expect(vuln?.detailNote ?? vuln?.findings.length).toBeTruthy();
     expect(model.channels[0]?.state).toBe("not_evaluated");
-    expect(model.headerSummary).toMatch(/EVALUATED|PARTIAL/);
+    expect(model.headerSummary).toMatch(/FINDING|EVALUATED|PARTIAL/);
   });
 
-  it("never fabricates findings or confirmed-negative associations", () => {
+  it("never fabricates findings from reputation alone", () => {
     const model = resolveConditionalIntelligenceChannels({
       iocType: IOC_TYPE.URL,
       iocValue: "http://evil.example/",
+      sourceResults: [
+        createOkSourceResult({
+          sourceId: "virustotal",
+          summary: "20 malicious detections",
+          tags: ["malicious", "phishing"],
+        }),
+      ],
     });
     expect(model.channels.every((channel) => channel.findings.length === 0)).toBe(true);
-    expect(model.channels.every((channel) => channel.state !== "no_association")).toBe(true);
     expect(model.channels.every((channel) => channel.state !== "available")).toBe(true);
+    expect(model.channels[0]?.state).toBe("no_association");
+    expect(model.channels[1]?.state).toBe("no_association");
+  });
+
+  it("surfaces attributed findings from intelContext", () => {
+    const model = resolveConditionalIntelligenceChannels({
+      iocType: IOC_TYPE.SHA256,
+      iocValue: "a".repeat(64),
+      sourceResults: [
+        createOkSourceResult({
+          sourceId: "otx",
+          summary: "1 pulse",
+          intelContext: {
+            malwareFamilies: ["Emotet"],
+            attackIds: ["T1059.001"],
+          },
+        }),
+      ],
+    });
+    expect(model.channels[0]?.state).toBe("available");
+    expect(model.channels[0]?.findings[0]?.primaryValue).toContain("T1059.001");
+    expect(model.channels[1]?.state).toBe("available");
+    expect(model.channels[1]?.findings[0]?.primaryValue).toContain("Emotet");
+    expect(model.channels[1]?.findings[0]?.sourceAttribution).toContain("OTX");
   });
 
   it("derives header summary only from real channel state", () => {
@@ -93,6 +124,8 @@ describe("conditionalIntelligence", () => {
           unsupportedReason: null,
           coverageState: "none",
           detailNote: null,
+          investigationStatus: null,
+          capabilityId: "mitre_attack",
         },
       ])
     ).toBeNull();

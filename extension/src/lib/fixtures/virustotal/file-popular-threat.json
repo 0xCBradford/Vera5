@@ -1,0 +1,19 @@
+{
+  "data": {
+    "type": "file",
+    "id": "abc",
+    "attributes": {
+      "last_analysis_stats": {
+        "malicious": 12,
+        "suspicious": 1,
+        "harmless": 40,
+        "undetected": 20
+      },
+      "popular_threat_classification": {
+        "suggested_threat_label": "trojan.emotet/banker",
+        "popular_threat_category": [{ "value": "trojan", "count": 40 }],
+        "popular_threat_name": [{ "value": "emotet", "count": 38 }]
+      }
+    }
+  }
+}

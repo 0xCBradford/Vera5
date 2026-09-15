@@ -18,6 +18,8 @@ import {
   resolveInvestigationPathsSelectionCopy,
   resolveScanPresentation,
   resolveVendorCardPresentation,
+  buildSelectedIocSessionKey,
+  isSelectedIocSessionKeyActive,
 } from "./workspacePresentationState";
 
 const resultsSummary = buildTabScanSummary({
@@ -113,6 +115,7 @@ describe("resolveIntelFeedUnselectedCopy", () => {
       detectedCount: 2,
     });
     expect(withResults.primary).toBe("2 indicators detected");
+    expect(withResults.secondary).toContain("Detected Indicators");
     expect(withResults.secondary).toContain("investigation paths");
   });
 });
@@ -297,5 +300,22 @@ describe("resolveInvestigationPathsSelectionCopy", () => {
     );
     expect(awaiting.conditionalStatus).toBe("Awaiting selection");
     expect(awaiting.sourcesPlaceholder).not.toBe("No indicator selected");
+  });
+});
+
+describe("buildSelectedIocSessionKey", () => {
+  it("uses scan-bound anchor id as the canonical selected IOC key", () => {
+    expect(buildSelectedIocSessionKey({ anchorId: "vera5-hl-1" })).toBe("vera5-hl-1");
+    expect(buildSelectedIocSessionKey(null)).toBeNull();
+    expect(buildSelectedIocSessionKey(undefined)).toBeNull();
+  });
+});
+
+describe("isSelectedIocSessionKeyActive", () => {
+  it("matches only when request and active keys are equal", () => {
+    expect(isSelectedIocSessionKeyActive("vera5-hl-1", "vera5-hl-1")).toBe(true);
+    expect(isSelectedIocSessionKeyActive("vera5-hl-1", "vera5-hl-2")).toBe(false);
+    expect(isSelectedIocSessionKeyActive(null, null)).toBe(true);
+    expect(isSelectedIocSessionKeyActive("vera5-hl-1", null)).toBe(false);
   });
 });

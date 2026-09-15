@@ -74,10 +74,12 @@ export const WORKSPACE_STATE_COPY = {
     nonePrimary: "No indicator selected",
     noneSecondary: "Select an indicator from Detected Indicators to begin investigation.",
     selectInstruction:
-      "Select an indicator below to assemble vendor evidence, scoring, and investigation paths.",
-    intelBeforeScan: "Scan the current page to detect indicators.",
+      "Select an indicator in Detected Indicators to assemble vendor evidence, scoring, and investigation paths.",
+    intelBeforeScan: "Scan the page or a selection to detect indicators.",
     intelEmptyScan: "No supported indicators were detected on this page.",
     intelScanning: "Scanning the current page for supported indicators…",
+    readyForAnalysis: "READY FOR ANALYSIS",
+    noTargetSelected: "NO TARGET SELECTED",
     sourcesAfterSelection: "Sources become available after selecting an indicator.",
     contextAfterSelection: "Select an indicator to evaluate local context.",
     awaitingSelection: "Awaiting selection",
@@ -528,6 +530,27 @@ export function resolveInvestigationPathsSelectionCopy(input: {
     conditionalStatus: WORKSPACE_STATE_COPY.selection.awaitingSelection,
     actionDisabledReason: WORKSPACE_STATE_COPY.selection.awaitingSelection,
   };
+}
+
+/** Phase 15E — stable session key for the globally selected IOC (scan-bound anchor). */
+export function buildSelectedIocSessionKey(
+  entry: { anchorId: string } | null | undefined
+): string | null {
+  if (!entry?.anchorId) {
+    return null;
+  }
+  return entry.anchorId;
+}
+
+/** Returns true when an async response still matches the active selected IOC. */
+export function isSelectedIocSessionKeyActive(
+  requestKey: string | null,
+  activeKey: string | null
+): boolean {
+  if (requestKey === null) {
+    return activeKey === null;
+  }
+  return requestKey === activeKey;
 }
 
 export function listQueryableEnrichmentSourceIds(

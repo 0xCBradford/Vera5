@@ -439,16 +439,9 @@ describe("enrichment handler", () => {
       payload: {
         sources: [
           {
-            sourceId: "abuseipdb",
             status: "skipped",
             errorCode: "unsupported_type",
-            errorMessage: "AbuseIPDB does not support this indicator type.",
-          },
-          {
-            sourceId: "otx",
-            status: "skipped",
-            errorCode: "unsupported_type",
-            errorMessage: "OTX does not support this indicator type.",
+            errorMessage: expect.stringContaining("No enabled enrichment sources support"),
           },
         ],
       },
@@ -679,10 +672,9 @@ describe("enrichment handler", () => {
       ok: true,
       payload: {
         source: {
-          sourceId: "urlscan",
           status: "skipped",
           errorCode: "unsupported_type",
-          errorMessage: "URLScan.io does not support this indicator type.",
+          errorMessage: expect.stringContaining("No enabled enrichment sources support"),
         },
       },
     });
@@ -817,10 +809,9 @@ describe("enrichment handler", () => {
       ok: true,
       payload: {
         source: {
-          sourceId: "greynoise",
           status: "skipped",
           errorCode: "unsupported_type",
-          errorMessage: "GreyNoise does not support this indicator type.",
+          errorMessage: expect.stringContaining("No enabled enrichment sources support"),
         },
       },
     });

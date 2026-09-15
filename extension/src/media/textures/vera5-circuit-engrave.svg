@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 640" fill="none" aria-hidden="true">
+  <!-- Phase 17E — denser static steel engraving; opacity set in CSS. No filters. -->
+  <g stroke="#6a849e" stroke-width="1" stroke-linecap="square" stroke-linejoin="miter">
+    <path d="M24 32h88v24h56"/>
+    <path d="M168 56h72v32"/>
+    <path d="M240 88h64v40h48"/>
+    <path d="M352 128v48h56v40"/>
+    <path d="M408 216h48v64h-40"/>
+    <path d="M416 280v72h-72"/>
+    <path d="M344 352h-80v48h-56"/>
+    <path d="M208 400v56h-72v48"/>
+    <path d="M136 504h-64v72h96"/>
+    <path d="M168 576h80v-40h64"/>
+    <path d="M312 536h88v64h56"/>
+    <path d="M456 600V488h-40"/>
+    <path d="M36 96h48v80H36"/>
+    <path d="M84 176h36v88H84"/>
+    <path d="M120 264h64v40"/>
+    <path d="M184 304v56h88"/>
+    <path d="M272 360h48v64h-32"/>
+    <path d="M288 424h96v32"/>
+    <path d="M384 456v80h-48"/>
+    <path d="M48 360h56v72H48"/>
+    <path d="M104 432h48"/>
+    <path d="M200 48v40h-48"/>
+    <path d="M280 40h72v36"/>
+    <path d="M400 48v56h-48"/>
+    <path d="M72 520h56v-48h40"/>
+    <path d="M240 480h64v40"/>
+    <path d="M40 240h28v48H40"/>
+    <path d="M320 200h56v48h-24"/>
+    <path d="M160 160h80v24h40"/>
+    <path d="M220 248h40v56"/>
+    <path d="M360 168h40v56"/>
+    <path d="M96 300h40v48"/>
+    <path d="M440 360h16v96"/>
+    <path d="M24 448h40v64"/>
+    <path d="M260 560h52v40"/>
+    <path d="M148 88h40"/>
+    <path d="M300 280h64"/>
+    <path d="M180 448h48"/>
+    <path d="M400 520h32"/>
+  </g>
+  <g fill="#6a849e">
+    <rect x="108" y="52" width="4" height="4"/>
+    <rect x="236" y="84" width="4" height="4"/>
+    <rect x="348" y="124" width="4" height="4"/>
+    <rect x="404" y="212" width="4" height="4"/>
+    <rect x="340" y="348" width="4" height="4"/>
+    <rect x="204" y="396" width="4" height="4"/>
+    <rect x="132" y="500" width="4" height="4"/>
+    <rect x="164" y="572" width="4" height="4"/>
+    <rect x="308" y="532" width="4" height="4"/>
+    <rect x="80" y="172" width="4" height="4"/>
+    <rect x="180" y="300" width="4" height="4"/>
+    <rect x="268" y="356" width="4" height="4"/>
+    <rect x="196" y="44" width="4" height="4"/>
+    <rect x="276" y="36" width="4" height="4"/>
+    <rect x="316" y="196" width="4" height="4"/>
+    <rect x="156" y="156" width="4" height="4"/>
+    <rect x="216" y="244" width="4" height="4"/>
+    <rect x="92" y="296" width="4" height="4"/>
+    <rect x="236" y="476" width="4" height="4"/>
+    <rect x="256" y="556" width="4" height="4"/>
+  </g>
+</svg>

@@ -8,6 +8,11 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import type { EnrichmentIntelContext } from "./conditionalIntelNormalize";
+import {
+  normalizeIntelContext,
+  normalizeMitreTechniqueId,
+} from "./conditionalIntelNormalize";
 import {
   CONNECTOR_AUTHORITY_TIER,
   enrichWithConnectorDefinition,
@@ -67,7 +72,12 @@ export const DEFAULT_OTX_CAPABILITY_FLAGS: ConnectorCapabilityFlags = {
 
 export type OtxPulseInfo = {
   count?: number;
-  pulses?: readonly { tags?: readonly string[]; name?: string }[];
+  pulses?: readonly {
+    tags?: readonly string[];
+    name?: string;
+    malwareFamilies?: readonly string[];
+    attackIds?: readonly string[];
+  }[];
 };
 
 export type OtxConnectorDeps = {
@@ -183,12 +193,22 @@ export function parseOtxPulseInfo(payload: unknown): OtxPulseInfo | null {
 
   const pulsesRaw = pulseInfo.pulses;
   if (Array.isArray(pulsesRaw)) {
-    const pulses: { tags?: readonly string[]; name?: string }[] = [];
+    const pulses: {
+      tags?: readonly string[];
+      name?: string;
+      malwareFamilies?: readonly string[];
+      attackIds?: readonly string[];
+    }[] = [];
     for (const pulse of pulsesRaw) {
       if (!isRecord(pulse)) {
         continue;
       }
-      const entry: { tags?: readonly string[]; name?: string } = {};
+      const entry: {
+        tags?: readonly string[];
+        name?: string;
+        malwareFamilies?: readonly string[];
+        attackIds?: readonly string[];
+      } = {};
       const tags = readStringArray(pulse.tags);
       if (tags) {
         entry.tags = tags;
@@ -196,7 +216,15 @@ export function parseOtxPulseInfo(payload: unknown): OtxPulseInfo | null {
       if (typeof pulse.name === "string" && pulse.name.trim().length > 0) {
         entry.name = pulse.name.trim();
       }
-      if (entry.tags || entry.name) {
+      const malwareFamilies = readStringArray(pulse.malware_families);
+      if (malwareFamilies) {
+        entry.malwareFamilies = malwareFamilies;
+      }
+      const attackIds = readStringArray(pulse.attack_ids);
+      if (attackIds) {
+        entry.attackIds = attackIds;
+      }
+      if (entry.tags || entry.name || entry.malwareFamilies || entry.attackIds) {
         pulses.push(entry);
       }
     }
@@ -225,18 +253,74 @@ export function buildOtxTags(pulseInfo: OtxPulseInfo): readonly string[] {
   return collectOtxThreatTags(pulseInfo.pulses);
 }
 
+export function buildOtxIntelContext(
+  pulseInfo: OtxPulseInfo
+): EnrichmentIntelContext | undefined {
+  const malwareFamilies: string[] = [];
+  const attackIds: string[] = [];
+  const familySeen = new Set<string>();
+  const attackSeen = new Set<string>();
+  for (const pulse of pulseInfo.pulses ?? []) {
+    for (const family of pulse.malwareFamilies ?? []) {
+      const trimmed = family.trim();
+      if (!trimmed || familySeen.has(trimmed.toLowerCase())) {
+        continue;
+      }
+      familySeen.add(trimmed.toLowerCase());
+      malwareFamilies.push(trimmed);
+    }
+    for (const attackId of pulse.attackIds ?? []) {
+      const normalized = normalizeMitreTechniqueId(attackId);
+      if (!normalized || attackSeen.has(normalized)) {
+        continue;
+      }
+      attackSeen.add(normalized);
+      attackIds.push(normalized);
+    }
+  }
+  if (malwareFamilies.length === 0 && attackIds.length === 0) {
+    return undefined;
+  }
+  return normalizeIntelContext({
+    ...(malwareFamilies.length > 0 ? { malwareFamilies } : {}),
+    ...(attackIds.length > 0 ? { attackIds } : {}),
+  });
+}
+
 export function normalizeOtxIndicatorResponse(
   payload: unknown
-): { summary: string; tags: readonly string[] } | null {
+): {
+  summary: string;
+  tags: readonly string[];
+  intelContext?: EnrichmentIntelContext;
+} | null {
   const pulseInfo = parseOtxPulseInfo(payload);
   if (!pulseInfo) {
     return null;
   }
   const count = pulseInfo.count ?? pulseInfo.pulses?.length ?? 0;
-  return mapOtxFieldsToUnifiedPresentation({
+  const presentation = mapOtxFieldsToUnifiedPresentation({
     pulseCount: count,
     threatTags: collectOtxThreatTags(pulseInfo.pulses),
   });
+  if (!presentation) {
+    return null;
+  }
+  const intelContext = buildOtxIntelContext(pulseInfo);
+  return {
+    summary: presentation.summary,
+    tags: presentation.tags,
+    ...(intelContext ? { intelContext } : {}),
+    scoringEvidence: {
+      source: OTX_SOURCE_ID,
+      pulseCount: count,
+      ...(intelContext?.malwareFamilies
+        ? { malwareFamilies: intelContext.malwareFamilies }
+        : {}),
+      ...(intelContext?.attackIds ? { attackIds: intelContext.attackIds } : {}),
+      ...(presentation.tags.length > 0 ? { threatTags: presentation.tags } : {}),
+    },
+  };
 }
 
 function mapOtxHttpStatus(status: number): {

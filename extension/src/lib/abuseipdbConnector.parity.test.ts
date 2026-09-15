@@ -14,6 +14,9 @@ type ParityNormalizationCase = {
   expected: {
     summary: string;
     tags: string[];
+    networkContext?: Record<string, unknown>;
+    registrationContext?: Record<string, unknown>;
+    scoringEvidence?: Record<string, unknown>;
   };
 };
 

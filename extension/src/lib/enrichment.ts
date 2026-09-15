@@ -3,8 +3,27 @@ import type {
   EnrichmentSourceAssessment,
   EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
+import type { EnrichmentIntelContext } from "./conditionalIntelNormalize";
+import { normalizeIntelContext } from "./conditionalIntelNormalize";
+import type {
+  EnrichmentNetworkContext,
+  EnrichmentRegistrationContext,
+} from "./relatedContextModel";
+import {
+  normalizeEnrichmentNetworkContext,
+  normalizeEnrichmentRegistrationContext,
+} from "./relatedContextNormalize";
 import type { IocType } from "./iocRegex";
 import { IOC_TYPE } from "./iocRegex";
+import type { ScoringEvidence } from "./scoring/scoringEvidence";
+import { normalizeScoringEvidence } from "./scoring/scoringEvidence";
+
+export type { EnrichmentIntelContext } from "./conditionalIntelNormalize";
+export type {
+  EnrichmentNetworkContext,
+  EnrichmentRegistrationContext,
+} from "./relatedContextModel";
+export type { ScoringEvidence } from "./scoring/scoringEvidence";
 
 const ENRICHMENT_RESULT_SOURCE_LABELS: Record<EnrichmentSourceId, string> = {
   abuseipdb: "AbuseIPDB",
@@ -57,6 +76,17 @@ export type EnrichmentSourceResult = {
   summary?: string;
   tags?: readonly string[];
   assessment?: EnrichmentSourceAssessment;
+  /** Phase 18B — structured conditional-intelligence fields from adapters. */
+  intelContext?: EnrichmentIntelContext;
+  /** Phase 18C — network / ASN / resolved-IP context from adapters. */
+  networkContext?: EnrichmentNetworkContext;
+  /** Phase 18C — registration / RDAP-style context from adapters. */
+  registrationContext?: EnrichmentRegistrationContext;
+  /**
+   * Phase 21B — structured scoring evidence for ScoringSignal adapters.
+   * Optional; presentation/assessment unchanged when absent.
+   */
+  scoringEvidence?: ScoringEvidence;
   errorCode?: EnrichmentErrorCode;
   errorMessage?: string;
   retryHint?: string;
@@ -255,6 +285,27 @@ export function isEnrichmentSourceResult(value: unknown): value is EnrichmentSou
   if (record.assessment !== undefined && !isEnrichmentSourceAssessment(record.assessment)) {
     return false;
   }
+  if (record.intelContext !== undefined && !isEnrichmentIntelContext(record.intelContext)) {
+    return false;
+  }
+  if (
+    record.networkContext !== undefined &&
+    !isEnrichmentNetworkContext(record.networkContext)
+  ) {
+    return false;
+  }
+  if (
+    record.registrationContext !== undefined &&
+    !isEnrichmentRegistrationContext(record.registrationContext)
+  ) {
+    return false;
+  }
+  if (
+    record.scoringEvidence !== undefined &&
+    normalizeScoringEvidence(record.scoringEvidence) === null
+  ) {
+    return false;
+  }
   if (record.errorCode !== undefined && !isEnrichmentErrorCode(record.errorCode)) {
     return false;
   }
@@ -315,6 +366,24 @@ export function normalizeEnrichmentSourceResult(value: unknown): EnrichmentSourc
   const assessment = normalizeEnrichmentSourceAssessment(record.assessment);
   if (assessment) {
     normalized.assessment = assessment;
+  }
+  const intelContext = normalizeIntelContext(record.intelContext);
+  if (intelContext) {
+    normalized.intelContext = intelContext;
+  }
+  const networkContext = normalizeEnrichmentNetworkContext(record.networkContext);
+  if (networkContext) {
+    normalized.networkContext = networkContext;
+  }
+  const registrationContext = normalizeEnrichmentRegistrationContext(
+    record.registrationContext
+  );
+  if (registrationContext) {
+    normalized.registrationContext = registrationContext;
+  }
+  const scoringEvidence = normalizeScoringEvidence(record.scoringEvidence);
+  if (scoringEvidence) {
+    normalized.scoringEvidence = scoringEvidence;
   }
   if (record.errorCode) {
     normalized.errorCode = record.errorCode;
@@ -505,6 +574,10 @@ export function createOkSourceResult(input: {
   summary: string;
   tags?: readonly string[];
   assessment?: EnrichmentSourceAssessment;
+  intelContext?: EnrichmentIntelContext;
+  networkContext?: EnrichmentNetworkContext;
+  registrationContext?: EnrichmentRegistrationContext;
+  scoringEvidence?: ScoringEvidence;
   fetchedAt?: string;
   fromCache?: boolean;
   rawVendorJson?: string;
@@ -526,6 +599,24 @@ export function createOkSourceResult(input: {
       summary: result.summary ?? "",
       tags: result.tags,
     });
+  const intelContext = normalizeIntelContext(input.intelContext);
+  if (intelContext) {
+    result.intelContext = intelContext;
+  }
+  const networkContext = normalizeEnrichmentNetworkContext(input.networkContext);
+  if (networkContext) {
+    result.networkContext = networkContext;
+  }
+  const registrationContext = normalizeEnrichmentRegistrationContext(
+    input.registrationContext
+  );
+  if (registrationContext) {
+    result.registrationContext = registrationContext;
+  }
+  const scoringEvidence = normalizeScoringEvidence(input.scoringEvidence);
+  if (scoringEvidence) {
+    result.scoringEvidence = scoringEvidence;
+  }
   if (input.fetchedAt) {
     result.fetchedAt = input.fetchedAt;
   }
@@ -539,12 +630,84 @@ export function createOkSourceResult(input: {
   return result;
 }
 
+function isStringArrayField(value: unknown): value is readonly string[] {
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
+}
+
+function isEnrichmentIntelContext(value: unknown): value is EnrichmentIntelContext {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const keys = [
+    "malwareFamilies",
+    "malwareAliases",
+    "campaigns",
+    "threatActors",
+    "threatClusters",
+    "attackIds",
+    "cveIds",
+  ] as const;
+  for (const key of keys) {
+    if (record[key] !== undefined && !isStringArrayField(record[key])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isOptionalString(value: unknown): boolean {
+  return value === undefined || typeof value === "string";
+}
+
+function isEnrichmentNetworkContext(value: unknown): value is EnrichmentNetworkContext {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (!isOptionalString(record.asn) || !isOptionalString(record.organization)) {
+    return false;
+  }
+  if (!isOptionalString(record.countryCode)) {
+    return false;
+  }
+  if (record.resolvedIps !== undefined && !isStringArrayField(record.resolvedIps)) {
+    return false;
+  }
+  return true;
+}
+
+function isEnrichmentRegistrationContext(
+  value: unknown
+): value is EnrichmentRegistrationContext {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    !isOptionalString(record.registrar) ||
+    !isOptionalString(record.organization) ||
+    !isOptionalString(record.registrationDate) ||
+    !isOptionalString(record.expirationDate) ||
+    !isOptionalString(record.relatedDomain)
+  ) {
+    return false;
+  }
+  if (record.nameservers !== undefined && !isStringArrayField(record.nameservers)) {
+    return false;
+  }
+  return true;
+}
+
 export function createErrorSourceResult(input: {
   sourceId: EnrichmentSourceId;
   errorCode: EnrichmentErrorCode;
   errorMessage?: string;
   retryHint?: string;
   fetchedAt?: string;
+  rawVendorJson?: string;
 }): EnrichmentSourceResult {
   const result: EnrichmentSourceResult = {
     sourceId: input.sourceId,
@@ -562,6 +725,10 @@ export function createErrorSourceResult(input: {
   }
   if (input.fetchedAt) {
     result.fetchedAt = input.fetchedAt;
+  }
+  const rawVendorJson = input.rawVendorJson?.trim();
+  if (rawVendorJson) {
+    result.rawVendorJson = rawVendorJson;
   }
   return result;
 }

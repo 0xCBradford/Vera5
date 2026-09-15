@@ -22,9 +22,9 @@ function scoredEntry(
     },
     metadataChips: [],
     fromCache: false,
-    lastUpdatedLine: null,
-    errorCode: null,
-    retryHint: null,
+    lastUpdatedLine: undefined,
+    errorCode: undefined,
+    retryHint: undefined,
     ...extras,
   };
 }
@@ -70,6 +70,8 @@ describe("buildVendorEvidenceRowModel", () => {
     expect(cached.scoreValue).toBe(53);
     expect(cached.evidenceText).toContain("Cached");
     expect(cached.evidenceText).toContain("53 risk signal");
+    expect(cached.evidenceProvenance).toBe("Cached");
+    expect(cached.evidenceConclusion).toBe("53 risk signal");
   });
 
   it("maps not queried, querying, pivot, disabled, and missing configuration", () => {

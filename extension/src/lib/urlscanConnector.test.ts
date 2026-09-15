@@ -107,6 +107,12 @@ describe("URLScan.io connector normalization", () => {
     ).toEqual({
       summary: "2 urlscan results",
       tags: ["phishing", "c2"],
+      scoringEvidence: {
+        hasMaliciousVerdict: false,
+        resultTotal: 2,
+        source: "urlscan",
+        verdictTags: ["phishing", "c2"],
+      },
     });
   });
 

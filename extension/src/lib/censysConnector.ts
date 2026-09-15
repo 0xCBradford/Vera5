@@ -28,8 +28,9 @@ import {
   type CensysUnifiedInput,
 } from "./enrichmentVendorNormalize";
 import { ENRICHMENT_SOURCE, getEnrichmentSourceDefinition } from "./enrichmentSourceRegistry";
+import { liveEnrichmentSupportsIocType } from "./enrichmentSourceApplicability";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
-import { IOC_TYPE, type IocType } from "./iocRegex";
+import { type IocType } from "./iocRegex";
 import {
   assertEnrichmentFetchHasNoBody,
   sanitizeEnrichmentIoc,
@@ -73,6 +74,7 @@ export type CensysHostData = {
   dnsNameCount: number;
   countryCode?: string;
   autonomousSystemName?: string;
+  asn?: string;
   serviceTags: readonly string[];
   certificateTags: readonly string[];
   dnsNames: readonly string[];
@@ -285,6 +287,11 @@ export function parseCensysHostData(payload: unknown): CensysHostData | null {
     ? readNonEmptyString(autonomousSystem.name) ??
       readNonEmptyString(autonomousSystem.description)
     : undefined;
+  const asn =
+    isRecord(autonomousSystem) &&
+    (typeof autonomousSystem.asn === "number" || typeof autonomousSystem.asn === "string")
+      ? String(autonomousSystem.asn)
+      : undefined;
   const dnsNames = isRecord(dns)
     ? readStringArray(dns.names ?? dns.reverse_dns)
     : [];
@@ -300,6 +307,7 @@ export function parseCensysHostData(payload: unknown): CensysHostData | null {
     dnsNames.length === 0 &&
     !countryCode &&
     !autonomousSystemName &&
+    !asn &&
     !ip
   ) {
     return null;
@@ -312,6 +320,7 @@ export function parseCensysHostData(payload: unknown): CensysHostData | null {
     dnsNameCount: dnsNames.length,
     countryCode,
     autonomousSystemName,
+    asn,
     serviceTags,
     certificateTags,
     dnsNames,
@@ -336,16 +345,44 @@ export function mapCensysHostDataToUnifiedPresentation(
 
 export function normalizeCensysHostResponse(
   payload: unknown
-): ReturnType<typeof mapCensysFieldsToUnifiedPresentation> | null {
+): {
+  summary: string;
+  tags: readonly string[];
+  networkContext?: {
+    asn?: string;
+    organization?: string;
+    countryCode?: string;
+  };
+} | null {
   const data = parseCensysHostData(payload);
   if (!data) {
     return null;
   }
-  return mapCensysHostDataToUnifiedPresentation(data);
+  const presentation = mapCensysHostDataToUnifiedPresentation(data);
+  const networkContext =
+    data.asn || data.autonomousSystemName || data.countryCode
+      ? {
+          ...(data.asn ? { asn: data.asn } : {}),
+          ...(data.autonomousSystemName
+            ? { organization: data.autonomousSystemName }
+            : {}),
+          ...(data.countryCode ? { countryCode: data.countryCode } : {}),
+        }
+      : undefined;
+  return {
+    summary: presentation.summary,
+    tags: presentation.tags,
+    ...(networkContext ? { networkContext } : {}),
+    scoringEvidence: {
+      source: CENSYS_SOURCE_ID,
+      kind: "context" as const,
+      summary: presentation.summary,
+    },
+  };
 }
 
 export function censysLiveSupportsIocType(type: IocType): boolean {
-  return type === IOC_TYPE.IPV4;
+  return liveEnrichmentSupportsIocType(ENRICHMENT_SOURCE.CENSYS, type);
 }
 
 export function buildCensysHostApiUrl(ipAddress: string): string {
@@ -550,6 +587,8 @@ export async function enrichWithCensys(
       sourceId: CENSYS_SOURCE_ID,
       summary: normalized.summary,
       tags: normalized.tags,
+      networkContext: normalized.networkContext,
+      scoringEvidence: normalized.scoringEvidence,
       fetchedAt,
       rawVendorJson: formatRedactedVendorJson(payload),
     });

@@ -83,6 +83,13 @@ describe("GreyNoise community connector normalization", () => {
     ).toEqual({
       summary: "malicious internet noise",
       tags: ["malicious", "noise"],
+      scoringEvidence: {
+        classification: "malicious",
+        name: "unknown",
+        noise: true,
+        riot: false,
+        source: "greynoise",
+      },
     });
   });
 
@@ -94,6 +101,11 @@ describe("GreyNoise community connector normalization", () => {
     ).toEqual({
       summary: "not observed in GreyNoise",
       tags: [],
+      scoringEvidence: {
+        noise: false,
+        riot: false,
+        source: "greynoise",
+      },
     });
   });
 

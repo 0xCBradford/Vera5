@@ -274,12 +274,45 @@ export function buildUrlscanTags(data: UrlscanSearchData): readonly string[] {
 
 export function normalizeUrlscanSearchResponse(
   payload: unknown
-): { summary: string; tags: readonly string[] } | null {
+): {
+  summary: string;
+  tags: readonly string[];
+  scoringEvidence: {
+    source: typeof URLSCAN_SOURCE_ID;
+    resultTotal: number;
+    hasMaliciousVerdict: boolean;
+    verdictTags?: readonly string[];
+  };
+} | null {
   const data = parseUrlscanSearchData(payload);
   if (!data) {
     return null;
   }
-  return mapUrlscanSearchDataToUnifiedPresentation(data);
+  const presentation = mapUrlscanSearchDataToUnifiedPresentation(data);
+  if (!presentation) {
+    return null;
+  }
+  const verdictTags = Array.from(
+    new Set(
+      (data.results ?? []).flatMap((entry) => [
+        ...(entry.verdictTags ?? []),
+        ...(entry.taskTags ?? []),
+      ])
+    )
+  );
+  const hasMaliciousVerdict =
+    (data.results ?? []).some((entry) => entry.maliciousVerdict === true) ||
+    presentation.tags.some((tag) => tag.toLowerCase() === "malicious");
+  return {
+    summary: presentation.summary,
+    tags: presentation.tags,
+    scoringEvidence: {
+      source: URLSCAN_SOURCE_ID,
+      resultTotal: data.total,
+      hasMaliciousVerdict,
+      ...(verdictTags.length > 0 ? { verdictTags } : {}),
+    },
+  };
 }
 
 function mapUrlscanHttpStatus(status: number): {
@@ -422,6 +455,7 @@ export async function enrichWithUrlscan(
       sourceId: URLSCAN_SOURCE_ID,
       summary: normalized.summary,
       tags: normalized.tags,
+      scoringEvidence: normalized.scoringEvidence,
       fetchedAt,
       rawVendorJson: formatRedactedVendorJson(payload),
     });

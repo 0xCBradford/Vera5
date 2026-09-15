@@ -10,11 +10,17 @@ import {
   type EnrichmentIoc,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import type { EnrichmentIntelContext } from "./conditionalIntelNormalize";
+import type {
+  EnrichmentNetworkContext,
+  EnrichmentRegistrationContext,
+} from "./relatedContextModel";
 import { ENRICHMENT_SOURCE_LABELS } from "./hoverCardEnrichment";
 import type { IocType } from "./iocRegex";
 import { IOC_TYPE } from "./iocRegex";
 import type { EnrichmentSourceId } from "./enrichmentSourceRegistry";
 import { ENRICHMENT_SOURCE, ENRICHMENT_SOURCE_ID_SET } from "./enrichmentSourceRegistry";
+import type { ScoringEvidence } from "./scoring/scoringEvidence";
 
 export type ConnectorRateLimitPolicy = {
   requestTimeoutMs: number | null;
@@ -197,6 +203,11 @@ export type ConnectorFetchResult = ConnectorFetchOk | ConnectorFetchError;
 export type ConnectorNormalizeResult = {
   summary: string;
   tags?: readonly string[];
+  intelContext?: EnrichmentIntelContext;
+  networkContext?: EnrichmentNetworkContext;
+  registrationContext?: EnrichmentRegistrationContext;
+  /** Phase 21B — structured fields for ScoringSignal adapters. */
+  scoringEvidence?: ScoringEvidence;
 };
 
 export type ConnectorDefinition = {
@@ -536,6 +547,11 @@ export function isConnectorNormalizeResult(
   if (record.tags !== undefined && !isStringArray(record.tags)) {
     return false;
   }
+  if (record.intelContext !== undefined) {
+    if (typeof record.intelContext !== "object" || record.intelContext === null) {
+      return false;
+    }
+  }
   return true;
 }
 
@@ -714,6 +730,10 @@ export async function enrichWithConnectorDefinition(
     sourceId: definition.id,
     summary: normalized.summary,
     tags: normalized.tags,
+    intelContext: normalized.intelContext,
+    networkContext: normalized.networkContext,
+    registrationContext: normalized.registrationContext,
+    scoringEvidence: normalized.scoringEvidence,
     fetchedAt: legacySourceResult?.fetchedAt ?? fetchResult.fetchedAt,
     rawVendorJson:
       fetchResult.rawVendorJson ?? legacySourceResult?.rawVendorJson,

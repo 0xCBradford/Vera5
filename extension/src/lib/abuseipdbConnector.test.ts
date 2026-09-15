@@ -95,6 +95,13 @@ describe("AbuseIPDB connector normalization", () => {
     ).toEqual({
       summary: "74 abuse confidence",
       tags: ["DE", "scanner"],
+      networkContext: {
+        countryCode: "DE",
+      },
+      scoringEvidence: {
+        abuseConfidenceScore: 74,
+        source: "abuseipdb",
+      },
     });
   });
 });

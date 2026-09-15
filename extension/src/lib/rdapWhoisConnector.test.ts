@@ -50,6 +50,18 @@ describe("rdapWhoisConnector normalization", () => {
         "ns1.example.com",
         "ns2.example.com",
       ],
+      registrationContext: {
+        registrar: "Example Registrar",
+        registrationDate: "1995-08-14",
+        expirationDate: "2024-08-13",
+        nameservers: ["ns1.example.com", "ns2.example.com"],
+      },
+      scoringEvidence: {
+        kind: "context",
+        source: "rdap_whois",
+        summary:
+          "Example Registrar · registered 1995-08-14 · expires 2024-08-13",
+      },
     });
   });
 });
@@ -97,6 +109,15 @@ describe("rdapWhoisConnector mocked normalization", () => {
     expect(normalizeRdapDomainPayload(payload)).toEqual({
       summary: "minimal.example · registered 2020-01-01 · expires 2030-12-31",
       tags: ["active"],
+      registrationContext: {
+        registrationDate: "2020-01-01",
+        expirationDate: "2030-12-31",
+      },
+      scoringEvidence: {
+        kind: "context",
+        source: "rdap_whois",
+        summary: "minimal.example · registered 2020-01-01 · expires 2030-12-31",
+      },
     });
   });
 
@@ -126,6 +147,14 @@ describe("rdapWhoisConnector mocked normalization", () => {
     expect(normalizeRdapDomainPayload(payload)).toEqual({
       summary: "Nested Registrar LLC",
       tags: undefined,
+      registrationContext: {
+        registrar: "Nested Registrar LLC",
+      },
+      scoringEvidence: {
+        kind: "context",
+        source: "rdap_whois",
+        summary: "Nested Registrar LLC",
+      },
     });
   });
 

@@ -1,10 +1,27 @@
 /**
- * Phase 12C — normalized Conditional Intelligence channel model.
- * Presentation/architecture only: no fabricated findings, no network calls.
- * Future MITRE / malware-family / CVE adapters should normalize into these types.
+ * Phase 12C / 18A — Conditional Intelligence channel presentation model.
+ * Driven by the Investigation Paths capability engine. No fabricated findings.
  */
 
-import { IOC_TYPE, type IocType } from "./iocRegex";
+import {
+  INVESTIGATION_CAPABILITY_ID,
+  INVESTIGATION_STATUS,
+  INVESTIGATION_STATUS_LABEL,
+  type InvestigationCapabilityId,
+  type InvestigationResult,
+  type InvestigationStatus,
+} from "./investigationCapability";
+import type { EnrichmentSourceResult } from "./enrichment";
+import {
+  mapInvestigationStatusToConditionalState,
+  resolveInvestigationWorkbench,
+  type InvestigationSourceAvailability,
+} from "./investigationEngine";
+import {
+  createInvestigationTarget,
+  type InvestigationTarget,
+} from "./investigationTarget";
+import { type IocType } from "./iocRegex";
 import { WORKSPACE_STATE_COPY } from "./workspacePresentationState";
 
 export const CONDITIONAL_CHANNEL_ID = {
@@ -60,6 +77,9 @@ export type ConditionalIntelligenceChannel = {
   coverageState: "none" | "partial" | "complete";
   /** Honest capability note when expandable without fabricated findings. */
   detailNote: string | null;
+  /** Phase 18A — canonical engine status. */
+  investigationStatus: InvestigationStatus | null;
+  capabilityId: InvestigationCapabilityId;
 };
 
 export type ConditionalIntelligenceConsoleModel = {
@@ -70,22 +90,30 @@ export type ConditionalIntelligenceConsoleModel = {
 
 const CHANNEL_META: Record<
   ConditionalChannelId,
-  { label: string; description: string; glyph: "mitre" | "family" | "cve" }
+  {
+    label: string;
+    description: string;
+    glyph: "mitre" | "family" | "cve";
+    capabilityId: InvestigationCapabilityId;
+  }
 > = {
   [CONDITIONAL_CHANNEL_ID.MITRE]: {
     label: "MITRE ATT&CK",
     description: "Technique and tactic relationships",
     glyph: "mitre",
+    capabilityId: INVESTIGATION_CAPABILITY_ID.MITRE_ATTACK,
   },
   [CONDITIONAL_CHANNEL_ID.MALWARE_CAMPAIGN]: {
     label: "Malware / Campaign",
     description: "Family, tooling, and campaign associations",
     glyph: "family",
+    capabilityId: INVESTIGATION_CAPABILITY_ID.MALWARE_CAMPAIGN,
   },
   [CONDITIONAL_CHANNEL_ID.VULNERABILITY]: {
     label: "Vulnerability Context",
-    description: "CVE, CVSS, and affected-product context",
+    description: "CVE references from target or attributed evidence",
     glyph: "cve",
+    capabilityId: INVESTIGATION_CAPABILITY_ID.VULNERABILITY_CONTEXT,
   },
 };
 
@@ -101,37 +129,63 @@ const STATE_LABEL: Record<ConditionalChannelState, string> = {
   partial: WORKSPACE_STATE_COPY.conditional.partial,
 };
 
-function baseChannel(
-  id: ConditionalChannelId,
-  overrides: Partial<ConditionalIntelligenceChannel> & {
-    state: ConditionalChannelState;
-  }
+function channelFromResult(
+  channelId: ConditionalChannelId,
+  result: InvestigationResult | undefined,
+  hasTarget: boolean
 ): ConditionalIntelligenceChannel {
-  const meta = CHANNEL_META[id];
-  const findings = overrides.findings ?? [];
-  const detailNote = overrides.detailNote ?? null;
-  const error = overrides.error ?? null;
-  const isExpandable =
-    overrides.isExpandable ??
+  const meta = CHANNEL_META[channelId];
+  const status = result?.status ?? INVESTIGATION_STATUS.UNAVAILABLE;
+  const state = mapInvestigationStatusToConditionalState(status, hasTarget);
+  const findings: ConditionalIntelligenceFinding[] = (result?.findings ?? []).map(
+    (finding) => ({
+      id: finding.id,
+      title: finding.title,
+      category: meta.label,
+      primaryValue: finding.primaryValue,
+      secondaryValues: finding.secondaryValues,
+      evidenceBasis: finding.evidenceBasis,
+      sourceAttribution: finding.sourceAttribution,
+    })
+  );
+  const detailNote =
+    result?.reasonDetail &&
     (findings.length > 0 ||
-      Boolean(detailNote) ||
-      Boolean(error && overrides.state === "source_error"));
+      state === "no_association" ||
+      state === "unavailable" ||
+      state === "unsupported" ||
+      state === "source_error")
+      ? result.reasonDetail
+      : null;
+  const isExpandable =
+    findings.length > 0 ||
+    Boolean(detailNote) ||
+    Boolean(result?.error && state === "source_error");
+
   return {
-    id,
+    id: channelId,
     label: meta.label,
     description: meta.description,
     glyph: meta.glyph,
-    state: overrides.state,
-    stateLabel: overrides.stateLabel ?? STATE_LABEL[overrides.state],
-    summary: overrides.summary ?? null,
+    state,
+    stateLabel:
+      hasTarget && state !== "awaiting_selection"
+        ? INVESTIGATION_STATUS_LABEL[status] === "Not applicable"
+          ? WORKSPACE_STATE_COPY.conditional.unsupported
+          : STATE_LABEL[state]
+        : STATE_LABEL[state],
+    summary: result?.summary ?? null,
     findings,
-    sources: overrides.sources ?? [],
-    lastEvaluated: overrides.lastEvaluated ?? null,
+    sources: result?.sourceAttribution ?? [],
+    lastEvaluated: result?.generatedAt ? new Date(result.generatedAt).toISOString() : null,
     isExpandable,
-    error,
-    unsupportedReason: overrides.unsupportedReason ?? null,
-    coverageState: overrides.coverageState ?? "none",
+    error: result?.error ?? null,
+    unsupportedReason:
+      state === "unsupported" || state === "unavailable" ? result?.reasonDetail ?? null : null,
+    coverageState: findings.length > 0 ? "partial" : "none",
     detailNote,
+    investigationStatus: hasTarget ? status : null,
+    capabilityId: meta.capabilityId,
   };
 }
 
@@ -142,52 +196,50 @@ function baseChannel(
 export function resolveConditionalIntelligenceChannels(input: {
   iocType: IocType | null;
   iocValue: string | null;
+  availability?: InvestigationSourceAvailability;
+  target?: InvestigationTarget | null;
+  sourceResults?: readonly EnrichmentSourceResult[];
 }): ConditionalIntelligenceConsoleModel {
-  const hasSelection = Boolean(input.iocType && input.iocValue?.trim());
+  const target =
+    input.target !== undefined
+      ? input.target
+      : input.iocType && input.iocValue
+        ? createInvestigationTarget({
+            iocType: input.iocType,
+            value: input.iocValue,
+          })
+        : null;
 
-  if (!hasSelection) {
-    const channels = (
-      [
-        CONDITIONAL_CHANNEL_ID.MITRE,
-        CONDITIONAL_CHANNEL_ID.MALWARE_CAMPAIGN,
-        CONDITIONAL_CHANNEL_ID.VULNERABILITY,
-      ] as const
-    ).map((id) => baseChannel(id, { state: "awaiting_selection", isExpandable: false }));
-    return { channels, headerSummary: null };
-  }
-
-  const mitre = baseChannel(CONDITIONAL_CHANNEL_ID.MITRE, {
-    state: "not_evaluated",
-    isExpandable: false,
+  const workbench = resolveInvestigationWorkbench({
+    target,
+    relatedFacts: {
+      pageIndicatorCount: 0,
+      priorSightingCount: 0,
+      collectionMembership: null,
+      suppressed: false,
+    },
+    availability: input.availability ?? {},
+    sourceResults: input.sourceResults ?? [],
   });
 
-  const malware = baseChannel(CONDITIONAL_CHANNEL_ID.MALWARE_CAMPAIGN, {
-    state: "not_evaluated",
-    isExpandable: false,
-  });
+  const hasTarget = Boolean(target);
+  const channels = (
+    [
+      CONDITIONAL_CHANNEL_ID.MITRE,
+      CONDITIONAL_CHANNEL_ID.MALWARE_CAMPAIGN,
+      CONDITIONAL_CHANNEL_ID.VULNERABILITY,
+    ] as const
+  ).map((channelId) =>
+    channelFromResult(
+      channelId,
+      workbench.resultsById.get(CHANNEL_META[channelId].capabilityId),
+      hasTarget
+    )
+  );
 
-  let vulnerability: ConditionalIntelligenceChannel;
-  if (input.iocType === IOC_TYPE.CVE && input.iocValue) {
-    // CVE IOC selected: identity is known, but local enrichment cannot supply
-    // CVSS/EPSS/KEV — honest unavailable with expandable capability note.
-    vulnerability = baseChannel(CONDITIONAL_CHANNEL_ID.VULNERABILITY, {
-      state: "unavailable",
-      summary: input.iocValue.trim(),
-      detailNote: `${input.iocValue.trim()} ${WORKSPACE_STATE_COPY.conditional.cveUnavailable}`,
-      isExpandable: true,
-      coverageState: "none",
-    });
-  } else {
-    vulnerability = baseChannel(CONDITIONAL_CHANNEL_ID.VULNERABILITY, {
-      state: "not_evaluated",
-      isExpandable: false,
-    });
-  }
-
-  const channels = [mitre, malware, vulnerability] as const;
   return {
     channels,
-    headerSummary: resolveConditionalHeaderSummary(channels),
+    headerSummary: hasTarget ? workbench.conditionalHeaderSummary : null,
   };
 }
 
@@ -195,6 +247,7 @@ const EVALUATED_STATES: ReadonlySet<ConditionalChannelState> = new Set([
   "available",
   "no_association",
   "unavailable",
+  "unsupported",
   "source_error",
   "partial",
 ]);

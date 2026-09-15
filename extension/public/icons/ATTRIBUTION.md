@@ -27,8 +27,8 @@ Retrieval date for this Phase 4 inventory: **2026-07-31**.
 
 | Filename | Location | Source | Modification | Usage |
 |----------|----------|--------|--------------|-------|
-| `logo-mark.png` | `extension/public/icons/` | VERA5-owned | None in Phase 4 | Side-panel / options wordmark mark |
-| `icon16.png` … `icon128.png` | `extension/public/icons/` | Generated from logo-mark | Toolbar tile generation | Chrome / Firefox manifest icons |
+| `logo-mark.png` | `extension/public/icons/` | VERA5-owned (`assets/logo/VERA 5 - New Logo.png`) | Resized to 256×256 transparent PNG | Side-panel / options header mark |
+| `icon16.png` … `icon128.png` | `extension/public/icons/` | Generated from logo-mark via `npm run icons` | Composited on void-black tile | Chrome / Firefox manifest icons |
 
 ---
 

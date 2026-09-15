@@ -187,12 +187,51 @@ export function buildAbuseIpdbTags(data: AbuseIpdbCheckData): readonly string[] 
 
 export function normalizeAbuseIpdbCheckResponse(
   payload: unknown
-): { summary: string; tags: readonly string[] } | null {
+): {
+  summary: string;
+  tags: readonly string[];
+  networkContext?: { organization?: string; countryCode?: string };
+  registrationContext?: { relatedDomain?: string; organization?: string };
+} | null {
   const data = parseAbuseIpdbCheckData(payload);
   if (!data) {
     return null;
   }
-  return mapAbuseIpdbFieldsToUnifiedPresentation(data);
+  const presentation = mapAbuseIpdbFieldsToUnifiedPresentation(data);
+  if (!presentation) {
+    return null;
+  }
+  const networkContext =
+    data.isp || data.countryCode
+      ? {
+          ...(data.isp ? { organization: data.isp } : {}),
+          ...(data.countryCode ? { countryCode: data.countryCode } : {}),
+        }
+      : undefined;
+  const registrationContext =
+    data.domain || data.isp
+      ? {
+          ...(data.domain ? { relatedDomain: data.domain } : {}),
+          ...(data.isp ? { organization: data.isp } : {}),
+        }
+      : undefined;
+  return {
+    summary: presentation.summary,
+    tags: presentation.tags,
+    ...(networkContext ? { networkContext } : {}),
+    ...(registrationContext ? { registrationContext } : {}),
+    scoringEvidence: {
+      source: ABUSEIPDB_SOURCE_ID,
+      ...(data.abuseConfidenceScore !== undefined
+        ? { abuseConfidenceScore: data.abuseConfidenceScore }
+        : {}),
+      ...(data.totalReports !== undefined ? { totalReports: data.totalReports } : {}),
+      ...(data.numDistinctUsers !== undefined
+        ? { numDistinctUsers: data.numDistinctUsers }
+        : {}),
+      ...(data.lastReportedAt ? { lastReportedAt: data.lastReportedAt } : {}),
+    },
+  };
 }
 
 function mapAbuseIpdbHttpStatus(status: number): {

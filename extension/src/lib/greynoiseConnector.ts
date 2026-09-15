@@ -179,12 +179,33 @@ export function buildGreyNoiseTags(data: GreyNoiseCommunityData): readonly strin
 
 export function normalizeGreyNoiseCommunityResponse(
   payload: unknown
-): { summary: string; tags: readonly string[] } | null {
+): {
+  summary: string;
+  tags: readonly string[];
+  scoringEvidence: {
+    source: typeof GREYNOISE_SOURCE_ID;
+    classification?: string;
+    noise: boolean;
+    riot: boolean;
+    name?: string;
+  };
+} | null {
   const data = parseGreyNoiseCommunityData(payload);
   if (!data) {
     return null;
   }
-  return mapGreyNoiseCommunityDataToUnifiedPresentation(data);
+  const presentation = mapGreyNoiseCommunityDataToUnifiedPresentation(data);
+  return {
+    summary: presentation.summary,
+    tags: presentation.tags,
+    scoringEvidence: {
+      source: GREYNOISE_SOURCE_ID,
+      noise: data.noise,
+      riot: data.riot,
+      ...(data.classification ? { classification: data.classification } : {}),
+      ...(data.name ? { name: data.name } : {}),
+    },
+  };
 }
 
 function mapGreyNoiseHttpStatus(status: number): {
@@ -255,7 +276,17 @@ async function fetchGreyNoiseCommunity(
 
 function normalizeGreyNoiseResponsePayload(
   payload: unknown
-): { summary: string; tags: readonly string[] } | null {
+): {
+  summary: string;
+  tags: readonly string[];
+  scoringEvidence?: {
+    source: typeof GREYNOISE_SOURCE_ID;
+    classification?: string;
+    noise: boolean;
+    riot: boolean;
+    name?: string;
+  };
+} | null {
   const normalized = normalizeGreyNoiseCommunityResponse(payload);
   if (normalized) {
     return normalized;
@@ -263,11 +294,19 @@ function normalizeGreyNoiseResponsePayload(
   if (isRecord(payload)) {
     const message = readNonEmptyString(payload.message);
     if (message) {
-      return mapGreyNoiseCommunityDataToUnifiedPresentation({
+      const presentation = mapGreyNoiseCommunityDataToUnifiedPresentation({
         noise: false,
         riot: false,
         message,
       });
+      return {
+        ...presentation,
+        scoringEvidence: {
+          source: GREYNOISE_SOURCE_ID,
+          noise: false,
+          riot: false,
+        },
+      };
     }
   }
   return null;
@@ -325,6 +364,7 @@ export async function enrichWithGreynoise(
             sourceId: GREYNOISE_SOURCE_ID,
             summary: normalized.summary,
             tags: normalized.tags,
+            scoringEvidence: normalized.scoringEvidence,
             fetchedAt,
             rawVendorJson: formatRedactedVendorJson(payload),
           });
@@ -368,6 +408,7 @@ export async function enrichWithGreynoise(
       sourceId: GREYNOISE_SOURCE_ID,
       summary: normalized.summary,
       tags: normalized.tags,
+      scoringEvidence: normalized.scoringEvidence,
       fetchedAt,
       rawVendorJson: formatRedactedVendorJson(payload),
     });

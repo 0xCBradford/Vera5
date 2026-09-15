@@ -78,6 +78,11 @@ describe("OTX connector normalization", () => {
     ).toEqual({
       summary: "2 threat pulses",
       tags: ["phishing", "c2"],
+      scoringEvidence: {
+        pulseCount: 2,
+        source: "otx",
+        threatTags: ["phishing", "c2"],
+      },
     });
   });
 

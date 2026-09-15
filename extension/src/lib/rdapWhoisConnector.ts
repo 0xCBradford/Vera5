@@ -266,9 +266,23 @@ export function normalizeRdapDomainPayload(
   if (!presentation) {
     return null;
   }
+  const registrationContext = {
+    ...(parsed.registrar ? { registrar: parsed.registrar } : {}),
+    ...(parsed.registrationDate ? { registrationDate: parsed.registrationDate } : {}),
+    ...(parsed.expirationDate ? { expirationDate: parsed.expirationDate } : {}),
+    ...(parsed.nameservers?.length ? { nameservers: parsed.nameservers } : {}),
+  };
   return {
     summary: presentation.summary,
     tags: presentation.tags.length > 0 ? presentation.tags : undefined,
+    ...(Object.keys(registrationContext).length > 0
+      ? { registrationContext }
+      : {}),
+    scoringEvidence: {
+      source: RDAP_WHOIS_SOURCE_ID,
+      kind: "context" as const,
+      summary: presentation.summary,
+    },
   };
 }
 

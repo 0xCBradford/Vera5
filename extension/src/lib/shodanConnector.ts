@@ -63,6 +63,7 @@ export type ShodanHostData = {
   openServiceCount: number;
   countryCode?: string;
   organization?: string;
+  asn?: string;
   serviceTags: readonly string[];
 };
 
@@ -71,6 +72,7 @@ export type ShodanDomainData = {
   subdomainCount: number;
   dnsRecordCount: number;
   serviceTags: readonly string[];
+  resolvedIps?: readonly string[];
 };
 
 export type ShodanConnectorDeps = {
@@ -229,12 +231,18 @@ export function parseShodanHostData(payload: unknown): ShodanHostData | null {
   const organization =
     readNonEmptyString(payload.org) ?? readNonEmptyString(payload.isp);
   const ip = readNonEmptyString(payload.ip_str) ?? readNonEmptyString(payload.ip);
+  const asnRaw =
+    readNonEmptyString(payload.asn) ??
+    (typeof payload.asn === "number" && Number.isFinite(payload.asn)
+      ? String(payload.asn)
+      : undefined);
 
   if (
     openServiceCount === 0 &&
     !countryCode &&
     !organization &&
-    !ip
+    !ip &&
+    !asnRaw
   ) {
     return null;
   }
@@ -244,6 +252,7 @@ export function parseShodanHostData(payload: unknown): ShodanHostData | null {
     openServiceCount,
     countryCode,
     organization,
+    asn: asnRaw,
     serviceTags: collectShodanHostServiceTags(dataEntries),
   };
 }
@@ -259,6 +268,16 @@ export function parseShodanDomainData(payload: unknown): ShodanDomainData | null
     : [];
   const domain = readNonEmptyString(payload.domain);
   const tags = readStringArray(payload.tags);
+  const resolvedIps: string[] = [];
+  const seenIps = new Set<string>();
+  for (const record of dnsRecords) {
+    const type = readNonEmptyString(record.type)?.toUpperCase();
+    const value = readNonEmptyString(record.value);
+    if ((type === "A" || type === "AAAA") && value && !seenIps.has(value)) {
+      seenIps.add(value);
+      resolvedIps.push(value);
+    }
+  }
 
   if (
     subdomains.length === 0 &&
@@ -274,6 +293,7 @@ export function parseShodanDomainData(payload: unknown): ShodanDomainData | null
     subdomainCount: subdomains.length,
     dnsRecordCount: dnsRecords.length,
     serviceTags: tags,
+    ...(resolvedIps.length > 0 ? { resolvedIps } : {}),
   };
 }
 
@@ -302,28 +322,66 @@ export function mapShodanDomainDataToUnifiedPresentation(
 
 export function normalizeShodanHostResponse(
   payload: unknown
-): ReturnType<typeof mapShodanFieldsToUnifiedPresentation> | null {
+): {
+  summary: string;
+  tags: readonly string[];
+  networkContext?: { asn?: string; organization?: string; countryCode?: string };
+} | null {
   const data = parseShodanHostData(payload);
   if (!data) {
     return null;
   }
-  return mapShodanHostDataToUnifiedPresentation(data);
+  const presentation = mapShodanHostDataToUnifiedPresentation(data);
+  const networkContext =
+    data.asn || data.organization || data.countryCode
+      ? {
+          ...(data.asn ? { asn: data.asn } : {}),
+          ...(data.organization ? { organization: data.organization } : {}),
+          ...(data.countryCode ? { countryCode: data.countryCode } : {}),
+        }
+      : undefined;
+  return {
+    summary: presentation.summary,
+    tags: presentation.tags,
+    ...(networkContext ? { networkContext } : {}),
+    scoringEvidence: {
+      source: SHODAN_SOURCE_ID,
+      kind: "context" as const,
+      summary: presentation.summary,
+    },
+  };
 }
 
 export function normalizeShodanDomainResponse(
   payload: unknown
-): ReturnType<typeof mapShodanFieldsToUnifiedPresentation> | null {
+): {
+  summary: string;
+  tags: readonly string[];
+  networkContext?: { resolvedIps?: readonly string[] };
+} | null {
   const data = parseShodanDomainData(payload);
   if (!data) {
     return null;
   }
-  return mapShodanDomainDataToUnifiedPresentation(data);
+  const presentation = mapShodanDomainDataToUnifiedPresentation(data);
+  return {
+    summary: presentation.summary,
+    tags: presentation.tags,
+    ...(data.resolvedIps?.length
+      ? { networkContext: { resolvedIps: data.resolvedIps } }
+      : {}),
+    scoringEvidence: {
+      source: SHODAN_SOURCE_ID,
+      kind: "context" as const,
+      summary: presentation.summary,
+    },
+  };
 }
 
 export function normalizeShodanResponse(
   type: IocType,
   payload: unknown
-): ReturnType<typeof mapShodanFieldsToUnifiedPresentation> | null {
+): ReturnType<typeof normalizeShodanHostResponse> | ReturnType<typeof normalizeShodanDomainResponse> {
   if (type === IOC_TYPE.IPV4) {
     return normalizeShodanHostResponse(payload);
   }
@@ -493,6 +551,8 @@ export async function enrichWithShodan(
       sourceId: SHODAN_SOURCE_ID,
       summary: normalized.summary,
       tags: normalized.tags,
+      networkContext: normalized.networkContext,
+      scoringEvidence: normalized.scoringEvidence,
       fetchedAt,
       rawVendorJson: formatRedactedVendorJson(payload),
     });

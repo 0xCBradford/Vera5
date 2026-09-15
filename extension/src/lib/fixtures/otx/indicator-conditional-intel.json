@@ -1,0 +1,21 @@
+{
+  "indicator": "198.51.100.99",
+  "type": "IPv4",
+  "pulse_info": {
+    "count": 2,
+    "pulses": [
+      {
+        "name": "Community pulse Emotet infra",
+        "tags": ["malware", "c2"],
+        "malware_families": ["Emotet", "emotet"],
+        "attack_ids": ["T1071.001", "T1059.001"]
+      },
+      {
+        "name": "Second pulse",
+        "tags": ["phishing"],
+        "malware_families": ["QakBot"],
+        "attack_ids": ["T1071.001", "TXYZ", "1059"]
+      }
+    ]
+  }
+}

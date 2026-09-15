@@ -93,6 +93,15 @@ describe("Shodan connector normalization", () => {
     expect(normalizeShodanHostResponse(SAMPLE_HOST_PAYLOAD)).toEqual({
       summary: "2 open services",
       tags: ["US", "Google LLC", "nginx", "https", "443/tcp"],
+      networkContext: {
+        countryCode: "US",
+        organization: "Google LLC",
+      },
+      scoringEvidence: {
+        kind: "context",
+        source: "shodan",
+        summary: "2 open services",
+      },
     });
     expect(parseShodanHostData({ ports: [80, 443], country_code: "DE" })).toMatchObject({
       openServiceCount: 2,
@@ -111,6 +120,14 @@ describe("Shodan connector normalization", () => {
     ).toEqual({
       summary: "2 subdomains",
       tags: ["cdn"],
+      networkContext: {
+        resolvedIps: ["93.184.216.34"],
+      },
+      scoringEvidence: {
+        kind: "context",
+        source: "shodan",
+        summary: "2 subdomains",
+      },
     });
     expect(parseShodanDomainData({ data: [{ type: "MX", value: "smtp.example.com" }] })).toMatchObject({
       subdomainCount: 0,

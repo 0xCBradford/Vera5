@@ -1,25 +1,44 @@
 import {
   ENRICHMENT_SOURCE,
-  ENRICHMENT_SOURCE_LABELS,
   ENRICHMENT_SOURCE_ORDER,
   LIVE_ENRICHMENT_SOURCE_ORDER,
-  enrichmentSourceSupportsIocType,
-  formatUnsupportedIndicatorTypeMessage,
   getEnrichmentSourceDefinition,
   type EnrichmentSourceId,
 } from "./enrichmentSourceRegistry";
-import { censysLiveSupportsIocType } from "./censysConnector";
-import { virustotalLiveSupportsIocType } from "./virustotalConnector";
 import type { IocType } from "./iocRegex";
 import type { EnrichmentSourceEnabledRecord } from "./storage";
 import {
-  ENRICHMENT_ERROR_CODE,
   ENRICHMENT_SOURCE_STATUS,
-  createSkippedSourceResult,
   type EnrichmentSourceResult,
 } from "./enrichment";
+import {
+  buildSkippedLiveEnrichmentUnsupportedTypeResults,
+  createNoApplicableLiveSourcesResults,
+  getApplicableSources,
+  listApplicableLiveEnrichmentSourceIds,
+  listEnabledApplicableLiveEnrichmentSourceIds,
+  liveEnrichmentSupportsIocType,
+  listVendorEvidenceSourceIds,
+  orderSourcesForVendorEvidence,
+  explainSourceIneligibilityReason,
+  NO_APPLICABLE_LIVE_SOURCES_MESSAGE,
+} from "./enrichmentSourceApplicability";
 
 export { LIVE_ENRICHMENT_SOURCE_ORDER };
+
+export {
+  ENRICHMENT_SOURCE,
+  buildSkippedLiveEnrichmentUnsupportedTypeResults,
+  createNoApplicableLiveSourcesResults,
+  getApplicableSources,
+  listApplicableLiveEnrichmentSourceIds,
+  listEnabledApplicableLiveEnrichmentSourceIds,
+  liveEnrichmentSupportsIocType,
+  listVendorEvidenceSourceIds,
+  orderSourcesForVendorEvidence,
+  explainSourceIneligibilityReason,
+  NO_APPLICABLE_LIVE_SOURCES_MESSAGE,
+};
 
 export function isEnrichmentSourceEnabled(
   enabled: EnrichmentSourceEnabledRecord,
@@ -28,32 +47,11 @@ export function isEnrichmentSourceEnabled(
   return enabled[sourceId] === true;
 }
 
-export function liveEnrichmentSupportsIocType(
-  sourceId: EnrichmentSourceId,
-  iocType: IocType
-): boolean {
-  const definition = getEnrichmentSourceDefinition(sourceId);
-  if (!definition.liveConnector) {
-    return false;
-  }
-  if (sourceId === ENRICHMENT_SOURCE.CENSYS) {
-    return censysLiveSupportsIocType(iocType);
-  }
-  if (sourceId === ENRICHMENT_SOURCE.VIRUSTOTAL) {
-    return virustotalLiveSupportsIocType(iocType);
-  }
-  return enrichmentSourceSupportsIocType(sourceId, iocType);
-}
-
 export function listEnabledLiveEnrichmentSourceIds(
   enabled: EnrichmentSourceEnabledRecord,
   iocType: IocType
 ): EnrichmentSourceId[] {
-  return LIVE_ENRICHMENT_SOURCE_ORDER.filter(
-    (sourceId) =>
-      isEnrichmentSourceEnabled(enabled, sourceId) &&
-      liveEnrichmentSupportsIocType(sourceId, iocType)
-  );
+  return listEnabledApplicableLiveEnrichmentSourceIds(enabled, iocType);
 }
 
 export function hasAnyEnabledLiveEnrichmentSource(enabled: EnrichmentSourceEnabledRecord): boolean {
@@ -62,25 +60,11 @@ export function hasAnyEnabledLiveEnrichmentSource(enabled: EnrichmentSourceEnabl
   );
 }
 
-export function buildSkippedLiveEnrichmentUnsupportedTypeResults(
-  enabled: EnrichmentSourceEnabledRecord
-): EnrichmentSourceResult[] {
-  return LIVE_ENRICHMENT_SOURCE_ORDER.filter((sourceId) =>
-    isEnrichmentSourceEnabled(enabled, sourceId)
-  ).map((sourceId) =>
-    createSkippedSourceResult(
-      sourceId,
-      ENRICHMENT_ERROR_CODE.UNSUPPORTED_TYPE,
-      formatUnsupportedIndicatorTypeMessage(ENRICHMENT_SOURCE_LABELS[sourceId])
-    )
-  );
-}
-
 export function resolveEnabledLiveEnrichmentSourceId(
   enabled: EnrichmentSourceEnabledRecord,
   iocType: IocType
 ): EnrichmentSourceId | null {
-  const sourceIds = listEnabledLiveEnrichmentSourceIds(enabled, iocType);
+  const sourceIds = listEnabledApplicableLiveEnrichmentSourceIds(enabled, iocType);
   return sourceIds[0] ?? null;
 }
 
@@ -99,5 +83,3 @@ export function pickPrimaryEnrichmentSource(
   }
   return sources[0];
 }
-
-export { ENRICHMENT_SOURCE };
